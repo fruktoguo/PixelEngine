@@ -11,19 +11,22 @@ internal sealed class GameViewUiInputSource(
     Func<EditorMode> modeProvider,
     Func<GameViewViewportSnapshot> viewportProvider,
     Func<Vector2> panelPointProvider,
-    Func<bool> inputFocusedProvider,
+    Func<bool> pointerHoveredProvider,
     Func<Vector2>? panelOriginFramebufferProvider = null,
-    Func<Vector2>? framebufferScaleProvider = null) : IUiInputSource
+    Func<Vector2>? framebufferScaleProvider = null,
+    Func<bool>? keyboardFocusedProvider = null) : IUiInputSource
 {
     private readonly IUiInputSource _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly Func<EditorMode> _modeProvider = modeProvider ?? throw new ArgumentNullException(nameof(modeProvider));
     private readonly Func<GameViewViewportSnapshot> _viewportProvider = viewportProvider ?? throw new ArgumentNullException(nameof(viewportProvider));
     private readonly Func<Vector2> _panelPointProvider = panelPointProvider ?? throw new ArgumentNullException(nameof(panelPointProvider));
-    private readonly Func<bool> _inputFocusedProvider = inputFocusedProvider ?? throw new ArgumentNullException(nameof(inputFocusedProvider));
+    private readonly Func<bool> _pointerHoveredProvider = pointerHoveredProvider ?? throw new ArgumentNullException(nameof(pointerHoveredProvider));
     private readonly Func<Vector2> _panelOriginFramebufferProvider =
         panelOriginFramebufferProvider ?? (() => Vector2.Zero);
     private readonly Func<Vector2> _framebufferScaleProvider =
         framebufferScaleProvider ?? (() => Vector2.One);
+    private readonly Func<bool> _keyboardFocusedProvider =
+        keyboardFocusedProvider ?? pointerHoveredProvider;
 
     public UiTextCompositionCapabilities TextCompositionCapabilities => _inner.TextCompositionCapabilities;
 
@@ -116,14 +119,19 @@ internal sealed class GameViewUiInputSource(
 
     private bool CanForwardKeyboardInput()
     {
-        return TryMapFocusedViewportPoint(out _);
+        return IsRuntimeInputMode(_modeProvider()) && _keyboardFocusedProvider();
     }
 
     private bool TryMapFocusedViewportPoint(out Vector2 viewportPoint)
     {
         viewportPoint = default;
-        return _modeProvider() == EditorMode.Play &&
-            _inputFocusedProvider() &&
+        return IsRuntimeInputMode(_modeProvider()) &&
+            _pointerHoveredProvider() &&
             _viewportProvider().TryMapPanelToViewport(_panelPointProvider(), out viewportPoint);
+    }
+
+    private static bool IsRuntimeInputMode(EditorMode mode)
+    {
+        return mode is EditorMode.Play or EditorMode.Paused;
     }
 }

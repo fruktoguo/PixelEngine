@@ -9,10 +9,10 @@ namespace PixelEngine.Scripting;
 public static class ScriptInspector
 {
     /// <summary>
-    /// 枚举指定脚本组件可在 Inspector 中显示和编辑的字段。
+    /// 枚举指定脚本组件可在 Inspector 中显示和编辑的字段与 public 属性。
     /// </summary>
     /// <param name="behaviour">要检查的脚本组件实例。</param>
-    /// <returns>字段描述数组，包含字段名、类型、当前值与可写性。</returns>
+    /// <returns>成员描述数组，包含名称、类型、当前值与可写性。</returns>
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2075",
@@ -22,7 +22,8 @@ public static class ScriptInspector
         ArgumentNullException.ThrowIfNull(behaviour);
         Type type = behaviour.GetType();
         List<ScriptFieldDescriptor> descriptors = [];
-        foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+        const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        foreach (FieldInfo field in type.GetFields(InstanceMembers))
         {
             if (!ShouldShow(field))
             {
@@ -43,16 +44,53 @@ public static class ScriptInspector
                 assetKind));
         }
 
+        foreach (PropertyInfo property in type.GetProperties(InstanceMembers))
+        {
+            if (!ShouldShow(property))
+            {
+                continue;
+            }
+
+            ScriptFieldKind kind = Classify(property, property.PropertyType, out ScriptAssetKind? assetKind);
+            object? value;
+            bool canWrite = property.SetMethod?.IsPublic == true;
+            try
+            {
+                value = property.GetValue(behaviour);
+            }
+            catch (TargetInvocationException exception)
+            {
+                // 用户 property getter 属于脚本边界，可能依赖尚未 Attach 的 Entity/Context 或主动抛错。
+                // Inspector 必须降级展示错误，不能让一个 getter 关闭整个 Editor。
+                Exception cause = exception.InnerException ?? exception;
+                value = $"<getter error: {cause.GetType().Name}: {cause.Message}>";
+                canWrite = false;
+                kind = ScriptFieldKind.Unsupported;
+            }
+
+            descriptors.Add(new ScriptFieldDescriptor(
+                property.Name,
+                property.PropertyType,
+                value,
+                canWrite,
+                IsPublic: true,
+                IsSerializedPrivate: false,
+                kind,
+                property.GetCustomAttribute<RangeAttribute>()?.Minimum,
+                property.GetCustomAttribute<RangeAttribute>()?.Maximum,
+                assetKind));
+        }
+
         return [.. descriptors];
     }
 
     /// <summary>
-    /// 尝试把 Inspector 修改值写回脚本字段；调用方应在相位 1 使用。
+    /// 尝试把 Inspector 修改值写回脚本字段或 public 属性；调用方应在相位安全 Editor 边界使用。
     /// </summary>
     /// <param name="behaviour">目标脚本组件。</param>
-    /// <param name="fieldName">字段名。</param>
+    /// <param name="fieldName">字段或属性名。</param>
     /// <param name="value">要写入的值。</param>
-    /// <returns>字段存在、可写且值类型兼容时返回 true。</returns>
+    /// <returns>成员存在、可写且值类型兼容时返回 true。</returns>
     [UnconditionalSuppressMessage(
         "Trimming",
         "IL2075",
@@ -61,8 +99,31 @@ public static class ScriptInspector
     {
         ArgumentNullException.ThrowIfNull(behaviour);
         ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
-        FieldInfo? field = behaviour.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-        if (field is null || !ShouldShow(field) || field.IsInitOnly || !TryNormalizeAssignable(field, value, out object? normalized))
+        Type behaviourType = behaviour.GetType();
+        const BindingFlags InstanceMembers = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+        PropertyInfo? property = behaviourType.GetProperty(fieldName, InstanceMembers);
+        if (property is not null && ShouldShow(property) && property.SetMethod?.IsPublic == true)
+        {
+            if (!TryNormalizeAssignable(property.PropertyType, value, out object? normalizedProperty))
+            {
+                return false;
+            }
+
+            try
+            {
+                property.SetValue(behaviour, normalizedProperty);
+                return true;
+            }
+            catch (TargetInvocationException)
+            {
+                // 与 getter 相同，用户 setter 也属于脚本隔离边界；拒绝本次写回而不终止 Editor。
+                return false;
+            }
+        }
+
+        FieldInfo? field = behaviourType.GetField(fieldName, InstanceMembers);
+        if (field is null || !ShouldShow(field) || field.IsInitOnly ||
+            !TryNormalizeAssignable(field.FieldType, value, out object? normalized))
         {
             return false;
         }
@@ -77,13 +138,26 @@ public static class ScriptInspector
             && (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() is not null);
     }
 
-    private static bool TryNormalizeAssignable(FieldInfo field, object? value, out object? normalized)
+    private static bool ShouldShow(PropertyInfo property)
     {
-        Type targetType = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        MethodInfo? getter = property.GetMethod;
+        return property.GetIndexParameters().Length == 0 &&
+            property.DeclaringType != typeof(Behaviour) &&
+            getter?.IsPublic == true &&
+            !property.PropertyType.IsByRefLike &&
+            !property.PropertyType.IsPointer &&
+            !property.PropertyType.IsFunctionPointer &&
+            !getter.ReturnParameter.ParameterType.IsByRef &&
+            property.GetCustomAttribute<HideInInspectorAttribute>() is null;
+    }
+
+    private static bool TryNormalizeAssignable(Type memberType, object? value, out object? normalized)
+    {
+        Type targetType = Nullable.GetUnderlyingType(memberType) ?? memberType;
         if (value is null)
         {
             normalized = null;
-            return !field.FieldType.IsValueType || Nullable.GetUnderlyingType(field.FieldType) is not null;
+            return !memberType.IsValueType || Nullable.GetUnderlyingType(memberType) is not null;
         }
 
         if (targetType.IsInstanceOfType(value))
@@ -112,8 +186,13 @@ public static class ScriptInspector
 
     private static ScriptFieldKind Classify(FieldInfo field, out ScriptAssetKind? assetKind)
     {
-        AssetFieldAttribute? assetField = field.GetCustomAttribute<AssetFieldAttribute>();
-        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        return Classify(field, field.FieldType, out assetKind);
+    }
+
+    private static ScriptFieldKind Classify(MemberInfo member, Type memberType, out ScriptAssetKind? assetKind)
+    {
+        AssetFieldAttribute? assetField = member.GetCustomAttribute<AssetFieldAttribute>();
+        Type target = Nullable.GetUnderlyingType(memberType) ?? memberType;
         if (assetField is not null)
         {
             assetKind = assetField.AssetType;
@@ -206,10 +285,10 @@ public enum ScriptFieldKind
 }
 
 /// <summary>
-/// 描述一个可供编辑器 Inspector 展示和编辑的脚本字段。
+/// 描述一个可供编辑器 Inspector 展示和编辑的脚本字段或属性。
 /// </summary>
 /// <param name="Name">字段名。</param>
-/// <param name="FieldType">字段运行时类型。</param>
+/// <param name="FieldType">成员运行时类型；保留 FieldType 名称以兼容既有 Editor API。</param>
 /// <param name="Value">字段当前值。</param>
 /// <param name="CanWrite">字段是否可写。</param>
 /// <param name="IsPublic">字段是否为 public。</param>

@@ -11,6 +11,9 @@
     "prefs.appearance": "外观", "prefs.general": "常规", "prefs.externalTools": "外部工具", "prefs.shortcuts": "快捷键", "prefs.language": "语言",
     "prefs.uiScale": "界面缩放", "prefs.theme": "主题", "prefs.saveLayout": "持续保存布局", "prefs.reopenProject": "启动时重新打开上一个工程", "prefs.restoreScene": "恢复上次打开的场景", "prefs.resetLayout": "恢复默认布局",
     "hierarchy.sceneRoot": "场景根节点", "hierarchy.generated": "生成点位", "hierarchy.runtime": "运行时（Play）· {0} 个实体 · {1} 个刚体", "game.waiting": "正在等待游戏视图纹理",
-    "scene.playerSpawn": "玩家出生点", "scene.goal": "目标点", "status.noProject": "未打开工程", "status.noScene": "未打开场景"
+    "scene.playerSpawn": "玩家出生点", "scene.goal": "目标点", "status.noProject": "未打开工程", "status.noScene": "未打开场景",
+    "console.clear": "清空", "console.collapse": "折叠重复", "console.clearOnPlay": "运行时清空", "console.errorPause": "错误时暂停",
+    "console.searchHint": "搜索", "console.log": "日志", "console.warning": "警告", "console.error": "错误", "console.autoScroll": "自动滚动",
+    "console.empty": "没有控制台消息", "console.visibleRows": "显示 {0} 行", "console.copy": "复制", "console.openSource": "打开源码", "console.selectMessage": "选择一条消息以查看完整详情。"
   }
 }

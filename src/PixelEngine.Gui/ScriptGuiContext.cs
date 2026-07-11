@@ -311,6 +311,21 @@ public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
             result |= ImGuiWindowFlags.NoScrollbar;
         }
 
+        if ((flags & GuiWindowFlags.NoMouseInputs) != 0)
+        {
+            result |= ImGuiWindowFlags.NoMouseInputs;
+        }
+
+        if ((flags & GuiWindowFlags.NoNavInputs) != 0)
+        {
+            result |= ImGuiWindowFlags.NoNavInputs;
+        }
+
+        if ((flags & GuiWindowFlags.NoNavFocus) != 0)
+        {
+            result |= ImGuiWindowFlags.NoNavFocus;
+        }
+
         return result;
     }
 
@@ -350,6 +365,21 @@ public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
         if ((flags & GuiDrawWindowFlags.NoScrollbar) != 0)
         {
             result |= ImGuiWindowFlags.NoScrollbar;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoMouseInputs) != 0)
+        {
+            result |= ImGuiWindowFlags.NoMouseInputs;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoNavInputs) != 0)
+        {
+            result |= ImGuiWindowFlags.NoNavInputs;
+        }
+
+        if ((flags & GuiDrawWindowFlags.NoNavFocus) != 0)
+        {
+            result |= ImGuiWindowFlags.NoNavFocus;
         }
 
         return result;

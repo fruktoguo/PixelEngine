@@ -31,6 +31,40 @@ public sealed class SceneHierarchyPanelTests
     }
 
     /// <summary>
+    /// 验证动态 provider 在 authoring projection 被替换后读取新 Scene，且 runtime Inspector 的
+    /// Transform/Behaviour 临时修改可完整恢复。
+    /// </summary>
+    [Fact]
+    public void RuntimeDataSourceFollowsCurrentSceneAndRestoresTemporaryEdits()
+    {
+        ScriptScene first = new();
+        Entity firstEntity = first.CreateEntity();
+        Transform firstTransform = firstEntity.AddComponent<Transform>();
+        firstTransform.SetPosition(10f, 20f);
+        EditableHierarchyBehaviour firstBehaviour = firstEntity.AddComponent<EditableHierarchyBehaviour>();
+        firstBehaviour.Speed = 3f;
+        ScriptScene current = first;
+        RuntimeSceneHierarchyDataSource source = RuntimeSceneHierarchyDataSource.CreateDynamic(() => current);
+
+        Assert.True(source.TrySetEntityTransform($"script:{firstEntity.Id}", 40f, 50f, 0.25f, 2f, 3f));
+        Assert.True(source.TrySetBehaviourField($"script:{firstEntity.Id}", 0, nameof(EditableHierarchyBehaviour.Speed), 9f));
+        Assert.Equal(40f, firstTransform.X);
+        Assert.Equal(9f, firstBehaviour.Speed);
+
+        source.RestoreTemporaryEdits();
+        Assert.Equal(10f, firstTransform.X);
+        Assert.Equal(20f, firstTransform.Y);
+        Assert.Equal(3f, firstBehaviour.Speed);
+
+        ScriptScene replacement = new();
+        _ = replacement.CreateEntity().AddComponent<HierarchyBehaviour>();
+        _ = replacement.CreateEntity().AddComponent<HierarchyBehaviour>();
+        current = replacement;
+
+        Assert.Equal(2, source.Capture().Entities.Count);
+    }
+
+    /// <summary>
     /// 验证层级面板选择实体和刚体时联动 EditorSelection 与视口聚焦。
     /// </summary>
     [Fact]
@@ -66,6 +100,11 @@ public sealed class SceneHierarchyPanelTests
 
     private sealed class HierarchyBehaviour : Behaviour
     {
+    }
+
+    private sealed class EditableHierarchyBehaviour : Behaviour
+    {
+        public float Speed { get; set; }
     }
 
     private sealed class RecordingHierarchySource(SceneHierarchySnapshot snapshot) : ISceneHierarchyDataSource

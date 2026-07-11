@@ -617,6 +617,10 @@ public sealed class EngineBuilderTests
 
         IReadOnlyList<IEditorHostExtension> extensions = engine.Context.GetService<IReadOnlyList<IEditorHostExtension>>();
         Assert.Same(extension, Assert.Single(extensions));
+        Assert.Same(extension, engine.Context.GetService<IGameplayViewportInputMapper>());
+        Assert.True(extension.TryMapPointerToViewport(out float viewportX, out float viewportY));
+        Assert.Equal(12f, viewportX);
+        Assert.Equal(34f, viewportY);
     }
 
     private sealed class FakeWorldAccess
@@ -639,11 +643,18 @@ public sealed class EngineBuilderTests
         throw new DirectoryNotFoundException("找不到 PixelEngine 仓库根目录。");
     }
 
-    private sealed class RecordingEditorHostExtension : IEditorHostExtension
+    private sealed class RecordingEditorHostExtension : IEditorHostExtension, IGameplayViewportInputMapper
     {
         public IDisposable? Attach(Engine engine, RenderWindow window, RenderPipeline pipeline)
         {
             throw new NotSupportedException("本测试只验证中性注册路径。");
+        }
+
+        public bool TryMapPointerToViewport(out float viewportX, out float viewportY)
+        {
+            viewportX = 12f;
+            viewportY = 34f;
+            return true;
         }
     }
 

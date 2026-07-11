@@ -131,15 +131,32 @@ internal sealed class DeleteGameObjectCommand(int stableId) : IEditorCommand
 internal sealed class RenameGameObjectCommand(int stableId, string newName) : IEditorCommand
 {
     private string? _oldName;
+    private EditorPrefabLink? _oldPrefabLink;
+    private EditorPrefabLink? _newPrefabLink;
+    private bool _captured;
 
     public string Name => "Rename GameObject";
 
     public void Execute(EditorSceneModel scene)
     {
         EditorGameObject gameObject = scene.Get(stableId);
-        _oldName ??= gameObject.Name;
+        if (!_captured)
+        {
+            _oldName = gameObject.Name;
+            _oldPrefabLink = gameObject.PrefabLink?.Clone();
+        }
+
         scene.Rename(stableId, newName);
         scene.RecordPrefabOverride(stableId, "Name", newName);
+        if (!_captured)
+        {
+            _newPrefabLink = scene.Get(stableId).PrefabLink?.Clone();
+            _captured = true;
+        }
+        else
+        {
+            scene.SetPrefabLink(stableId, _newPrefabLink);
+        }
     }
 
     public void Undo(EditorSceneModel scene)
@@ -147,6 +164,7 @@ internal sealed class RenameGameObjectCommand(int stableId, string newName) : IE
         if (_oldName is not null)
         {
             scene.Rename(stableId, _oldName);
+            scene.SetPrefabLink(stableId, _oldPrefabLink);
         }
     }
 }
@@ -157,15 +175,32 @@ internal sealed class RenameGameObjectCommand(int stableId, string newName) : IE
 internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : IEditorCommand
 {
     private bool? _oldEnabled;
+    private EditorPrefabLink? _oldPrefabLink;
+    private EditorPrefabLink? _newPrefabLink;
+    private bool _captured;
 
     public string Name => "Set GameObject Enabled";
 
     public void Execute(EditorSceneModel scene)
     {
         EditorGameObject gameObject = scene.Get(stableId);
-        _oldEnabled ??= gameObject.Enabled;
+        if (!_captured)
+        {
+            _oldEnabled = gameObject.Enabled;
+            _oldPrefabLink = gameObject.PrefabLink?.Clone();
+        }
+
         scene.SetEnabled(stableId, enabled);
         scene.RecordPrefabOverride(stableId, "Enabled", enabled.ToString());
+        if (!_captured)
+        {
+            _newPrefabLink = scene.Get(stableId).PrefabLink?.Clone();
+            _captured = true;
+        }
+        else
+        {
+            scene.SetPrefabLink(stableId, _newPrefabLink);
+        }
     }
 
     public void Undo(EditorSceneModel scene)
@@ -173,6 +208,7 @@ internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : 
         if (_oldEnabled.HasValue)
         {
             scene.SetEnabled(stableId, _oldEnabled.Value);
+            scene.SetPrefabLink(stableId, _oldPrefabLink);
         }
     }
 }
@@ -180,28 +216,66 @@ internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : 
 /// <summary>
 /// Undo 命令：SetTransform。
 /// </summary>
-internal sealed class SetTransformCommand(int stableId, EditorSceneTransform newTransform) : IEditorCommand
+internal sealed class SetTransformCommand : IEditorCommand
 {
+    private readonly int _stableId;
+    private readonly EditorSceneTransform _newTransform;
     private EditorSceneTransform? _oldTransform;
+    private EditorPrefabLink? _oldPrefabLink;
+    private EditorPrefabLink? _newPrefabLink;
+    private bool _captured;
+
+    public SetTransformCommand(int stableId, EditorSceneTransform newTransform)
+    {
+        if (stableId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(stableId));
+        }
+
+        _stableId = stableId;
+        _newTransform = (newTransform ?? throw new ArgumentNullException(nameof(newTransform))).Clone();
+    }
+
+    public SetTransformCommand(int stableId, EditorSceneTransform oldTransform, EditorSceneTransform newTransform)
+        : this(stableId, newTransform)
+    {
+        _oldTransform = (oldTransform ?? throw new ArgumentNullException(nameof(oldTransform))).Clone();
+    }
 
     public string Name => "Set Transform";
 
     public void Execute(EditorSceneModel scene)
     {
-        _oldTransform ??= scene.Get(stableId).Transform.Clone();
-        scene.SetTransform(stableId, newTransform);
-        scene.RecordPrefabOverride(stableId, "Transform.X", newTransform.X.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(stableId, "Transform.Y", newTransform.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(stableId, "Transform.RotationRadians", newTransform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(stableId, "Transform.ScaleX", newTransform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(stableId, "Transform.ScaleY", newTransform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        EditorGameObject gameObject = scene.Get(_stableId);
+        if (!_captured)
+        {
+            _oldTransform ??= gameObject.Transform.Clone();
+            _oldPrefabLink = gameObject.PrefabLink?.Clone();
+        }
+
+        scene.SetTransform(_stableId, _newTransform);
+        scene.RecordPrefabOverride(_stableId, "Transform.X", _newTransform.X.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(_stableId, "Transform.Y", _newTransform.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(_stableId, "Transform.RotationRadians", _newTransform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(_stableId, "Transform.ScaleX", _newTransform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        scene.RecordPrefabOverride(_stableId, "Transform.ScaleY", _newTransform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (!_captured)
+        {
+            _newPrefabLink = scene.Get(_stableId).PrefabLink?.Clone();
+            _captured = true;
+        }
+        else
+        {
+            scene.SetPrefabLink(_stableId, _newPrefabLink);
+        }
     }
 
     public void Undo(EditorSceneModel scene)
     {
         if (_oldTransform is not null)
         {
-            scene.SetTransform(stableId, _oldTransform);
+            scene.SetTransform(_stableId, _oldTransform);
+            scene.SetPrefabLink(_stableId, _oldPrefabLink);
         }
     }
 }
@@ -273,25 +347,38 @@ internal sealed class SetComponentFieldCommand(int stableId, int componentIndex,
 {
     private string? _oldValue;
     private bool _hadOldValue;
+    private EditorPrefabLink? _oldPrefabLink;
+    private EditorPrefabLink? _newPrefabLink;
+    private bool _captured;
 
     public string Name => "Set Component Field";
 
     public void Execute(EditorSceneModel scene)
     {
         EditorComponentModel component = scene.Get(stableId).Components[componentIndex];
-        if (!_hadOldValue && component.SerializedFields.TryGetValue(fieldName, out string? existing))
+        if (!_captured)
         {
-            _oldValue = existing;
-            _hadOldValue = true;
+            _hadOldValue = component.SerializedFields.TryGetValue(fieldName, out _oldValue);
+            _oldPrefabLink = scene.Get(stableId).PrefabLink?.Clone();
         }
 
         scene.SetComponentField(stableId, componentIndex, fieldName, value);
         scene.RecordPrefabOverride(stableId, $"Component:{component.TypeName}:{fieldName}", value ?? string.Empty);
+        if (!_captured)
+        {
+            _newPrefabLink = scene.Get(stableId).PrefabLink?.Clone();
+            _captured = true;
+        }
+        else
+        {
+            scene.SetPrefabLink(stableId, _newPrefabLink);
+        }
     }
 
     public void Undo(EditorSceneModel scene)
     {
         scene.SetComponentField(stableId, componentIndex, fieldName, _hadOldValue ? _oldValue : null);
+        scene.SetPrefabLink(stableId, _oldPrefabLink);
     }
 }
 

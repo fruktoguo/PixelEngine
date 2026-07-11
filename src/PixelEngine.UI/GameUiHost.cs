@@ -11,7 +11,6 @@ public sealed class GameUiHost : IDisposable
 {
     private readonly IGameUiBackend _backend;
     private readonly UiScreenStackEntry[] _screenStackBuffer;
-    private int _presentationFrameCountdown;
     private bool _initialized;
 
     /// <summary>
@@ -43,22 +42,25 @@ public sealed class GameUiHost : IDisposable
     public UiBackendKind BackendKind => _backend.Kind;
 
     /// <summary>
-    /// 当前后端是否需要光栅化或合成更新。
+    /// 当前后端是否有 layout/raster invalidation 或动画更新。
+    /// 最终 framebuffer composite 不得由此值跳过，因为 runtime viewport 每帧都会被 world 重写。
     /// </summary>
     public bool NeedsComposite => Options.Enabled && (_backend.IsDirty || _backend.IsAnimating);
 
     /// <summary>
-    /// 当前 UI present 降频间隔；1 表示每个渲染帧都允许 paint/composite。
+    /// UI paint 降频偏好；1 表示不降频。
+    /// 当前 backend 契约尚未拆分 paint 与 cached composite，因此该值仅保留为质量策略/诊断提示，
+    /// 最终 composite 仍每帧执行以保证静态 HUD 与 modal 不消失。
     /// </summary>
     public int PresentationIntervalFrames { get; private set; } = 1;
 
     /// <summary>
-    /// 因 UI present 降频而跳过的 paint/composite 帧数。
+    /// 实际跳过的 paint 帧数。当前 backend 契约不能安全跳过 paint 而保留 cached composite，因此保持 0。
     /// </summary>
     public long SkippedPresentationFrames { get; private set; }
 
     /// <summary>
-    /// 最近一次实际执行 UI 后端绘制/光栅化的耗时，单位毫秒；静态无脏帧为 0。
+    /// 最近一次实际执行 UI 后端 final composite 的耗时，单位毫秒；未初始化或禁用时为 0。
     /// </summary>
     public double LastPaintMilliseconds { get; private set; }
 
@@ -252,7 +254,8 @@ public sealed class GameUiHost : IDisposable
     }
 
     /// <summary>
-    /// 设置 UI present 降频间隔。仅影响 paint/composite，不影响 UI update、输入泵或事件 drain。
+    /// 设置 UI paint 降频偏好。不影响 final composite、UI update、输入泵或事件 drain。
+    /// 在 backend 增加独立 cached-composite 契约前，final composite 始终每帧执行。
     /// </summary>
     /// <param name="intervalFrames">间隔帧数；1 表示不降频。</param>
     public void SetPresentationFrameInterval(int intervalFrames)
@@ -265,7 +268,6 @@ public sealed class GameUiHost : IDisposable
         }
 
         PresentationIntervalFrames = intervalFrames;
-        _presentationFrameCountdown = 0;
     }
 
     /// <summary>
@@ -468,8 +470,10 @@ public sealed class GameUiHost : IDisposable
     public void Composite(in Rendering.UiPresentContext context)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized && NeedsComposite && ShouldPresentThisFrame())
+        if (Options.Enabled && _initialized)
         {
+            // runtime viewport 每帧由 world/post-process 重新写入；即使 backend 静态且无 dirty，
+            // 也必须重放其 cached UI 输出，否则 HUD/modal 只出现一帧。
             long started = Stopwatch.GetTimestamp();
             _backend.Composite(in context);
             LastPaintMilliseconds = ElapsedMilliseconds(started);
@@ -487,8 +491,9 @@ public sealed class GameUiHost : IDisposable
     public void DrawGui(IGuiDrawContext gui)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized && NeedsComposite && _backend is IManagedGuiDrawable drawable && ShouldPresentThisFrame())
+        if (Options.Enabled && _initialized && _backend is IManagedGuiDrawable drawable)
         {
+            // ManagedFallback 与脚本 GUI 共用即时模式 frame；framebuffer 每帧重建，静态控件也必须重放 draw data。
             long started = Stopwatch.GetTimestamp();
             drawable.DrawGui(gui);
             LastPaintMilliseconds = ElapsedMilliseconds(started);
@@ -525,25 +530,6 @@ public sealed class GameUiHost : IDisposable
     {
         int count = Documents.CopyStack(_screenStackBuffer);
         _backend.SetScreenStack(_screenStackBuffer.AsSpan(0, count));
-    }
-
-    // UI present 降频：仅跳过 paint/composite，不影响 Update、输入泵与事件 drain。
-    private bool ShouldPresentThisFrame()
-    {
-        if (PresentationIntervalFrames <= 1)
-        {
-            return true;
-        }
-
-        if (_presentationFrameCountdown > 0)
-        {
-            _presentationFrameCountdown--;
-            SkippedPresentationFrames++;
-            return false;
-        }
-
-        _presentationFrameCountdown = PresentationIntervalFrames - 1;
-        return true;
     }
 
     private void ThrowIfDisposed()

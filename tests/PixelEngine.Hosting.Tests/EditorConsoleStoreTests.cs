@@ -74,6 +74,88 @@ public sealed class EditorConsoleStoreTests
     }
 
     /// <summary>
+    /// 验证 Collapse 仅聚合展示投影，保留原始日志并给出稳定重复次数与严重度计数。
+    /// </summary>
+    [Fact]
+    public void ConsoleCollapseProjectionPreservesRawEntriesAndCountsSeverities()
+    {
+        EditorConsoleStore store = new();
+        DateTimeOffset timestamp = DateTimeOffset.UtcNow;
+        store.Add(new EditorConsoleEntry(timestamp, EditorConsoleCategory.Runtime, EditorConsoleSeverity.Info, "runtime", "ready"));
+        store.Add(new EditorConsoleEntry(timestamp.AddMilliseconds(1), EditorConsoleCategory.Runtime, EditorConsoleSeverity.Warning, "runtime", "hot"));
+        store.Add(new EditorConsoleEntry(timestamp.AddMilliseconds(2), EditorConsoleCategory.Runtime, EditorConsoleSeverity.Warning, "runtime", "hot"));
+        store.Add(new EditorConsoleEntry(timestamp.AddMilliseconds(3), EditorConsoleCategory.Runtime, EditorConsoleSeverity.Error, "runtime", "boom", "stack"));
+
+        EditorConsoleRow[] rows = store.SnapshotRows(collapse: true);
+        EditorConsoleRow warning = Assert.Single(rows, static row => row.Entry.Text == "hot");
+        Assert.Equal(2, warning.RepeatCount);
+        Assert.Equal(4, store.Snapshot().Length);
+        Assert.Equal(new EditorConsoleCounts(1, 2, 1), store.CaptureCounts());
+        Assert.True(store.LastRuntimeErrorSequence >= 0);
+    }
+
+    /// <summary>
+    /// 验证非连续重复项按 CollapseKey 选择，不把 first/last sequence 区间内的其他消息误高亮。
+    /// </summary>
+    [Fact]
+    public void ConsoleCollapsedSelectionDoesNotTreatSequenceRangeAsGroupMembership()
+    {
+        EditorConsoleStore store = new();
+        DateTimeOffset timestamp = DateTimeOffset.UtcNow;
+        store.Add(new EditorConsoleEntry(timestamp, EditorConsoleCategory.Runtime, EditorConsoleSeverity.Info, "runtime", "A"));
+        store.Add(new EditorConsoleEntry(timestamp.AddMilliseconds(1), EditorConsoleCategory.Runtime, EditorConsoleSeverity.Info, "runtime", "B"));
+        store.Add(new EditorConsoleEntry(timestamp.AddMilliseconds(2), EditorConsoleCategory.Runtime, EditorConsoleSeverity.Info, "runtime", "A"));
+        EditorConsoleRow[] raw = store.SnapshotRows(collapse: false);
+        EditorConsoleRow selectedB = raw.Single(row => row.Entry.Text == "B");
+        EditorConsoleRow[] collapsed = store.SnapshotRows(collapse: true);
+
+        EditorConsoleRow a = collapsed.Single(row => row.Entry.Text == "A");
+        EditorConsoleRow b = collapsed.Single(row => row.Entry.Text == "B");
+        Assert.False(EditorConsolePanel.RowMatchesSelection(a, collapse: true, selectedB.Sequence, selectedB.Entry.CollapseKey));
+        Assert.True(EditorConsolePanel.RowMatchesSelection(b, collapse: true, selectedB.Sequence, selectedB.Entry.CollapseKey));
+    }
+
+    /// <summary>
+    /// 验证 Console 搜索覆盖消息、来源、详情与文件位置。
+    /// </summary>
+    [Fact]
+    public void ConsoleUnifiedSearchIncludesDetailsAndSourceLocation()
+    {
+        EditorConsoleStore store = new();
+        store.Add(new EditorConsoleEntry(
+            DateTimeOffset.UtcNow,
+            EditorConsoleCategory.Script,
+            EditorConsoleSeverity.Error,
+            "runtime-script",
+            "callback failed",
+            "NullReferenceException stack",
+            "ScriptSource/Player.cs",
+            42));
+
+        _ = Assert.Single(store.SnapshotRows(new EditorConsoleFilter { SearchContains = "NullReference" }));
+        _ = Assert.Single(store.SnapshotRows(new EditorConsoleFilter { SearchContains = "runtime-script" }));
+        _ = Assert.Single(store.SnapshotRows(new EditorConsoleFilter { SearchContains = "Player.cs" }));
+        Assert.Empty(store.SnapshotRows(new EditorConsoleFilter { SearchContains = "not-found" }));
+    }
+
+    /// <summary>
+    /// 验证 Clear on Play 只在新 Play session 触发，Error Pause 只按新运行时错误边沿触发。
+    /// </summary>
+    [Fact]
+    public void ConsolePlayStateTriggersClearAndErrorPauseOnlyOnEdges()
+    {
+        EditorConsolePlayState state = new(initialRuntimeErrorSequence: 3);
+        Assert.False(state.ObserveMode(EditorMode.Edit, clearOnPlay: true));
+        Assert.True(state.ObserveMode(EditorMode.Play, clearOnPlay: true));
+        Assert.False(state.ObserveMode(EditorMode.Paused, clearOnPlay: true));
+        Assert.False(state.ObserveMode(EditorMode.Play, clearOnPlay: true));
+        Assert.False(state.ObserveRuntimeError(3, errorPause: true, EditorMode.Play));
+        Assert.True(state.ObserveRuntimeError(4, errorPause: true, EditorMode.Play));
+        Assert.False(state.ObserveRuntimeError(4, errorPause: true, EditorMode.Play));
+        Assert.False(state.ObserveRuntimeError(5, errorPause: true, EditorMode.Edit));
+    }
+
+    /// <summary>
     /// 验证 Console sink helper 会归类 build、asset、UI 与 script 诊断。
     /// </summary>
     [Fact]

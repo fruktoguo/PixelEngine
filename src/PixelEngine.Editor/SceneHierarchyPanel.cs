@@ -43,6 +43,52 @@ public interface ISceneHierarchyDataSource
 }
 
 /// <summary>
+/// Runtime Hierarchy 与 Inspector 共用的数据源。写操作只允许由 Editor 帧末安全相位调用，
+/// 并以临时编辑记录保证退出 Play 后可恢复。
+/// </summary>
+public interface IRuntimeSceneEditorDataSource : ISceneHierarchyDataSource
+{
+    /// <summary>读取当前 runtime 实体。</summary>
+    /// <param name="handle">实体稳定 handle。</param>
+    /// <param name="entity">找到的实体检查快照。</param>
+    /// <returns>实体仍存在时返回 true。</returns>
+    bool TryGetEntity(string handle, out ScriptEntityInspection entity);
+
+    /// <summary>读取当前 runtime 刚体快照。</summary>
+    /// <param name="bodyKey">刚体稳定键。</param>
+    /// <param name="body">找到的刚体快照。</param>
+    /// <returns>刚体仍存在时返回 true。</returns>
+    bool TryGetBody(int bodyKey, out RigidBodySnapshot body);
+
+    /// <summary>临时修改 runtime 实体 Transform。</summary>
+    /// <param name="handle">实体稳定 handle。</param>
+    /// <param name="x">世界 X。</param>
+    /// <param name="y">世界 Y。</param>
+    /// <param name="rotationRadians">弧度旋转。</param>
+    /// <param name="scaleX">X 缩放。</param>
+    /// <param name="scaleY">Y 缩放。</param>
+    /// <returns>实体与 Transform 可写时返回 true。</returns>
+    bool TrySetEntityTransform(
+        string handle,
+        float x,
+        float y,
+        float rotationRadians,
+        float scaleX,
+        float scaleY);
+
+    /// <summary>临时修改 runtime Behaviour 字段。</summary>
+    /// <param name="handle">实体稳定 handle。</param>
+    /// <param name="componentIndex">Behaviour 在实体检查快照中的索引。</param>
+    /// <param name="fieldName">字段或属性名。</param>
+    /// <param name="value">新值。</param>
+    /// <returns>成员存在、可写且值兼容时返回 true。</returns>
+    bool TrySetBehaviourField(string handle, int componentIndex, string fieldName, object? value);
+
+    /// <summary>恢复本数据源记录的全部临时 Play 编辑。</summary>
+    void RestoreTemporaryEdits();
+}
+
+/// <summary>
 /// 视口聚焦服务。
 /// </summary>
 public interface IViewportFocusService
@@ -58,12 +104,44 @@ public interface IViewportFocusService
 /// <summary>
 /// 基于脚本 Scene 与 PhysicsSystem 的层级数据源。
 /// </summary>
-/// <param name="scriptScene">脚本场景。</param>
-/// <param name="physics">物理系统。</param>
-public sealed class RuntimeSceneHierarchyDataSource(Scene? scriptScene = null, PhysicsSystem? physics = null) : ISceneHierarchyDataSource
+public sealed class RuntimeSceneHierarchyDataSource : IRuntimeSceneEditorDataSource
 {
-    private readonly Scene? _scriptScene = scriptScene;
-    private readonly PhysicsSystem? _physics = physics;
+    private readonly Func<Scene?> _sceneProvider;
+    private readonly PhysicsSystem? _physics;
+    private readonly Dictionary<string, RuntimeTransformSnapshot> _transformBaselines = new(StringComparer.Ordinal);
+    private readonly Dictionary<RuntimeFieldKey, object?> _fieldBaselines = [];
+    private Scene? _baselineScene;
+
+    /// <summary>使用固定 Scene 创建数据源；兼容无需替换 projection 的调用方。</summary>
+    /// <param name="scriptScene">固定脚本 Scene；可为空。</param>
+    /// <param name="physics">可选物理系统。</param>
+    public RuntimeSceneHierarchyDataSource(Scene? scriptScene = null, PhysicsSystem? physics = null)
+        : this(() => scriptScene, physics, dynamicProvider: false)
+    {
+    }
+
+    private RuntimeSceneHierarchyDataSource(
+        Func<Scene?> sceneProvider,
+        PhysicsSystem? physics,
+        bool dynamicProvider)
+    {
+        _ = dynamicProvider;
+        _sceneProvider = sceneProvider ?? throw new ArgumentNullException(nameof(sceneProvider));
+        _physics = physics;
+    }
+
+    /// <summary>
+    /// 创建会在每次读取时解析当前 Scene 的动态数据源，用于 Play/Edit projection 可替换的 Editor 宿主。
+    /// </summary>
+    /// <param name="sceneProvider">当前脚本 Scene provider。</param>
+    /// <param name="physics">可选物理系统。</param>
+    /// <returns>动态 runtime 层级数据源。</returns>
+    public static RuntimeSceneHierarchyDataSource CreateDynamic(
+        Func<Scene?> sceneProvider,
+        PhysicsSystem? physics = null)
+    {
+        return new RuntimeSceneHierarchyDataSource(sceneProvider, physics, dynamicProvider: true);
+    }
 
     /// <inheritdoc />
     public SceneHierarchySnapshot Capture()
@@ -71,14 +149,156 @@ public sealed class RuntimeSceneHierarchyDataSource(Scene? scriptScene = null, P
         return new SceneHierarchySnapshot(CaptureEntities(), CaptureBodies());
     }
 
+    /// <inheritdoc />
+    public bool TryGetEntity(string handle, out ScriptEntityInspection entity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(handle);
+        Scene? scene = _sceneProvider();
+        if (scene is not null)
+        {
+            ScriptEntityInspection[] entities = scene.CaptureInspectionSnapshot();
+            for (int i = 0; i < entities.Length; i++)
+            {
+                if (string.Equals(entities[i].Handle, handle, StringComparison.Ordinal))
+                {
+                    entity = entities[i];
+                    return true;
+                }
+            }
+        }
+
+        entity = default;
+        return false;
+    }
+
+    /// <inheritdoc />
+    public bool TryGetBody(int bodyKey, out RigidBodySnapshot body)
+    {
+        if (_physics is not null)
+        {
+            int count = _physics.Stats.ActiveBodyCount;
+            if (count != 0)
+            {
+                RigidBodySnapshot[] snapshots = new RigidBodySnapshot[count];
+                int written = _physics.CopyBodySnapshots(snapshots);
+                for (int i = 0; i < written; i++)
+                {
+                    if (snapshots[i].BodyKey == bodyKey)
+                    {
+                        body = snapshots[i];
+                        return true;
+                    }
+                }
+            }
+        }
+
+        body = default;
+        return false;
+    }
+
+    /// <inheritdoc />
+    public bool TrySetEntityTransform(
+        string handle,
+        float x,
+        float y,
+        float rotationRadians,
+        float scaleX,
+        float scaleY)
+    {
+        if (!float.IsFinite(x) || !float.IsFinite(y) || !float.IsFinite(rotationRadians) ||
+            !float.IsFinite(scaleX) || !float.IsFinite(scaleY) ||
+            !TryGetEntity(handle, out ScriptEntityInspection entity) || entity.Transform is null)
+        {
+            return false;
+        }
+
+        Scene? scene = _sceneProvider();
+        EnsureBaselineScene(scene);
+        Transform transform = entity.Transform;
+        if (!_transformBaselines.ContainsKey(handle))
+        {
+            _transformBaselines.Add(handle, RuntimeTransformSnapshot.Capture(transform));
+        }
+
+        transform.SetPosition(x, y);
+        transform.RotationRadians = rotationRadians;
+        transform.ScaleX = scaleX;
+        transform.ScaleY = scaleY;
+        return true;
+    }
+
+    /// <inheritdoc />
+    public bool TrySetBehaviourField(string handle, int componentIndex, string fieldName, object? value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        if (!TryGetEntity(handle, out ScriptEntityInspection entity) ||
+            (uint)componentIndex >= (uint)entity.Components.Length)
+        {
+            return false;
+        }
+
+        Behaviour behaviour = entity.Components[componentIndex].Behaviour;
+        ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
+        for (int i = 0; i < fields.Length; i++)
+        {
+            ScriptFieldDescriptor field = fields[i];
+            if (!string.Equals(field.Name, fieldName, StringComparison.Ordinal) || !field.CanWrite)
+            {
+                continue;
+            }
+
+            Scene? scene = _sceneProvider();
+            EnsureBaselineScene(scene);
+            RuntimeFieldKey key = new(handle, componentIndex, fieldName);
+            _ = _fieldBaselines.TryAdd(key, field.Value);
+            return ScriptInspector.TrySetFieldValue(behaviour, fieldName, value);
+        }
+
+        return false;
+    }
+
+    /// <inheritdoc />
+    public void RestoreTemporaryEdits()
+    {
+        Scene? scene = _sceneProvider();
+        if (scene is null || !ReferenceEquals(scene, _baselineScene))
+        {
+            ClearTemporaryEditBaselines();
+            return;
+        }
+
+        foreach (KeyValuePair<string, RuntimeTransformSnapshot> item in _transformBaselines)
+        {
+            if (TryGetEntity(item.Key, out ScriptEntityInspection entity) && entity.Transform is not null)
+            {
+                item.Value.Apply(entity.Transform);
+            }
+        }
+
+        foreach (KeyValuePair<RuntimeFieldKey, object?> item in _fieldBaselines)
+        {
+            if (TryGetEntity(item.Key.Handle, out ScriptEntityInspection entity) &&
+                (uint)item.Key.ComponentIndex < (uint)entity.Components.Length)
+            {
+                _ = ScriptInspector.TrySetFieldValue(
+                    entity.Components[item.Key.ComponentIndex].Behaviour,
+                    item.Key.FieldName,
+                    item.Value);
+            }
+        }
+
+        ClearTemporaryEditBaselines();
+    }
+
     private IReadOnlyList<SceneHierarchyEntityItem> CaptureEntities()
     {
-        if (_scriptScene is null)
+        Scene? scriptScene = _sceneProvider();
+        if (scriptScene is null)
         {
             return [];
         }
 
-        ScriptEntityInspection[] entities = _scriptScene.CaptureInspectionSnapshot();
+        ScriptEntityInspection[] entities = scriptScene.CaptureInspectionSnapshot();
         SceneHierarchyEntityItem[] items = new SceneHierarchyEntityItem[entities.Length];
         for (int i = 0; i < entities.Length; i++)
         {
@@ -130,6 +350,52 @@ public sealed class RuntimeSceneHierarchyDataSource(Scene? scriptScene = null, P
         }
 
         return bodies;
+    }
+
+    private void EnsureBaselineScene(Scene? scene)
+    {
+        if (ReferenceEquals(scene, _baselineScene))
+        {
+            return;
+        }
+
+        ClearTemporaryEditBaselines();
+        _baselineScene = scene;
+    }
+
+    private void ClearTemporaryEditBaselines()
+    {
+        _transformBaselines.Clear();
+        _fieldBaselines.Clear();
+        _baselineScene = null;
+    }
+
+    private readonly record struct RuntimeFieldKey(string Handle, int ComponentIndex, string FieldName);
+
+    private readonly record struct RuntimeTransformSnapshot(
+        float X,
+        float Y,
+        float RotationRadians,
+        float ScaleX,
+        float ScaleY)
+    {
+        public static RuntimeTransformSnapshot Capture(Transform transform)
+        {
+            return new RuntimeTransformSnapshot(
+                transform.X,
+                transform.Y,
+                transform.RotationRadians,
+                transform.ScaleX,
+                transform.ScaleY);
+        }
+
+        public void Apply(Transform transform)
+        {
+            transform.SetPosition(X, Y);
+            transform.RotationRadians = RotationRadians;
+            transform.ScaleX = ScaleX;
+            transform.ScaleY = ScaleY;
+        }
     }
 }
 

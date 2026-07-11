@@ -45,7 +45,9 @@ public sealed class PlayerControllerIntegrationTests
         runtime.DrawGui(hudGui);
 
         // Assert：验证不变式与预期结果
-        Assert.Contains("begin:demo-hud:Demo HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings", hudGui.Drawn);
+        Assert.Contains(
+            "begin:demo-hud:Demo HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoInputs",
+            hudGui.Drawn);
         Assert.Contains("swatch:selected-material:FF5FC8D8:14", hudGui.Drawn);
         Assert.Contains(hudGui.Drawn, line => line.StartsWith("progress:", StringComparison.Ordinal));
         Assert.Contains("text:材质 sand    半径 4", hudGui.Drawn);
@@ -109,7 +111,8 @@ public sealed class PlayerControllerIntegrationTests
         _ = entity.AddComponent<WeaponController>();
         MissionDirector mission = entity.AddComponent<MissionDirector>();
         mission.RequiredCrystals = 3;
-        _ = entity.AddComponent<PlayableHud>();
+        PlayableHud hud = entity.AddComponent<PlayableHud>();
+        hud.ShowDiagnostics = true;
 
         // Act：执行被测操作
         engine.RunHeadlessTicks(2);
@@ -119,10 +122,12 @@ public sealed class PlayerControllerIntegrationTests
         runtime.DrawGui(gui);
 
         // Assert：验证不变式与预期结果
-        Assert.Contains("begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar", gui.Drawn);
+        Assert.Contains(
+            "begin:playable-hud:Playable HUD:NoTitleBar, NoResize, NoMove, NoSavedSettings, NoScrollbar, NoInputs",
+            gui.Drawn);
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
-        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 左起点 -> 右出口，穿过熔岩坑与路障", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 → 右侧出口", StringComparison.Ordinal));
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:旧任务诊断 采集 0/3", StringComparison.Ordinal));
         Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶", StringComparison.Ordinal));
         Assert.Contains("text:射击 0", gui.Drawn);
@@ -144,6 +149,37 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Contains("text:射击 1", firedGui.Drawn);
         Assert.DoesNotContain("text:射击 1", gui.Drawn);
+    }
+
+    /// <summary>
+    /// 验证可玩 HUD 默认使用右侧紧凑布局，不以诊断面板遮挡左侧玩家出生区。
+    /// </summary>
+    [Fact]
+    public void PlayableHudDefaultsToCompactRightSideGameplayOverlay()
+    {
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        _ = entity.AddComponent<PlayerController>();
+        _ = entity.AddComponent<PlayerHealth>();
+        _ = entity.AddComponent<PlayableProjectileTool>();
+        _ = entity.AddComponent<WeaponController>();
+        _ = entity.AddComponent<PlayableHud>();
+
+        engine.RunHeadlessTicks(2);
+        RecordingGuiContext gui = new();
+        engine.Context.GetService<IScriptRuntime>().DrawGui(gui);
+
+        Assert.Contains("next:340,12,288,176,FirstUseEver", gui.Drawn);
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 → 右侧出口", StringComparison.Ordinal));
+        Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal));
+        Assert.DoesNotContain("text:材质", gui.Drawn);
     }
 
     /// <summary>

@@ -1,6 +1,8 @@
 using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
+using PixelEngine.Physics;
 using PixelEngine.Scripting;
+using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -14,7 +16,9 @@ internal sealed class GameObjectInspectorPanel(
     IEditorConsoleSink? console = null,
     IAssetBrowserDataSource? assetSource = null,
     Action<string>? instantiatePrefab = null,
-    ScriptAssetOpenHandler? openScriptAsset = null) : IEditorPanel
+    ScriptAssetOpenHandler? openScriptAsset = null,
+    IRuntimeSceneEditorDataSource? runtimeSource = null,
+    Func<EditorMode>? modeProvider = null) : IEditorPanel
 {
     private const string ReadyStatus = "就绪";
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
@@ -24,8 +28,14 @@ internal sealed class GameObjectInspectorPanel(
     private readonly IAssetBrowserDataSource? _assetSource = assetSource;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
+    private readonly IRuntimeSceneEditorDataSource? _runtimeSource = runtimeSource;
+    private readonly Func<EditorMode>? _modeProvider = modeProvider;
     private string _componentSearch = string.Empty;
     private string? _statusSelectionKey;
+    private EditorMode _lastMode = EditorMode.Edit;
+    private int? _transformEditStableId;
+    private EditorSceneTransform? _transformEditBefore;
+    private EditorGameObject? _transformEditTarget;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
@@ -35,6 +45,7 @@ internal sealed class GameObjectInspectorPanel(
 
     public void Draw(in EditorContext context)
     {
+        PrepareFrame(context.Selection.GameObjectStableId);
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
         {
@@ -44,6 +55,20 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         Visible = visible;
+        if (!string.IsNullOrWhiteSpace(context.Selection.EntityHandle))
+        {
+            DrawRuntimeEntityInspector(context.Selection.EntityHandle);
+            ImGui.End();
+            return;
+        }
+
+        if (context.Selection.BodyId.HasValue)
+        {
+            DrawRuntimeBodyInspector(context.Selection.BodyId.Value);
+            ImGui.End();
+            return;
+        }
+
         // 无选中时早退；否则绘制头部、Transform 与组件列表
         if (!context.Selection.GameObjectStableId.HasValue && context.Selection.FolderPath is not null)
         {
@@ -75,6 +100,62 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.SeparatorText("Inspector 状态");
         ImGui.TextUnformatted(Status);
         ImGui.End();
+    }
+
+    /// <summary>
+    /// 在面板可见性与绘制顺序之外收口连续 Transform 编辑。
+    /// Hierarchy 先于 Inspector 绘制；若用户从 A 的 InputFloat 直接点击 B，A 的旧控件不会再被绘制，
+    /// 因此不能只依赖 ImGui.IsItemDeactivatedAfterEdit 提交 Undo。
+    /// </summary>
+    internal void PrepareFrame(int? selectedStableId)
+    {
+        EditorMode mode = _modeProvider?.Invoke() ?? EditorMode.Edit;
+        bool targetReplaced = _transformEditStableId.HasValue &&
+            (!_scene.TryGet(_transformEditStableId.Value, out EditorGameObject? currentTarget) ||
+             !ReferenceEquals(currentTarget, _transformEditTarget));
+        UpdateRuntimeEditLifetime();
+        if (_transformEditStableId.HasValue &&
+            (!Visible || mode != EditorMode.Edit || selectedStableId != _transformEditStableId || targetReplaced))
+        {
+            CommitPendingTransformEdit();
+        }
+    }
+
+    internal bool BeginTransformEdit(int stableId)
+    {
+        if (_transformEditStableId.HasValue && _transformEditStableId != stableId)
+        {
+            CommitPendingTransformEdit();
+        }
+
+        if (_transformEditStableId.HasValue)
+        {
+            return true;
+        }
+
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject))
+        {
+            return false;
+        }
+
+        _transformEditStableId = stableId;
+        _transformEditBefore = gameObject.Transform.Clone();
+        _transformEditTarget = gameObject;
+        return true;
+    }
+
+    internal bool ApplyTransformEdit(int stableId, EditorSceneTransform transform)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+        if (!BeginTransformEdit(stableId) ||
+            !_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            !ReferenceEquals(gameObject, _transformEditTarget))
+        {
+            return false;
+        }
+
+        _scene.SetTransform(stableId, transform);
+        return true;
     }
 
     internal AssetInspectorSnapshot CaptureAssetInspector(string assetPath)
@@ -262,6 +343,181 @@ internal sealed class GameObjectInspectorPanel(
         return "folder:" + folderPath;
     }
 
+    private void UpdateRuntimeEditLifetime()
+    {
+        if (_modeProvider is null || _runtimeSource is null)
+        {
+            return;
+        }
+
+        EditorMode mode = _modeProvider();
+        if (_lastMode is EditorMode.Play or EditorMode.Paused &&
+            mode == EditorMode.Edit)
+        {
+            _runtimeSource.RestoreTemporaryEdits();
+        }
+
+        _lastMode = mode;
+    }
+
+    private void DrawRuntimeEntityInspector(string handle)
+    {
+        if (_runtimeSource is null || !_runtimeSource.TryGetEntity(handle, out ScriptEntityInspection entity))
+        {
+            ImGui.TextUnformatted("Runtime entity is no longer available");
+            return;
+        }
+
+        ImGui.TextColored(new Vector4(0.45f, 0.72f, 1f, 1f), "Play Mode · changes are temporary");
+        ImGui.TextUnformatted($"{entity.Handle} · Entity {entity.EntityId}");
+        if (entity.Transform is not null)
+        {
+            ImGui.SeparatorText("Transform (Runtime)");
+            DrawRuntimeTransform(entity);
+        }
+
+        ImGui.SeparatorText("Components (Runtime)");
+        for (int i = 0; i < entity.Components.Length; i++)
+        {
+            ScriptComponentInspection component = entity.Components[i];
+            if (!ImGui.CollapsingHeader(
+                $"{component.TypeName}##runtime_component_{entity.EntityId}_{i}",
+                ImGuiTreeNodeFlags.DefaultOpen))
+            {
+                continue;
+            }
+
+            ImGui.TextUnformatted(component.Faulted
+                ? "Faulted"
+                : component.Enabled ? "Enabled" : "Disabled");
+            ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(component.Behaviour);
+            for (int fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
+            {
+                DrawRuntimeField(entity.Handle, i, fields[fieldIndex]);
+            }
+        }
+    }
+
+    private void DrawRuntimeTransform(ScriptEntityInspection entity)
+    {
+        Transform transform = entity.Transform!;
+        float x = transform.X;
+        float y = transform.Y;
+        float rotation = transform.RotationRadians;
+        float scaleX = transform.ScaleX;
+        float scaleY = transform.ScaleY;
+        bool changed = ImGui.InputFloat("X##runtime_transform", ref x);
+        changed |= ImGui.InputFloat("Y##runtime_transform", ref y);
+        changed |= ImGui.InputFloat("Rotation##runtime_transform", ref rotation);
+        changed |= ImGui.InputFloat("Scale X##runtime_transform", ref scaleX);
+        changed |= ImGui.InputFloat("Scale Y##runtime_transform", ref scaleY);
+        if (changed)
+        {
+            _ = _runtimeSource!.TrySetEntityTransform(entity.Handle, x, y, rotation, scaleX, scaleY);
+        }
+    }
+
+    private void DrawRuntimeField(string handle, int componentIndex, ScriptFieldDescriptor field)
+    {
+        string label = $"{field.Name}##runtime_{handle}_{componentIndex}_{field.Name}";
+        if (!field.CanWrite || field.Kind == ScriptFieldKind.Unsupported)
+        {
+            ImGui.TextUnformatted($"{field.Name}: {field.Value}");
+            return;
+        }
+
+        switch (field.Kind)
+        {
+            case ScriptFieldKind.Boolean:
+                {
+                    bool value = field.Value is bool current && current;
+                    if (ImGui.Checkbox(label, ref value))
+                    {
+                        _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, value);
+                    }
+
+                    break;
+                }
+            case ScriptFieldKind.Number:
+                {
+                    float value = field.Value is IConvertible convertible
+                        ? convertible.ToSingle(System.Globalization.CultureInfo.InvariantCulture)
+                        : 0f;
+                    if (ImGui.InputFloat(label, ref value) && TryConvertRuntimeNumber(value, field.FieldType, out object? converted))
+                    {
+                        _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, converted);
+                    }
+
+                    break;
+                }
+            case ScriptFieldKind.String:
+                {
+                    string value = field.Value?.ToString() ?? string.Empty;
+                    if (ImGui.InputText(label, ref value, 256))
+                    {
+                        _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, value);
+                    }
+
+                    break;
+                }
+            case ScriptFieldKind.Enum:
+                {
+                    Type enumType = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+                    string[] names = Enum.GetNames(enumType);
+                    int index = Math.Max(0, Array.IndexOf(names, field.Value?.ToString()));
+                    if (ImGui.Combo(label, ref index, names, names.Length) && (uint)index < (uint)names.Length)
+                    {
+                        object value = Enum.Parse(enumType, names[index]);
+                        _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, value);
+                    }
+
+                    break;
+                }
+            case ScriptFieldKind.Vector:
+            case ScriptFieldKind.Material:
+            case ScriptFieldKind.AssetReference:
+            case ScriptFieldKind.Unsupported:
+            default:
+                ImGui.TextUnformatted($"{field.Name}: {field.Value}");
+                break;
+        }
+    }
+
+    private void DrawRuntimeBodyInspector(int bodyKey)
+    {
+        if (_runtimeSource is null || !_runtimeSource.TryGetBody(bodyKey, out RigidBodySnapshot body))
+        {
+            ImGui.TextUnformatted("Runtime body is no longer available");
+            return;
+        }
+
+        ImGui.TextUnformatted($"Body {body.BodyKey}");
+        ImGui.SeparatorText("Transform (Runtime, read-only)");
+        ImGui.TextUnformatted($"Position: {body.Transform.Position.X:0.###}, {body.Transform.Position.Y:0.###}");
+        ImGui.TextUnformatted($"Rotation: sin={body.Transform.Sin:0.###}, cos={body.Transform.Cos:0.###}");
+        ImGui.TextUnformatted($"Linear velocity: {body.LinearVelocityPixelsPerSecond.X:0.###}, {body.LinearVelocityPixelsPerSecond.Y:0.###}");
+        ImGui.TextUnformatted($"Angular velocity: {body.AngularVelocityRadiansPerSecond:0.###}");
+        ImGui.TextUnformatted($"Mask: {body.Mask.Width}×{body.Mask.Height} · {body.Mask.SolidPixelCount} pixels");
+        ImGui.TextWrapped("Rigid body editing requires a Physics phase-safe command and is intentionally read-only here.");
+    }
+
+    private static bool TryConvertRuntimeNumber(float value, Type destinationType, out object? converted)
+    {
+        Type target = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
+        try
+        {
+            converted = target == typeof(float)
+                ? value
+                : Convert.ChangeType(value, target, System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+        {
+            converted = null;
+            return false;
+        }
+    }
+
     private void DrawHeader(EditorGameObject gameObject)
     {
         string name = gameObject.Name;
@@ -297,44 +553,101 @@ internal sealed class GameObjectInspectorPanel(
         EditorSceneTransform transform = gameObject.Transform.Clone();
         float x = transform.X;
         float y = transform.Y;
-        bool changed = false;
-        if (ImGui.InputFloat("X", ref x))
+        bool changed = ImGui.InputFloat("X", ref x);
+        if (changed)
         {
             transform.X = x;
-            changed = true;
         }
+        HandleTransformInput(gameObject, transform, changed);
 
-        if (ImGui.InputFloat("Y", ref y))
+        changed = ImGui.InputFloat("Y", ref y);
+        if (changed)
         {
             transform.Y = y;
-            changed = true;
         }
+        HandleTransformInput(gameObject, transform, changed);
 
         float rotation = transform.RotationRadians;
-        if (ImGui.InputFloat("Rotation", ref rotation))
+        changed = ImGui.InputFloat("Rotation", ref rotation);
+        if (changed)
         {
             transform.RotationRadians = rotation;
-            changed = true;
         }
+        HandleTransformInput(gameObject, transform, changed);
 
         float scaleX = transform.ScaleX;
         float scaleY = transform.ScaleY;
-        if (ImGui.InputFloat("Scale X", ref scaleX))
+        changed = ImGui.InputFloat("Scale X", ref scaleX);
+        if (changed)
         {
             transform.ScaleX = scaleX;
-            changed = true;
         }
+        HandleTransformInput(gameObject, transform, changed);
 
-        if (ImGui.InputFloat("Scale Y", ref scaleY))
+        changed = ImGui.InputFloat("Scale Y", ref scaleY);
+        if (changed)
         {
             transform.ScaleY = scaleY;
-            changed = true;
+        }
+        HandleTransformInput(gameObject, transform, changed);
+    }
+
+    private void HandleTransformInput(EditorGameObject gameObject, EditorSceneTransform transform, bool changed)
+    {
+        if (ImGui.IsItemActivated())
+        {
+            _ = BeginTransformEdit(gameObject.StableId);
         }
 
         if (changed)
         {
-            _undo.Execute(_scene, new SetTransformCommand(gameObject.StableId, transform));
+            _ = ApplyTransformEdit(gameObject.StableId, transform);
         }
+
+        if (!ImGui.IsItemDeactivatedAfterEdit() ||
+            _transformEditStableId != gameObject.StableId ||
+            _transformEditBefore is null)
+        {
+            return;
+        }
+
+        CommitPendingTransformEdit();
+    }
+
+    private void CommitPendingTransformEdit()
+    {
+        if (!_transformEditStableId.HasValue || _transformEditBefore is null)
+        {
+            return;
+        }
+
+        int stableId = _transformEditStableId.Value;
+        EditorSceneTransform before = _transformEditBefore;
+        EditorGameObject? expectedTarget = _transformEditTarget;
+        _transformEditStableId = null;
+        _transformEditBefore = null;
+        _transformEditTarget = null;
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            !ReferenceEquals(gameObject, expectedTarget))
+        {
+            return;
+        }
+
+        EditorSceneTransform after = gameObject.Transform.Clone();
+        if (!TransformEquals(before, after))
+        {
+            _undo.Execute(_scene, new SetTransformCommand(stableId, before, after));
+        }
+    }
+
+    private static bool TransformEquals(EditorSceneTransform left, EditorSceneTransform right)
+    {
+        const float Epsilon = 0.0001f;
+        return MathF.Abs(left.X - right.X) <= Epsilon &&
+            MathF.Abs(left.Y - right.Y) <= Epsilon &&
+            MathF.Abs(left.RotationRadians - right.RotationRadians) <= Epsilon &&
+            MathF.Abs(left.ScaleX - right.ScaleX) <= Epsilon &&
+            MathF.Abs(left.ScaleY - right.ScaleY) <= Epsilon;
     }
 
     private void DrawComponents(EditorGameObject gameObject)

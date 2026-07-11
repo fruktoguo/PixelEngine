@@ -603,7 +603,8 @@ internal sealed class EditorProjectSession : IDisposable
     // 场景图版本变化时重建 ScriptScene 投影，使 Inspector/Game View 与文档一致
     private void RefreshEditProjectionIfNeeded(bool force = false)
     {
-        if (Engine.Mode == EngineExecutionMode.Play || (!force && SceneModel.Version == _runtimeProjectionVersion))
+        if (Engine.Mode is EngineExecutionMode.Play or EngineExecutionMode.Paused ||
+            (!force && SceneModel.Version == _runtimeProjectionVersion))
         {
             return;
         }

@@ -1006,18 +1006,59 @@ public sealed class EditorProjectAssetModelTests
                 },
                 scenePath);
             EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
-            EditorAssetBrowserDataSource source = new(manifest, new FixedThumbnailProvider("textures/sand.png", new AssetThumbnail(99, 32, 16)));
+            FixedThumbnailProvider thumbnails = new(
+                "textures/sand.png",
+                new AssetThumbnail(99, 32, 16));
+            EditorAssetBrowserDataSource source = new(manifest, thumbnails);
 
             IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
 
             // Assert：验证预期结果
-            Assert.Equal("纹理：32×16，3 B", Find(assets, "textures/sand.png").PreviewSummary);
+            AssetBrowserItem texture = Find(assets, "textures/sand.png");
+            Assert.Null(texture.Thumbnail);
+            Assert.Equal("纹理：3 B", texture.PreviewSummary);
+            Assert.True(source.TryAcquireThumbnail(texture.Path, out AssetThumbnail acquired));
+            Assert.Equal(new AssetThumbnail(99, 32, 16), acquired);
+            source.ReleaseThumbnail(texture.Path, acquired.TextureHandle);
+            Assert.Equal(["textures/sand.png"], thumbnails.AcquiredPaths);
+            Assert.Equal([("textures/sand.png", 99u)], thumbnails.Released);
             Assert.Equal("音频：2 B", Find(assets, "audio/hit.wav").PreviewSummary);
             Assert.StartsWith("材质目录：2 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
             Assert.StartsWith("UI Screen：HUD，", Find(assets, "ui/screens/hud.xhtml").PreviewSummary, StringComparison.Ordinal);
             Assert.Equal("场景：2 个 GameObject，1 个根，1 个 Behaviour", Find(assets, "scenes/main.scene").PreviewSummary);
             Assert.Equal("Prefab：1 个 GameObject，1 个根，0 个 Behaviour", Find(assets, "prefabs/rock.prefab").PreviewSummary);
             Assert.StartsWith("脚本：DemoBehaviour，", Find(assets, "scripts/DemoBehaviour.cs").PreviewSummary, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证生产双根 Project Window 只把 Content rooted path 映射给纹理 provider，并对称转发 lease 释放。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserRoutesRootedThumbnailLeasesToContentProvider()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Thumbnail Lease Project");
+            _ = Directory.CreateDirectory(Path.Combine(project.ContentRootPath, "textures"));
+            File.WriteAllBytes(Path.Combine(project.ContentRootPath, "textures", "sand.png"), [1, 2, 3]);
+            FixedThumbnailProvider thumbnails = new(
+                "textures/sand.png",
+                new AssetThumbnail(77, 24, 12));
+            using EditorAssetBrowserDataSource source = new(project, thumbnails);
+            AssetBrowserItem texture = Find(source.ListAssets(), "Content/textures/sand.png");
+
+            Assert.Null(texture.Thumbnail);
+            Assert.True(source.TryAcquireThumbnail(texture.Path, out AssetThumbnail acquired));
+            source.ReleaseThumbnail(texture.Path, acquired.TextureHandle);
+            Assert.False(source.TryAcquireThumbnail("ScriptSource/EditorIcon.png", out _));
+            Assert.Equal(["textures/sand.png"], thumbnails.AcquiredPaths);
+            Assert.Equal([("textures/sand.png", 77u)], thumbnails.Released);
         }
         finally
         {
@@ -1110,9 +1151,29 @@ public sealed class EditorProjectAssetModelTests
         return Assert.Single(assets, item => item.Path == path);
     }
 
-    private sealed class FixedThumbnailProvider(string path, AssetThumbnail thumbnail) : ITextureThumbnailProvider
+    private sealed class FixedThumbnailProvider(string path, AssetThumbnail thumbnail) : IEditorTextureThumbnailLeaseProvider
     {
+        public List<string> AcquiredPaths { get; } = [];
+
+        public List<(string Path, uint TextureHandle)> Released { get; } = [];
+
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail resolved)
+        {
+            return Resolve(assetPath, out resolved);
+        }
+
+        public bool TryAcquireThumbnail(string assetPath, out AssetThumbnail resolved)
+        {
+            AcquiredPaths.Add(assetPath);
+            return Resolve(assetPath, out resolved);
+        }
+
+        public void ReleaseThumbnail(string assetPath, uint textureHandle)
+        {
+            Released.Add((assetPath, textureHandle));
+        }
+
+        private bool Resolve(string assetPath, out AssetThumbnail resolved)
         {
             if (string.Equals(assetPath, path, StringComparison.OrdinalIgnoreCase))
             {

@@ -95,6 +95,37 @@ internal readonly record struct GameViewViewportSnapshot(
     }
 
     /// <summary>
+    /// 将窗口 framebuffer 指针按 panel origin、DPI 与 Game View letterbox 映射到 runtime viewport。
+    /// </summary>
+    /// <param name="framebufferPoint">窗口 framebuffer 指针坐标。</param>
+    /// <param name="panelOriginFramebuffer">面板原点的窗口 framebuffer 坐标。</param>
+    /// <param name="framebufferScale">面板逻辑坐标到 framebuffer 的 DPI 缩放。</param>
+    /// <param name="viewportPoint">映射后的 runtime viewport 坐标。</param>
+    /// <returns>输入有限且位于实际 Game View 图像矩形内时返回 true。</returns>
+    public bool TryMapFramebufferToViewport(
+        Vector2 framebufferPoint,
+        Vector2 panelOriginFramebuffer,
+        Vector2 framebufferScale,
+        out Vector2 viewportPoint)
+    {
+        viewportPoint = default;
+        if (!float.IsFinite(framebufferPoint.X) ||
+            !float.IsFinite(framebufferPoint.Y) ||
+            !float.IsFinite(panelOriginFramebuffer.X) ||
+            !float.IsFinite(panelOriginFramebuffer.Y))
+        {
+            return false;
+        }
+
+        float scaleX = NormalizeScale(framebufferScale.X);
+        float scaleY = NormalizeScale(framebufferScale.Y);
+        Vector2 panelPoint = new(
+            (framebufferPoint.X - panelOriginFramebuffer.X) / scaleX,
+            (framebufferPoint.Y - panelOriginFramebuffer.Y) / scaleY);
+        return TryMapPanelToViewport(panelPoint, out viewportPoint);
+    }
+
+    /// <summary>
     /// 将 viewport 纹理坐标映射回 Game View 面板局部坐标。
     /// </summary>
     /// <param name="viewportPoint">viewport 纹理像素坐标。</param>
@@ -188,6 +219,23 @@ internal readonly record struct GameViewViewportSnapshot(
         int width = Math.Max(1, (int)MathF.Ceiling(right) - x);
         int height = Math.Max(1, (int)MathF.Ceiling(bottom) - y);
         target = new UiPresentTarget(x, y, width, height, MathF.Max(scaleX, scaleY));
+        return true;
+    }
+
+    /// <summary>
+    /// 创建 runtime viewport 离屏表面的全尺寸 UI 目标。
+    /// </summary>
+    /// <param name="target">以 runtime texture 左上角为原点的目标。</param>
+    /// <returns>snapshot 有效且纹理尺寸为正时返回 true。</returns>
+    public bool TryCreateRuntimeUiPresentTarget(out UiPresentTarget target)
+    {
+        if (!IsValid || TextureWidth <= 0 || TextureHeight <= 0)
+        {
+            target = default;
+            return false;
+        }
+
+        target = new UiPresentTarget(0, 0, TextureWidth, TextureHeight, 1f);
         return true;
     }
 

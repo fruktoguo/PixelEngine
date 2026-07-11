@@ -12,14 +12,20 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     private readonly GameUiHost _host;
     private readonly IUiPresentTargetProvider? _targetProvider;
     private readonly IDisposable _registration;
+    private UiPresentTarget _lastPresentTarget;
+    private bool _hasPresentTarget;
     private bool _disposed;
 
-    private UiLayerCompositor(RenderPipeline pipeline, GameUiHost host, IUiPresentTargetProvider? targetProvider)
+    private UiLayerCompositor(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        GameUiHost host,
+        IUiPresentTargetProvider? targetProvider)
     {
         ArgumentNullException.ThrowIfNull(pipeline);
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _targetProvider = targetProvider;
-        _registration = pipeline.RegisterUiLayer(UiPresentLayerOrders.Game, this);
+        _registration = pipeline.RegisterUiLayer(surface, UiPresentLayerOrders.Game, this);
     }
 
     /// <summary>
@@ -30,7 +36,11 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     /// <returns>已注册的合成层。</returns>
     public static UiLayerCompositor Attach(RenderPipeline pipeline, GameUiHost host)
     {
-        return new UiLayerCompositor(pipeline, host, targetProvider: null);
+        return new UiLayerCompositor(
+            pipeline,
+            UiPresentSurface.WindowFramebuffer,
+            host,
+            targetProvider: null);
     }
 
     /// <summary>
@@ -45,7 +55,43 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         GameUiHost host,
         IUiPresentTargetProvider? targetProvider)
     {
-        return new UiLayerCompositor(pipeline, host, targetProvider);
+        return new UiLayerCompositor(
+            pipeline,
+            UiPresentSurface.WindowFramebuffer,
+            host,
+            targetProvider);
+    }
+
+    /// <summary>
+    /// 在显式 present surface 注册游戏 UI 合成层。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="surface">目标 present surface。</param>
+    /// <param name="host">游戏 UI 宿主。</param>
+    /// <returns>已注册的合成层。</returns>
+    public static UiLayerCompositor Attach(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        GameUiHost host)
+    {
+        return new UiLayerCompositor(pipeline, surface, host, targetProvider: null);
+    }
+
+    /// <summary>
+    /// 在显式 present surface 注册游戏 UI 合成层，并允许覆盖该 surface 内的目标区域。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="surface">目标 present surface。</param>
+    /// <param name="host">游戏 UI 宿主。</param>
+    /// <param name="targetProvider">可选目标区域提供者；坐标属于所选 surface。</param>
+    /// <returns>已注册的合成层。</returns>
+    public static UiLayerCompositor Attach(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        GameUiHost host,
+        IUiPresentTargetProvider? targetProvider)
+    {
+        return new UiLayerCompositor(pipeline, surface, host, targetProvider);
     }
 
     /// <summary>
@@ -67,6 +113,14 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
             _targetProvider.TryGetPresentTarget(out UiPresentTarget target)
                 ? context.WithTarget(target)
                 : context;
+        if (!_hasPresentTarget || presentContext.Target != _lastPresentTarget)
+        {
+            UiPresentTarget presentTarget = presentContext.Target;
+            _host.Resize(new UiViewport(0, 0, presentTarget.Width, presentTarget.Height, presentTarget.DpiScale));
+            _lastPresentTarget = presentTarget;
+            _hasPresentTarget = true;
+        }
+
         _host.Composite(in presentContext);
         RecordSub(context.Profiler, started);
         FrameIndex++;

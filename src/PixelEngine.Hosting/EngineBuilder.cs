@@ -383,12 +383,21 @@ public sealed class EngineBuilder
         context.RegisterService(scenes);
         IReadOnlyList<IEditorHostExtension> editorHostExtensions = [.. _editorHostExtensions];
         context.RegisterService(editorHostExtensions);
+        bool gameUiInputSourceRegistered = false;
+        bool gameplayViewportMapperRegistered = false;
         for (int i = 0; i < editorHostExtensions.Count; i++)
         {
-            if (editorHostExtensions[i] is IGameUiInputSourceFactory gameUiInputSourceFactory)
+            IEditorHostExtension extension = editorHostExtensions[i];
+            if (!gameUiInputSourceRegistered && extension is IGameUiInputSourceFactory gameUiInputSourceFactory)
             {
                 context.RegisterService(gameUiInputSourceFactory);
-                break;
+                gameUiInputSourceRegistered = true;
+            }
+
+            if (!gameplayViewportMapperRegistered && extension is IGameplayViewportInputMapper gameplayViewportMapper)
+            {
+                context.RegisterService(gameplayViewportMapper);
+                gameplayViewportMapperRegistered = true;
             }
         }
 

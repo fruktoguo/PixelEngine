@@ -1,5 +1,6 @@
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Hosting;
+using HostingEditorMode = PixelEngine.Hosting.EditorMode;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -33,7 +34,68 @@ internal readonly record struct EditorConsoleEntry(
     EditorConsoleCategory Category,
     EditorConsoleSeverity Severity,
     string Source,
-    string Text);
+    string Text,
+    string Details = "",
+    string? FilePath = null,
+    int Line = 0,
+    long FrameIndex = -1)
+{
+    public string CollapseKey => string.Join(
+        '\u001f',
+        Category,
+        Severity,
+        Source,
+        Text,
+        Details,
+        FilePath ?? string.Empty,
+        Line);
+}
+
+/// <summary>
+/// Unity-like Console 的可选择投影行。
+/// </summary>
+internal readonly record struct EditorConsoleRow(
+    long Sequence,
+    long LastSequence,
+    EditorConsoleEntry Entry,
+    int RepeatCount);
+
+/// <summary>
+/// Console 三种可见严重度的实时数量。
+/// </summary>
+internal readonly record struct EditorConsoleCounts(int Logs, int Warnings, int Errors);
+
+/// <summary>
+/// Console 的 Play transition 边沿状态；保证 Clear on Play 与 Error Pause 不被逐帧重复触发。
+/// </summary>
+internal sealed class EditorConsolePlayState(long initialRuntimeErrorSequence = -1)
+{
+    private bool _modeInitialized;
+    private HostingEditorMode _lastMode = HostingEditorMode.Edit;
+    private long _observedRuntimeErrorSequence = initialRuntimeErrorSequence;
+
+    public bool ObserveMode(HostingEditorMode mode, bool clearOnPlay)
+    {
+        bool shouldClear = _modeInitialized &&
+            clearOnPlay &&
+            _lastMode == HostingEditorMode.Edit &&
+            mode == HostingEditorMode.Play;
+        _lastMode = mode;
+        _modeInitialized = true;
+        return shouldClear;
+    }
+
+    public bool ObserveRuntimeError(long sequence, bool errorPause, HostingEditorMode mode)
+    {
+        if (sequence <= _observedRuntimeErrorSequence)
+        {
+            return false;
+        }
+
+        _observedRuntimeErrorSequence = sequence;
+        return errorPause && mode == HostingEditorMode.Play;
+    }
+}
 
 /// <summary>
 /// EditorConsoleFilter。
@@ -50,6 +112,8 @@ internal sealed record EditorConsoleFilter
 
     public string? TextContains { get; init; }
 
+    public string? SearchContains { get; init; }
+
     public DateTimeOffset? From { get; init; }
 
     public DateTimeOffset? To { get; init; }
@@ -62,13 +126,23 @@ internal sealed record EditorConsoleFilter
             !(From is { } from && entry.Timestamp < from) &&
             !(To is { } to && entry.Timestamp > to) &&
             Contains(entry.Source, SourceContains) &&
-            Contains(entry.Text, TextContains);
+            Contains(entry.Text, TextContains) &&
+            MatchesSearch(entry, SearchContains);
     }
 
     private static bool Contains(string value, string? filter)
     {
         return string.IsNullOrWhiteSpace(filter) ||
             value.Contains(filter, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MatchesSearch(in EditorConsoleEntry entry, string? filter)
+    {
+        return string.IsNullOrWhiteSpace(filter) ||
+            entry.Text.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+            entry.Source.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+            entry.Details.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrWhiteSpace(entry.FilePath) && entry.FilePath.Contains(filter, StringComparison.OrdinalIgnoreCase));
     }
 }
 
@@ -222,6 +296,7 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
     private readonly int _capacity;
     private readonly Queue<ConsoleStoreItem> _items;
     private long _nextSequence;
+    private long _lastRuntimeErrorSequence = -1;
 
     public EditorConsoleStore(int capacity = DefaultCapacity)
     {
@@ -239,6 +314,25 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
             }
         }
     }
+
+    /// <summary>
+    /// 最近加入的原始日志序号；无日志时为 -1。
+    /// </summary>
+    public long LastSequence
+    {
+        get
+        {
+            lock (_items)
+            {
+                return _nextSequence - 1;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 最近一条运行时错误序号；供 Error Pause 边沿触发，不把 Build/Asset 错误误当运行时错误。
+    /// </summary>
+    public long LastRuntimeErrorSequence => Volatile.Read(ref _lastRuntimeErrorSequence);
 
     public void Add(EditorConsoleEntry entry)
     {
@@ -259,7 +353,12 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
                 _ = _items.Dequeue();
             }
 
-            _items.Enqueue(new ConsoleStoreItem(_nextSequence++, normalized));
+            long sequence = _nextSequence++;
+            _items.Enqueue(new ConsoleStoreItem(sequence, normalized));
+            if (normalized.Category == EditorConsoleCategory.Runtime && normalized.Severity == EditorConsoleSeverity.Error)
+            {
+                Volatile.Write(ref _lastRuntimeErrorSequence, sequence);
+            }
         }
     }
 
@@ -291,6 +390,111 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
         return [.. query.Select(static item => item.Entry)];
     }
 
+    /// <summary>
+    /// 捕获 Unity-like Console 行；Collapse 只聚合投影，不破坏原始环形缓冲。
+    /// </summary>
+    public EditorConsoleRow[] SnapshotRows(
+        EditorConsoleFilter? filter = null,
+        bool newestFirst = false,
+        bool collapse = false)
+    {
+        ConsoleStoreItem[] snapshot;
+        lock (_items)
+        {
+            snapshot = [.. _items];
+        }
+
+        IEnumerable<ConsoleStoreItem> query = snapshot;
+        if (filter is not null)
+        {
+            query = query.Where(item => filter.Matches(item.Entry));
+        }
+
+        if (!collapse)
+        {
+            IEnumerable<ConsoleStoreItem> ordered = newestFirst
+                ? query.OrderByDescending(static item => item.Sequence)
+                : query.OrderBy(static item => item.Sequence);
+            return
+            [
+                .. ordered.Select(static item => new EditorConsoleRow(
+                    item.Sequence,
+                    item.Sequence,
+                    item.Entry,
+                    RepeatCount: 1)),
+            ];
+        }
+
+        Dictionary<string, CollapsedConsoleItem> collapsed = new(StringComparer.Ordinal);
+        foreach (ConsoleStoreItem item in query.OrderBy(static item => item.Sequence))
+        {
+            string key = item.Entry.CollapseKey;
+            if (collapsed.TryGetValue(key, out CollapsedConsoleItem existing))
+            {
+                collapsed[key] = existing with
+                {
+                    LastSequence = item.Sequence,
+                    RepeatCount = existing.RepeatCount + 1,
+                };
+            }
+            else
+            {
+                collapsed.Add(key, new CollapsedConsoleItem(item.Sequence, item.Sequence, item.Entry, 1));
+            }
+        }
+
+        IEnumerable<CollapsedConsoleItem> collapsedQuery = newestFirst
+            ? collapsed.Values.OrderByDescending(static item => item.LastSequence)
+            : collapsed.Values.OrderBy(static item => item.Sequence);
+        return
+        [
+            .. collapsedQuery.Select(static item => new EditorConsoleRow(
+                item.Sequence,
+                item.LastSequence,
+                item.Entry,
+                item.RepeatCount)),
+        ];
+    }
+
+    /// <summary>
+    /// 捕获原始日志的 Log/Warning/Error 数量；Collapse 与文本搜索不改变总数。
+    /// </summary>
+    public EditorConsoleCounts CaptureCounts()
+    {
+        lock (_items)
+        {
+            int logs = 0;
+            int warnings = 0;
+            int errors = 0;
+            foreach (ConsoleStoreItem item in _items)
+            {
+                switch (item.Entry.Severity)
+                {
+                    case EditorConsoleSeverity.Trace:
+                    case EditorConsoleSeverity.Info:
+                        logs++;
+                        break;
+                    case EditorConsoleSeverity.Warning:
+                        warnings++;
+                        break;
+                    case EditorConsoleSeverity.Error:
+                        errors++;
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(item), item.Entry.Severity, "未知 Console 严重度。");
+                }
+            }
+
+            return new EditorConsoleCounts(logs, warnings, errors);
+        }
+    }
+
 
     private readonly record struct ConsoleStoreItem(long Sequence, EditorConsoleEntry Entry);
+
+    private readonly record struct CollapsedConsoleItem(
+        long Sequence,
+        long LastSequence,
+        EditorConsoleEntry Entry,
+        int RepeatCount);
 }

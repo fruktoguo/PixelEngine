@@ -143,12 +143,31 @@ internal static class EditorGameViewContract
         in EditorInputSnapshot editorCapture,
         bool viewportHasInputFocus)
     {
-        return !viewportHasInputFocus
+        return ResolveEditorInputCapture(
+            in contract,
+            in editorCapture,
+            pointerHasInputFocus: viewportHasInputFocus,
+            keyboardHasInputFocus: viewportHasInputFocus);
+    }
+
+    /// <summary>
+    /// 按独立 mouse/keyboard 所有权解析 Editor 对 gameplay 的输入捕获。
+    /// </summary>
+    /// <remarks>
+    /// ImGui 的全局 WantCapture 会包含 Game View 画布自身造成的捕获，不能据此再次阻断 gameplay。
+    /// 菜单、popup、modal 或其他面板取得 hover/focus 后，对应 Game View 所有权会变为 false，仍由 Editor 优先。
+    /// </remarks>
+    public static EditorHostInputCapture ResolveEditorInputCapture(
+        in EditorViewportContract contract,
+        in EditorInputSnapshot editorCapture,
+        bool pointerHasInputFocus,
+        bool keyboardHasInputFocus)
+    {
+        _ = editorCapture;
+        return contract.InputOwner == EditorViewportInputOwner.AuthoringTools
             ? new EditorHostInputCapture(WantCaptureMouse: true, WantCaptureKeyboard: true)
-            : contract.InputOwner == EditorViewportInputOwner.AuthoringTools
-            ? new EditorHostInputCapture(WantCaptureMouse: true, WantCaptureKeyboard: true)
-            : !editorCapture.WantCaptureMouse && !editorCapture.WantCaptureKeyboard
-                ? EditorHostInputCapture.None
-                : new EditorHostInputCapture(editorCapture.WantCaptureMouse, editorCapture.WantCaptureKeyboard);
+            : new EditorHostInputCapture(
+                WantCaptureMouse: !pointerHasInputFocus,
+                WantCaptureKeyboard: !keyboardHasInputFocus);
     }
 }

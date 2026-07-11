@@ -51,7 +51,8 @@ public sealed class DemoHud : Behaviour
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
-            GuiWindowFlags.NoTitleBar;
+            GuiWindowFlags.NoTitleBar |
+            GuiWindowFlags.NoInputs;
         if (!gui.BeginWindow("demo-hud", "Demo HUD", flags))
         {
             gui.EndWindow();

@@ -1,10 +1,17 @@
 {
-  "formatVersion": 1,
+  "formatVersion": 2,
   "name": "lava-mine",
   "entities": [
     {
       "stableId": 1,
       "name": "LevelDirector",
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "rotationRadians": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
       "behaviours": [
         {
           "typeName": "PixelEngine.Demo.LevelDirector",
@@ -18,6 +25,40 @@
             "BuildScriptEntities": "true",
             "BuildGoalTrigger": "true"
           }
+        }
+      ]
+    },
+    {
+      "stableId": 2,
+      "name": "Player",
+      "parentId": 1,
+      "transform": {
+        "x": 48,
+        "y": 244,
+        "rotationRadians": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "behaviours": [
+        {
+          "typeName": "PixelEngine.Demo.PlayerSpawnPoint"
+        }
+      ]
+    },
+    {
+      "stableId": 3,
+      "name": "Goal",
+      "parentId": 1,
+      "transform": {
+        "x": 570,
+        "y": 208,
+        "rotationRadians": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "behaviours": [
+        {
+          "typeName": "PixelEngine.Demo.GoalPoint"
         }
       ]
     }

@@ -156,9 +156,17 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     public int Height => _worldTexture.Height;
 
     /// <summary>
-    /// 最近一帧 post-process 后、present 前的最终画面纹理；供 Editor 视口只读采样。
+    /// 最近一帧 post-process 与 gameplay/debug overlay 合成后、present 前的最终 runtime 画面纹理；供 Editor 视口只读采样。
     /// </summary>
     public RenderViewportTexture CurrentViewportTexture { get; private set; }
+
+    /// <summary>
+    /// 已合成进 <see cref="CurrentViewportTexture" /> 的 overlay 命令数量。
+    /// </summary>
+    /// <remarks>
+    /// 该值用于窗口验收确认 runtime viewport 不只是裸 world 纹理；窗口 resize 后、首帧产生前为 0。
+    /// </remarks>
+    public int CurrentViewportOverlayCount { get; private set; }
 
     /// <summary>
     /// 已注册 UI present 层数量。
@@ -166,17 +174,34 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     public int UiLayerCount { get; private set; }
 
     /// <summary>
-    /// 注册一个 present 前 UI 层。层按 order 升序、同 order 按注册顺序确定性绘制。
+    /// 注册一个窗口 framebuffer UI 层。该兼容 overload 保留既有 CLR 签名与窗口绘制语义。
     /// </summary>
     /// <param name="order">排序值；越小越早绘制。</param>
     /// <param name="layer">UI 层实例。</param>
     /// <returns>释放即可注销该层。</returns>
     public IDisposable RegisterUiLayer(int order, IUiPresentLayer layer)
     {
+        return RegisterUiLayer(UiPresentSurface.WindowFramebuffer, order, layer);
+    }
+
+    /// <summary>
+    /// 在显式目标 surface 注册 UI 层。每个 surface 内按 order 升序、同 order 按注册顺序确定性绘制。
+    /// </summary>
+    /// <param name="surface">目标 surface；runtime 游戏 UI 与窗口宿主 UI 必须显式区分。</param>
+    /// <param name="order">同一 surface 内的排序值；越小越早绘制。</param>
+    /// <param name="layer">UI 层实例。</param>
+    /// <returns>释放即可注销该层。</returns>
+    public IDisposable RegisterUiLayer(UiPresentSurface surface, int order, IUiPresentLayer layer)
+    {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(layer);
+        if (surface is not (UiPresentSurface.RuntimeViewport or UiPresentSurface.WindowFramebuffer))
+        {
+            throw new ArgumentOutOfRangeException(nameof(surface), surface, "未知 UI present surface。");
+        }
+
         EnsureUiLayerCapacity(UiLayerCount + 1);
-        UiLayerEntry entry = new(order, _nextUiLayerSequence++, layer);
+        UiLayerEntry entry = new(surface, order, _nextUiLayerSequence++, layer);
         int index = UiLayerCount;
         while (index > 0 && CompareUiLayers(entry, _uiLayers[index - 1]) < 0)
         {
@@ -281,6 +306,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _visibility.Upload(_visibilityMask);
         _hasUploadedWorld = false;
         CurrentViewportTexture = default;
+        CurrentViewportOverlayCount = 0;
     }
 
     /// <summary>
@@ -460,27 +486,51 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
             RecordSub(profiler, FrameSubPhase.Bloom, started);
         }
 
-        // --- 后处理阶段：dither → gamma → CRT ---
+        // --- Runtime viewport 阶段：dither → gamma → CRT → gameplay/debug overlay ---
         started = Stopwatch.GetTimestamp();
         current = RenderPost(current);
-        CurrentViewportTexture = new RenderViewportTexture(current.Handle, current.Width, current.Height);
+        // Editor 的 Game View 直接采样 CurrentViewportTexture，因此 gameplay overlay 必须先写入
+        // 离屏 runtime surface，不能只在默认 framebuffer 上绘制，否则玩家/准星会被 Editor 面板覆盖。
+        _overlay.Render(overlays, current);
+        CurrentViewportOverlayCount = overlays.Length;
         RecordSub(profiler, FrameSubPhase.PostProcess, started);
 
-        // --- Present 阶段：缩放上屏、overlay、UI 层与交换缓冲 ---
+        // --- Present 阶段：Game UI 离屏合成 → 发布 viewport → 窗口缩放 → Editor UI ---
         started = Stopwatch.GetTimestamp();
+        PresentationViewport runtimeViewport = PresentationViewport.Fit(Width, Height, Width, Height);
+        current.BindFramebuffer();
+        PresentUiLayers(
+            new UiPresentContext(
+                _gl,
+                current.Width,
+                current.Height,
+                current.Width,
+                current.Height,
+                runtimeViewport,
+                _uiPrimitives,
+                profiler),
+            UiPresentSurface.RuntimeViewport);
+
+        // CurrentViewportTexture 是 runtime world + gameplay overlay + Game UI 的完整权威表面。
+        // Editor Game View 只采样该纹理；Editor chrome/modal 在后续默认 framebuffer 阶段绘制，绝不进入它。
+        CurrentViewportTexture = new RenderViewportTexture(current.Handle, current.Width, current.Height);
         PresentationViewport presentation = PresentationViewport.Fit(Width, Height, _window.Width, _window.Height);
         _present.Render(current, presentation, _quad);
-        _overlay.Render(overlays, presentation);
         _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
-        PresentUiLayers(new UiPresentContext(
-            _gl,
-            _window.Width,
-            _window.Height,
-            _window.LogicalWidth,
-            _window.LogicalHeight,
-            presentation,
-            _uiPrimitives,
-            profiler));
+        UiPresentTarget windowUiTarget = new(0, 0, _window.Width, _window.Height, 1f);
+        PresentUiLayers(
+            new UiPresentContext(
+                _gl,
+                _window.Width,
+                _window.Height,
+                _window.LogicalWidth,
+                _window.LogicalHeight,
+                presentation,
+                windowUiTarget,
+                windowUiTarget.Scissor,
+                _uiPrimitives,
+                profiler),
+            UiPresentSurface.WindowFramebuffer);
         BeforePresentUi?.Invoke(_gl);
         BeforeSwapBuffers?.Invoke(_gl);
         RecordSub(profiler, FrameSubPhase.Present, started);
@@ -706,11 +756,16 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
             Settings.RadianceCascades.Validate().Enabled;
     }
 
-    // 按 order 升序绘制 UI 层；每层前后保存/恢复 GL 状态以防污染世界渲染。
-    private void PresentUiLayers(in UiPresentContext context)
+    // 按 surface 过滤并按已排序的 order/sequence 绘制；每层前后保存/恢复 GL 状态。
+    private void PresentUiLayers(in UiPresentContext context, UiPresentSurface surface)
     {
         for (int i = 0; i < UiLayerCount; i++)
         {
+            if (_uiLayers[i].Surface != surface)
+            {
+                continue;
+            }
+
             UiGlStateSnapshot state = UiGlStateSnapshot.Capture(_gl);
             PrepareUiState(context);
             try
@@ -726,7 +781,6 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
 
     private void PrepareUiState(in UiPresentContext context)
     {
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         _gl.Viewport(0, 0, (uint)context.FramebufferWidth, (uint)context.FramebufferHeight);
         ApplyUiPresentClip(context);
         _gl.Disable(EnableCap.DepthTest);
@@ -805,7 +859,11 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         profiler.RecordSub(subPhase, elapsed * 1000.0 / Stopwatch.Frequency);
     }
 
-    private readonly record struct UiLayerEntry(int Order, int Sequence, IUiPresentLayer Layer);
+    private readonly record struct UiLayerEntry(
+        UiPresentSurface Surface,
+        int Order,
+        int Sequence,
+        IUiPresentLayer Layer);
 
     private sealed class UiLayerRegistration(RenderPipeline pipeline, IUiPresentLayer layer) : IDisposable
     {

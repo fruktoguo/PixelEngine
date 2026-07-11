@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using System.Globalization;
+using System.Numerics;
 
 namespace PixelEngine.Editor;
 
@@ -48,7 +49,27 @@ public sealed class AssetBrowserPanel(
     AssetBrowserImportHandler? importAsset = null,
     AssetBrowserImportSourcePickHandler? pickImportSource = null) : IEditorPanel
 {
+    /// <summary>
+    /// Project Window 网格缩略图允许的最小边长。
+    /// </summary>
+    public const float MinimumThumbnailSize = 48f;
+
+    /// <summary>
+    /// Project Window 网格缩略图允许的最大边长。
+    /// </summary>
+    public const float MaximumThumbnailSize = 128f;
+
+    private const float DefaultThumbnailSize = 72f;
+    private const float GridLabelHeight = 38f;
+    private const float GridCellPadding = 10f;
+    private const uint SelectedTileColor = 0xCC744C2F;
+    private const uint HoveredTileColor = 0x88484440;
+    private const uint FolderIconColor = 0xFF5CB9F0;
+    private const uint AssetIconColor = 0xFFD5D8DD;
+    private const uint AccentIconColor = 0xFF5BA2FF;
+    private const uint DarkIconColor = 0xFF36383D;
     private readonly IAssetBrowserDataSource _source = source ?? throw new ArgumentNullException(nameof(source));
+    private readonly AssetBrowserThumbnailLeaseCache _thumbnailLeases = new(source as IAssetBrowserThumbnailDataSource);
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
@@ -97,7 +118,23 @@ public sealed class AssetBrowserPanel(
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
 
     /// <inheritdoc />
-    public bool Visible { get; set; } = true;
+    public bool Visible
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            if (!value)
+            {
+                _thumbnailLeases.ReleaseAll();
+            }
+        }
+    } = true;
 
     /// <summary>
     /// 最近一次完整资产快照。
@@ -166,6 +203,26 @@ public sealed class AssetBrowserPanel(
     public AssetBrowserSortMode SortMode { get; private set; } = AssetBrowserSortMode.PathAscending;
 
     /// <summary>
+    /// Project Window 当前右侧内容展示模式。
+    /// </summary>
+    public AssetBrowserViewMode ViewMode { get; private set; } = AssetBrowserViewMode.Grid;
+
+    /// <summary>
+    /// 网格模式当前图标边长。
+    /// </summary>
+    public float ThumbnailSize { get; private set; } = DefaultThumbnailSize;
+
+    /// <summary>
+    /// OpenGL 缩略图的左上 UV；磁盘图片 row 0 是顶部，因此绘制时翻转 V。
+    /// </summary>
+    public static Vector2 ThumbnailUv0 => new(0f, 1f);
+
+    /// <summary>
+    /// OpenGL 缩略图的右下 UV；与 <see cref="ThumbnailUv0"/> 配对避免图片上下倒置。
+    /// </summary>
+    public static Vector2 ThumbnailUv1 => new(1f, 0f);
+
+    /// <summary>
     /// 最近一次面板状态。
     /// </summary>
     public string Status { get; private set; } = "就绪";
@@ -203,6 +260,34 @@ public sealed class AssetBrowserPanel(
 
         SortMode = mode;
         ApplyFilter();
+    }
+
+    /// <summary>
+    /// 切换 Project Window 网格或列表展示模式。
+    /// </summary>
+    /// <param name="mode">目标展示模式。</param>
+    public void SetViewMode(AssetBrowserViewMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知 Project Window 展示模式。");
+        }
+
+        ViewMode = mode;
+    }
+
+    /// <summary>
+    /// 设置网格缩略图尺寸，并收敛到可用范围。
+    /// </summary>
+    /// <param name="size">请求的图标边长。</param>
+    public void SetThumbnailSize(float size)
+    {
+        if (!float.IsFinite(size))
+        {
+            throw new ArgumentOutOfRangeException(nameof(size), size, "缩略图尺寸必须为有限值。");
+        }
+
+        ThumbnailSize = Math.Clamp(size, MinimumThumbnailSize, MaximumThumbnailSize);
     }
 
     /// <summary>
@@ -867,58 +952,64 @@ public sealed class AssetBrowserPanel(
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
-        _trackedSelection = context.Selection;
-        _ = ApplyPendingChanges();
-        bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        _thumbnailLeases.BeginFrame();
+        try
         {
+            _trackedSelection = context.Selection;
+            _ = ApplyPendingChanges();
+            bool visible = Visible;
+            if (!ImGui.Begin(Title, ref visible))
+            {
+                Visible = visible;
+                ImGui.End();
+                return;
+            }
+
             Visible = visible;
+            if (!visible)
+            {
+                ImGui.End();
+                return;
+            }
+
+            DrawToolbar(context.Selection);
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                // 搜索可能命中动态“启动 / 当前” badge；只在搜索态重算，普通浏览不逐帧分配投影。
+                ApplyFilter();
+            }
+
+            if (ImGui.BeginTable(
+                "project_window_layout",
+                2,
+                ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV))
+            {
+                ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 150f);
+                ImGui.TableSetupColumn("Contents", ImGuiTableColumnFlags.WidthStretch);
+                ImGui.TableNextRow();
+                _ = ImGui.TableNextColumn();
+                _ = ImGui.BeginChild("project_folder_tree");
+                DrawFolderTree(context.Selection);
+                ImGui.EndChild();
+
+                _ = ImGui.TableNextColumn();
+                DrawBreadcrumbs(context.Selection);
+                ImGui.Separator();
+                _ = ImGui.BeginChild("project_folder_contents");
+                DrawFolderContents(context.Selection);
+
+                ImGui.EndChild();
+                ImGui.EndTable();
+            }
+
+            DrawPendingActionEditors();
+            ImGui.TextUnformatted(Status);
             ImGui.End();
-            return;
         }
-
-        Visible = visible;
-        DrawToolbar(context.Selection);
-        if (!string.IsNullOrWhiteSpace(_search))
+        finally
         {
-            // 搜索可能命中动态“启动 / 当前” badge；只在搜索态重算，普通浏览不逐帧分配投影。
-            ApplyFilter();
+            _thumbnailLeases.EndFrame();
         }
-
-        if (ImGui.BeginTable(
-            "project_window_layout",
-            2,
-            ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV))
-        {
-            ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 220f);
-            ImGui.TableSetupColumn("Contents", ImGuiTableColumnFlags.WidthStretch);
-            ImGui.TableNextRow();
-            _ = ImGui.TableNextColumn();
-            _ = ImGui.BeginChild("project_folder_tree");
-            DrawFolderTree(context.Selection);
-            ImGui.EndChild();
-
-            _ = ImGui.TableNextColumn();
-            DrawBreadcrumbs(context.Selection);
-            ImGui.Separator();
-            _ = ImGui.BeginChild("project_folder_contents");
-            for (int i = 0; i < VisibleFolders.Count; i++)
-            {
-                DrawFolderContentRow(VisibleFolders[i], context.Selection);
-            }
-
-            for (int i = 0; i < FilteredAssets.Count; i++)
-            {
-                DrawAssetRow(FilteredAssets[i], context.Selection);
-            }
-
-            ImGui.EndChild();
-            ImGui.EndTable();
-        }
-
-        DrawPendingActionEditors();
-        ImGui.TextUnformatted(Status);
-        ImGui.End();
     }
 
     private void DrawToolbar(EditorSelection selection)
@@ -972,25 +1063,59 @@ public sealed class AssetBrowserPanel(
             DrawImportControls(selection);
         }
 
+        ImGui.Separator();
         string search = _search;
-        if (ImGui.InputText("搜索", ref search, 128))
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.InputTextWithHint("##project-search", "搜索", ref search, 128))
         {
             SetSearch(search);
         }
-        ImGui.SameLine();
+
         int kindIndex = KindFilter.HasValue ? (int)KindFilter.Value + 1 : 0;
-        if (ImGui.Combo("类型", ref kindIndex, KindFilterLabels, KindFilterLabels.Length))
+        ImGui.SetNextItemWidth(94f);
+        if (ImGui.Combo("##project-kind", ref kindIndex, KindFilterLabels, KindFilterLabels.Length))
         {
             SetKindFilter(kindIndex == 0 ? null : (AssetBrowserItemKind)(kindIndex - 1));
         }
 
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("按资产类型过滤");
+        }
+
         ImGui.SameLine();
         int sortMode = (int)SortMode;
-        if (ImGui.Combo("排序", ref sortMode, SortModeLabels, SortModeLabels.Length) &&
+        ImGui.SetNextItemWidth(94f);
+        if (ImGui.Combo("##project-sort", ref sortMode, SortModeLabels, SortModeLabels.Length) &&
             sortMode >= 0 &&
             sortMode < SortModeLabels.Length)
         {
             SetSortMode((AssetBrowserSortMode)sortMode);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("排序方式");
+        }
+
+        ImGui.SameLine();
+        DrawViewModeButton(AssetBrowserViewMode.Grid, "project-grid-view");
+        ImGui.SameLine();
+        DrawViewModeButton(AssetBrowserViewMode.List, "project-list-view");
+        if (ViewMode == AssetBrowserViewMode.Grid)
+        {
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(110f);
+            float thumbnailSize = ThumbnailSize;
+            if (ImGui.SliderFloat("##project-thumbnail-size", ref thumbnailSize, MinimumThumbnailSize, MaximumThumbnailSize, "%.0f"))
+            {
+                SetThumbnailSize(thumbnailSize);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("缩略图大小");
+            }
         }
     }
 
@@ -1125,10 +1250,174 @@ public sealed class AssetBrowserPanel(
         }
     }
 
-    private void DrawFolderContentRow(AssetBrowserFolderItem folder, EditorSelection selection)
+    private void DrawFolderContents(EditorSelection selection)
+    {
+        if (ViewMode == AssetBrowserViewMode.Grid)
+        {
+            DrawGridContents(selection);
+            return;
+        }
+
+        for (int i = 0; i < VisibleFolders.Count; i++)
+        {
+            DrawFolderContentRow(VisibleFolders[i], selection);
+        }
+
+        for (int i = 0; i < FilteredAssets.Count; i++)
+        {
+            DrawAssetRow(FilteredAssets[i], selection);
+        }
+    }
+
+    private void DrawGridContents(EditorSelection selection)
+    {
+        float cellWidth = ThumbnailSize + (GridCellPadding * 2f);
+        int columnCount = Math.Max(1, (int)(Math.Max(cellWidth, ImGui.GetContentRegionAvail().X) / cellWidth));
+        if (!ImGui.BeginTable(
+            "project_asset_grid",
+            columnCount,
+            ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.PadOuterX))
+        {
+            return;
+        }
+
+        for (int i = 0; i < VisibleFolders.Count; i++)
+        {
+            _ = ImGui.TableNextColumn();
+            DrawFolderContentTile(VisibleFolders[i], selection, cellWidth);
+        }
+
+        for (int i = 0; i < FilteredAssets.Count; i++)
+        {
+            _ = ImGui.TableNextColumn();
+            DrawAssetTile(FilteredAssets[i], selection, cellWidth);
+        }
+
+        ImGui.EndTable();
+    }
+
+    private void DrawFolderContentTile(AssetBrowserFolderItem folder, EditorSelection selection, float cellWidth)
     {
         bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.OrdinalIgnoreCase);
-        if (ImGui.Selectable($"[文件夹] {folder.DisplayName}  {folder.AssetCount} 项##content-folder-{folder.Path}", selected))
+        Vector2 tileSize = new(cellWidth, ThumbnailSize + GridLabelHeight + GridCellPadding);
+        Vector2 tileMin = ImGui.GetCursorScreenPos();
+        bool clicked = ImGui.InvisibleButton($"folder-tile-{folder.Path}", tileSize);
+        bool hovered = ImGui.IsItemHovered();
+        bool doubleClicked = hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left);
+        if (clicked || doubleClicked)
+        {
+            _ = SelectFolder(folder.Path, selection);
+        }
+
+        DrawTileBackground(tileMin, tileSize, selected, hovered);
+        DrawAssetIcon(
+            ImGui.GetWindowDrawList(),
+            AssetBrowserIconKind.Folder,
+            tileMin + new Vector2((cellWidth - ThumbnailSize) * 0.5f, GridCellPadding * 0.5f),
+            new Vector2(ThumbnailSize),
+            FolderIconColor);
+        DrawTileLabel(folder.DisplayName, tileMin, cellWidth);
+        // Drag/drop target 与右键菜单都依赖当前 tile 的 LastItemData。
+        // Tooltip 内部会提交 Text item 并覆盖 LastItemData，因此必须最后绘制。
+        DrawFolderDropTarget(folder);
+        DrawFolderContextMenu(folder);
+        if (hovered)
+        {
+            ImGui.SetTooltip($"{folder.Path}\n{folder.AssetCount.ToString(CultureInfo.InvariantCulture)} 项");
+        }
+    }
+
+    private void DrawAssetTile(AssetBrowserItem item, EditorSelection selection, float cellWidth)
+    {
+        bool selected = IsAssetSelected(selection, item);
+        Vector2 tileSize = new(cellWidth, ThumbnailSize + GridLabelHeight + GridCellPadding);
+        Vector2 tileMin = ImGui.GetCursorScreenPos();
+        bool clicked = ImGui.InvisibleButton($"asset-tile-{item.AssetId ?? item.Path}", tileSize);
+        bool tileVisible = ImGui.IsRectVisible(tileMin, tileMin + tileSize);
+        bool hovered = ImGui.IsItemHovered();
+        bool doubleClicked = hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left);
+        if (clicked)
+        {
+            _ = SelectAsset(item.Path, selection);
+        }
+
+        if (doubleClicked)
+        {
+            OpenPrimaryAsset(item);
+        }
+
+        DrawTileBackground(tileMin, tileSize, selected, hovered);
+        Vector2 previewMin = tileMin + new Vector2((cellWidth - ThumbnailSize) * 0.5f, GridCellPadding * 0.5f);
+        AssetThumbnail? thumbnail = _thumbnailLeases.Resolve(in item, tileVisible);
+        DrawAssetPreview(ImGui.GetWindowDrawList(), item, thumbnail, previewMin, new Vector2(ThumbnailSize));
+        DrawTileLabel(item.DisplayName, tileMin, cellWidth);
+        if (ImGui.BeginDragDropSource())
+        {
+            if (TryCreateDragPayload(item.Path, out AssetBrowserDragPayload payload))
+            {
+                _ = AssetBrowserDragPayloadImGui.SetPayload(payload);
+                ImGui.TextUnformatted(item.Path);
+            }
+
+            ImGui.EndDragDropSource();
+        }
+
+        DrawAssetContextMenu(item);
+        if (hovered)
+        {
+            string typeLabel = item.Descriptor?.TypeLabel ?? GetDefaultTypeLabel(item.Kind);
+            string summary = string.IsNullOrWhiteSpace(item.PreviewSummary) ? string.Empty : $"\n{item.PreviewSummary}";
+            ImGui.SetTooltip($"{item.Path}\n{typeLabel}{summary}");
+        }
+    }
+
+    private static void DrawTileBackground(Vector2 tileMin, Vector2 tileSize, bool selected, bool hovered)
+    {
+        uint color = selected ? SelectedTileColor : hovered ? HoveredTileColor : 0;
+        if (color != 0)
+        {
+            ImGui.GetWindowDrawList().AddRectFilled(tileMin, tileMin + tileSize, color, 4f);
+        }
+    }
+
+    private void DrawTileLabel(string label, Vector2 tileMin, float cellWidth)
+    {
+        string fitted = FitLabel(label, cellWidth - (GridCellPadding * 1.5f));
+        Vector2 textSize = ImGui.CalcTextSize(fitted);
+        Vector2 textPosition = new(
+            tileMin.X + Math.Max(4f, (cellWidth - textSize.X) * 0.5f),
+            tileMin.Y + ThumbnailSize + GridCellPadding);
+        ImGui.GetWindowDrawList().AddText(textPosition, 0xFFE2E4E8, fitted);
+    }
+
+    private static string FitLabel(string label, float availableWidth)
+    {
+        if (ImGui.CalcTextSize(label).X <= availableWidth)
+        {
+            return label;
+        }
+
+        const string ellipsis = "…";
+        int length = label.Length;
+        while (length > 1)
+        {
+            length--;
+            string candidate = label[..length] + ellipsis;
+            if (ImGui.CalcTextSize(candidate).X <= availableWidth)
+            {
+                return candidate;
+            }
+        }
+
+        return ellipsis;
+    }
+
+    private void DrawFolderContentRow(AssetBrowserFolderItem folder, EditorSelection selection)
+    {
+        DrawInlinePreview(AssetBrowserIconKind.Folder, thumbnail: null);
+        ImGui.SameLine();
+        bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.OrdinalIgnoreCase);
+        if (ImGui.Selectable($"{folder.DisplayName}  {folder.AssetCount} 项##content-folder-{folder.Path}", selected))
         {
             _ = SelectFolder(folder.Path, selection);
         }
@@ -1217,11 +1506,10 @@ public sealed class AssetBrowserPanel(
 
     private void DrawAssetRow(AssetBrowserItem item, EditorSelection selection)
     {
-        if (item.Thumbnail is AssetThumbnail thumbnail && thumbnail.TextureHandle != 0)
-        {
-            ImGui.Image(CreateTextureRef(thumbnail.TextureHandle), new System.Numerics.Vector2(32, 32));
-            ImGui.SameLine();
-        }
+        bool rowVisible = ImGui.IsRectVisible(new Vector2(Math.Max(1f, ImGui.GetContentRegionAvail().X), 28f));
+        AssetThumbnail? thumbnail = _thumbnailLeases.Resolve(in item, rowVisible);
+        DrawInlinePreview(item.IconKind, thumbnail);
+        ImGui.SameLine();
 
         string typeLabel = item.Descriptor?.TypeLabel ?? GetDefaultTypeLabel(item.Kind);
         string badgeLabel = FormatBadges(GetBadges(item));
@@ -1239,14 +1527,7 @@ public sealed class AssetBrowserPanel(
 
         if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
         {
-            if (item.Kind == AssetBrowserItemKind.Scene)
-            {
-                _ = TryOpenSceneAsset(item.Path);
-            }
-            else if (item.Kind == AssetBrowserItemKind.Script)
-            {
-                _ = TryOpenScriptAsset(item.Path);
-            }
+            OpenPrimaryAsset(item);
         }
 
         if (ImGui.BeginDragDropSource())
@@ -1274,6 +1555,287 @@ public sealed class AssetBrowserPanel(
         if (!string.IsNullOrWhiteSpace(item.PreviewSummary))
         {
             ImGui.TextUnformatted($"摘要：{item.PreviewSummary}");
+        }
+    }
+
+    private static void DrawInlinePreview(AssetBrowserIconKind iconKind, AssetThumbnail? thumbnail)
+    {
+        const float size = 28f;
+        Vector2 min = ImGui.GetCursorScreenPos();
+        _ = ImGui.InvisibleButton($"inline-preview-{iconKind}-{min.X:0}-{min.Y:0}", new Vector2(size));
+        if (thumbnail is { TextureHandle: not 0 } image)
+        {
+            DrawThumbnail(ImGui.GetWindowDrawList(), image, min, new Vector2(size));
+            return;
+        }
+
+        DrawAssetIcon(
+            ImGui.GetWindowDrawList(),
+            iconKind,
+            min,
+            new Vector2(size),
+            iconKind == AssetBrowserIconKind.Folder ? FolderIconColor : AssetIconColor);
+    }
+
+    private static void DrawAssetPreview(
+        ImDrawListPtr drawList,
+        AssetBrowserItem item,
+        AssetThumbnail? thumbnail,
+        Vector2 min,
+        Vector2 size)
+    {
+        if (thumbnail is { TextureHandle: not 0 } image)
+        {
+            DrawThumbnail(drawList, image, min, size);
+            return;
+        }
+
+        uint color = item.IconKind switch
+        {
+            AssetBrowserIconKind.Folder => FolderIconColor,
+            AssetBrowserIconKind.Material or AssetBrowserIconKind.Scene or AssetBrowserIconKind.Prefab => AccentIconColor,
+            AssetBrowserIconKind.Texture or
+            AssetBrowserIconKind.Audio or
+            AssetBrowserIconKind.Script or
+            AssetBrowserIconKind.UiScreen or
+            AssetBrowserIconKind.Json or
+            AssetBrowserIconKind.Font or
+            AssetBrowserIconKind.Text or
+            AssetBrowserIconKind.Configuration or
+            AssetBrowserIconKind.Other => AssetIconColor,
+            _ => throw new ArgumentOutOfRangeException(nameof(item), item.IconKind, "未知 Project Window 图标类型。"),
+        };
+        DrawAssetIcon(drawList, item.IconKind, min, size, color);
+    }
+
+    private static void DrawThumbnail(ImDrawListPtr drawList, AssetThumbnail thumbnail, Vector2 boundsMin, Vector2 boundsSize)
+    {
+        float sourceWidth = Math.Max(1, thumbnail.Width);
+        float sourceHeight = Math.Max(1, thumbnail.Height);
+        float scale = Math.Min(boundsSize.X / sourceWidth, boundsSize.Y / sourceHeight);
+        Vector2 imageSize = new(sourceWidth * scale, sourceHeight * scale);
+        Vector2 imageMin = boundsMin + ((boundsSize - imageSize) * 0.5f);
+        drawList.AddRectFilled(boundsMin, boundsMin + boundsSize, 0xFF25262A, 3f);
+        drawList.AddImage(
+            CreateTextureRef(thumbnail.TextureHandle),
+            imageMin,
+            imageMin + imageSize,
+            ThumbnailUv0,
+            ThumbnailUv1,
+            0xFFFFFFFF);
+    }
+
+    private static void DrawAssetIcon(
+        ImDrawListPtr drawList,
+        AssetBrowserIconKind iconKind,
+        Vector2 min,
+        Vector2 size,
+        uint color)
+    {
+        float unit = Math.Max(1f, Math.Min(size.X, size.Y) / 16f);
+        Vector2 center = min + (size * 0.5f);
+        Vector2 inset = new(unit * 2f);
+        Vector2 bodyMin = min + inset;
+        Vector2 bodyMax = min + size - inset;
+        switch (iconKind)
+        {
+            case AssetBrowserIconKind.Folder:
+                drawList.AddRectFilled(
+                    new Vector2(bodyMin.X + unit, bodyMin.Y),
+                    new Vector2(center.X + unit, bodyMin.Y + (unit * 3f)),
+                    color,
+                    unit);
+                drawList.AddRectFilled(
+                    new Vector2(bodyMin.X, bodyMin.Y + (unit * 2f)),
+                    bodyMax,
+                    color,
+                    unit * 1.5f);
+                break;
+
+            case AssetBrowserIconKind.Texture:
+                drawList.AddRect(bodyMin, bodyMax, color, unit, ImDrawFlags.None, unit);
+                drawList.AddCircleFilled(bodyMin + new Vector2(unit * 3f), unit * 1.2f, color);
+                drawList.AddTriangleFilled(
+                    new Vector2(bodyMin.X + unit, bodyMax.Y - unit),
+                    new Vector2(center.X, center.Y),
+                    new Vector2(center.X + (unit * 2f), bodyMax.Y - unit),
+                    color);
+                drawList.AddTriangleFilled(
+                    new Vector2(center.X - unit, bodyMax.Y - unit),
+                    new Vector2(bodyMax.X - (unit * 3f), center.Y - unit),
+                    new Vector2(bodyMax.X - unit, bodyMax.Y - unit),
+                    color);
+                break;
+
+            case AssetBrowserIconKind.Audio:
+                drawList.AddRectFilled(
+                    new Vector2(center.X - unit, bodyMin.Y),
+                    new Vector2(center.X + unit, bodyMax.Y - (unit * 2f)),
+                    color,
+                    unit);
+                drawList.AddTriangleFilled(
+                    new Vector2(center.X, bodyMin.Y),
+                    new Vector2(bodyMax.X - unit, bodyMin.Y - unit),
+                    new Vector2(center.X, center.Y),
+                    color);
+                drawList.AddCircleFilled(new Vector2(center.X - (unit * 3f), bodyMax.Y - unit), unit * 2f, color);
+                drawList.AddCircleFilled(new Vector2(center.X + (unit * 3f), bodyMax.Y - unit), unit * 2f, color);
+                break;
+
+            case AssetBrowserIconKind.Material:
+                drawList.AddCircleFilled(center, unit * 5f, color);
+                drawList.AddCircleFilled(center - new Vector2(unit * 1.5f), unit * 1.25f, DarkIconColor);
+                drawList.AddCircleFilled(center + new Vector2(unit * 2f, -unit), unit, DarkIconColor);
+                drawList.AddCircleFilled(center + new Vector2(unit, unit * 2.5f), unit * 0.8f, DarkIconColor);
+                break;
+
+            case AssetBrowserIconKind.Scene:
+                drawList.AddCircle(center, unit * 5f, color, 0, unit);
+                drawList.AddLine(new Vector2(center.X, bodyMin.Y), new Vector2(center.X, bodyMax.Y), color, unit);
+                drawList.AddLine(new Vector2(bodyMin.X, center.Y), new Vector2(bodyMax.X, center.Y), color, unit);
+                drawList.AddCircleFilled(center, unit * 1.5f, color);
+                break;
+
+            case AssetBrowserIconKind.Prefab:
+                drawList.AddTriangleFilled(
+                    new Vector2(center.X, bodyMin.Y),
+                    new Vector2(bodyMax.X, center.Y),
+                    center,
+                    color);
+                drawList.AddTriangleFilled(
+                    new Vector2(center.X, bodyMax.Y),
+                    new Vector2(bodyMin.X, center.Y),
+                    center,
+                    color);
+                drawList.AddTriangleFilled(
+                    new Vector2(center.X, bodyMin.Y),
+                    new Vector2(bodyMin.X, center.Y),
+                    center,
+                    color);
+                drawList.AddTriangleFilled(
+                    new Vector2(center.X, bodyMax.Y),
+                    new Vector2(bodyMax.X, center.Y),
+                    center,
+                    color);
+                break;
+
+            case AssetBrowserIconKind.UiScreen:
+                drawList.AddRect(bodyMin, bodyMax, color, unit, ImDrawFlags.None, unit);
+                drawList.AddRectFilled(bodyMin, new Vector2(bodyMax.X, bodyMin.Y + (unit * 3f)), color, unit);
+                drawList.AddRectFilled(
+                    new Vector2(bodyMin.X + (unit * 2f), bodyMin.Y + (unit * 5f)),
+                    new Vector2(bodyMax.X - (unit * 2f), bodyMax.Y - (unit * 2f)),
+                    color,
+                    unit);
+                break;
+
+            case AssetBrowserIconKind.Font:
+                drawList.AddLine(new Vector2(bodyMin.X + unit, bodyMax.Y), new Vector2(center.X, bodyMin.Y), color, unit * 1.5f);
+                drawList.AddLine(new Vector2(center.X, bodyMin.Y), new Vector2(bodyMax.X - unit, bodyMax.Y), color, unit * 1.5f);
+                drawList.AddLine(
+                    new Vector2(center.X - (unit * 3f), center.Y + unit),
+                    new Vector2(center.X + (unit * 3f), center.Y + unit),
+                    color,
+                    unit * 1.25f);
+                break;
+
+            case AssetBrowserIconKind.Configuration:
+                drawList.AddCircle(center, unit * 4f, color, 8, unit * 2f);
+                drawList.AddCircleFilled(center, unit * 1.8f, color);
+                for (int i = 0; i < 4; i++)
+                {
+                    float x = i % 2 == 0 ? center.X - (unit * 5f) : center.X + (unit * 3f);
+                    float y = i < 2 ? center.Y - unit : center.Y + unit;
+                    drawList.AddRectFilled(new Vector2(x, y), new Vector2(x + (unit * 2f), y + (unit * 2f)), color, unit);
+                }
+                break;
+
+            case AssetBrowserIconKind.Script:
+            case AssetBrowserIconKind.Json:
+            case AssetBrowserIconKind.Text:
+            case AssetBrowserIconKind.Other:
+            default:
+                drawList.AddRect(bodyMin, bodyMax, color, unit, ImDrawFlags.None, unit);
+                float lineStart = bodyMin.X + (unit * 2f);
+                float lineEnd = bodyMax.X - (unit * 2f);
+                for (int i = 0; i < 3; i++)
+                {
+                    float y = bodyMin.Y + (unit * (4f + (i * 2.5f)));
+                    drawList.AddLine(new Vector2(lineStart, y), new Vector2(lineEnd, y), color, unit);
+                }
+
+                if (iconKind == AssetBrowserIconKind.Json)
+                {
+                    drawList.AddCircleFilled(new Vector2(lineStart, center.Y), unit, color);
+                    drawList.AddCircleFilled(new Vector2(lineEnd, center.Y), unit, color);
+                }
+                break;
+        }
+    }
+
+    private void DrawViewModeButton(AssetBrowserViewMode mode, string id)
+    {
+        const float buttonSize = 25f;
+        Vector2 min = ImGui.GetCursorScreenPos();
+        bool clicked = ImGui.InvisibleButton(id, new Vector2(buttonSize));
+        bool hovered = ImGui.IsItemHovered();
+        bool selected = ViewMode == mode;
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        if (selected || hovered)
+        {
+            drawList.AddRectFilled(
+                min,
+                min + new Vector2(buttonSize),
+                selected ? SelectedTileColor : HoveredTileColor,
+                3f);
+        }
+
+        uint color = selected ? 0xFFFFB074 : 0xFFD5D8DD;
+        if (mode == AssetBrowserViewMode.Grid)
+        {
+            for (int y = 0; y < 2; y++)
+            {
+                for (int x = 0; x < 2; x++)
+                {
+                    Vector2 cellMin = min + new Vector2(5f + (x * 9f), 5f + (y * 9f));
+                    drawList.AddRectFilled(cellMin, cellMin + new Vector2(6f), color, 1f);
+                }
+            }
+        }
+        else
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                float y = min.Y + 6f + (i * 6f);
+                drawList.AddRectFilled(new Vector2(min.X + 4f, y), new Vector2(min.X + 8f, y + 3f), color, 1f);
+                drawList.AddLine(new Vector2(min.X + 10f, y + 1.5f), new Vector2(min.X + 21f, y + 1.5f), color, 2f);
+            }
+        }
+
+        if (hovered)
+        {
+            ImGui.SetTooltip(mode == AssetBrowserViewMode.Grid ? "网格视图" : "列表视图");
+        }
+
+        if (clicked)
+        {
+            SetViewMode(mode);
+        }
+    }
+
+    private void OpenPrimaryAsset(AssetBrowserItem item)
+    {
+        if (item.Kind == AssetBrowserItemKind.Scene)
+        {
+            _ = TryOpenSceneAsset(item.Path);
+        }
+        else if (item.Kind == AssetBrowserItemKind.Script)
+        {
+            _ = TryOpenScriptAsset(item.Path);
+        }
+        else if (item.Kind == AssetBrowserItemKind.Audio)
+        {
+            _ = TryPreviewAudio(item.Path);
         }
     }
 
@@ -2412,4 +2974,125 @@ public sealed class AssetBrowserPanel(
     {
         return new ImTextureRef(null, (ImTextureID)(ulong)handle);
     }
+}
+
+/// <summary>
+/// Project Window 可见缩略图 lease 集合。每个 lease 至少跨过提交它的 ImGui render frame，
+/// 离开裁剪区域后在下一次面板 Draw 末尾释放。
+/// </summary>
+internal sealed class AssetBrowserThumbnailLeaseCache(IAssetBrowserThumbnailDataSource? source)
+{
+    private readonly IAssetBrowserThumbnailDataSource? _source = source;
+    private readonly Dictionary<string, ThumbnailLease> _leases = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<string> _releasePaths = [];
+    private long _frameIndex;
+    private bool _frameActive;
+
+    /// <summary>当前持有的生产缩略图 lease 数；供资源生命周期测试与诊断使用。</summary>
+    internal int Count => _leases.Count;
+
+    /// <summary>开始一次面板 draw frame。</summary>
+    internal void BeginFrame()
+    {
+        if (_frameActive)
+        {
+            throw new InvalidOperationException("Project Window 缩略图 lease frame 已经开始。");
+        }
+
+        _frameIndex++;
+        _frameActive = true;
+    }
+
+    /// <summary>
+    /// 返回静态快照缩略图，或为实际通过 ImGui clip 的生产资产取得一个 lease。
+    /// </summary>
+    internal AssetThumbnail? Resolve(in AssetBrowserItem item, bool visible)
+    {
+        if (!_frameActive)
+        {
+            throw new InvalidOperationException("必须先开始 Project Window 缩略图 lease frame。");
+        }
+
+        if (item.Thumbnail is { } snapshotThumbnail)
+        {
+            return snapshotThumbnail;
+        }
+
+        if (!visible || item.Kind != AssetBrowserItemKind.Texture || _source is null)
+        {
+            return null;
+        }
+
+        long modifiedTicks = item.LastModifiedUtc.UtcTicks;
+        if (_leases.TryGetValue(item.Path, out ThumbnailLease existing))
+        {
+            if (existing.SizeBytes == item.SizeBytes && existing.LastModifiedTicks == modifiedTicks)
+            {
+                _leases[item.Path] = existing with { LastUsedFrame = _frameIndex };
+                return existing.Thumbnail;
+            }
+
+            _source.ReleaseThumbnail(item.Path, existing.Thumbnail.TextureHandle);
+            _ = _leases.Remove(item.Path);
+        }
+
+        if (!_source.TryAcquireThumbnail(item.Path, out AssetThumbnail thumbnail))
+        {
+            return null;
+        }
+
+        _leases.Add(
+            item.Path,
+            new ThumbnailLease(
+                thumbnail,
+                item.SizeBytes,
+                modifiedTicks,
+                _frameIndex));
+        return thumbnail;
+    }
+
+    /// <summary>释放本帧没有提交给 ImGui draw data 的缩略图。</summary>
+    internal void EndFrame()
+    {
+        if (!_frameActive)
+        {
+            throw new InvalidOperationException("Project Window 缩略图 lease frame 尚未开始。");
+        }
+
+        _releasePaths.Clear();
+        foreach (KeyValuePair<string, ThumbnailLease> pair in _leases)
+        {
+            if (pair.Value.LastUsedFrame != _frameIndex)
+            {
+                _releasePaths.Add(pair.Key);
+            }
+        }
+
+        for (int i = 0; i < _releasePaths.Count; i++)
+        {
+            string path = _releasePaths[i];
+            ThumbnailLease lease = _leases[path];
+            _source!.ReleaseThumbnail(path, lease.Thumbnail.TextureHandle);
+            _ = _leases.Remove(path);
+        }
+
+        _frameActive = false;
+    }
+
+    /// <summary>面板关闭或数据源切换时立即释放全部 lease。</summary>
+    internal void ReleaseAll()
+    {
+        foreach (KeyValuePair<string, ThumbnailLease> pair in _leases)
+        {
+            _source!.ReleaseThumbnail(pair.Key, pair.Value.Thumbnail.TextureHandle);
+        }
+
+        _leases.Clear();
+    }
+
+    private readonly record struct ThumbnailLease(
+        AssetThumbnail Thumbnail,
+        long SizeBytes,
+        long LastModifiedTicks,
+        long LastUsedFrame);
 }

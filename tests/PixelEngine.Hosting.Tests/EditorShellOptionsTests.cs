@@ -53,6 +53,7 @@ public sealed class EditorShellOptionsTests
     [InlineData("--scripted-hierarchy-probe")]
     [InlineData("--scripted-default-workbench-probe")]
     [InlineData("--scripted-preferences-probe")]
+    [InlineData("--scripted-gameview-probe")]
     public void EveryScriptedProbeDefaultsToEphemeralUserState(string probeFlag)
     {
         EditorShellOptions options = EditorShellOptions.Parse([probeFlag]);

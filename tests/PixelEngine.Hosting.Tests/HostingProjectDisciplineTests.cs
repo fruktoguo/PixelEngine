@@ -414,18 +414,27 @@ public sealed class HostingProjectDisciplineTests
         string guiConnector = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "GuiWindowInputConnector.cs"));
         string editorConnector = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorWindowInputConnector.cs"));
 
-        foreach (string source in new[] { guiConnector, editorConnector })
-        {
-            string compact = source.Replace(" ", string.Empty, StringComparison.Ordinal)
-                .Replace("\r", string.Empty, StringComparison.Ordinal)
-                .Replace("\n", string.Empty, StringComparison.Ordinal);
-            // Assert：验证预期结果
-            Assert.Contains("privatevoidForwardMousePosition(Vector2position)", compact, StringComparison.Ordinal);
-            Assert.Contains("_input.MouseMoveFramebuffer(position.X*_window.FramebufferScaleX,position.Y*_window.FramebufferScaleY);", compact, StringComparison.Ordinal);
-            Assert.Contains("privatevoidOnMouseDown(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", compact, StringComparison.Ordinal);
-            Assert.Contains("privatevoidOnMouseUp(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", compact, StringComparison.Ordinal);
-            Assert.DoesNotContain("_input.MouseMove(position.X,position.Y);", compact, StringComparison.Ordinal);
-        }
+        string editorCompact = editorConnector.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Replace("\n", string.Empty, StringComparison.Ordinal);
+        Assert.Contains("privatevoidForwardMousePosition(Vector2position)", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("_input.MouseMoveFramebuffer(position.X*_window.FramebufferScaleX,position.Y*_window.FramebufferScaleY);", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("privatevoidOnMouseDown(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("privatevoidOnMouseUp(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", editorCompact, StringComparison.Ordinal);
+        Assert.DoesNotContain("_input.MouseMove(position.X,position.Y);", editorCompact, StringComparison.Ordinal);
+
+        string guiCompact = guiConnector.Replace(" ", string.Empty, StringComparison.Ordinal)
+            .Replace("\r", string.Empty, StringComparison.Ordinal)
+            .Replace("\n", string.Empty, StringComparison.Ordinal);
+        Assert.Contains("privateboolForwardMousePosition(Vector2position)", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("floatframebufferX=position.X*_window.FramebufferScaleX;", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("TryResolvePointer(_viewportRoute,framebufferX,framebufferY,outfloatviewportX,outfloatviewportY)", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("route.TryMapPointer(framebufferX,framebufferY,outviewportX,outviewportY)", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("_input.MouseMoveFramebuffer(viewportX,viewportY);", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("_input.MouseMoveFramebuffer(MouseUnavailable,MouseUnavailable);", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("if(!ForwardMousePosition(mouse.Position)){return;}", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("_viewportRouteisnull||_forwardedKeys.Remove(key)", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("_viewportRouteisnull||_viewportRoute.AllowsKeyboardInput", guiCompact, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -804,7 +813,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains(".EnableGameUi()", source, StringComparison.Ordinal);
         Assert.Contains(".AddEditorHostExtension(editorHost)", source, StringComparison.Ordinal);
         Assert.Contains("engine.AttachWindowRuntime(window)", source, StringComparison.Ordinal);
-        Assert.Contains("EditorShellHostExtension : IEditorHostExtension", source, StringComparison.Ordinal);
+        Assert.Contains("internal sealed class EditorShellHostExtension", source, StringComparison.Ordinal);
+        Assert.Contains("IEditorHostExtension", source, StringComparison.Ordinal);
         Assert.Contains("EditorRenderBridge.AttachIfEnabled", source, StringComparison.Ordinal);
         Assert.Contains("EditorWindowInputConnector", source, StringComparison.Ordinal);
         Assert.Contains("EngineEditorPlaySessionService", source, StringComparison.Ordinal);
@@ -1776,7 +1786,8 @@ public sealed class HostingProjectDisciplineTests
         // Assert：验证预期结果
         Assert.Equal("lava-mine", document.Name);
         EngineSceneEntityDocument[] entities = document.Entities!;
-        EngineSceneEntityDocument entity = Assert.Single(entities);
+        Assert.Equal(3, entities.Length);
+        EngineSceneEntityDocument entity = Assert.Single(entities, item => item.Name == "LevelDirector");
         EngineSceneBehaviourDocument behaviour = Assert.Single(entity.Behaviours!);
         Assert.Equal("PixelEngine.Demo.LevelDirector", behaviour.TypeName);
         Assert.Equal("640", behaviour.SerializedFields!["LevelWidth"]);
@@ -1785,6 +1796,16 @@ public sealed class HostingProjectDisciplineTests
         Assert.Equal("true", behaviour.SerializedFields["BuildGoalTrigger"]);
         Assert.Equal("570", behaviour.SerializedFields["GoalX"]);
         Assert.Equal("208", behaviour.SerializedFields["GoalY"]);
+        EngineSceneEntityDocument player = Assert.Single(entities, item => item.Name == "Player");
+        Assert.Equal(entity.StableId, player.ParentId);
+        Assert.Equal(48f, player.Transform!.X);
+        Assert.Equal(244f, player.Transform.Y);
+        Assert.Equal("PixelEngine.Demo.PlayerSpawnPoint", Assert.Single(player.Behaviours!).TypeName);
+        EngineSceneEntityDocument goal = Assert.Single(entities, item => item.Name == "Goal");
+        Assert.Equal(entity.StableId, goal.ParentId);
+        Assert.Equal(570f, goal.Transform!.X);
+        Assert.Equal(208f, goal.Transform.Y);
+        Assert.Equal("PixelEngine.Demo.GoalPoint", Assert.Single(goal.Behaviours!).TypeName);
         Assert.DoesNotContain(
             entities.SelectMany(item => item.Behaviours!),
             item => item.TypeName is

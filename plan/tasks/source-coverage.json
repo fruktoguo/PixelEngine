@@ -94,7 +94,7 @@
       "expected": { "done": 96, "open": 0, "active": 0, "blocked": 0 },
       "checkboxSha256": "f12a69812523ca45d088d6347011d19f491c985a0540a67e878138dd9e2769ca",
       "completedCapabilityIds": ["BASE-012"],
-      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003"]
+      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-009"]
     },
     {
       "path": "plan/13-demo-game.md",
@@ -143,7 +143,7 @@
       "expected": { "done": 77, "open": 3, "active": 0, "blocked": 9 },
       "checkboxSha256": "d720faa86838f1c13e068e8ec6b6ba26e790a0a92759c6da16c3e79b8918ccc8",
       "completedCapabilityIds": ["BASE-013"],
-      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "UI-002", "DEMO-005", "DOC-001", "DOC-002", "REL-001"]
+      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "UI-002", "DEMO-005", "DOC-001", "DOC-002", "REL-001"]
     },
     {
       "path": "plan/20-interactive-html-ui.md",
@@ -173,7 +173,7 @@
     {
       "id": "D",
       "name": "M15 产品与目标环境证据",
-      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
+      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
     },
     {
       "id": "E",

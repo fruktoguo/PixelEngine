@@ -85,6 +85,7 @@
 | 数学/SIMD | **System.Numerics + System.Runtime.Intrinsics** | BCL | `Vector<T>` + `Avx2/Avx512/Avx10v2` + scalar fallback；`Silk.NET.Maths` 仅在与 GL 交互便利处可选 |
 | 物理 | **Box2D v3.1.1（vendored C 源，自建绑定）** | `native/box2d/`（git submodule 或 vendored）+ `PixelEngine.Interop` 内 `[LibraryImport]` 薄绑定 | 唯一 sim-native / dual-build 静态承载依赖；自建 task-callback 桥（架构 §14.2）；dual-build 静/动 × 6 RID |
 | 编辑器 UI | **Dear ImGui via Hexa.NET.ImGui** | `Hexa.NET.ImGui`、`Hexa.NET.ImGui.Backends`（GL/GLFW 后端）；含 ImGuizmo/ImPlot/ImNodes | 即时模式、AOT 友好、活跃维护；停靠式面板 |
+| 编辑器图片缩略图解码 | **StbImageSharp** | `StbImageSharp`（仅 `apps/PixelEngine.Editor.Shell`） | 纯托管解码 PNG/JPEG/BMP/TGA 并上传共享 GL context；不进入玩家包、不新增 native 依赖 |
 | 脚本编译 | **Roslyn** | `Microsoft.CodeAnalysis.CSharp` | 热重载编译用户脚本 |
 | 脚本隔离 | **可回收 AssemblyLoadContext** | BCL `System.Runtime.Loader` | unload/reload 实现 Unity 式迭代 |
 | 内容序列化 | **System.Text.Json + 源生成器** | BCL `System.Text.Json` | materials/reactions/场景；AOT 友好 |

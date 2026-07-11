@@ -148,10 +148,10 @@ public sealed class GameUiHostTests
     }
 
     /// <summary>
-    /// 验证Composite Runs Only When Backend Is Dirty Or Animating。
+    /// 验证静态 backend 也会每帧 composite，避免每帧重建的 runtime framebuffer 丢失 HUD。
     /// </summary>
     [Fact]
-    public void CompositeRunsOnlyWhenBackendIsDirtyOrAnimating()
+    public void CompositeRunsEveryFrameWhileRuntimeSurfaceIsRebuilt()
     {
         FakeBackend backend = new();
         using GameUiHost host = new(backend);
@@ -169,21 +169,21 @@ public sealed class GameUiHostTests
 
         host.Composite(default);
 
-        Assert.Equal(1, backend.CompositeCount);
-        Assert.Equal(0, host.LastPaintMilliseconds);
+        Assert.Equal(2, backend.CompositeCount);
+        Assert.True(host.LastPaintMilliseconds >= 0);
 
         backend.IsAnimatingOverride = true;
         host.Composite(default);
 
-        Assert.Equal(2, backend.CompositeCount);
+        Assert.Equal(3, backend.CompositeCount);
         Assert.True(host.NeedsComposite);
     }
 
     /// <summary>
-    /// 验证Presentation Frame Interval Skips Paint But保持Dirty State。
+    /// 验证 paint interval 偏好不会跳过 final composite；静态 UI 在降频帧仍必须存在。
     /// </summary>
     [Fact]
-    public void PresentationFrameIntervalSkipsPaintButKeepsDirtyState()
+    public void PresentationFrameIntervalDoesNotSkipRequiredFinalComposite()
     {
         FakeBackend backend = new()
         {
@@ -197,8 +197,8 @@ public sealed class GameUiHostTests
         host.Composite(default);
         host.Composite(default);
 
-        Assert.Equal(2, backend.CompositeCount);
-        Assert.Equal(1, host.SkippedPresentationFrames);
+        Assert.Equal(3, backend.CompositeCount);
+        Assert.Equal(0, host.SkippedPresentationFrames);
         Assert.Equal(2, host.PresentationIntervalFrames);
         Assert.True(host.NeedsComposite);
         Assert.True(host.LastPaintMilliseconds >= 0);

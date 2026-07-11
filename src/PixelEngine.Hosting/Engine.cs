@@ -422,7 +422,10 @@ public sealed class Engine : IDisposable
             input,
             routeProvider,
             Context.Options.InternalWidth,
-            Context.Options.InternalHeight);
+            Context.Options.InternalHeight,
+            Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)
+                ? gameplayViewportMapper
+                : null);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         return input;
@@ -659,7 +662,11 @@ public sealed class Engine : IDisposable
 
         if (needsUiLayerCompositor && !hasUiLayerCompositor)
         {
-            UiLayerCompositor compositor = UiLayerCompositor.Attach(pipeline, gameUi!, gameUiPresentTargetProvider);
+            UiLayerCompositor compositor = UiLayerCompositor.Attach(
+                pipeline,
+                UiPresentSurface.RuntimeViewport,
+                gameUi!,
+                gameUiPresentTargetProvider);
             Context.RegisterService(compositor);
             _ownedRuntimeResources.Add(compositor);
         }
@@ -669,13 +676,22 @@ public sealed class Engine : IDisposable
         if (needsGuiBridge && !hasGuiBridge)
         {
             GuiApp gui = ResolveGuiApp();
-            input = new GuiWindowInputConnector(window, gui.Input);
+            IGuiViewportInputRoute? viewportInputRoute =
+                Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)
+                    ? new GameplayViewportGuiInputRoute(gameplayViewportMapper)
+                    : null;
+            input = new GuiWindowInputConnector(window, gui.Input, viewportInputRoute);
             Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;
+            Action<UiPresentTarget>? gameUiTargetChanged = gameUiNeedsGuiBridge
+                ? target => gameUi!.Resize(new UiViewport(0, 0, target.Width, target.Height, target.DpiScale))
+                : null;
             GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
                 pipeline,
+                UiPresentSurface.RuntimeViewport,
                 gui,
                 scriptRuntime,
-                managedGui);
+                managedGui,
+                gameUiTargetChanged);
             if (bridge is not null)
             {
                 Context.RegisterService(bridge);

@@ -212,4 +212,24 @@ public enum GuiWindowFlags
     /// 禁止滚动条。
     /// </summary>
     NoScrollbar = 1 << 6,
+
+    /// <summary>
+    /// 窗口不参与鼠标命中与捕获。
+    /// </summary>
+    NoMouseInputs = 1 << 7,
+
+    /// <summary>
+    /// 窗口不消费键盘/手柄导航输入。
+    /// </summary>
+    NoNavInputs = 1 << 8,
+
+    /// <summary>
+    /// 窗口不能成为导航焦点。
+    /// </summary>
+    NoNavFocus = 1 << 9,
+
+    /// <summary>
+    /// 纯展示窗口：鼠标与导航输入全部穿透。
+    /// </summary>
+    NoInputs = NoMouseInputs | NoNavInputs | NoNavFocus,
 }
