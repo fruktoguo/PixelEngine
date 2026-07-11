@@ -107,18 +107,20 @@ mkdir -p "$runtime_dir"
 mkdir -p "$shared_dir"
 
 shared_build_bin="$native_root/out/build/$rid/box2d-shared/bin"
-mapfile -t shared_libraries < <(
-  find "$shared_dir" "$shared_build_bin" -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) 2>/dev/null
-)
+shared_libraries=()
+while IFS= read -r library; do
+  shared_libraries+=("$library")
+done < <(find "$shared_dir" "$shared_build_bin" -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) 2>/dev/null)
 
 if [[ "${#shared_libraries[@]}" -eq 0 ]]; then
   echo "No shared library output found." >&2
   exit 1
 fi
 
-mapfile -t static_libraries < <(
-  find "$static_dir" -type f \( -name '*.a' -o -name '*.lib' \) 2>/dev/null
-)
+static_libraries=()
+while IFS= read -r library; do
+  static_libraries+=("$library")
+done < <(find "$static_dir" -type f \( -name '*.a' -o -name '*.lib' \) 2>/dev/null)
 
 if [[ "${#static_libraries[@]}" -eq 0 ]]; then
   echo "No static library output found in $static_dir." >&2
