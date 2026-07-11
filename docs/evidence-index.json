@@ -534,6 +534,19 @@
       "notes": "Hierarchy 搜索/图标/真实 Scene Visibility/Picking、Inspector active/name/Transform/Behaviour/Add Component 与 GameObject Enabled scene-prefab-runtime 语义已闭合；Project/Console/Picker、DPI/resize、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
     },
     {
+      "entryId": "editor-003-unity-parity-cycle04-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "9e06b434b94f8f43755b1e58e750132bc79697a1",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle04",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; Unity 6.5 6000.5.3f1 live reference; PixelEngine 1280x720 compact and 3840x2054 maximized framebuffer real-input probes",
+      "command": "Unity BallWorld live maximized Project/Console reference; PixelEngine real Console tab and Win+Up through computer-use; EditorShell internal capture-frame v4d/v4e; full Hosting with blame-hang; targeted Hosting; Editor/UI tests; solution Release build; task catalog validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-04.md",
+      "sha256": "75a128d2438fd7d7bd0e21164ad6c41008d8cda5e6a07af29183ea1cfb1b4471",
+      "notes": "Project 单行工具栏、双栏导航、紧凑列表与稳定底栏，以及 Console 宽窄响应式工具栏、severity 计数、日志/详情分区已由真实窗口与 framebuffer 验证；Picker、DPI/resize/dock、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
