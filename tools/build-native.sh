@@ -110,7 +110,10 @@ shared_build_bin="$native_root/out/build/$rid/box2d-shared/bin"
 shared_libraries=()
 while IFS= read -r library; do
   shared_libraries+=("$library")
-done < <(find "$shared_dir" "$shared_build_bin" -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) 2>/dev/null)
+# Box2D on ELF platforms emits libbox2d.so as a symlink to its versioned payload.
+# Follow command-line symlinks so the canonical P/Invoke name is copied as a real
+# file into the RID runtime directory instead of being silently skipped.
+done < <(find -L "$shared_dir" "$shared_build_bin" -type f \( -name '*.so' -o -name '*.dylib' -o -name '*.dll' \) 2>/dev/null)
 
 if [[ "${#shared_libraries[@]}" -eq 0 ]]; then
   echo "No shared library output found." >&2

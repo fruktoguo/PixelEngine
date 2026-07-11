@@ -759,7 +759,20 @@ public sealed class EditorProjectAssetModelTests
         try
         {
             string contentRoot = Path.Combine(projectRoot, "content");
-            EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
+            EditorAssetManifestStore manifest = new(
+                projectRoot,
+                contentRoot,
+                EditorAssetManifestStore.ManifestRelativePath,
+                referenceDocumentRoot: null,
+                saveReferenceDocument: static (document, path) =>
+                {
+                    if (path.EndsWith("z-readonly.scene", StringComparison.Ordinal))
+                    {
+                        throw new IOException("Injected later reference-document save failure.");
+                    }
+
+                    EngineSceneDocumentLoader.SaveDocument(document, path);
+                });
             EditorAssetRecord texture = manifest.CreateAsset("textures/sand.png", EditorAssetType.Texture, textContents: "texture");
             string oldReference = EditorAssetReferenceCodec.Encode(texture.Id, texture.LogicalPath, texture.AssetType);
             string firstScene = Path.Combine(contentRoot, "scenes", "a-first.scene");
@@ -769,12 +782,9 @@ public sealed class EditorProjectAssetModelTests
             EditorSceneModel activeScene = EditorSceneModel.FromDocument(CreateSceneWithAssetReference(oldReference));
             _ = manifest.EnsureAsset("scenes/a-first.scene");
             _ = manifest.EnsureAsset("scenes/z-readonly.scene");
-            File.SetAttributes(secondScene, FileAttributes.ReadOnly);
-
             // Assert：验证预期结果
             _ = Assert.ThrowsAny<Exception>(() => manifest.MoveAsset("textures/sand.png", "textures/moved/sand.png", activeScene));
 
-            File.SetAttributes(secondScene, FileAttributes.Normal);
             Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
             Assert.False(File.Exists(Path.Combine(contentRoot, "textures", "moved", "sand.png")));
             Assert.True(manifest.TryResolveAssetId(texture.Id, out EditorAssetRecord resolved));

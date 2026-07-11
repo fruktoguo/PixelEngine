@@ -35,23 +35,64 @@ public static class Box2DLibrary
                 ? "libbox2d.dylib"
                 : "libbox2d.so";
         string baseDirectory = AppContext.BaseDirectory;
-        string rid = RuntimeInformation.RuntimeIdentifier;
         foreach (string probeDirectory in GetProbeDirectories(baseDirectory))
         {
-            string ridPath = Path.Combine(probeDirectory, "runtimes", rid, "native", fileName);
-            if (NativeLibrary.TryLoad(ridPath, assembly, searchPath, out IntPtr handle))
+            foreach (string rid in GetProbeRuntimeIdentifiers())
             {
-                return handle;
+                string ridPath = Path.Combine(probeDirectory, "runtimes", rid, "native", fileName);
+                if (NativeLibrary.TryLoad(ridPath, assembly, searchPath, out IntPtr ridHandle))
+                {
+                    return ridHandle;
+                }
             }
 
             string localPath = Path.Combine(probeDirectory, fileName);
-            if (NativeLibrary.TryLoad(localPath, assembly, searchPath, out handle))
+            if (NativeLibrary.TryLoad(localPath, assembly, searchPath, out IntPtr localHandle))
             {
-                return handle;
+                return localHandle;
             }
         }
 
         return IntPtr.Zero;
+    }
+
+    private static IEnumerable<string> GetProbeRuntimeIdentifiers()
+    {
+        string runtimeIdentifier = RuntimeInformation.RuntimeIdentifier;
+        yield return runtimeIdentifier;
+
+        string? portableRuntimeIdentifier = GetPortableRuntimeIdentifier();
+        if (portableRuntimeIdentifier is not null &&
+            !StringComparer.Ordinal.Equals(runtimeIdentifier, portableRuntimeIdentifier))
+        {
+            // Framework-dependent Linux/macOS hosts report distro/version-specific RIDs
+            // (for example ubuntu.24.04-x64), while engine assets intentionally use the
+            // portable RID layout from docs §14.4 / plan §15.
+            yield return portableRuntimeIdentifier;
+        }
+    }
+
+    private static string? GetPortableRuntimeIdentifier()
+    {
+        Architecture processArchitecture = RuntimeInformation.ProcessArchitecture;
+        string? architecture = processArchitecture == Architecture.X64
+            ? "x64"
+            : processArchitecture == Architecture.Arm64
+                ? "arm64"
+                : null;
+        if (architecture is null)
+        {
+            return null;
+        }
+
+        string? platform = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+            ? "win"
+            : RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
+                ? "osx"
+                : RuntimeInformation.IsOSPlatform(OSPlatform.Linux)
+                    ? "linux"
+                    : null;
+        return platform is null ? null : $"{platform}-{architecture}";
     }
 
     private static IEnumerable<string> GetProbeDirectories(string baseDirectory)

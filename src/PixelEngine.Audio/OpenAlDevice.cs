@@ -77,7 +77,7 @@ public sealed unsafe class OpenAlDevice : IDisposable
             device = openAlDevice;
             return true;
         }
-        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException or BadImageFormatException)
+        catch (Exception ex) when (ex is DllNotFoundException or FileNotFoundException or EntryPointNotFoundException or InvalidOperationException or BadImageFormatException)
         {
             failureReason = ex.Message;
             return false;
