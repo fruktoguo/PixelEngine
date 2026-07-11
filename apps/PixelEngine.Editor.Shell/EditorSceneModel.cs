@@ -31,6 +31,12 @@ internal sealed class EditorSceneModel
     public int Version { get; private set; }
 
     /// <summary>
+    /// 非落盘 Scene View 状态世代；visibility/picking 只刷新 authoring preview，
+    /// 不得借用 <see cref="Version"/> 触发 runtime script projection 重建。
+    /// </summary>
+    public int SceneViewVersion { get; private set; }
+
+    /// <summary>
     /// 当前场景内容世代；仅在 <see cref="ReplaceWith"/> 整体替换场景时递增。
     /// 连续编辑事务用它区分不同场景中可能复用的 StableId。
     /// </summary>
@@ -223,6 +229,86 @@ internal sealed class EditorSceneModel
     {
         Get(stableId).Enabled = enabled;
         MarkDirty();
+    }
+
+    /// <summary>
+    /// 设置对象自身的编辑态 Scene Visibility。父级隐藏会递归覆盖子级，但不抹掉子级自身状态。
+    /// </summary>
+    public void SetSceneVisible(int stableId, bool visible)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        if (gameObject.SceneVisible == visible)
+        {
+            return;
+        }
+
+        gameObject.SceneVisible = visible;
+        SceneViewVersion++;
+    }
+
+    /// <summary>
+    /// 设置对象自身的编辑态 Scene Picking。父级禁止拾取会递归覆盖子级。
+    /// </summary>
+    public void SetScenePickable(int stableId, bool pickable)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        if (gameObject.ScenePickable == pickable)
+        {
+            return;
+        }
+
+        gameObject.ScenePickable = pickable;
+        SceneViewVersion++;
+    }
+
+    /// <summary>
+    /// 批量设置所有对象的 Scene Visibility；属于编辑器状态，不标记场景 dirty。
+    /// </summary>
+    public void SetAllSceneVisible(bool visible)
+    {
+        bool changed = false;
+        foreach (EditorGameObject gameObject in EnumerateDepthFirst())
+        {
+            changed |= gameObject.SceneVisible != visible;
+            gameObject.SceneVisible = visible;
+        }
+
+        if (changed)
+        {
+            SceneViewVersion++;
+        }
+    }
+
+    /// <summary>
+    /// 批量设置所有对象的 Scene Picking；属于编辑器状态，不标记场景 dirty。
+    /// </summary>
+    public void SetAllScenePickable(bool pickable)
+    {
+        bool changed = false;
+        foreach (EditorGameObject gameObject in EnumerateDepthFirst())
+        {
+            changed |= gameObject.ScenePickable != pickable;
+            gameObject.ScenePickable = pickable;
+        }
+
+        if (changed)
+        {
+            SceneViewVersion++;
+        }
+    }
+
+    public bool IsSceneVisible(int stableId)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        return gameObject.SceneVisible &&
+            (!gameObject.ParentId.HasValue || IsSceneVisible(gameObject.ParentId.Value));
+    }
+
+    public bool IsScenePickable(int stableId)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        return gameObject.ScenePickable &&
+            (!gameObject.ParentId.HasValue || IsScenePickable(gameObject.ParentId.Value));
     }
 
     public void SetTransform(int stableId, EditorSceneTransform transform)
@@ -423,6 +509,7 @@ internal sealed class EditorSceneModel
         IsDirty = markDirty;
         SceneGeneration++;
         Version++;
+        SceneViewVersion++;
     }
 
     public IEnumerable<EditorGameObject> EnumerateDepthFirst()

@@ -37,6 +37,7 @@ internal sealed class SceneViewPanel(
     private Vector2 _canvasSize;
     private bool _canvasHovered;
     private int _previewVersion = -1;
+    private int _previewSceneViewVersion = -1;
     private string _previewSceneName = string.Empty;
     private string _framedSceneName = string.Empty;
     private SceneAuthoringPreview _preview = SceneAuthoringPreviewBuilder.Build(EditorSceneModel.Empty());
@@ -141,6 +142,11 @@ internal sealed class SceneViewPanel(
             return false;
         }
 
+        if (!_scene.IsSceneVisible(stableId.Value))
+        {
+            return false;
+        }
+
         EditorSceneTransform transform = _scene.ComputeWorldTransform(gameObject.StableId);
         _camera.FramePoint(new Vector2(transform.X, transform.Y));
         return true;
@@ -176,6 +182,11 @@ internal sealed class SceneViewPanel(
                 continue;
             }
 
+            if (!_scene.IsScenePickable(marker.StableId.Value))
+            {
+                continue;
+            }
+
             float dx = marker.Position.X - world.X;
             float dy = marker.Position.Y - world.Y;
             float distanceSquared = (dx * dx) + (dy * dy);
@@ -202,7 +213,9 @@ internal sealed class SceneViewPanel(
             ClearGizmoTransaction();
         }
 
-        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject))
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            !_scene.IsSceneVisible(stableId) ||
+            !_scene.IsScenePickable(stableId))
         {
             return false;
         }
@@ -746,8 +759,16 @@ internal sealed class SceneViewPanel(
     {
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
         PrepareFrame(stableId, _preparedMode);
-        if (!stableId.HasValue || !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject))
+        if (!stableId.HasValue ||
+            !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject) ||
+            !_scene.IsSceneVisible(stableId.Value) ||
+            !_scene.IsScenePickable(stableId.Value))
         {
+            if (_gizmoTransactionStableId.HasValue)
+            {
+                _ = CommitGizmoTransform();
+            }
+
             return;
         }
 
@@ -792,13 +813,16 @@ internal sealed class SceneViewPanel(
 
     private SceneAuthoringPreview EnsurePreview()
     {
-        if (_previewVersion == _scene.Version && string.Equals(_previewSceneName, _scene.Name, StringComparison.Ordinal))
+        if (_previewVersion == _scene.Version &&
+            _previewSceneViewVersion == _scene.SceneViewVersion &&
+            string.Equals(_previewSceneName, _scene.Name, StringComparison.Ordinal))
         {
             return _preview;
         }
 
         _preview = SceneAuthoringPreviewBuilder.Build(_scene);
         _previewVersion = _scene.Version;
+        _previewSceneViewVersion = _scene.SceneViewVersion;
         _previewSceneName = _scene.Name;
         return _preview;
     }

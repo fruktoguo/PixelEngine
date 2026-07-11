@@ -67,6 +67,13 @@ internal static class SceneAuthoringPreviewBuilder
 
         foreach (EditorGameObject gameObject in scene.EnumerateDepthFirst())
         {
+            // Unity 的 Scene Visibility 是纯编辑器状态：隐藏对象及其子级只影响 authoring 预览，
+            // 不修改 GameObject active，也不进入 .scene / runtime 投影。
+            if (!scene.IsSceneVisible(gameObject.StableId))
+            {
+                continue;
+            }
+
             EditorSceneTransform transform = scene.ComputeWorldTransform(gameObject.StableId);
             Vector2 position = new(transform.X, transform.Y);
             SceneAuthoringMarkerKind markerKind = ResolveMarkerKind(gameObject);

@@ -38,6 +38,7 @@ internal sealed class GameObjectHierarchyPanel(
         SyncSelection(context.Selection);
         DrawToolbar();
         ImGui.Separator();
+        DrawSceneStateHeader();
         ImGuiTreeNodeFlags sceneFlags = ImGuiTreeNodeFlags.DefaultOpen |
             ImGuiTreeNodeFlags.OpenOnArrow |
             ImGuiTreeNodeFlags.SpanAvailWidth;
@@ -48,6 +49,9 @@ internal sealed class GameObjectHierarchyPanel(
             sceneFlags |= ImGuiTreeNodeFlags.Selected;
         }
 
+        float stateColumnSize = ImGui.GetFrameHeight();
+        ImGui.Dummy(new Vector2((stateColumnSize * 2f) + ImGui.GetStyle().ItemSpacing.X, stateColumnSize));
+        ImGui.SameLine();
         Vector2 sceneRowMin = ImGui.GetCursorScreenPos();
         bool sceneOpen = ImGui.TreeNodeEx(
             $"   {_scene.Name}{(_scene.IsDirty ? "*" : string.Empty)}##scene_root",
@@ -235,6 +239,32 @@ internal sealed class GameObjectHierarchyPanel(
         _ = ImGui.InputTextWithHint("##hierarchy-search", "Search", ref _search, 128);
     }
 
+    private void DrawSceneStateHeader()
+    {
+        bool allVisible = true;
+        bool allPickable = true;
+        foreach (EditorGameObject gameObject in _scene.EnumerateDepthFirst())
+        {
+            allVisible &= gameObject.SceneVisible;
+            allPickable &= gameObject.ScenePickable;
+        }
+
+        if (DrawVisibilityToggle("hierarchy-visible-all", allVisible, allObjects: true))
+        {
+            _scene.SetAllSceneVisible(!allVisible);
+        }
+
+        ImGui.SameLine();
+        if (DrawPickingToggle("hierarchy-pickable-all", allPickable, allObjects: true))
+        {
+            _scene.SetAllScenePickable(!allPickable);
+        }
+
+        ImGui.SameLine();
+        ImGui.TextDisabled("Name");
+        ImGui.Separator();
+    }
+
     private void DrawNode(int stableId, EditorSelection selection)
     {
         EditorGameObject gameObject = _scene.Get(stableId);
@@ -259,21 +289,29 @@ internal sealed class GameObjectHierarchyPanel(
             flags |= ImGuiTreeNodeFlags.Selected;
         }
 
-        if (DrawVisibilityToggle(stableId, gameObject.Enabled))
+        if (DrawVisibilityToggle($"hierarchy-visible-{stableId}", gameObject.SceneVisible, allObjects: false))
         {
-            _undo.Execute(_scene, new SetGameObjectEnabledCommand(stableId, !gameObject.Enabled));
+            _scene.SetSceneVisible(stableId, !gameObject.SceneVisible);
         }
 
         ImGui.SameLine();
-        if (!gameObject.Enabled)
+        if (DrawPickingToggle($"hierarchy-pickable-{stableId}", gameObject.ScenePickable, allObjects: false))
+        {
+            _scene.SetScenePickable(stableId, !gameObject.ScenePickable);
+        }
+
+        ImGui.SameLine();
+        bool effectivelyVisible = _scene.IsSceneVisible(stableId);
+        bool dimmed = !gameObject.Enabled || !effectivelyVisible;
+        if (dimmed)
         {
             ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]);
         }
 
         Vector2 rowMin = ImGui.GetCursorScreenPos();
         bool open = ImGui.TreeNodeEx($"   {gameObject.Name}##go_{stableId}", flags);
-        DrawObjectIcon(rowMin, scene: false, enabled: gameObject.Enabled);
-        if (!gameObject.Enabled)
+        DrawObjectIcon(rowMin, scene: false, enabled: gameObject.Enabled && effectivelyVisible);
+        if (dimmed)
         {
             ImGui.PopStyleColor();
         }
@@ -323,17 +361,19 @@ internal sealed class GameObjectHierarchyPanel(
         return false;
     }
 
-    private static bool DrawVisibilityToggle(int stableId, bool enabled)
+    private static bool DrawVisibilityToggle(string id, bool visible, bool allObjects)
     {
         float size = ImGui.GetFrameHeight();
         Vector2 min = ImGui.GetCursorScreenPos();
-        bool clicked = ImGui.InvisibleButton($"##hierarchy-visible-{stableId}", new Vector2(size));
+        bool clicked = ImGui.InvisibleButton($"##{id}", new Vector2(size));
         bool hovered = ImGui.IsItemHovered();
-        uint color = enabled ? 0xFFD7D7D7 : 0xFF777777;
+        uint color = visible ? 0xFFD7D7D7 : 0xFF777777;
         if (hovered)
         {
             color = 0xFFFFFFFF;
-            ImGui.SetTooltip(enabled ? "Disable GameObject" : "Enable GameObject");
+            ImGui.SetTooltip(allObjects
+                ? visible ? "Hide all objects in Scene View" : "Show all objects in Scene View"
+                : visible ? "Hide in Scene View" : "Show in Scene View");
         }
 
         Vector2 center = min + new Vector2(size * 0.5f);
@@ -344,11 +384,56 @@ internal sealed class GameObjectHierarchyPanel(
         drawList.AddLine(center + new Vector2(unit * 5f, 0f), center + new Vector2(0f, unit * 3f), color, 1.2f);
         drawList.AddLine(center + new Vector2(0f, unit * 3f), center + new Vector2(-unit * 5f, 0f), color, 1.2f);
         drawList.AddCircleFilled(center, unit * 1.5f, color);
-        if (!enabled)
+        if (!visible)
         {
             drawList.AddLine(
                 center + new Vector2(-unit * 4f, -unit * 4f),
                 center + new Vector2(unit * 4f, unit * 4f),
+                color,
+                1.5f);
+        }
+
+        return clicked;
+    }
+
+    private static bool DrawPickingToggle(string id, bool pickable, bool allObjects)
+    {
+        float size = ImGui.GetFrameHeight();
+        Vector2 min = ImGui.GetCursorScreenPos();
+        bool clicked = ImGui.InvisibleButton($"##{id}", new Vector2(size));
+        bool hovered = ImGui.IsItemHovered();
+        uint color = pickable ? 0xFFD7D7D7 : 0xFF777777;
+        if (hovered)
+        {
+            color = 0xFFFFFFFF;
+            ImGui.SetTooltip(allObjects
+                ? pickable ? "Disable picking for all objects" : "Enable picking for all objects"
+                : pickable ? "Disable Scene picking" : "Enable Scene picking");
+        }
+
+        Vector2 center = min + new Vector2(size * 0.5f);
+        float unit = size / 16f;
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        Vector2 palmMin = center + new Vector2(-unit * 2.5f, -unit * 0.5f);
+        Vector2 palmMax = center + new Vector2(unit * 3.5f, unit * 4.5f);
+        drawList.AddRect(palmMin, palmMax, color, unit, ImDrawFlags.None, 1.2f);
+        for (int finger = 0; finger < 4; finger++)
+        {
+            float x = center.X + ((finger - 1.5f) * unit * 1.6f);
+            float top = center.Y - (finger is 1 or 2 ? unit * 4.5f : unit * 3.5f);
+            drawList.AddLine(new Vector2(x, center.Y), new Vector2(x, top), color, 1.2f);
+        }
+
+        drawList.AddLine(
+            center + new Vector2(-unit * 2.5f, unit * 1.5f),
+            center + new Vector2(-unit * 5f, -unit * 0.5f),
+            color,
+            1.2f);
+        if (!pickable)
+        {
+            drawList.AddLine(
+                center + new Vector2(-unit * 5f, -unit * 5f),
+                center + new Vector2(unit * 5f, unit * 5f),
                 color,
                 1.5f);
         }

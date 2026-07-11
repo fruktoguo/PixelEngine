@@ -23,6 +23,16 @@ internal sealed class EditorGameObject
 
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// 是否在编辑态 Scene View 中可见；不进入 .scene / prefab，也不改变运行时 active。
+    /// </summary>
+    public bool SceneVisible { get; internal set; } = true;
+
+    /// <summary>
+    /// 是否允许在编辑态 Scene View 中被鼠标与 gizmo 拾取；不进入运行时。
+    /// </summary>
+    public bool ScenePickable { get; internal set; } = true;
+
     public int? ParentId { get; internal set; }
 
     public List<int> Children { get; } = [];
@@ -38,6 +48,8 @@ internal sealed class EditorGameObject
         EditorGameObject clone = new(StableId, Name)
         {
             Enabled = Enabled,
+            SceneVisible = SceneVisible,
+            ScenePickable = ScenePickable,
             ParentId = ParentId,
             Transform = Transform.Clone(),
             PrefabLink = PrefabLink?.Clone(),

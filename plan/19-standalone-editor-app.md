@@ -29,7 +29,7 @@
 | Project / Console / Picker | 资源树、搜索过滤、行选择、日志等级与首次工程入口使用一致的紧凑层级 | 目录/资产/日志操作、删除确认、drag/drop、错误恢复和 Project Picker 信息架构需用真实鼠标键盘闭环 |
 | 窗口系统 | resize、DPI、IME、焦点、停靠与 Windows Graphics Capture 可稳定观察 | framebuffer、屏幕录制和输入坐标必须一致；白屏捕获、旧 DPI 坐标、透明区域误捕获均视为未完成 |
 
-Hierarchy / Inspector 的 Unity 对标必须服从 PixelEngine 2D authoring 真相源：Hierarchy 提供真实场景搜索、对象图标、启用状态、选择与层级操作；Inspector 以 active + name header、始终存在的 Transform component、Behaviour component foldout/context menu 和 Add Component 搜索组织现有能力。PixelEngine 尚无 Tag、Layer、Static 或 3D Z 轴产品语义，因此不得为视觉相似绘制这些无行为字段。GameObject `Enabled` 一旦暴露为 active 开关，就必须随 `.scene` / prefab 往返，并在运行时物化时递归考虑父级禁用状态；不能继续停留为保存后丢失的编辑器临时位。
+Hierarchy / Inspector 的 Unity 对标必须服从 PixelEngine 2D authoring 真相源：Hierarchy 提供真实场景搜索、对象图标、Scene Visibility、Scene Picking、选择与层级操作，其中 visibility/picking 只影响编辑态 Scene View，不得偷换为 GameObject active；Inspector 以 active + name header、始终存在的 Transform component、Behaviour component foldout/context menu 和 Add Component 搜索组织现有能力。PixelEngine 尚无 Tag、Layer、Static 或 3D Z 轴产品语义，因此不得为视觉相似绘制这些无行为字段。GameObject `Enabled` 一旦暴露为 active 开关，就必须随 `.scene` / prefab 往返，并在运行时物化时递归考虑父级禁用状态；不能继续停留为保存后丢失的编辑器临时位。Scene Visibility / Picking 则是非落盘的编辑器状态：父级隐藏/禁止拾取递归作用于子级，分别真实控制 marker 绘制与鼠标命中/gizmo，不得用无行为图标占位。
 
 交付按“全局主题/chrome/status → 核心面板密度与选择 → Scene/Inspector 操作 → Project/Console/Picker → resize/DPI/录屏 → 完整 author→play→edit→build→run”循环推进。每轮必须保留 Unity 参照、PixelEngine 当前帧、输入动作与自动化结果；脚本化 source-contract 只能作回归门禁，不能替代真实窗口 reviewer。只有差异矩阵清零、同机复走完整路线且没有可复现的视觉或交互偏差时，canonical `EDITOR-003` 才能改为完成。
 

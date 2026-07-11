@@ -152,6 +152,68 @@ public sealed class SceneAuthoringPreviewTests
     }
 
     /// <summary>
+    /// 验证 Unity 式 Scene Visibility / Picking 是非落盘编辑器状态，父级状态递归影响子级，
+    /// 并分别真实控制 preview 绘制、鼠标命中与 gizmo。
+    /// </summary>
+    [Fact]
+    public void SceneVisibilityAndPickingAreEditorOnlyRecursiveControls()
+    {
+        EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "scene-state",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "Parent",
+                    Transform = new EngineSceneTransformDocument { X = 0f, Y = 0f },
+                },
+                new EngineSceneEntityDocument
+                {
+                    StableId = 2,
+                    Name = "Child",
+                    ParentId = 1,
+                    Transform = new EngineSceneTransformDocument { X = 100f, Y = 50f },
+                },
+            ],
+        });
+        SceneViewPanel panel = new(scene, new EditorUndoStack());
+        int contentVersion = scene.Version;
+        Assert.False(scene.IsDirty);
+        Assert.Equal(2, panel.Preview.Markers.Length);
+
+        scene.SetSceneVisible(1, visible: false);
+
+        Assert.False(scene.IsSceneVisible(1));
+        Assert.False(scene.IsSceneVisible(2));
+        Assert.Empty(panel.Preview.Markers);
+        Assert.False(panel.TryPickWorld(new Vector2(100f, 50f), out _));
+        Assert.False(panel.BeginGizmoTransform(2));
+        Assert.False(scene.IsDirty);
+        Assert.Equal(contentVersion, scene.Version);
+
+        scene.SetSceneVisible(1, visible: true);
+        scene.SetScenePickable(1, pickable: false);
+
+        Assert.Equal(2, panel.Preview.Markers.Length);
+        Assert.False(scene.IsScenePickable(2));
+        Assert.False(panel.TryPickWorld(new Vector2(100f, 50f), out _));
+        Assert.False(panel.BeginGizmoTransform(2));
+        Assert.True(Assert.Single(scene.ToDocument().Entities!, entity => entity.StableId == 1).Enabled!.Value);
+        Assert.True(Assert.Single(scene.ToDocument().Entities!, entity => entity.StableId == 2).Enabled!.Value);
+        Assert.Equal(contentVersion, scene.Version);
+
+        scene.SetAllScenePickable(pickable: true);
+
+        Assert.True(panel.TryPickWorld(new Vector2(100f, 50f), out int picked));
+        Assert.Equal(2, picked);
+        Assert.True(panel.BeginGizmoTransform(2));
+        Assert.False(panel.CommitGizmoTransform());
+    }
+
+    /// <summary>
     /// 验证带父级旋转/缩放的 child gizmo 使用 world→local 转换，且完整拖动只形成一个 Undo 项。
     /// </summary>
     [Fact]
