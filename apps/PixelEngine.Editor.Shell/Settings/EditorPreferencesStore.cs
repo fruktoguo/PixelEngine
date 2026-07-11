@@ -8,7 +8,7 @@ namespace PixelEngine.Editor.Shell.Settings;
 /// </summary>
 internal sealed record EditorPreferencesDocument
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
 
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 
@@ -20,23 +20,27 @@ internal sealed record EditorPreferencesDocument
 
     public bool RestoreLastScene { get; init; } = true;
 
-    public string ExternalScriptEditor { get; init; } = string.Empty;
+    public string ExternalScriptEditor { get; init; } = ExternalCodeEditorPreference.VsCode;
 
     public string Language { get; init; } = ResolveDefaultLanguage();
 
     public bool TryNormalize(out EditorPreferencesDocument normalized, out string diagnostic)
     {
-        if (FormatVersion != CurrentFormatVersion)
+        if (FormatVersion is not 1 and not CurrentFormatVersion)
         {
             normalized = new EditorPreferencesDocument();
             diagnostic = $"不支持的 Editor Preferences 版本：{FormatVersion}。";
             return false;
         }
 
+        string editor = FormatVersion == 1 && string.IsNullOrWhiteSpace(ExternalScriptEditor)
+            ? ExternalCodeEditorPreference.VsCode
+            : ExternalCodeEditorPreference.Normalize(ExternalScriptEditor);
         normalized = this with
         {
+            FormatVersion = CurrentFormatVersion,
             UiScale = EditorUiScale.Normalize(UiScale),
-            ExternalScriptEditor = ExternalScriptEditor?.Trim() ?? string.Empty,
+            ExternalScriptEditor = editor,
             Language = string.IsNullOrWhiteSpace(Language) ? ResolveDefaultLanguage() : Language.Trim(),
         };
         diagnostic = string.Empty;
@@ -110,19 +114,32 @@ internal sealed class EditorPreferencesStore
             EditorPreferencesDocument? document = JsonSerializer.Deserialize(
                 json,
                 EditorShellJsonContext.Default.EditorPreferencesDocument);
-            return document is null
-                ? new EditorPreferencesStore(
+            if (document is null)
+            {
+                return new EditorPreferencesStore(
                     fullPath,
                     new EditorPreferencesDocument(),
                     loadedFromDisk: false,
-                    "Editor Preferences 文件为空。")
-                : document.TryNormalize(out EditorPreferencesDocument normalized, out string diagnostic)
-                    ? new EditorPreferencesStore(fullPath, normalized, loadedFromDisk: true, string.Empty)
-                    : new EditorPreferencesStore(
+                    "Editor Preferences 文件为空。");
+            }
+
+            if (!document.TryNormalize(out EditorPreferencesDocument normalized, out string diagnostic))
+            {
+                return new EditorPreferencesStore(
                     fullPath,
                     new EditorPreferencesDocument(),
                     loadedFromDisk: false,
                     diagnostic);
+            }
+
+            EditorPreferencesStore store = new(fullPath, normalized, loadedFromDisk: true, string.Empty);
+            if (document.FormatVersion != EditorPreferencesDocument.CurrentFormatVersion &&
+                !store.TryWrite(normalized, out string migrationDiagnostic))
+            {
+                store.LastDiagnostic = $"Editor Preferences 已在内存迁移，但写回 v{EditorPreferencesDocument.CurrentFormatVersion} 失败：{migrationDiagnostic}";
+            }
+
+            return store;
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -167,15 +184,17 @@ internal sealed class EditorPreferencesStore
         }
 
         string legacyCommand = legacy.ExternalScriptEditor?.Trim() ?? string.Empty;
-        bool safeSystemDefaultCommand = string.IsNullOrEmpty(legacyCommand) ||
-            string.Equals(legacyCommand, "system-default", StringComparison.OrdinalIgnoreCase) ||
+        bool explicitSystemDefault = string.Equals(legacyCommand, "system-default", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(legacyCommand, "default", StringComparison.OrdinalIgnoreCase);
+        bool safeSystemDefaultCommand = string.IsNullOrEmpty(legacyCommand) || explicitSystemDefault;
         bool migrated = TryUpdate(
             Current with
             {
                 SaveLayoutOnExit = legacy.SaveLayoutOnExit,
                 // 工程文件属于内容输入，不能静默迁移并执行其中的自定义 executable command。
-                ExternalScriptEditor = safeSystemDefaultCommand ? string.Empty : Current.ExternalScriptEditor,
+                ExternalScriptEditor = explicitSystemDefault
+                    ? ExternalCodeEditorPreference.SystemDefault
+                    : Current.ExternalScriptEditor,
             },
             out diagnostic);
         LegacyMigrationHandled = migrated;

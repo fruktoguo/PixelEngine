@@ -239,16 +239,60 @@ internal sealed class EditorPreferencesWindow(
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.externalTools", "External Tools"));
         string command = _store.Current.ExternalScriptEditor;
-        if (ImGui.InputText("Script Editor", ref command, 1024))
+        ExternalCodeEditorKind currentKind = ExternalCodeEditorPreference.Classify(command);
+        string preview = EditorDisplayName(currentKind);
+        if (ImGui.BeginCombo(EditorLocalization.Get("prefs.scriptEditor", "Script Editor"), preview))
         {
-            Update(_store.Current with { ExternalScriptEditor = command });
+            DrawEditorPreset(ExternalCodeEditorKind.VsCode, ExternalCodeEditorPreference.VsCode, currentKind);
+            DrawEditorPreset(ExternalCodeEditorKind.VisualStudio, ExternalCodeEditorPreference.VisualStudio, currentKind);
+            DrawEditorPreset(ExternalCodeEditorKind.Rider, ExternalCodeEditorPreference.Rider, currentKind);
+            DrawEditorPreset(ExternalCodeEditorKind.SystemDefault, ExternalCodeEditorPreference.SystemDefault, currentKind);
+            DrawEditorPreset(ExternalCodeEditorKind.Custom, "code.cmd --reuse-window --goto {file}:{line}:{column}", currentKind);
+            ImGui.EndCombo();
         }
 
-        ImGui.TextWrapped("留空或填写 system-default 使用系统默认程序。自定义命令可使用 {file} 占位符；未写占位符时会自动追加脚本路径。");
-        if (ImGui.Button("Use System Default"))
+        if (currentKind == ExternalCodeEditorKind.Custom)
         {
-            Update(_store.Current with { ExternalScriptEditor = string.Empty });
+            if (ImGui.InputText(EditorLocalization.Get("prefs.customEditorCommand", "Custom Command"), ref command, 1024))
+            {
+                Update(_store.Current with { ExternalScriptEditor = command });
+            }
+
+            ImGui.TextWrapped(EditorLocalization.Get(
+                "prefs.customEditorHelp",
+                "Placeholders: {file}, {line}, {column}, {project}. Without {file}, the script path is appended."));
         }
+
+        ImGui.TextWrapped(EditorLocalization.Get(
+            "prefs.scriptEditorHelp",
+            "VS Code is the default. Script assets reuse the project workspace and open at the requested line."));
+    }
+
+    private void DrawEditorPreset(ExternalCodeEditorKind kind, string value, ExternalCodeEditorKind currentKind)
+    {
+        bool selected = kind == currentKind;
+        if (ImGui.Selectable(EditorDisplayName(kind), selected))
+        {
+            Update(_store.Current with { ExternalScriptEditor = value });
+        }
+
+        if (selected)
+        {
+            ImGui.SetItemDefaultFocus();
+        }
+    }
+
+    private static string EditorDisplayName(ExternalCodeEditorKind kind)
+    {
+        return kind switch
+        {
+            ExternalCodeEditorKind.VsCode => EditorLocalization.Get("prefs.editor.vscode", "Visual Studio Code (Recommended)"),
+            ExternalCodeEditorKind.VisualStudio => EditorLocalization.Get("prefs.editor.visualStudio", "Visual Studio"),
+            ExternalCodeEditorKind.Rider => EditorLocalization.Get("prefs.editor.rider", "JetBrains Rider"),
+            ExternalCodeEditorKind.SystemDefault => EditorLocalization.Get("prefs.editor.systemDefault", "System Default"),
+            ExternalCodeEditorKind.Custom => EditorLocalization.Get("prefs.editor.custom", "Custom Command"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知外部代码编辑器类型。"),
+        };
     }
 
     private static void DrawShortcuts()

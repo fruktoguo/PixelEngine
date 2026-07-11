@@ -36,6 +36,7 @@ internal sealed class EditorMainMenuBar
 
         DrawFileMenu(app);
         DrawEditMenu(app);
+        DrawAssetsMenu(app);
         DrawGameObjectMenu(app);
         DrawWindowMenu(app);
         DrawPlayMenu(app);
@@ -455,6 +456,25 @@ internal sealed class EditorMainMenuBar
         if (ImGui.MenuItem(L.Get("action.delete", "Delete"), string.Empty, selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
         {
             app.DeleteSelectedGameObject();
+        }
+
+        ImGui.EndMenu();
+    }
+
+    private static void DrawAssetsMenu(EditorShellApp app)
+    {
+        if (!ImGui.BeginMenu(L.Get("menu.assets", "Assets")))
+        {
+            return;
+        }
+
+        if (ImGui.MenuItem(
+            L.Get("action.openCSharpProject", "Open C# Project"),
+            string.Empty,
+            selected: false,
+            enabled: app.HasOpenProject))
+        {
+            _ = app.OpenCSharpProject(out _);
         }
 
         ImGui.EndMenu();

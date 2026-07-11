@@ -257,7 +257,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
         ImGui.TextDisabled($"{entry.Category} · {entry.Source} · {entry.Timestamp.ToLocalTime():yyyy-MM-dd HH:mm:ss.fff}");
         if (!string.IsNullOrWhiteSpace(entry.FilePath))
         {
-            string location = entry.Line > 0 ? $"{entry.FilePath}:{entry.Line}" : entry.FilePath;
+            string location = FormatSourceLocation(entry);
             if (ImGui.Selectable(location, selected: false))
             {
                 _ = TryOpenSource(entry);
@@ -301,7 +301,11 @@ internal sealed class EditorConsolePanel : IEditorPanel
             browserPath = "ScriptSource/" + value.TrimStart('/');
         }
 
-        return _app.OpenScriptAsset(browserPath, out _);
+        return _app.OpenScriptAsset(
+            browserPath,
+            Math.Max(1, entry.Line),
+            Math.Max(1, entry.Column),
+            out _);
     }
 
     private bool IsSeverityVisible(EditorConsoleSeverity severity)
@@ -330,11 +334,20 @@ internal sealed class EditorConsolePanel : IEditorPanel
     {
         string location = string.IsNullOrWhiteSpace(entry.FilePath)
             ? string.Empty
-            : entry.Line > 0 ? $"{entry.FilePath}:{entry.Line}" : entry.FilePath;
+            : FormatSourceLocation(entry);
         return string.Join(
             Environment.NewLine,
             new[] { entry.Text, entry.Details, location }
                 .Where(static value => !string.IsNullOrWhiteSpace(value)));
+    }
+
+    private static string FormatSourceLocation(in EditorConsoleEntry entry)
+    {
+        return entry.Line <= 0
+            ? entry.FilePath ?? string.Empty
+            : entry.Column > 0
+                ? $"{entry.FilePath}:{entry.Line}:{entry.Column}"
+                : $"{entry.FilePath}:{entry.Line}";
     }
 
     private static uint ToAbgr(Vector4 color)

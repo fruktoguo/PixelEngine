@@ -175,6 +175,74 @@ function Remove-EditorDeveloperMetadata([string]$EditorRoot) {
     Remove-Item -Force
 }
 
+function Copy-ScriptReferenceAssemblies(
+  [string]$EditorPublishRoot,
+  [string]$DestinationRoot,
+  [string[]]$PrimaryAssemblyNames
+) {
+  if (-not (Test-Path -LiteralPath $EditorPublishRoot -PathType Container)) {
+    throw "编辑器 publish 目录不存在：$EditorPublishRoot"
+  }
+
+  New-Item -ItemType Directory -Force -Path $DestinationRoot | Out-Null
+  $primaryAssemblySet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($primaryAssemblyName in $PrimaryAssemblyNames) {
+    [void]$primaryAssemblySet.Add($primaryAssemblyName)
+  }
+  foreach ($assemblyName in $PrimaryAssemblyNames) {
+    $dllSource = Join-Path $EditorPublishRoot "$assemblyName.dll"
+    $xmlSource = Join-Path $EditorPublishRoot "$assemblyName.xml"
+    if (-not (Test-Path -LiteralPath $dllSource -PathType Leaf)) {
+      throw "脚本引用程序集缺少 managed DLL：$dllSource"
+    }
+
+    if (-not (Test-Path -LiteralPath $xmlSource -PathType Leaf)) {
+      throw "脚本引用程序集缺少 XML IntelliSense 文档：$xmlSource"
+    }
+
+    Copy-Item -LiteralPath $dllSource -Destination (Join-Path $DestinationRoot "$assemblyName.dll") -Force
+    Copy-Item -LiteralPath $xmlSource -Destination (Join-Path $DestinationRoot "$assemblyName.xml") -Force
+  }
+
+  # 独立 SDK 工程通过 HintPath 引用 primary assemblies；ResolveAssemblyReference 仍需在同目录
+  # 解析它们 public metadata 闭包中的第三方 managed dependencies。只按 PE metadata 识别 managed DLL，
+  # 明确排除 Editor 实现装配与 native DLL，避免把工具层 API 暴露给游戏脚本。
+  $managedDependencyFiles = [Collections.Generic.List[string]]::new()
+  Get-ChildItem -LiteralPath $EditorPublishRoot -File -Filter '*.dll' -Force |
+    Sort-Object Name |
+    ForEach-Object {
+      $assemblyName = [IO.Path]::GetFileNameWithoutExtension($_.Name)
+      if ($primaryAssemblySet.Contains($assemblyName) -or
+          $_.Name.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
+          $_.Name.Equals('PixelEngine.Editor.Shell.dll', [StringComparison]::OrdinalIgnoreCase)) {
+        return
+      }
+
+      if ($assemblyName.StartsWith('PixelEngine.', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "发现未登记的 PixelEngine 脚本引用程序集；请先评审并加入 primary assembly 清单：$($_.Name)"
+      }
+
+      try {
+        [void][Reflection.AssemblyName]::GetAssemblyName($_.FullName)
+      }
+      catch [BadImageFormatException] {
+        return
+      }
+
+      Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $DestinationRoot $_.Name) -Force
+      $managedDependencyFiles.Add($_.Name)
+    }
+
+  $pdb = Get-ChildItem -LiteralPath $DestinationRoot -File -Recurse -Force |
+    Where-Object { $_.Extension.Equals('.pdb', [StringComparison]::OrdinalIgnoreCase) } |
+    Select-Object -First 1
+  if ($pdb) {
+    throw "脚本引用程序集目录绝不允许包含 PDB：$($pdb.FullName)"
+  }
+
+  return $managedDependencyFiles.ToArray()
+}
+
 function Write-FinalOutputChecksums([string]$Root, [string]$OutputPath) {
   $rootFull = [IO.Path]::GetFullPath($Root)
   $outputFull = [IO.Path]::GetFullPath($OutputPath)
@@ -237,6 +305,21 @@ $nativeBuildScript = Join-Path $repoRoot 'tools/build-native.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
 $demoBuildScript = Join-Path $repoRoot 'tools/build-player.ps1'
 $editorExe = Join-Path $editorPublish 'PixelEngine.Editor.Shell.exe'
+$scriptReferenceAssemblyNames = @(
+  'PixelEngine.Audio',
+  'PixelEngine.Content',
+  'PixelEngine.Core',
+  'PixelEngine.Gui',
+  'PixelEngine.Hosting',
+  'PixelEngine.Interop',
+  'PixelEngine.Physics',
+  'PixelEngine.Rendering',
+  'PixelEngine.Scripting',
+  'PixelEngine.Serialization',
+  'PixelEngine.Simulation',
+  'PixelEngine.UI',
+  'PixelEngine.World'
+)
 
 $nativeBuildResult = Invoke-ProcessChecked `
   -Name 'native-build' `
@@ -345,6 +428,11 @@ Copy-Directory $validationRoot $finalValidationDir
 if (-not $IncludeEditorSymbols.IsPresent) {
   Remove-EditorDeveloperMetadata $finalEditorDir
 }
+$scriptReferenceAssembliesRelative = '编辑器/ScriptReferenceAssemblies'
+$scriptReferenceAssembliesDir = Join-Path $nextRoot $scriptReferenceAssembliesRelative
+$scriptReferenceManagedDependencies = @(
+  Copy-ScriptReferenceAssemblies $editorPublish $scriptReferenceAssembliesDir $scriptReferenceAssemblyNames
+)
 
 $manifest = [ordered]@{
   schema = 'pixelengine.final-output/v1'
@@ -357,7 +445,12 @@ $manifest = [ordered]@{
   demoChannel = $DemoChannel
   demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend
   editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent
-  editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'pdb-and-xml-pruned' }
+  editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'runtime-pdb-and-xml-pruned' }
+  editorScriptReferenceAssembliesPath = $scriptReferenceAssembliesRelative
+  editorScriptReferenceAssembliesPolicy = 'managed-dll-and-xml-intellisense-no-pdb'
+  editorScriptReferenceAssemblies = $scriptReferenceAssemblyNames
+  editorScriptReferenceManagedDependencyPolicy = 'managed-editor-publish-dlls-excluding-editor-and-native'
+  editorScriptReferenceManagedDependencies = $scriptReferenceManagedDependencies
   editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
   updatePolicy = 'staged-build-and-verify-before-replace'
@@ -389,9 +482,10 @@ $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $final
 PixelEngine 正式输出
 
 此目录只由 tools/update-final-output.ps1 更新。脚本会先在 artifacts/final-output-staging 下构建与验证，编辑器默认工作台和游戏 Demo 窗口验证全部通过后，才替换本目录。
-默认编辑器正式输出会清理 .pdb/.xml 开发元数据；需要诊断符号时请显式使用 -IncludeEditorSymbols 重新生成。
+默认编辑器运行目录会清理 .pdb/.xml 开发元数据；需要诊断符号时请显式使用 -IncludeEditorSymbols 重新生成。编辑器\ScriptReferenceAssemblies 是独立脚本工程的产品 SDK 引用目录，固定保留 PixelEngine managed DLL、XML IntelliSense 文档及所需第三方 managed dependency DLL，但不包含 PixelEngine.Editor、native DLL 或 PDB。
 
 - 编辑器：编辑器\PixelEngine.Editor.Shell.exe
+- 脚本开发 SDK：编辑器\ScriptReferenceAssemblies\
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe
 - 验证记录：_验证记录\manifest.json
 - 完整性校验：SHA256SUMS
@@ -411,6 +505,7 @@ Replace-FinalOutput $nextRoot $outputRootFull
 
 Write-Host "正式输出已更新：$outputRootFull"
 Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.Editor.Shell.exe')"
+Write-Host "脚本开发 SDK：$(Join-Path $outputRootFull '编辑器/ScriptReferenceAssemblies')"
 Write-Host "Demo 入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
 Write-Host "验证 manifest：$(Join-Path $outputRootFull '_验证记录/manifest.json')"
 Write-Host "完整性校验：$(Join-Path $outputRootFull 'SHA256SUMS')"

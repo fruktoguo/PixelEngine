@@ -237,6 +237,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("SHA256SUMS 登记了不存在的文件", verifier, StringComparison.Ordinal);
         Assert.Contains(".Extension.Equals('.pdb'", verifier, StringComparison.Ordinal);
         Assert.Contains(".Extension.Equals('.xml'", verifier, StringComparison.Ordinal);
+        Assert.Contains("editorScriptReferenceAssembliesPath", verifier, StringComparison.Ordinal);
+        Assert.Contains("managed-dll-and-xml-intellisense-no-pdb", verifier, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Hosting", verifier, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Scripting", verifier, StringComparison.Ordinal);
+        Assert.Contains("脚本引用程序集目录绝不允许包含 PDB", verifier, StringComparison.Ordinal);
         Assert.DoesNotContain("dotnet publish", verifier, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("build-player.ps1", verifier, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Replace-FinalOutput", verifier, StringComparison.Ordinal);
@@ -276,6 +281,110 @@ public sealed class HostingProjectDisciplineTests
             ProcessResult missing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
             Assert.NotEqual(0, missing.ExitCode);
             Assert.Contains("SHA256SUMS 登记了不存在的文件", missing.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证正式输出审计会拒绝脚本 SDK 缺少 XML、夹带 PDB，或在 SDK 外泄漏运行目录 XML。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierEnforcesScriptReferenceSdkMetadataBoundary()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            File.Delete(Path.Combine(outputRoot, "编辑器", "ScriptReferenceAssemblies", "PixelEngine.Scripting.xml"));
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult missingXml = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, missingXml.ExitCode);
+            Assert.True(
+                missingXml.CombinedOutput.Contains("脚本引用 XML PixelEngine.Scripting", StringComparison.Ordinal),
+                missingXml.CombinedOutput);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(outputRoot, "编辑器/ScriptReferenceAssemblies/leaked.pdb", "pdb");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult sdkPdb = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, sdkPdb.ExitCode);
+            Assert.True(
+                sdkPdb.CombinedOutput.Contains("脚本引用程序集目录绝不允许包含 PDB", StringComparison.Ordinal),
+                sdkPdb.CombinedOutput);
+
+            File.Delete(Path.Combine(outputRoot, "编辑器", "ScriptReferenceAssemblies", "leaked.pdb"));
+            WriteTextFile(outputRoot, "编辑器/leaked.xml", "xml");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult runtimeXml = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, runtimeXml.ExitCode);
+            Assert.True(
+                runtimeXml.CombinedOutput.Contains("编辑器运行目录不应在脚本引用 SDK 之外包含 .pdb/.xml", StringComparison.Ordinal),
+                runtimeXml.CombinedOutput);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 verifier 从编辑器运行目录独立推导 managed dependency，且符号策略字段不能缺失或伪造类型。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsSelfReportedDependencyAndMissingSymbolPolicy()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            File.Delete(Path.Combine(outputRoot, "编辑器", "ScriptReferenceAssemblies", "System.Text.Json.dll"));
+            string manifestPath = Path.Combine(outputRoot, "_验证记录", "manifest.json");
+            JsonObject manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+            manifest["editorScriptReferenceManagedDependencies"] = new JsonArray(
+                JsonValue.Create("System.Collections.Immutable.dll"));
+            File.WriteAllText(manifestPath, manifest.ToJsonString());
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult missingDerivedDependency = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, missingDerivedDependency.ExitCode);
+            Assert.True(
+                missingDerivedDependency.CombinedOutput.Contains("managed dependency 数量与编辑器运行目录不匹配", StringComparison.Ordinal),
+                missingDerivedDependency.CombinedOutput);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            manifestPath = Path.Combine(outputRoot, "_验证记录", "manifest.json");
+            manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
+            Assert.True(manifest.Remove("editorSymbolsIncluded"));
+            File.WriteAllText(manifestPath, manifest.ToJsonString());
+            WriteTextFile(outputRoot, "编辑器/leaked.xml", "xml");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult missingSymbolPolicy = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, missingSymbolPolicy.ExitCode);
+            Assert.True(
+                missingSymbolPolicy.CombinedOutput.Contains("editorSymbolsIncluded 必须存在且为 bool", StringComparison.Ordinal),
+                missingSymbolPolicy.CombinedOutput);
         }
         finally
         {
@@ -359,10 +468,37 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("if (-not $IncludeEditorSymbols.IsPresent)", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("Remove-EditorDeveloperMetadata $finalEditorDir", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent", finalOutputScript, StringComparison.Ordinal);
-        Assert.Contains("editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'pdb-and-xml-pruned' }", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'runtime-pdb-and-xml-pruned' }", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("-Name 'native-build'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("tools/build-native.ps1", finalOutputScript, StringComparison.Ordinal);
         Assert.DoesNotContain("-Tail 80 -Raw", finalOutputScript, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证正式编辑器包提供独立脚本工程所需的产品 SDK 引用层，并保留 XML IntelliSense、拒绝 PDB 与 Editor 实现闭包。
+    /// </summary>
+    [Fact]
+    public void FinalOutputPackagesScriptReferenceAssembliesForStandaloneIdeProjects()
+    {
+        string root = FindRepositoryRoot();
+        string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+        string verifier = File.ReadAllText(Path.Combine(root, "tools", "verify-final-output.ps1"));
+        string finalOutputDoc = File.ReadAllText(Path.Combine(root, "docs", "final-output.md"));
+
+        Assert.Contains("function Copy-ScriptReferenceAssemblies", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'PixelEngine.Hosting'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'PixelEngine.Scripting'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorScriptReferenceAssembliesPath = $scriptReferenceAssembliesRelative", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorScriptReferenceAssembliesPolicy = 'managed-dll-and-xml-intellisense-no-pdb'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorScriptReferenceManagedDependencyPolicy = 'managed-editor-publish-dlls-excluding-editor-and-native'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("[Reflection.AssemblyName]::GetAssemblyName", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Copy-Item -LiteralPath $xmlSource", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("脚本引用程序集目录绝不允许包含 PDB", finalOutputScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("'PixelEngine.Editor'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("Assert-ChecksumContains $relativePaths \"$scriptReferenceAssembliesRelative/$assemblyName.xml\"", verifier, StringComparison.Ordinal);
+        Assert.Contains("脚本引用程序集目录包含未规定文件", verifier, StringComparison.Ordinal);
+        Assert.Contains("ScriptReferenceAssemblies", finalOutputDoc, StringComparison.Ordinal);
+        Assert.Contains("IntelliSense", finalOutputDoc, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2130,6 +2266,50 @@ public sealed class HostingProjectDisciplineTests
     {
         WriteTextFile(outputRoot, "编辑器/PixelEngine.Editor.Shell.exe", "editor");
         WriteTextFile(outputRoot, "游戏Demo/PixelEngine Demo.exe", "demo");
+        string[] scriptReferenceAssemblies =
+        [
+            "PixelEngine.Audio",
+            "PixelEngine.Content",
+            "PixelEngine.Core",
+            "PixelEngine.Gui",
+            "PixelEngine.Hosting",
+            "PixelEngine.Interop",
+            "PixelEngine.Physics",
+            "PixelEngine.Rendering",
+            "PixelEngine.Scripting",
+            "PixelEngine.Serialization",
+            "PixelEngine.Simulation",
+            "PixelEngine.UI",
+            "PixelEngine.World",
+        ];
+        foreach (string assemblyName in scriptReferenceAssemblies)
+        {
+            CopyManagedFixtureAssembly(
+                outputRoot,
+                $"编辑器/ScriptReferenceAssemblies/{assemblyName}.dll",
+                Path.Combine(AppContext.BaseDirectory, $"{assemblyName}.dll"));
+            WriteTextFile(
+                outputRoot,
+                $"编辑器/ScriptReferenceAssemblies/{assemblyName}.xml",
+                $"<doc><assembly><name>{assemblyName}</name></assembly></doc>");
+        }
+
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "编辑器/ScriptReferenceAssemblies/System.Text.Json.dll",
+            typeof(JsonSerializer).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "编辑器/ScriptReferenceAssemblies/System.Collections.Immutable.dll",
+            typeof(System.Collections.Immutable.ImmutableArray<>).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "编辑器/System.Text.Json.dll",
+            typeof(JsonSerializer).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "编辑器/System.Collections.Immutable.dll",
+            typeof(System.Collections.Immutable.ImmutableArray<>).Assembly.Location);
         WriteTextFile(
             outputRoot,
             "_验证记录/logs/editor-default-workbench.stdout.log",
@@ -2162,7 +2342,16 @@ public sealed class HostingProjectDisciplineTests
                 demoChannel = "r2r",
                 demoRuntimeUiBackendRequested = "RmlUi",
                 editorSymbolsIncluded = false,
-                editorDeveloperMetadataPolicy = "pdb-and-xml-pruned",
+                editorDeveloperMetadataPolicy = "runtime-pdb-and-xml-pruned",
+                editorScriptReferenceAssembliesPath = "编辑器/ScriptReferenceAssemblies",
+                editorScriptReferenceAssembliesPolicy = "managed-dll-and-xml-intellisense-no-pdb",
+                editorScriptReferenceAssemblies = scriptReferenceAssemblies,
+                editorScriptReferenceManagedDependencyPolicy = "managed-editor-publish-dlls-excluding-editor-and-native",
+                editorScriptReferenceManagedDependencies = new[]
+                {
+                    "System.Collections.Immutable.dll",
+                    "System.Text.Json.dll",
+                },
                 editorExecutable = "编辑器/PixelEngine.Editor.Shell.exe",
                 demoExecutable = "游戏Demo/PixelEngine Demo.exe",
                 checksumFile = "SHA256SUMS",
@@ -2188,6 +2377,13 @@ public sealed class HostingProjectDisciplineTests
                 },
             }));
         WriteFinalOutputChecksums(outputRoot);
+    }
+
+    private static void CopyManagedFixtureAssembly(string outputRoot, string relativePath, string sourcePath)
+    {
+        string fullPath = Path.Combine(outputRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.Copy(sourcePath, fullPath, overwrite: true);
     }
 
     private static void WriteTextFile(string outputRoot, string relativePath, string content)

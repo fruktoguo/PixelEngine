@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Text;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -10,12 +9,16 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class EditorScriptAssetOpenService
 {
     private const string FilePlaceholder = "{file}";
+    private const string LinePlaceholder = "{line}";
+    private const string ColumnPlaceholder = "{column}";
+    private const string ProjectPlaceholder = "{project}";
     private readonly EditorAssetManifestStore? _assets;
     private readonly EditorProject? _project;
     private readonly string _projectRoot;
     private readonly string _contentRoot;
     private readonly Func<string> _editorCommandProvider;
     private readonly IExternalScriptEditorProcessLauncher _processLauncher;
+    private readonly IExternalCodeEditorLocator _editorLocator;
 
     /// <summary>
     /// 兼容基于 content manifest 的旧 Project Window opener。
@@ -23,13 +26,15 @@ internal sealed class EditorScriptAssetOpenService
     public EditorScriptAssetOpenService(
         EditorAssetManifestStore assets,
         Func<string>? editorCommandProvider = null,
-        IExternalScriptEditorProcessLauncher? processLauncher = null)
+        IExternalScriptEditorProcessLauncher? processLauncher = null,
+        IExternalCodeEditorLocator? editorLocator = null)
     {
         _assets = assets ?? throw new ArgumentNullException(nameof(assets));
         _projectRoot = assets.ProjectRoot;
         _contentRoot = assets.ContentRoot;
         _editorCommandProvider = editorCommandProvider ?? (static () => string.Empty);
         _processLauncher = processLauncher ?? new ExternalScriptEditorProcessLauncher();
+        _editorLocator = editorLocator ?? new ExternalCodeEditorLocator();
     }
 
     /// <summary>
@@ -38,13 +43,15 @@ internal sealed class EditorScriptAssetOpenService
     public EditorScriptAssetOpenService(
         EditorProject project,
         Func<string>? editorCommandProvider = null,
-        IExternalScriptEditorProcessLauncher? processLauncher = null)
+        IExternalScriptEditorProcessLauncher? processLauncher = null,
+        IExternalCodeEditorLocator? editorLocator = null)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _projectRoot = project.ProjectRoot;
         _contentRoot = project.ContentRootPath;
         _editorCommandProvider = editorCommandProvider ?? (static () => string.Empty);
         _processLauncher = processLauncher ?? new ExternalScriptEditorProcessLauncher();
+        _editorLocator = editorLocator ?? new ExternalCodeEditorLocator();
     }
 
     public bool TryOpenScriptAsset(string logicalPath, out string diagnostic)
@@ -56,12 +63,22 @@ internal sealed class EditorScriptAssetOpenService
 
     public EditorScriptAssetOpenResult OpenScriptAsset(string logicalPath)
     {
+        return OpenScriptAsset(logicalPath, line: 1, column: 1);
+    }
+
+    /// <summary>
+    /// 打开脚本并定位到一基行列；Project Window 使用 1:1，Console 使用编译诊断的真实位置。
+    /// </summary>
+    public EditorScriptAssetOpenResult OpenScriptAsset(string logicalPath, int line, int column = 1)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(logicalPath);
+        line = Math.Max(1, line);
+        column = Math.Max(1, column);
         try
         {
             return _project is null
-                ? OpenManifestScriptAsset(logicalPath)
-                : OpenRootedScriptAsset(logicalPath);
+                ? OpenManifestScriptAsset(logicalPath, line, column)
+                : OpenRootedScriptAsset(logicalPath, line, column);
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
         {
@@ -69,7 +86,7 @@ internal sealed class EditorScriptAssetOpenService
         }
     }
 
-    private EditorScriptAssetOpenResult OpenManifestScriptAsset(string logicalPath)
+    private EditorScriptAssetOpenResult OpenManifestScriptAsset(string logicalPath, int line, int column)
     {
         EditorAssetManifestStore assets = _assets ??
             throw new InvalidOperationException("legacy script opener 缺少 asset manifest。");
@@ -86,10 +103,10 @@ internal sealed class EditorScriptAssetOpenService
         string fullPath = ResolveLegacyFullPath(asset);
         return !File.Exists(fullPath)
             ? Failed(asset, $"脚本文件不存在：{fullPath}", fullPath)
-            : OpenResolvedScript(asset.Id, asset.LogicalPath, fullPath);
+            : OpenResolvedScript(asset.Id, asset.LogicalPath, fullPath, line, column);
     }
 
-    private EditorScriptAssetOpenResult OpenRootedScriptAsset(string rootedPath)
+    private EditorScriptAssetOpenResult OpenRootedScriptAsset(string rootedPath, int line, int column)
     {
         EditorProject project = _project ??
             throw new InvalidOperationException("rooted script opener 缺少 EditorProject。");
@@ -110,17 +127,20 @@ internal sealed class EditorScriptAssetOpenService
             project.ScriptSourcePath);
         return !File.Exists(fullPath)
             ? Failed(string.Empty, canonicalPath, $"脚本文件不存在：{fullPath}", fullPath)
-            : OpenResolvedScript(string.Empty, canonicalPath, fullPath);
+            : OpenResolvedScript(string.Empty, canonicalPath, fullPath, line, column);
     }
 
     private EditorScriptAssetOpenResult OpenResolvedScript(
         string assetId,
         string logicalPath,
-        string fullPath)
+        string fullPath,
+        int line,
+        int column)
     {
-        string editorCommand = _editorCommandProvider()?.Trim() ?? string.Empty;
-        bool useSystemDefault = IsSystemDefault(editorCommand);
-        if (!TryCreateStartInfo(editorCommand, fullPath, useSystemDefault, out ProcessStartInfo? startInfo, out string diagnostic) ||
+        string editorCommand = ExternalCodeEditorPreference.Normalize(_editorCommandProvider());
+        ExternalCodeEditorKind editorKind = ExternalCodeEditorPreference.Classify(editorCommand);
+        bool useSystemDefault = editorKind == ExternalCodeEditorKind.SystemDefault;
+        if (!TryCreateStartInfo(editorCommand, editorKind, fullPath, line, column, out ProcessStartInfo? startInfo, out string diagnostic) ||
             startInfo is null)
         {
             return Failed(assetId, logicalPath, diagnostic, fullPath, editorCommand, useSystemDefault);
@@ -136,25 +156,27 @@ internal sealed class EditorScriptAssetOpenService
 
         string success = useSystemDefault
             ? $"已用系统默认 opener 打开脚本：{logicalPath}"
-            : $"已用外部脚本编辑器打开脚本：{logicalPath}";
+            : $"已用外部脚本编辑器打开脚本：{logicalPath}:{line}:{column}";
         return new EditorScriptAssetOpenResult(
             Success: true,
             AssetId: assetId,
             LogicalPath: logicalPath,
             ResolvedPath: fullPath,
-            EditorCommand: useSystemDefault ? "system-default" : editorCommand,
+            EditorCommand: useSystemDefault ? ExternalCodeEditorPreference.SystemDefault : editorCommand,
             UsedSystemDefault: useSystemDefault,
             Diagnostic: success);
     }
 
     private bool TryCreateStartInfo(
         string editorCommand,
+        ExternalCodeEditorKind editorKind,
         string fullPath,
-        bool useSystemDefault,
+        int line,
+        int column,
         out ProcessStartInfo? startInfo,
         out string diagnostic)
     {
-        if (useSystemDefault)
+        if (editorKind == ExternalCodeEditorKind.SystemDefault)
         {
             startInfo = new ProcessStartInfo
             {
@@ -168,7 +190,12 @@ internal sealed class EditorScriptAssetOpenService
             return true;
         }
 
-        string[] tokens = SplitCommandLine(editorCommand, out diagnostic);
+        if (editorKind != ExternalCodeEditorKind.Custom)
+        {
+            return TryCreatePresetStartInfo(editorKind, fullPath, line, column, out startInfo, out diagnostic);
+        }
+
+        string[] tokens = ExternalCodeEditorCommandLine.Split(editorCommand, out diagnostic);
         if (tokens.Length == 0)
         {
             startInfo = null;
@@ -179,22 +206,84 @@ internal sealed class EditorScriptAssetOpenService
         }
 
         bool hasPlaceholder = editorCommand.Contains(FilePlaceholder, StringComparison.Ordinal);
-        startInfo = new ProcessStartInfo
+        string executableCommand = ReplacePlaceholders(tokens[0], fullPath, line, column);
+        if (!_editorLocator.TryResolveCustomExecutable(
+            executableCommand,
+            out string executable,
+            out diagnostic))
         {
-            FileName = ReplaceFilePlaceholder(tokens[0], fullPath),
-            UseShellExecute = false,
-            WorkingDirectory = _projectRoot,
-        };
+            startInfo = null;
+            return false;
+        }
+
+        List<string> arguments = [];
         for (int i = 1; i < tokens.Length; i++)
         {
-            startInfo.ArgumentList.Add(ReplaceFilePlaceholder(tokens[i], fullPath));
+            arguments.Add(ReplacePlaceholders(tokens[i], fullPath, line, column));
         }
 
         if (!hasPlaceholder)
         {
-            startInfo.ArgumentList.Add(fullPath);
+            arguments.Add(fullPath);
         }
 
+        startInfo = ExternalCodeEditorProcess.CreateStartInfo(executable, arguments, _projectRoot);
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    private bool TryCreatePresetStartInfo(
+        ExternalCodeEditorKind kind,
+        string fullPath,
+        int line,
+        int column,
+        out ProcessStartInfo? startInfo,
+        out string diagnostic)
+    {
+        if (!_editorLocator.TryLocate(kind, out ExternalCodeEditorInstallation installation, out diagnostic))
+        {
+            startInfo = null;
+            return false;
+        }
+
+        EditorCSharpProjectResolution resolution;
+        try
+        {
+            EditorProject? project = _project;
+            resolution = project is null
+                ? default
+                : EditorCodeWorkspaceFiles.ResolveOrGenerate(
+                    project,
+                    EditorCodeWorkspaceFiles.ResolveReferenceAssemblyDirectory());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            startInfo = null;
+            diagnostic = $"准备脚本 IDE 工程上下文失败：{exception.Message}";
+            return false;
+        }
+
+        string workspaceTarget = resolution.WorkspaceTarget ?? EditorCodeWorkspaceFiles.ResolveVsCodeWorkspaceTarget(_projectRoot);
+        string solutionTarget = resolution.SolutionPath ?? _projectRoot;
+        List<string> arguments = kind switch
+        {
+            ExternalCodeEditorKind.VsCode =>
+            [
+                "--reuse-window",
+                workspaceTarget,
+                "--goto",
+                $"{fullPath}:{line}:{column}",
+            ],
+            ExternalCodeEditorKind.VisualStudio => [solutionTarget, "/Edit", fullPath, "/Command", $"Edit.Goto {line}"],
+            ExternalCodeEditorKind.Rider => [solutionTarget, "--line", line.ToString(System.Globalization.CultureInfo.InvariantCulture), "--column", column.ToString(System.Globalization.CultureInfo.InvariantCulture), fullPath],
+            ExternalCodeEditorKind.SystemDefault or ExternalCodeEditorKind.Custom =>
+                throw new ArgumentOutOfRangeException(nameof(kind), kind, "该编辑器类型不使用 preset 脚本启动路径。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "未知外部代码编辑器类型。"),
+        };
+        startInfo = ExternalCodeEditorProcess.CreateStartInfo(
+            installation.ExecutablePath,
+            arguments,
+            _projectRoot);
         diagnostic = string.Empty;
         return true;
     }
@@ -213,70 +302,13 @@ internal sealed class EditorScriptAssetOpenService
             : throw new InvalidOperationException($"资产路径越过 content 根目录：{asset.LogicalPath}");
     }
 
-    private static bool IsSystemDefault(string editorCommand)
+    private string ReplacePlaceholders(string value, string fullPath, int line, int column)
     {
-        return string.IsNullOrWhiteSpace(editorCommand) ||
-            string.Equals(editorCommand.Trim(), "system-default", StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(editorCommand.Trim(), "default", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string ReplaceFilePlaceholder(string value, string fullPath)
-    {
-        return value.Replace(FilePlaceholder, fullPath, StringComparison.Ordinal);
-    }
-
-    private static string[] SplitCommandLine(string command, out string diagnostic)
-    {
-        diagnostic = string.Empty;
-        List<string> tokens = [];
-        StringBuilder current = new();
-        char quote = '\0';
-        for (int i = 0; i < command.Length; i++)
-        {
-            char ch = command[i];
-            if (ch is '"' or '\'')
-            {
-                if (quote == '\0')
-                {
-                    quote = ch;
-                    continue;
-                }
-
-                if (quote == ch)
-                {
-                    quote = '\0';
-                    continue;
-                }
-            }
-
-            if (char.IsWhiteSpace(ch) && quote == '\0')
-            {
-                AddToken(tokens, current);
-                continue;
-            }
-
-            _ = current.Append(ch);
-        }
-
-        if (quote != '\0')
-        {
-            diagnostic = "外部脚本编辑器配置包含未闭合引号。";
-            return [];
-        }
-
-        AddToken(tokens, current);
-        return [.. tokens];
-    }
-
-    private static void AddToken(List<string> tokens, StringBuilder current)
-    {
-        if (current.Length == 0)
-        {
-            return;
-        }
-
-        tokens.Add(current.ToString());
-        _ = current.Clear();
+        return value
+            .Replace(FilePlaceholder, fullPath, StringComparison.Ordinal)
+            .Replace(LinePlaceholder, line.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace(ColumnPlaceholder, column.ToString(System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            .Replace(ProjectPlaceholder, _projectRoot, StringComparison.Ordinal);
     }
 
     private static EditorScriptAssetOpenResult Failed(string logicalPath, string diagnostic)

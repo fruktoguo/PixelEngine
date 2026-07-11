@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Text.Json;
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Settings;
@@ -142,8 +143,86 @@ public sealed class EditorPreferencesTests
 
         Assert.True(migrated);
         Assert.False(store.Current.SaveLayoutOnExit);
-        Assert.Equal(string.Empty, store.Current.ExternalScriptEditor);
+        Assert.Equal(ExternalCodeEditorPreference.VsCode, store.Current.ExternalScriptEditor);
         Assert.Contains("已忽略", diagnostic, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证真实 v1 空 editor 偏好逐字段迁移到 v2 + VS Code，且不丢失其它用户设置。
+    /// </summary>
+    [Fact]
+    public void VersionOneEmptyEditorMigratesToVersionTwoVsCodeAndPreservesPreferences()
+    {
+        using TempDir temp = new();
+        string path = System.IO.Path.Combine(temp.Path, "preferences.json");
+        File.WriteAllText(
+            path,
+            """
+            {
+              "formatVersion": 1,
+              "uiScale": 1.4,
+              "saveLayoutOnExit": false,
+              "reopenLastProject": false,
+              "restoreLastScene": false,
+              "externalScriptEditor": "",
+              "language": "zh-CN"
+            }
+            """);
+
+        EditorPreferencesStore store = EditorPreferencesStore.Load(path);
+
+        Assert.True(store.LoadedFromDisk, store.LastDiagnostic);
+        Assert.Equal(EditorPreferencesDocument.CurrentFormatVersion, store.Current.FormatVersion);
+        Assert.Equal(1.4f, store.Current.UiScale);
+        Assert.False(store.Current.SaveLayoutOnExit);
+        Assert.False(store.Current.ReopenLastProject);
+        Assert.False(store.Current.RestoreLastScene);
+        Assert.Equal("zh-CN", store.Current.Language);
+        Assert.Equal(ExternalCodeEditorPreference.VsCode, store.Current.ExternalScriptEditor);
+        using JsonDocument migrated = JsonDocument.Parse(File.ReadAllText(path));
+        Assert.Equal(
+            EditorPreferencesDocument.CurrentFormatVersion,
+            migrated.RootElement.GetProperty("formatVersion").GetInt32());
+        Assert.Equal(
+            ExternalCodeEditorPreference.VsCode,
+            migrated.RootElement.GetProperty("externalScriptEditor").GetString());
+    }
+
+    /// <summary>
+    /// 验证 v2 显式 System Default sentinel 不会在重载时迁回 VS Code。
+    /// </summary>
+    [Fact]
+    public void VersionTwoSystemDefaultSentinelRoundTripsWithoutMigration()
+    {
+        using TempDir temp = new();
+        string path = System.IO.Path.Combine(temp.Path, "preferences.json");
+        EditorPreferencesStore store = EditorPreferencesStore.Load(path);
+        Assert.True(store.TryUpdate(
+            store.Current with { ExternalScriptEditor = ExternalCodeEditorPreference.SystemDefault },
+            out string diagnostic), diagnostic);
+
+        EditorPreferencesStore reloaded = EditorPreferencesStore.Load(path);
+
+        Assert.Equal(EditorPreferencesDocument.CurrentFormatVersion, reloaded.Current.FormatVersion);
+        Assert.Equal(ExternalCodeEditorPreference.SystemDefault, reloaded.Current.ExternalScriptEditor);
+    }
+
+    /// <summary>
+    /// 验证旧工程明确填写 system-default 时迁移为 v2 sentinel；旧空值仍保留新版 VS Code 默认。
+    /// </summary>
+    [Theory]
+    [InlineData("system-default")]
+    [InlineData("default")]
+    public void LegacyExplicitSystemDefaultMigratesToVersionTwoSentinel(string legacyValue)
+    {
+        EditorPreferencesStore store = EditorPreferencesStore.CreateInMemory();
+
+        Assert.True(store.TryMigrateLegacy(
+            new EditorPreferencesDto { ExternalScriptEditor = legacyValue },
+            out string diagnostic), diagnostic);
+
+        Assert.Equal(ExternalCodeEditorPreference.SystemDefault, store.Current.ExternalScriptEditor);
+        Assert.DoesNotContain("已忽略", diagnostic, StringComparison.Ordinal);
     }
 
     /// <summary>

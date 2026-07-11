@@ -1,5 +1,7 @@
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Hosting;
+using System.Globalization;
+using System.Text.RegularExpressions;
 using HostingEditorMode = PixelEngine.Hosting.EditorMode;
 
 namespace PixelEngine.Editor.Shell;
@@ -38,7 +40,8 @@ internal readonly record struct EditorConsoleEntry(
     string Details = "",
     string? FilePath = null,
     int Line = 0,
-    long FrameIndex = -1)
+    long FrameIndex = -1,
+    int Column = 0)
 {
     public string CollapseKey => string.Join(
         '\u001f',
@@ -48,7 +51,8 @@ internal readonly record struct EditorConsoleEntry(
         Text,
         Details,
         FilePath ?? string.Empty,
-        Line);
+        Line,
+        Column);
 }
 
 /// <summary>
@@ -159,6 +163,10 @@ internal interface IEditorConsoleSink
 /// </summary>
 internal static class EditorConsoleSinkExtensions
 {
+    private static readonly Regex ScriptDiagnosticLocationPattern = new(
+        @"^(?<path>.+)\((?<line>[0-9]+),(?<column>[0-9]+)(?:,[0-9]+,[0-9]+)?\):",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
     public static void AddBuildEvent(this IEditorConsoleSink sink, BuildProgressEvent item, string source = "build-player")
     {
         ArgumentNullException.ThrowIfNull(sink);
@@ -215,6 +223,17 @@ internal static class EditorConsoleSinkExtensions
             result.Diagnostic));
     }
 
+    public static void AddCodeWorkspaceOpenResult(this IEditorConsoleSink sink, EditorCodeWorkspaceOpenResult result)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        sink.Add(new EditorConsoleEntry(
+            DateTimeOffset.UtcNow,
+            EditorConsoleCategory.Asset,
+            result.Success ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Error,
+            "code-project-opener",
+            result.Diagnostic));
+    }
+
     public static void AddUiBackendSelection(this IEditorConsoleSink sink, GameUiBackendSelection selection)
     {
         ArgumentNullException.ThrowIfNull(sink);
@@ -245,13 +264,72 @@ internal static class EditorConsoleSinkExtensions
             message));
         for (int i = 0; i < diagnostics.Count; i++)
         {
-            sink.Add(new EditorConsoleEntry(
-                DateTimeOffset.UtcNow,
-                EditorConsoleCategory.Script,
-                ClassifyScriptDiagnostic(diagnostics[i], success),
-                source,
-                diagnostics[i]));
+            sink.AddScriptDiagnostic(source, diagnostics[i], success);
         }
+    }
+
+    /// <summary>
+    /// 写入一条脚本诊断，并从 Roslyn 标准文本中保留源码文件与一基行列。
+    /// </summary>
+    public static void AddScriptDiagnostic(
+        this IEditorConsoleSink sink,
+        string source,
+        string diagnostic,
+        bool success)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        _ = TryParseScriptDiagnosticLocation(
+            diagnostic,
+            out string? filePath,
+            out int line,
+            out int column);
+        sink.Add(new EditorConsoleEntry(
+            DateTimeOffset.UtcNow,
+            EditorConsoleCategory.Script,
+            ClassifyScriptDiagnostic(diagnostic, success),
+            source,
+            diagnostic,
+            FilePath: filePath,
+            Line: line,
+            Column: column));
+    }
+
+    internal static bool TryParseScriptDiagnosticLocation(
+        string diagnostic,
+        out string? filePath,
+        out int line,
+        out int column)
+    {
+        filePath = null;
+        line = 0;
+        column = 0;
+        if (string.IsNullOrWhiteSpace(diagnostic))
+        {
+            return false;
+        }
+
+        Match match = ScriptDiagnosticLocationPattern.Match(diagnostic);
+        if (!match.Success ||
+            !int.TryParse(match.Groups["line"].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out line) ||
+            !int.TryParse(match.Groups["column"].ValueSpan, NumberStyles.None, CultureInfo.InvariantCulture, out column) ||
+            line <= 0 ||
+            column <= 0)
+        {
+            line = 0;
+            column = 0;
+            return false;
+        }
+
+        string path = match.Groups["path"].Value.Trim();
+        if (path.Length == 0)
+        {
+            line = 0;
+            column = 0;
+            return false;
+        }
+
+        filePath = path;
+        return true;
     }
 
     public static void AddProjectError(this IEditorConsoleSink sink, string source, string message)

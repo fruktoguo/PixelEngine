@@ -68,6 +68,42 @@ function Assert-TextContains([string]$Text, [string]$Needle, [string]$Label) {
   }
 }
 
+function Get-ManagedEditorDependencyFileNames(
+  [string]$EditorRoot,
+  [string[]]$PrimaryAssemblyNames
+) {
+  $primaryAssemblySet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($primaryAssemblyName in $PrimaryAssemblyNames) {
+    [void]$primaryAssemblySet.Add($primaryAssemblyName)
+  }
+
+  $managedDependencyFiles = [Collections.Generic.List[string]]::new()
+  $editorDlls = @(Get-ChildItem -LiteralPath $EditorRoot -File -Filter '*.dll' -Force | Sort-Object Name)
+  foreach ($file in $editorDlls) {
+    $assemblyName = [IO.Path]::GetFileNameWithoutExtension($file.Name)
+    if ($primaryAssemblySet.Contains($assemblyName) -or
+        $file.Name.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
+        $file.Name.Equals('PixelEngine.Editor.Shell.dll', [StringComparison]::OrdinalIgnoreCase)) {
+      continue
+    }
+
+    if ($assemblyName.StartsWith('PixelEngine.', [StringComparison]::OrdinalIgnoreCase)) {
+      throw "编辑器运行目录包含未登记的 PixelEngine 脚本引用程序集：$($file.Name)"
+    }
+
+    try {
+      [void][Reflection.AssemblyName]::GetAssemblyName($file.FullName)
+    }
+    catch [BadImageFormatException] {
+      continue
+    }
+
+    $managedDependencyFiles.Add($file.Name)
+  }
+
+  return $managedDependencyFiles.ToArray()
+}
+
 if (-not (Test-Path -LiteralPath $outputRootFull -PathType Container)) {
   throw "正式输出目录不存在：$outputRootFull"
 }
@@ -102,6 +138,92 @@ if ($manifest.checksumFile -ne 'SHA256SUMS') {
   throw "manifest checksumFile 不匹配：$($manifest.checksumFile)"
 }
 
+$requiredScriptReferenceAssemblies = @(
+  'PixelEngine.Audio',
+  'PixelEngine.Content',
+  'PixelEngine.Core',
+  'PixelEngine.Gui',
+  'PixelEngine.Hosting',
+  'PixelEngine.Interop',
+  'PixelEngine.Physics',
+  'PixelEngine.Rendering',
+  'PixelEngine.Scripting',
+  'PixelEngine.Serialization',
+  'PixelEngine.Simulation',
+  'PixelEngine.UI',
+  'PixelEngine.World'
+)
+$scriptReferenceAssembliesRelative = [string]$manifest.editorScriptReferenceAssembliesPath
+if ($scriptReferenceAssembliesRelative -ne '编辑器/ScriptReferenceAssemblies') {
+  throw "manifest editorScriptReferenceAssembliesPath 不匹配：$scriptReferenceAssembliesRelative"
+}
+
+if ($manifest.editorScriptReferenceAssembliesPolicy -ne 'managed-dll-and-xml-intellisense-no-pdb') {
+  throw "manifest editorScriptReferenceAssembliesPolicy 不匹配：$($manifest.editorScriptReferenceAssembliesPolicy)"
+}
+
+$declaredScriptReferenceAssemblies = @($manifest.editorScriptReferenceAssemblies)
+$declaredScriptReferenceSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($assemblyName in $declaredScriptReferenceAssemblies) {
+  if (-not $declaredScriptReferenceSet.Add([string]$assemblyName)) {
+    throw "manifest editorScriptReferenceAssemblies 存在重复项：$assemblyName"
+  }
+}
+
+if ($declaredScriptReferenceSet.Count -ne $requiredScriptReferenceAssemblies.Count) {
+  throw "manifest editorScriptReferenceAssemblies 数量不匹配：expected=$($requiredScriptReferenceAssemblies.Count), actual=$($declaredScriptReferenceSet.Count)"
+}
+
+foreach ($assemblyName in $requiredScriptReferenceAssemblies) {
+  if (-not $declaredScriptReferenceSet.Contains($assemblyName)) {
+    throw "manifest editorScriptReferenceAssemblies 缺少：$assemblyName"
+  }
+}
+
+if ($manifest.editorScriptReferenceManagedDependencyPolicy -ne 'managed-editor-publish-dlls-excluding-editor-and-native') {
+  throw "manifest editorScriptReferenceManagedDependencyPolicy 不匹配：$($manifest.editorScriptReferenceManagedDependencyPolicy)"
+}
+
+$declaredScriptReferenceManagedDependencies = @($manifest.editorScriptReferenceManagedDependencies)
+if ($declaredScriptReferenceManagedDependencies.Count -eq 0) {
+  throw 'manifest editorScriptReferenceManagedDependencies 不能为空。'
+}
+
+$declaredScriptReferenceManagedDependencySet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($dependencyFileNameValue in $declaredScriptReferenceManagedDependencies) {
+  $dependencyFileName = [string]$dependencyFileNameValue
+  if ([IO.Path]::GetFileName($dependencyFileName) -ne $dependencyFileName -or
+      -not $dependencyFileName.EndsWith('.dll', [StringComparison]::OrdinalIgnoreCase)) {
+    throw "manifest editorScriptReferenceManagedDependencies 文件名非法：$dependencyFileName"
+  }
+
+  if ($dependencyFileName.StartsWith('PixelEngine.', [StringComparison]::OrdinalIgnoreCase) -or
+      $dependencyFileName.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
+      $dependencyFileName.Equals('PixelEngine.Editor.Shell.dll', [StringComparison]::OrdinalIgnoreCase)) {
+    throw "manifest editorScriptReferenceManagedDependencies 不得包含 PixelEngine primary/Editor 装配：$dependencyFileName"
+  }
+
+  if (-not $declaredScriptReferenceManagedDependencySet.Add($dependencyFileName)) {
+    throw "manifest editorScriptReferenceManagedDependencies 存在重复项：$dependencyFileName"
+  }
+}
+
+$editorSymbolsProperty = $manifest.PSObject.Properties['editorSymbolsIncluded']
+if ($null -eq $editorSymbolsProperty -or $editorSymbolsProperty.Value -isnot [bool]) {
+  throw 'manifest editorSymbolsIncluded 必须存在且为 bool。'
+}
+$editorSymbolsIncluded = [bool]$editorSymbolsProperty.Value
+
+if (-not $editorSymbolsIncluded -and
+    $manifest.editorDeveloperMetadataPolicy -ne 'runtime-pdb-and-xml-pruned') {
+  throw "manifest editorDeveloperMetadataPolicy 不匹配：$($manifest.editorDeveloperMetadataPolicy)"
+}
+
+if ($editorSymbolsIncluded -and
+    $manifest.editorDeveloperMetadataPolicy -ne 'included-for-diagnostics') {
+  throw "manifest editorDeveloperMetadataPolicy 不匹配：$($manifest.editorDeveloperMetadataPolicy)"
+}
+
 $checksumPath = Resolve-OutputPath ([string]$manifest.checksumFile) 'checksumFile'
 Assert-FileExists $checksumPath 'SHA256SUMS'
 
@@ -109,6 +231,61 @@ $editorExe = Resolve-OutputPath ([string]$manifest.editorExecutable) 'editorExec
 $demoExe = Resolve-OutputPath ([string]$manifest.demoExecutable) 'demoExecutable'
 Assert-FileExists $editorExe '编辑器入口'
 Assert-FileExists $demoExe 'Demo 入口'
+$editorRoot = Split-Path -Parent $editorExe
+$runtimeManagedDependencies = @(Get-ManagedEditorDependencyFileNames $editorRoot $requiredScriptReferenceAssemblies)
+$runtimeManagedDependencySet = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($dependencyFileName in $runtimeManagedDependencies) {
+  [void]$runtimeManagedDependencySet.Add([string]$dependencyFileName)
+}
+if ($runtimeManagedDependencySet.Count -ne $declaredScriptReferenceManagedDependencySet.Count) {
+  throw "manifest managed dependency 数量与编辑器运行目录不匹配：runtime=$($runtimeManagedDependencySet.Count), manifest=$($declaredScriptReferenceManagedDependencySet.Count)"
+}
+foreach ($dependencyFileName in $runtimeManagedDependencySet) {
+  if (-not $declaredScriptReferenceManagedDependencySet.Contains($dependencyFileName)) {
+    throw "manifest editorScriptReferenceManagedDependencies 缺少编辑器运行目录 managed dependency：$dependencyFileName"
+  }
+}
+foreach ($dependencyFileName in $declaredScriptReferenceManagedDependencySet) {
+  if (-not $runtimeManagedDependencySet.Contains($dependencyFileName)) {
+    throw "manifest editorScriptReferenceManagedDependencies 登记了非编辑器运行目录 managed dependency：$dependencyFileName"
+  }
+}
+$scriptReferenceAssembliesRoot = Resolve-OutputPath $scriptReferenceAssembliesRelative 'editorScriptReferenceAssembliesPath'
+if (-not (Test-Path -LiteralPath $scriptReferenceAssembliesRoot -PathType Container)) {
+  throw "脚本引用程序集目录不存在：$scriptReferenceAssembliesRoot"
+}
+
+foreach ($assemblyName in $requiredScriptReferenceAssemblies) {
+  $primaryDllPath = Join-Path $scriptReferenceAssembliesRoot "$assemblyName.dll"
+  Assert-FileExists $primaryDllPath "脚本引用 DLL $assemblyName"
+  Assert-FileExists (Join-Path $scriptReferenceAssembliesRoot "$assemblyName.xml") "脚本引用 XML $assemblyName"
+  try {
+    $primaryIdentity = [Reflection.AssemblyName]::GetAssemblyName($primaryDllPath)
+  }
+  catch [BadImageFormatException] {
+    throw "脚本引用 primary DLL 不是托管程序集：$assemblyName.dll"
+  }
+
+  if ($primaryIdentity.Name -ne $assemblyName) {
+    throw "脚本引用 primary DLL identity 不匹配：file=$assemblyName.dll, assembly=$($primaryIdentity.Name)"
+  }
+}
+
+
+foreach ($dependencyFileName in $declaredScriptReferenceManagedDependencies) {
+  $dependencyPath = Join-Path $scriptReferenceAssembliesRoot ([string]$dependencyFileName)
+  Assert-FileExists $dependencyPath "脚本引用 managed dependency $dependencyFileName"
+  try {
+    $dependencyIdentity = [Reflection.AssemblyName]::GetAssemblyName($dependencyPath)
+  }
+  catch [BadImageFormatException] {
+    throw "脚本引用 managed dependency 不是托管程序集：$dependencyFileName"
+  }
+
+  if ("$($dependencyIdentity.Name).dll" -ne $dependencyFileName) {
+    throw "脚本引用 managed dependency identity 不匹配：file=$dependencyFileName, assembly=$($dependencyIdentity.Name)"
+  }
+}
 
 $validation = $manifest.validation
 if ($null -eq $validation) {
@@ -192,6 +369,13 @@ Assert-ChecksumContains $relativePaths 'README.txt' 'README'
 Assert-ChecksumContains $relativePaths ([string]$manifest.editorExecutable) '编辑器入口'
 Assert-ChecksumContains $relativePaths ([string]$manifest.demoExecutable) 'Demo 入口'
 Assert-ChecksumContains $relativePaths ([string]$validation.demoBuildResult) 'demo-build-result'
+foreach ($assemblyName in $requiredScriptReferenceAssemblies) {
+  Assert-ChecksumContains $relativePaths "$scriptReferenceAssembliesRelative/$assemblyName.dll" "脚本引用 DLL $assemblyName"
+  Assert-ChecksumContains $relativePaths "$scriptReferenceAssembliesRelative/$assemblyName.xml" "脚本引用 XML $assemblyName"
+}
+foreach ($dependencyFileName in $declaredScriptReferenceManagedDependencies) {
+  Assert-ChecksumContains $relativePaths "$scriptReferenceAssembliesRelative/$dependencyFileName" "脚本引用 managed dependency $dependencyFileName"
+}
 
 $actualFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 Get-ChildItem -LiteralPath $outputRootFull -File -Recurse -Force |
@@ -224,15 +408,46 @@ foreach ($listed in $relativePaths) {
   }
 }
 
-if ($manifest.editorSymbolsIncluded -eq $false) {
-  $editorRoot = Split-Path -Parent $editorExe
+$scriptReferencePdb = Get-ChildItem -LiteralPath $scriptReferenceAssembliesRoot -File -Recurse -Force |
+  Where-Object { $_.Extension.Equals('.pdb', [StringComparison]::OrdinalIgnoreCase) } |
+  Select-Object -First 1
+if ($scriptReferencePdb) {
+  throw "脚本引用程序集目录绝不允许包含 PDB：$($scriptReferencePdb.FullName)"
+}
+
+$expectedScriptReferenceFiles = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($assemblyName in $requiredScriptReferenceAssemblies) {
+  [void]$expectedScriptReferenceFiles.Add("$assemblyName.dll")
+  [void]$expectedScriptReferenceFiles.Add("$assemblyName.xml")
+}
+foreach ($dependencyFileName in $declaredScriptReferenceManagedDependencies) {
+  [void]$expectedScriptReferenceFiles.Add([string]$dependencyFileName)
+}
+
+$actualScriptReferenceFiles = Get-ChildItem -LiteralPath $scriptReferenceAssembliesRoot -File -Recurse -Force
+if ($actualScriptReferenceFiles.Count -ne $expectedScriptReferenceFiles.Count) {
+  throw "脚本引用程序集文件数量不匹配：expected=$($expectedScriptReferenceFiles.Count), actual=$($actualScriptReferenceFiles.Count)"
+}
+
+foreach ($file in $actualScriptReferenceFiles) {
+  $relative = [IO.Path]::GetRelativePath($scriptReferenceAssembliesRoot, $file.FullName).Replace('\', '/')
+  if (-not $expectedScriptReferenceFiles.Contains($relative)) {
+    throw "脚本引用程序集目录包含未规定文件：$relative"
+  }
+}
+
+if (-not $editorSymbolsIncluded) {
+  $scriptReferenceRootPrefix = $scriptReferenceAssembliesRoot.TrimEnd(
+    [IO.Path]::DirectorySeparatorChar,
+    [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
   $metadata = Get-ChildItem -LiteralPath $editorRoot -File -Recurse -Force |
     Where-Object {
-      $_.Extension.Equals('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
-      $_.Extension.Equals('.xml', [StringComparison]::OrdinalIgnoreCase)
+      (-not $_.FullName.StartsWith($scriptReferenceRootPrefix, [StringComparison]::OrdinalIgnoreCase)) -and
+      ($_.Extension.Equals('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
+       $_.Extension.Equals('.xml', [StringComparison]::OrdinalIgnoreCase))
     }
   if ($metadata) {
-    throw "编辑器正式输出不应包含 .pdb/.xml 开发元数据：$($metadata[0].FullName)"
+    throw "编辑器运行目录不应在脚本引用 SDK 之外包含 .pdb/.xml 开发元数据：$($metadata[0].FullName)"
   }
 }
 
