@@ -28,8 +28,8 @@ internal static class UiImageAssetResolver
                 : documentDirectory;
         string imagesDirectory = EnsureTrailingSeparator(Path.GetFullPath(Path.Combine(uiRoot, "images")));
         string candidate = !string.IsNullOrWhiteSpace(source)
-            ? ResolveImageSource(uiRoot, documentDirectory, source!)
-            : Path.Combine(imagesDirectory, imageId! + ".png");
+            ? ResolveImageSource(uiRoot, documentDirectory, source)
+            : Path.Combine(imagesDirectory, imageId + ".png");
         string fullPath = Path.GetFullPath(candidate);
         return !IsUnderDirectory(imagesDirectory, fullPath)
             ? throw new InvalidDataException($"UI 图片必须位于 content/ui/images 目录：{fullPath}")
