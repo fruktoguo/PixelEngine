@@ -906,13 +906,13 @@ public sealed class TemperatureField
         {
             if (StorageKind == TemperatureStorageKind.Float32)
             {
-                _currentFloat!.AsSpan().Clear();
-                _scratchFloat!.AsSpan().Clear();
+                _currentFloat.AsSpan().Clear();
+                _scratchFloat.AsSpan().Clear();
                 return;
             }
 
-            _currentHalf!.AsSpan().Clear();
-            _scratchHalf!.AsSpan().Clear();
+            _currentHalf.AsSpan().Clear();
+            _scratchHalf.AsSpan().Clear();
         }
 
         // ping-pong：传导结果在 scratch，帧末交换 current/scratch 指针。
