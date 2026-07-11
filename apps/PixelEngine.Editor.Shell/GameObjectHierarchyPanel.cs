@@ -5,11 +5,18 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Hierarchy 面板：场景树选择与 GameObject 操作。
 /// </summary>
-internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUndoStack undo, EditorPrefabAssetStore prefabs) : IEditorPanel
+internal sealed class GameObjectHierarchyPanel(
+    EditorSceneModel scene,
+    EditorUndoStack undo,
+    EditorPrefabAssetStore prefabs,
+    Func<SceneHierarchySnapshot>? runtimeSnapshot = null,
+    Func<EditorMode>? modeProvider = null) : IEditorPanel
 {
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly EditorPrefabAssetStore _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
+    private readonly Func<SceneHierarchySnapshot>? _runtimeSnapshot = runtimeSnapshot;
+    private readonly Func<EditorMode>? _modeProvider = modeProvider;
     private int _renameTarget;
     private int? _draggingStableId;
     private string _renameBuffer = string.Empty;
@@ -32,7 +39,7 @@ internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUnd
         SyncSelection(context.Selection);
         DrawToolbar();
         ImGui.Separator();
-        if (ImGui.Selectable("Scene Root", _scene.SelectedStableId is null))
+        if (ImGui.Selectable(EditorLocalization.Get("hierarchy.sceneRoot", "Scene Root"), _scene.SelectedStableId is null))
         {
             _scene.Select(null);
             context.Selection.Clear();
@@ -44,6 +51,9 @@ internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUnd
             DrawNode(_scene.RootIds[i], context.Selection);
         }
 
+        DrawGeneratedMarkers();
+        DrawRuntimeHierarchy();
+
         if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
         {
             _draggingStableId = null;
@@ -51,6 +61,67 @@ internal sealed class GameObjectHierarchyPanel(EditorSceneModel scene, EditorUnd
 
         DrawContextMenu(null);
         ImGui.End();
+    }
+
+    private void DrawGeneratedMarkers()
+    {
+        SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(_scene);
+        int generatedCount = 0;
+        for (int i = 0; i < preview.Markers.Length; i++)
+        {
+            if (!preview.Markers[i].StableId.HasValue)
+            {
+                generatedCount++;
+            }
+        }
+
+        if (generatedCount == 0 || !ImGui.TreeNodeEx(
+            EditorLocalization.Get("hierarchy.generated", "Generated Markers"),
+            ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth))
+        {
+            return;
+        }
+
+        for (int i = 0; i < preview.Markers.Length; i++)
+        {
+            SceneAuthoringMarker marker = preview.Markers[i];
+            if (!marker.StableId.HasValue)
+            {
+                ImGui.BulletText($"{marker.Name}  ({marker.Position.X:0}, {marker.Position.Y:0})");
+            }
+        }
+
+        ImGui.TreePop();
+    }
+
+    private void DrawRuntimeHierarchy()
+    {
+        if (_runtimeSnapshot is null || _modeProvider?.Invoke() == EditorMode.Edit)
+        {
+            return;
+        }
+
+        SceneHierarchySnapshot snapshot = _runtimeSnapshot();
+        if (!ImGui.TreeNodeEx(
+            EditorLocalization.Format("hierarchy.runtime", "Runtime (Play) · {0} entities · {1} bodies", snapshot.Entities.Count, snapshot.Bodies.Count),
+            ImGuiTreeNodeFlags.DefaultOpen | ImGuiTreeNodeFlags.SpanAvailWidth))
+        {
+            return;
+        }
+
+        for (int i = 0; i < snapshot.Entities.Count; i++)
+        {
+            SceneHierarchyEntityItem entity = snapshot.Entities[i];
+            ImGui.BulletText($"{entity.DisplayName}  [{entity.ComponentCount} components]");
+        }
+
+        for (int i = 0; i < snapshot.Bodies.Count; i++)
+        {
+            SceneHierarchyBodyItem body = snapshot.Bodies[i];
+            ImGui.BulletText($"{body.DisplayName}  ({body.X:0.0}, {body.Y:0.0})");
+        }
+
+        ImGui.TreePop();
     }
 
     internal void SyncSelection(EditorSelection selection)

@@ -63,6 +63,16 @@ public sealed class EditorApp : IDisposable
     /// </summary>
     public bool IsRunning => _initialized && Options.Enabled;
 
+    /// <summary>在下一帧开始前安全应用 UI 缩放。</summary>
+    public void SetUiScale(float scale)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_initialized)
+        {
+            _controller.SetUiScale(scale);
+        }
+    }
+
     /// <summary>
     /// 注册一个面板。
     /// </summary>

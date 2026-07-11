@@ -61,6 +61,13 @@ public sealed class ImGuiController
         Backend.NewFrame(deltaSeconds, width, height, framebufferScaleX, framebufferScaleY);
     }
 
+    /// <summary>在下一帧开始前应用 UI 缩放。</summary>
+    public void SetUiScale(float scale)
+    {
+        ThrowIfNotInitialized();
+        Backend.SetUiScale(scale);
+    }
+
     /// <summary>
     /// 绘制主 dockspace。
     /// </summary>

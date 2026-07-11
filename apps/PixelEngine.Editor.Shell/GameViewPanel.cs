@@ -10,6 +10,7 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider) : IEditorPanel
 {
     private readonly Func<RenderViewportTexture> _textureProvider = textureProvider ?? throw new ArgumentNullException(nameof(textureProvider));
+    private bool _focusRequested;
 
     public string Title => EditorDockSpace.GameViewWindowTitle;
 
@@ -43,10 +44,21 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         return EditorGameViewContract.GameView(mode);
     }
 
+    public void RequestFocus()
+    {
+        _focusRequested = true;
+    }
+
     public void Draw(in EditorContext context)
     {
         _ = context;
         bool visible = Visible;
+        if (_focusRequested)
+        {
+            ImGui.SetNextWindowFocus();
+            _focusRequested = false;
+        }
+
         if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
             Visible = visible;
@@ -61,7 +73,7 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         {
             LastViewportSnapshot = GameViewViewportSnapshot.Empty;
             ClearInputState();
-            ImGui.TextUnformatted("等待游戏视图纹理");
+            ImGui.TextUnformatted(EditorLocalization.Get("game.waiting", "Waiting for the Game View texture"));
             ImGui.End();
             return;
         }

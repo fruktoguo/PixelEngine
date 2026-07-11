@@ -16,6 +16,11 @@ public enum EditorMode
     /// 运行模式：输入交给游戏/脚本，编辑工具让位。
     /// </summary>
     Play,
+
+    /// <summary>
+    /// 暂停的 Play session：保留运行时世界，可继续或单步。
+    /// </summary>
+    Paused,
 }
 
 /// <summary>
@@ -86,8 +91,13 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>当前模式、Play 来源与临时快照状态。</returns>
     public EditorPlaySessionSnapshot Capture()
     {
+        EditorMode mode = _engine.Mode == EngineExecutionMode.Play
+            ? EditorMode.Play
+            : _engine.Mode == EngineExecutionMode.Paused
+                ? EditorMode.Paused
+                : EditorMode.Edit;
         return new EditorPlaySessionSnapshot(
-            _engine.Mode == EngineExecutionMode.Play ? EditorMode.Play : EditorMode.Edit,
+            mode,
             _source,
             _temporarySnapshotActive,
             _statusMessage);
@@ -131,6 +141,44 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
         _source = EditorPlaySource.TemporarySnapshot;
         _temporarySnapshotActive = true;
         _statusMessage = save.Message;
+        return Succeeded(_statusMessage);
+    }
+
+    /// <summary>
+    /// 暂停当前 Play session，而不恢复临时快照。
+    /// </summary>
+    public EditorPlaySessionResult PausePlay()
+    {
+        if (_engine.Mode == EngineExecutionMode.Paused)
+        {
+            _statusMessage = "Play session 已暂停。";
+            return Succeeded(_statusMessage);
+        }
+
+        if (_engine.Mode != EngineExecutionMode.Play)
+        {
+            _statusMessage = "当前没有可暂停的 Play session。";
+            return Failed(_statusMessage);
+        }
+
+        _engine.EnterPauseMode();
+        _statusMessage = "Play session 已暂停，可继续或单步。";
+        return Succeeded(_statusMessage);
+    }
+
+    /// <summary>
+    /// 继续已暂停的 Play session。
+    /// </summary>
+    public EditorPlaySessionResult ResumePlay()
+    {
+        if (_engine.Mode != EngineExecutionMode.Paused)
+        {
+            _statusMessage = "当前没有已暂停的 Play session。";
+            return Failed(_statusMessage);
+        }
+
+        _engine.EnterPlayMode();
+        _statusMessage = "Play session 已继续。";
         return Succeeded(_statusMessage);
     }
 

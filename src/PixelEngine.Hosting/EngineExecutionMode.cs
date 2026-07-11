@@ -16,7 +16,12 @@ public enum EngineExecutionMode
     Play,
 
     /// <summary>
-    /// 单步模式：从编辑态临时执行恰好一个 sim tick。
+    /// 游玩暂停模式：保留 Play session 与运行时世界，只推进输入、渲染与后台相位。
+    /// </summary>
+    Paused,
+
+    /// <summary>
+    /// 单步模式：从编辑态或暂停的 Play session 临时执行恰好一个 sim tick。
     /// </summary>
     Step,
 }

@@ -31,6 +31,20 @@ public sealed record RenderWindowOptions
     public bool VSync { get; init; } = true;
 
     /// <summary>
+    /// Windows 下是否让原生标题栏使用与应用一致的深色 chrome；其他平台忽略。
+    /// </summary>
+    public bool UseDarkWindowChrome { get; init; }
+
+    /// <summary>标题栏背景色，格式为 0xRRGGBB。</summary>
+    public uint TitleBarColorRgb { get; init; } = 0x202226;
+
+    /// <summary>标题栏文字色，格式为 0xRRGGBB。</summary>
+    public uint TitleBarTextColorRgb { get; init; } = 0xE7E9ED;
+
+    /// <summary>窗口边框色，格式为 0xRRGGBB。</summary>
+    public uint WindowBorderColorRgb { get; init; } = 0x111216;
+
+    /// <summary>
     /// Silk 窗口帧率节流；0 表示不由 Silk run loop 限制帧率。
     /// </summary>
     public double FramesPerSecond { get; init; }

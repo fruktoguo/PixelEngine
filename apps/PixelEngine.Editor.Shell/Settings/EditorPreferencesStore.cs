@@ -22,6 +22,8 @@ internal sealed record EditorPreferencesDocument
 
     public string ExternalScriptEditor { get; init; } = string.Empty;
 
+    public string Language { get; init; } = ResolveDefaultLanguage();
+
     public bool TryNormalize(out EditorPreferencesDocument normalized, out string diagnostic)
     {
         if (FormatVersion != CurrentFormatVersion)
@@ -35,9 +37,17 @@ internal sealed record EditorPreferencesDocument
         {
             UiScale = EditorUiScale.Normalize(UiScale),
             ExternalScriptEditor = ExternalScriptEditor?.Trim() ?? string.Empty,
+            Language = string.IsNullOrWhiteSpace(Language) ? ResolveDefaultLanguage() : Language.Trim(),
         };
         diagnostic = string.Empty;
         return true;
+    }
+
+    private static string ResolveDefaultLanguage()
+    {
+        return System.Globalization.CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+            ? "zh-CN"
+            : "en-US";
     }
 }
 

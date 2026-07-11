@@ -11,8 +11,9 @@
   - 验收：`actionlint`/GitHub validator 通过；push 后 workflow 不再 0-job；修复不能缩减计划矩阵来规避错误。
   - 证据：`.github/workflows/ci.yml` 已改为 Windows/non-Windows 静态 shell steps；PyYAML 解析通过；`go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml` 通过；静态矩阵保持 6 个 build/test RID、4 个 verify-publish RID，`win-arm64` 仍为 build-only。首次远端 run 留给 `CI-002`，未以本地证据冒充远端成功。
 
-- [~] `CI-002` 取得当前 HEAD 的 Windows build/test/benchmark guard 首次远端全绿。
+- [ ] `CI-002` 取得当前 HEAD 的 Windows build/test/benchmark guard 首次远端全绿。
   - 优先级：P0。
+  - 恢复说明：2026-07-11 因用户真实窗口发现 Editor P0 崩溃与产品缺陷，先转入 `EDITOR-008`；其完成并形成新候选 HEAD 后继续。
   - 验收：win-x64 build、1492+ tests、disassembly guard、benchmark regression 实际执行；artifact/report 绑定 run id 和 commit SHA。
 
 - [!] `CI-003` 取得长期 6-RID build/test 与 4-RID verify-publish 矩阵证据。阻塞：`CI-002` 未完成，且需要对应 hosted runner/native 构建可用。

@@ -18,4 +18,8 @@
     <PackageReference Include="Hexa.NET.ImGui" />
     <PackageReference Include="Hexa.NET.ImGuizmo" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Localization\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

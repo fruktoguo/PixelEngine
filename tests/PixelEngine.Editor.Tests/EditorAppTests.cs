@@ -292,11 +292,11 @@ public sealed class EditorAppTests
 
         Assert.Equal(GuiThemeKind.Unity6Dark, editorOptions.Theme);
         Assert.Equal(GuiThemeKind.NeutralDark, guiOptions.Theme);
-        Assert.Equal("Unity 6 Dark", tokens.Name);
-        Assert.Equal(0f, tokens.WindowRounding);
-        Assert.Equal(0f, tokens.TabRounding);
-        Assert.Equal(new Vector4(0x38 / 255f, 0x38 / 255f, 0x38 / 255f, 1f), tokens.WindowBg);
-        Assert.Equal(new Vector4(0x3D / 255f, 0x6D / 255f, 0x99 / 255f, 1f), tokens.Accent);
+        Assert.Equal("PixelEngine Modern Dark", tokens.Name);
+        Assert.Equal(4f, tokens.WindowRounding);
+        Assert.Equal(4f, tokens.TabRounding);
+        Assert.Equal(new Vector4(0x1E / 255f, 0x1F / 255f, 0x22 / 255f, 1f), tokens.WindowBg);
+        Assert.Equal(new Vector4(0x4C / 255f, 0x8D / 255f, 1f, 1f), tokens.Accent);
     }
 
     /// <summary>
@@ -405,6 +405,11 @@ public sealed class EditorAppTests
             Current = this;
             InitializeCount++;
             Events.Add("Initialize");
+        }
+
+        public void SetUiScale(float scale)
+        {
+            _ = scale;
         }
 
         public void NewFrame(float deltaSeconds, int width, int height, float framebufferScaleX, float framebufferScaleY)

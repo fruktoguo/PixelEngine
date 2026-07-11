@@ -100,6 +100,33 @@ public sealed class EngineExecutionModeTests
     }
 
     /// <summary>
+    /// 验证暂停的 Play session 保留运行态，单步后仍保持暂停，继续后恢复普通 Play。
+    /// </summary>
+    [Fact]
+    public void PausedPlaySessionCanStepAndResumeWithoutExitingPlay()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        EngineEditorPlaySessionService service = new(engine);
+
+        _ = service.EnterPlayCurrent();
+        EditorPlaySessionResult paused = service.PausePlay();
+        FrameTiming timing = engine.StepOnce();
+        EditorPlaySessionSnapshot afterStep = service.Capture();
+
+        Assert.True(paused.Succeeded);
+        Assert.True(timing.RunSim);
+        Assert.Equal(EngineExecutionMode.Paused, engine.Mode);
+        Assert.Equal(EditorMode.Paused, afterStep.Mode);
+
+        EditorPlaySessionResult resumed = service.ResumePlay();
+        Assert.True(resumed.Succeeded);
+        Assert.Equal(EngineExecutionMode.Play, engine.Mode);
+        Assert.Equal(EditorMode.Play, resumed.Snapshot.Mode);
+    }
+
+    /// <summary>
     /// 验证 Editor sim 控制适配器只通过 Engine/FrameClock 控制暂停、单步与 60/30Hz。
     /// </summary>
     [Fact]

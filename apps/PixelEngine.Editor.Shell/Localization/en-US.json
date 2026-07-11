@@ -1,0 +1,16 @@
+{
+  "formatVersion": 1,
+  "locale": "en-US",
+  "displayName": "English",
+  "strings": {
+    "menu.file": "File", "menu.edit": "Edit", "menu.gameObject": "GameObject", "menu.window": "Window", "menu.play": "Play", "menu.help": "Help",
+    "action.newProject": "New Project", "action.openProject": "Open Project", "action.saveScene": "Save Scene", "action.build": "Build",
+    "action.play": "Play", "action.pause": "Pause", "action.resume": "Resume", "action.step": "Step", "action.stop": "Stop",
+    "action.undo": "Undo", "action.redo": "Redo", "action.create": "Create", "action.delete": "Delete", "action.duplicate": "Duplicate", "action.rename": "Rename",
+    "window.preferences": "Preferences", "window.hierarchy": "Hierarchy", "window.project": "Project", "window.inspector": "Inspector", "window.scene": "Scene", "window.game": "Game View", "window.console": "Console",
+    "prefs.appearance": "Appearance", "prefs.general": "General", "prefs.externalTools": "External Tools", "prefs.shortcuts": "Shortcuts", "prefs.language": "Language",
+    "prefs.uiScale": "UI Scale", "prefs.theme": "Theme", "prefs.saveLayout": "Save layout continuously", "prefs.reopenProject": "Reopen last project on startup", "prefs.restoreScene": "Restore last open scene", "prefs.resetLayout": "Reset to Default Layout",
+    "hierarchy.sceneRoot": "Scene Root", "hierarchy.generated": "Generated Markers", "hierarchy.runtime": "Runtime (Play) · {0} entities · {1} bodies", "game.waiting": "Waiting for the Game View texture",
+    "scene.playerSpawn": "Player Spawn", "scene.goal": "Goal", "status.noProject": "No Project", "status.noScene": "No Scene"
+  }
+}

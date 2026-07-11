@@ -644,8 +644,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("UiManifestWindowTitle = \"UI Manifest\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("PerformanceHudWindowTitle = \"Profiler\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
-        Assert.Contains("DockBuilderDockWindow(AssetBrowserWindowTitle, bottomNode)", dockSpace, StringComparison.Ordinal);
-        Assert.Contains("DockBuilderDockWindow(UiManifestWindowTitle, bottomNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(AssetBrowserWindowTitle, projectNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(SceneHierarchyWindowTitle, hierarchyNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(InspectorWindowTitle, inspectorNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("DockBuilderDockWindow(UiManifestWindowTitle, projectNode)", dockSpace, StringComparison.Ordinal);
         Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
@@ -873,7 +875,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("StableIdToEntityId", source, StringComparison.Ordinal);
         Assert.Contains("EngineSceneDocument", source, StringComparison.Ordinal);
         Assert.Contains("ConfigureAuthoring(sceneModel, undoStack, prefabs)", source, StringComparison.Ordinal);
-        Assert.Contains("GameObjectHierarchyPanel(_sceneModel, _undoStack, _prefabs)", source, StringComparison.Ordinal);
+        Assert.Contains("new GameObjectHierarchyPanel(", source, StringComparison.Ordinal);
+        Assert.Contains("runtimeHierarchy.Capture", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectInspectorPanel(", source, StringComparison.Ordinal);
         Assert.Contains("assetBrowserDataSource,", source, StringComparison.Ordinal);
         Assert.Contains("CaptureAssetInspector", source, StringComparison.Ordinal);

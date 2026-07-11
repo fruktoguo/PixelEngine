@@ -260,6 +260,15 @@ public sealed class RenderWindow : IDisposable
             debugMessenger = options.EnableDebugContext && diagnostics is not null
                 ? GlDebugMessenger.TryCreate(gl, capabilities, diagnostics)
                 : null;
+            if (options.UseDarkWindowChrome && window.Native?.Win32 is { } win32)
+            {
+                WindowsWindowChrome.TryApply(
+                    win32.Hwnd,
+                    options.TitleBarColorRgb,
+                    options.TitleBarTextColorRgb,
+                    options.WindowBorderColorRgb);
+            }
+
             return new RenderWindow(window, input, gl, nativeContext, backend, capabilities, debugMessenger);
         }
         catch

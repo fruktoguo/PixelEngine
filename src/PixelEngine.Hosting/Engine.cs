@@ -130,6 +130,20 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
+    /// 暂停当前 Play session；运行时世界与临时快照保持活动。
+    /// </summary>
+    public void EnterPauseMode()
+    {
+        ThrowIfShutdown();
+        if (Mode is not (EngineExecutionMode.Play or EngineExecutionMode.Paused))
+        {
+            throw new InvalidOperationException("只有活动的 Play session 可以暂停。");
+        }
+
+        Mode = EngineExecutionMode.Paused;
+    }
+
+    /// <summary>
     /// 设置基础 sim 频率；后续普通 tick 由 FrameClock 使用该频率，自动过载降级仍可临时降到 30Hz。
     /// </summary>
     /// <param name="simHz">目标 sim 频率，目前支持 60Hz 与 30Hz。</param>
@@ -142,16 +156,17 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
-    /// 在编辑模式下执行恰好一个 sim tick，随后回到编辑模式。
+    /// 在编辑模式或暂停的 Play session 中执行恰好一个 sim tick，随后回到原模式。
     /// </summary>
     public FrameTiming StepOnce(double realDeltaSeconds = 0)
     {
         ThrowIfShutdown();
-        if (Mode != EngineExecutionMode.Edit)
+        if (Mode is not (EngineExecutionMode.Edit or EngineExecutionMode.Paused))
         {
-            throw new InvalidOperationException("StepOnce 只能从编辑模式触发。");
+            throw new InvalidOperationException("StepOnce 只能从编辑模式或暂停的 Play session 触发。");
         }
 
+        EngineExecutionMode returnMode = Mode;
         Mode = EngineExecutionMode.Step;
         try
         {
@@ -159,7 +174,7 @@ public sealed class Engine : IDisposable
         }
         finally
         {
-            Mode = EngineExecutionMode.Edit;
+            Mode = returnMode;
         }
     }
 
@@ -2701,6 +2716,7 @@ public sealed class Engine : IDisposable
         return Mode switch
         {
             EngineExecutionMode.Edit => Context.Clock.BeginRenderOnlyFrame(realDeltaSeconds),
+            EngineExecutionMode.Paused => Context.Clock.BeginRenderOnlyFrame(realDeltaSeconds),
             EngineExecutionMode.Step => Context.Clock.BeginForcedSimFrame(realDeltaSeconds),
             EngineExecutionMode.Play => Context.Clock.BeginFrame(realDeltaSeconds),
             _ => throw new InvalidOperationException($"未知 Engine 执行模式：{Mode}。"),

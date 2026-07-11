@@ -7,6 +7,7 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class EditorShellLayout
 {
+    internal const int CurrentLayoutVersion = 2;
     private const int MinimumSavedDockSpaceWidth = 800;
     private const int MinimumSavedDockSpaceHeight = 450;
     private readonly EditorDockSpace _dockSpace = new();
@@ -14,9 +15,16 @@ internal sealed class EditorShellLayout
     public EditorShellLayout(
         string layoutPath,
         int targetWindowWidth = EditorWorkspaceWindowState.DefaultWidth,
-        int targetWindowHeight = EditorWorkspaceWindowState.DefaultHeight)
+        int targetWindowHeight = EditorWorkspaceWindowState.DefaultHeight,
+        bool migrateToCurrentLayout = false)
     {
         LayoutPath = layoutPath;
+        if (migrateToCurrentLayout && !HasCurrentLayoutVersion(layoutPath))
+        {
+            TryDeleteLayout(layoutPath);
+            TryWriteCurrentLayoutVersion(layoutPath);
+        }
+
         if (SavedDockLayoutIsIncompatible(layoutPath, targetWindowWidth, targetWindowHeight))
         {
             TryDeleteLayout(layoutPath);
@@ -45,6 +53,7 @@ internal sealed class EditorShellLayout
         }
 
         _dockSpace.ResetLayoutState(buildDefaultLayout: true);
+        TryWriteCurrentLayoutVersion(LayoutPath);
     }
 
     internal static bool SavedDockLayoutIsTooSmall(string layoutPath)
@@ -110,6 +119,61 @@ internal sealed class EditorShellLayout
         {
             // 只影响布局自愈；ImGui 仍可尝试读取原文件并给用户 Reset Layout 入口。
         }
+    }
+
+    private static bool HasCurrentLayoutVersion(string layoutPath)
+    {
+        string versionPath = GetVersionPath(layoutPath);
+        try
+        {
+            return File.Exists(versionPath) &&
+                int.TryParse(File.ReadAllText(versionPath).Trim(), out int version) &&
+                version == CurrentLayoutVersion;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static void TryWriteCurrentLayoutVersion(string layoutPath)
+    {
+        string versionPath = GetVersionPath(layoutPath);
+        string temporaryPath = $"{versionPath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            string? directory = Path.GetDirectoryName(versionPath);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                _ = Directory.CreateDirectory(directory);
+            }
+
+            File.WriteAllText(temporaryPath, CurrentLayoutVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            File.Move(temporaryPath, versionPath, overwrite: true);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // 版本 sidecar 失败只会让下次启动再次回到安全默认布局，不能阻止 Editor 启动。
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                try
+                {
+                    File.Delete(temporaryPath);
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    // 临时 sidecar 清理失败不覆盖主结果。
+                }
+            }
+        }
+    }
+
+    private static string GetVersionPath(string layoutPath)
+    {
+        return $"{layoutPath}.version";
     }
 
     private static bool TryReadSavedSize(string line, bool readingViewportHostWindow, out int width, out int height)

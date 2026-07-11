@@ -12,6 +12,9 @@ public interface IGuiImGuiBackend
     /// </summary>
     void Initialize(GuiAppOptions options);
 
+    /// <summary>在下一帧开始前应用 UI 样式缩放。</summary>
+    void SetUiScale(float scale);
+
     /// <summary>
     /// 开始一帧 ImGui。
     /// </summary>
