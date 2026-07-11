@@ -5,7 +5,7 @@ using Silk.NET.OpenGL;
 namespace PixelEngine.Rendering;
 
 /// <summary>
-/// UI 层 present 上下文。共享同一个 OpenGL context、默认 framebuffer 与 UI 三角形批提交器。
+/// UI 层 present 上下文。共享同一个 OpenGL context、当前目标 framebuffer 与 UI 三角形批提交器。
 /// </summary>
 public readonly struct UiPresentContext
 {
@@ -66,12 +66,12 @@ public readonly struct UiPresentContext
     public GL Gl { get; }
 
     /// <summary>
-    /// 默认 framebuffer 宽度。
+    /// 当前目标 framebuffer 宽度。
     /// </summary>
     public int FramebufferWidth { get; }
 
     /// <summary>
-    /// 默认 framebuffer 高度。
+    /// 当前目标 framebuffer 高度。
     /// </summary>
     public int FramebufferHeight { get; }
 
@@ -86,22 +86,22 @@ public readonly struct UiPresentContext
     public int LogicalHeight { get; }
 
     /// <summary>
-    /// 逻辑坐标到默认 framebuffer 坐标的 X 轴缩放。
+    /// 逻辑坐标到当前目标 framebuffer 坐标的 X 轴缩放。
     /// </summary>
     public float FramebufferScaleX => FramebufferWidth / (float)LogicalWidth;
 
     /// <summary>
-    /// 逻辑坐标到默认 framebuffer 坐标的 Y 轴缩放。
+    /// 逻辑坐标到当前目标 framebuffer 坐标的 Y 轴缩放。
     /// </summary>
     public float FramebufferScaleY => FramebufferHeight / (float)LogicalHeight;
 
     /// <summary>
-    /// 世界画面在默认 framebuffer 中的呈现区域。
+    /// 世界画面在当前目标 framebuffer 中的呈现区域。
     /// </summary>
     public PresentationViewport WorldViewport { get; }
 
     /// <summary>
-    /// 当前 UI 层的目标区域。坐标以默认 framebuffer 左上角为原点。
+    /// 当前 UI 层的目标区域。坐标以当前目标 framebuffer 左上角为原点。
     /// </summary>
     public UiPresentTarget Target { get; }
 
@@ -147,7 +147,7 @@ public readonly struct UiPresentContext
     }
 
     /// <summary>
-    /// 提交一批 2D UI 三角形。坐标以默认 framebuffer 左上角为原点，单位为像素。
+    /// 提交一批 2D UI 三角形。坐标以当前目标 framebuffer 左上角为原点，单位为像素。
     /// </summary>
     /// <param name="vertices">顶点 span。</param>
     /// <param name="indices">索引 span。</param>

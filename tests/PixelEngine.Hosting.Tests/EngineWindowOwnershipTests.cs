@@ -57,11 +57,33 @@ public sealed class EngineWindowOwnershipTests
         string body = ExtractAttachGuiRuntimeBody(source);
 
         Assert.Contains("gameUi.BackendKind != UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
-        Assert.Contains("UiLayerCompositor.Attach(pipeline, gameUi!, gameUiPresentTargetProvider)", body, StringComparison.Ordinal);
+        Assert.Contains("UiLayerCompositor.Attach(", body, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.RuntimeViewport", body, StringComparison.Ordinal);
         Assert.Contains("ResolveGameUiPresentTargetProvider(registeredExtensions)", body, StringComparison.Ordinal);
         Assert.Contains("gameUi.BackendKind == UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
         Assert.Contains("GuiRenderBridge.AttachIfEnabled", body, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.RuntimeViewport", body, StringComparison.Ordinal);
         Assert.Contains("Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;", body, StringComparison.Ordinal);
+        Assert.Contains("new GameplayViewportGuiInputRoute(gameplayViewportMapper)", body, StringComparison.Ordinal);
+        Assert.Contains("new GuiWindowInputConnector(window, gui.Input, viewportInputRoute)", body, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证独立 Player 未注册 viewport mapper 时仍使用 GuiWindowInputConnector 的原始整窗路径。
+    /// </summary>
+    [Fact]
+    public void StandaloneRuntimeGuiKeepsLegacyWholeWindowInputPathBySourceContract()
+    {
+        string engine = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
+        string connector = ReadRepositoryFile("src", "PixelEngine.Gui", "GuiWindowInputConnector.cs");
+
+        Assert.Contains("Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)", engine, StringComparison.Ordinal);
+        Assert.Contains("? new GameplayViewportGuiInputRoute(gameplayViewportMapper)", engine, StringComparison.Ordinal);
+        Assert.Contains(": null;", engine, StringComparison.Ordinal);
+        Assert.Contains(": this(window, input, viewportRoute: null)", connector, StringComparison.Ordinal);
+        Assert.Contains("if (route is null)", connector, StringComparison.Ordinal);
+        Assert.Contains("viewportX = framebufferX;", connector, StringComparison.Ordinal);
+        Assert.Contains("viewportY = framebufferY;", connector, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -83,7 +105,9 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("InputArbitrator.ApplyEditor(input, editorCapture)", ExtractApplyEditorInputCaptureBody(engine), StringComparison.Ordinal);
         Assert.Contains("IEditorInputCaptureSource", ReadRepositoryFile("src", "PixelEngine.Hosting", "IEditorInputCaptureSource.cs"), StringComparison.Ordinal);
         Assert.Contains("public static class InputArbitrator", ReadRepositoryFile("src", "PixelEngine.Hosting", "InputArbitrator.cs"), StringComparison.Ordinal);
-        Assert.Contains("EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource", extension, StringComparison.Ordinal);
+        Assert.Contains("internal sealed class EditorShellHostExtension", extension, StringComparison.Ordinal);
+        Assert.Contains("IEditorHostExtension", extension, StringComparison.Ordinal);
+        Assert.Contains("IEditorInputCaptureSource", extension, StringComparison.Ordinal);
         Assert.Contains("RegisterService<IEditorInputCaptureSource>(this)", extension, StringComparison.Ordinal);
         Assert.Contains("IUiPresentTargetProvider", extension, StringComparison.Ordinal);
         Assert.Contains("GameViewUiPresentTargetProvider", extension, StringComparison.Ordinal);

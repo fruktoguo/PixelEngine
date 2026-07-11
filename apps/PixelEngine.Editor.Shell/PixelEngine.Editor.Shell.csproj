@@ -17,6 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Hexa.NET.ImGui" />
     <PackageReference Include="Hexa.NET.ImGuizmo" />
+    <PackageReference Include="StbImageSharp" />
   </ItemGroup>
 
   <ItemGroup>

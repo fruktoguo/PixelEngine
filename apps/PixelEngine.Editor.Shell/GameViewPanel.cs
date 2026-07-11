@@ -27,9 +27,17 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
         }
     } = true;
 
-    public bool InputFocused { get; private set; }
+    /// <summary>Game View 窗口是否拥有 gameplay 键盘焦点。</summary>
+    public bool KeyboardFocused { get; private set; }
 
-    public bool InputHovered { get; private set; }
+    /// <summary>指针是否位于实际 runtime 图像矩形内。</summary>
+    public bool PointerHovered { get; private set; }
+
+    /// <summary>兼容旧调用方的键盘焦点别名。</summary>
+    public bool InputFocused => KeyboardFocused;
+
+    /// <summary>兼容旧调用方的图像 hover 别名。</summary>
+    public bool InputHovered => PointerHovered;
 
     public Vector2 LastPointerPanelPoint { get; private set; }
 
@@ -59,7 +67,12 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
             _focusRequested = false;
         }
 
-        if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+        if (!ImGui.Begin(
+                Title,
+                ref visible,
+                ImGuiWindowFlags.NoScrollbar |
+                ImGuiWindowFlags.NoScrollWithMouse |
+                ImGuiWindowFlags.NoNavInputs))
         {
             Visible = visible;
             ClearInputState();
@@ -93,8 +106,10 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
         Vector2 mousePanel = ImGui.GetIO().MousePos - panelOriginScreen;
         LastPointerPanelPoint = mousePanel;
-        InputHovered = ImGui.IsWindowHovered() && LastViewportSnapshot.ContainsPanelPoint(mousePanel);
-        InputFocused = InputHovered && (ImGui.IsWindowFocused() || ImGui.IsWindowHovered());
+        PointerHovered = ImGui.IsWindowHovered() && LastViewportSnapshot.ContainsPanelPoint(mousePanel);
+        // 键盘焦点与 mouse hover 必须独立：Unity 风格 Game View 点击/自动聚焦后，即使鼠标暂时
+        // 离开图像，WASD 仍归 gameplay；popup/modal 获取焦点时这里会自然变为 false。
+        KeyboardFocused = ImGui.IsWindowFocused();
 
         ImGui.Image(
             ViewportPanel.CreateTextureRef(texture.Handle),
@@ -106,8 +121,8 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
     private void ClearInputState()
     {
-        InputFocused = false;
-        InputHovered = false;
+        KeyboardFocused = false;
+        PointerHovered = false;
         LastPointerPanelPoint = default;
         LastPanelOriginFramebuffer = default;
         LastFramebufferScale = Vector2.One;

@@ -4,6 +4,8 @@ using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
+using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
@@ -217,6 +219,7 @@ internal sealed class EditorShellApp
         ScriptedMenuLayoutProbeState scriptedMenuLayout = new();
         ScriptedHierarchyProbeState scriptedHierarchy = new();
         ScriptedDefaultWorkbenchProbeState scriptedDefaultWorkbench = new();
+        ScriptedGameViewProbeState scriptedGameView = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!shellWindow.Window.IsClosing && !_exitRequested)
@@ -288,6 +291,11 @@ internal sealed class EditorShellApp
             else
             {
                 CurrentSession.RunOneTick(deltaSeconds);
+                if (_options.ScriptedGameViewProbe)
+                {
+                    RunScriptedGameViewProbeActions(executed, scriptedGameView);
+                }
+
                 if (_options.ScriptedProbe)
                 {
                     RunScriptedProbeActions(
@@ -370,6 +378,11 @@ internal sealed class EditorShellApp
                 break;
             }
 
+            if (_options.ScriptedGameViewProbe && scriptedGameView.Finished)
+            {
+                break;
+            }
+
             if (!_options.ScriptedBuildCancelProbe && _options.ScriptedBuildProbe && scriptedBuildCompleted)
             {
                 break;
@@ -429,6 +442,11 @@ internal sealed class EditorShellApp
                 $"window_pos={PreferencesWindow.LastWindowPosition.X:F0},{PreferencesWindow.LastWindowPosition.Y:F0}, " +
                 $"window_size={PreferencesWindow.LastWindowSize.X:F0}x{PreferencesWindow.LastWindowSize.Y:F0}, " +
                 $"navigation_visible={PreferencesWindow.LastNavigationVisible}");
+        }
+
+        if (_options.ScriptedGameViewProbe)
+        {
+            WriteScriptedGameViewProbeSummary(scriptedGameView);
         }
 
         if (_options.ScriptedBuildSettingsProbe)
@@ -1289,6 +1307,136 @@ internal sealed class EditorShellApp
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
+    private void RunScriptedGameViewProbeActions(int executedTicks, ScriptedGameViewProbeState state)
+    {
+        if (CurrentSession is null || state.Finished)
+        {
+            return;
+        }
+
+        Engine engine = CurrentSession.Engine;
+        if (!state.InputRegistered && executedTicks >= 4)
+        {
+            ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
+            engine.Phases.Register(EnginePhase.InputAndTime, _ =>
+            {
+                if (state.InjectMovement && engine.Mode == EngineExecutionMode.Play)
+                {
+                    input.Update(state.MovementKeys, [], 360f, 240f, 0f);
+                }
+            });
+            state.InputRegistered = true;
+            return;
+        }
+
+        if (!state.PlayEntered && executedTicks >= 8)
+        {
+            CurrentSession.EnterPlayMode();
+            state.PlayEntered = engine.Mode == EngineExecutionMode.Play;
+            return;
+        }
+
+        if (!state.StartCaptured && executedTicks >= 18 && TryCapturePlayerProbe(engine, out float startX, out int startVisualCommands))
+        {
+            state.StartX = startX;
+            state.StartVisualCommands = startVisualCommands;
+            state.StartCaptured = true;
+            state.InjectMovement = true;
+            return;
+        }
+
+        if (state.StartCaptured && state.InjectMovement && executedTicks >= 58)
+        {
+            state.InjectMovement = false;
+            if (TryCapturePlayerProbe(engine, out float endX, out int endVisualCommands))
+            {
+                state.EndX = endX;
+                state.EndVisualCommands = endVisualCommands;
+                state.PlayerMoved = endX > state.StartX + 0.5f;
+                state.RenderOverlayCommands = CaptureRenderOverlayCommandCount(engine);
+                state.RemainedInPlay = engine.Mode == EngineExecutionMode.Play;
+                state.Completed = state.PlayerMoved &&
+                    state.EndVisualCommands > 0 &&
+                    state.RenderOverlayCommands > 0 &&
+                    state.RemainedInPlay;
+                state.Diagnostic = state.Completed
+                    ? "Game View 玩家可见性与移动探针完成。"
+                    : $"探针未满足验收：moved={state.PlayerMoved}, visual={state.EndVisualCommands}, overlays={state.RenderOverlayCommands}, play={state.RemainedInPlay}。";
+                state.Finished = true;
+            }
+            else
+            {
+                state.Diagnostic = "Play 场景中未找到 PlayerController/PlayerVisual。";
+                state.Finished = true;
+            }
+        }
+    }
+
+    private static bool TryCapturePlayerProbe(Engine engine, out float centerX, out int visualCommands)
+    {
+        centerX = 0f;
+        visualCommands = 0;
+        PixelEngine.Scripting.Scene? scriptScene = engine.CurrentScene?.ScriptScene;
+        if (scriptScene is null)
+        {
+            return false;
+        }
+
+        ScriptEntityInspection[] entities = scriptScene.CaptureInspectionSnapshot();
+        bool foundPlayer = false;
+        for (int i = 0; i < entities.Length; i++)
+        {
+            ScriptComponentInspection[] components = entities[i].Components;
+            for (int j = 0; j < components.Length; j++)
+            {
+                ScriptComponentInspection component = components[j];
+                if (component.TypeName.EndsWith(".PlayerController", StringComparison.Ordinal))
+                {
+                    object? value = component.Behaviour.GetType().GetProperty("CenterX")?.GetValue(component.Behaviour);
+                    if (value is float x && float.IsFinite(x))
+                    {
+                        centerX = x;
+                        foundPlayer = true;
+                    }
+                }
+                else if (component.TypeName.EndsWith(".PlayerVisual", StringComparison.Ordinal))
+                {
+                    object? value = component.Behaviour.GetType().GetProperty("LastOverlayCommandsSubmitted")?.GetValue(component.Behaviour);
+                    if (value is int count)
+                    {
+                        visualCommands = count;
+                    }
+                }
+            }
+        }
+
+        return foundPlayer;
+    }
+
+    private static int CaptureRenderOverlayCommandCount(Engine engine)
+    {
+        return engine.Context.TryGetService(out RenderPipeline pipeline)
+            ? pipeline.CurrentViewportOverlayCount
+            : 0;
+    }
+
+    private static void WriteScriptedGameViewProbeSummary(ScriptedGameViewProbeState state)
+    {
+        Console.WriteLine(
+            "editor_gameview_probe " +
+            "schema=pixelengine.editor-gameview-probe/v1, " +
+            $"completed={state.Completed}, " +
+            $"input_registered={state.InputRegistered}, " +
+            $"play_entered={state.PlayEntered}, " +
+            $"start_x={state.StartX.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"end_x={state.EndX.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"player_moved={state.PlayerMoved}, " +
+            $"visual_commands={state.EndVisualCommands}, " +
+            $"render_overlay_commands={state.RenderOverlayCommands}, " +
+            $"remained_in_play={state.RemainedInPlay}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
     private void RunScriptedProbeActions(
         int executedTicks,
         ref bool playEntered,
@@ -2063,6 +2211,7 @@ internal sealed class ScriptedBuildCancelProbeState
     public bool RerunStarted;
     public bool RerunCompleted;
     public bool Completed;
+
     public string Diagnostic = string.Empty;
     public string RerunDiagnostic = string.Empty;
     public ScriptedBuildProbeSnapshot FirstSnapshot = new();
@@ -2156,6 +2305,42 @@ internal sealed class ScriptedDefaultWorkbenchProbeState
     public string BuildPackageArchive = string.Empty;
     public string BuildError = string.Empty;
     public ScriptedBuildProbeSnapshot BuildSnapshot = new();
+    public string Diagnostic = string.Empty;
+}
+
+/// <summary>
+/// 保持 Play 的 Game View 玩家视觉与移动验收状态。
+/// </summary>
+internal sealed class ScriptedGameViewProbeState
+{
+    public readonly Key[] MovementKeys = [Key.D];
+
+    public bool InputRegistered;
+
+    public bool PlayEntered;
+
+    public bool StartCaptured;
+
+    public bool InjectMovement;
+
+    public bool PlayerMoved;
+
+    public bool RemainedInPlay;
+
+    public bool Completed;
+
+    public bool Finished;
+
+    public float StartX;
+
+    public float EndX;
+
+    public int StartVisualCommands;
+
+    public int EndVisualCommands;
+
+    public int RenderOverlayCommands;
+
     public string Diagnostic = string.Empty;
 }
 

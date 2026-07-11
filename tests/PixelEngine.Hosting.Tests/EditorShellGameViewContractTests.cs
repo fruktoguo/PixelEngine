@@ -148,25 +148,44 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
-    /// 验证 Game View 仍尊重菜单、dock、modal 等 editor overlay 的输入捕获。
+    /// 验证 Game View 画布自身产生的 ImGui capture 不会反过来吞掉 gameplay 输入。
     /// </summary>
     [Fact]
-    public void GameViewStillBlocksGameplayWhenEditorOverlayCapturesInput()
+    public void GameViewCanvasSelfCaptureDoesNotBlockGameplayWhenItOwnsPointerAndKeyboard()
     {
         // Arrange：准备输入与初始状态
         EditorViewportContract contract = EditorGameViewContract.GameView(Editor.EditorMode.Play);
-        EditorInputSnapshot editorCapture = new(WantCaptureMouse: true, WantCaptureKeyboard: false);
+        EditorInputSnapshot editorCapture = new(WantCaptureMouse: true, WantCaptureKeyboard: true);
 
         EditorHostInputCapture capture = EditorGameViewContract.ResolveEditorInputCapture(
             contract,
             editorCapture,
-            viewportHasInputFocus: true);
+            pointerHasInputFocus: true,
+            keyboardHasInputFocus: true);
         InputArbitrationState state = InputArbitrator.ApplyEditor(InputArbitrationState.Allowed, capture);
 
         // Assert：验证预期结果
-        Assert.True(capture.WantCaptureMouse);
-        Assert.False(state.AllowWorldMouse);
+        Assert.Equal(EditorHostInputCapture.None, capture);
+        Assert.True(state.AllowWorldMouse);
         Assert.True(state.AllowWorldKeyboard);
+    }
+
+    /// <summary>
+    /// 验证键盘焦点与图像 hover 独立；鼠标离开 Game View 后 WASD 仍归已聚焦的 Game View。
+    /// </summary>
+    [Fact]
+    public void GameViewKeyboardFocusPersistsIndependentlyFromPointerHover()
+    {
+        EditorViewportContract contract = EditorGameViewContract.GameView(Editor.EditorMode.Play);
+
+        EditorHostInputCapture capture = EditorGameViewContract.ResolveEditorInputCapture(
+            contract,
+            new EditorInputSnapshot(WantCaptureMouse: true, WantCaptureKeyboard: true),
+            pointerHasInputFocus: false,
+            keyboardHasInputFocus: true);
+
+        Assert.True(capture.WantCaptureMouse);
+        Assert.False(capture.WantCaptureKeyboard);
     }
 
     /// <summary>
@@ -355,6 +374,37 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 Game UI 键盘输入只依赖 Game View 键盘焦点，不错误依赖 mouse hover。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceForwardsKeyboardWhenFocusedWithoutPointerHover()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        FixedUiInputSource inner = new(new UiPointerState(0f, 0f, 0f, 0f, false, false, false))
+        {
+            DownKeys = [new UiKey(65)],
+        };
+        GameViewUiInputSource source = new(
+            inner,
+            () => Editor.EditorMode.Play,
+            () => snapshot,
+            () => new Vector2(0f, 0f),
+            () => false,
+            keyboardFocusedProvider: () => true);
+        Span<UiKey> keys = stackalloc UiKey[4];
+
+        int count = source.CaptureDownKeys(keys, out _);
+
+        Assert.Equal(1, count);
+        Assert.Equal(new UiKey(65), keys[0]);
+        Assert.False(source.TryGetPointer(out _));
+    }
+
+    /// <summary>
     /// 验证 Game View 坐标闭环仍保留透明 UI 区域 pass-through 语义。
     /// </summary>
     [Fact]
@@ -399,10 +449,10 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
-    /// 验证 Game View 输入源只在 Play、聚焦且指针位于图像区域内时转发键盘与文本输入。
+    /// 验证 Game View 输入源只在 runtime mode 且拥有键盘焦点时转发键盘与文本输入。
     /// </summary>
     [Fact]
-    public void GameViewUiInputSourceBlocksKeyboardTextAndCompositionOutsideFocusedPlayImage()
+    public void GameViewUiInputSourceBlocksKeyboardTextAndCompositionOutsideRuntimeKeyboardFocus()
     {
         // Arrange：准备输入与初始状态
         GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
@@ -413,7 +463,6 @@ public sealed class EditorShellGameViewContractTests
 
         AssertKeyboardBlocked(Editor.EditorMode.Edit, focused: true, panelPoint: new Vector2(90f, 65f));
         AssertKeyboardBlocked(Editor.EditorMode.Play, focused: false, panelPoint: new Vector2(90f, 65f));
-        AssertKeyboardBlocked(Editor.EditorMode.Play, focused: true, panelPoint: new Vector2(90f, 130f));
 
         void AssertKeyboardBlocked(Editor.EditorMode mode, bool focused, Vector2 panelPoint)
         {
@@ -519,6 +568,24 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 Editor runtime ImGui 输入使用 Game View 的 pointer/keyboard 焦点，而不是整窗直通。
+    /// </summary>
+    [Fact]
+    public void EditorRuntimeGuiInputRouteUsesGameViewFocusAndFramebufferMapper()
+    {
+        string root = FindRepositoryRoot();
+        string extension = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"));
+
+        Assert.Contains("public bool AllowsRuntimeGuiKeyboardInput =>", extension, StringComparison.Ordinal);
+        Assert.Contains("KeyboardFocused: true", extension, StringComparison.Ordinal);
+        Assert.Contains("public bool TryMapFramebufferPointerToViewport(", extension, StringComparison.Ordinal);
+        Assert.Contains("PointerHovered: true", extension, StringComparison.Ordinal);
+        Assert.Contains("LastViewportSnapshot.TryMapFramebufferToViewport(", extension, StringComparison.Ordinal);
+        Assert.Contains("LastPanelOriginFramebuffer", extension, StringComparison.Ordinal);
+        Assert.Contains("LastFramebufferScale", extension, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Game View 输出侧把 panel-local image rect 转成 framebuffer-space UI present target。
     /// </summary>
     [Fact]
@@ -541,6 +608,47 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(2f, target.DpiScale);
         Assert.Equal(target.Scissor, new UiScissorRect(221, 121, 321, 181));
         Assert.True(target.IsValid);
+    }
+
+    /// <summary>
+    /// 验证 runtime ImGui 指针按窗口 framebuffer、DPI 和 Game View letterbox 映射到纹理像素。
+    /// </summary>
+    [Fact]
+    public void GameViewViewportSnapshotMapsFramebufferPointerThroughDpiAndLetterbox()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        Vector2 panelOriginFramebuffer = new(100f, 40f);
+        Vector2 dpi = new(2f, 2f);
+
+        // panel-local image center=(90,65)，window framebuffer=(100,40)+(90,65)*2=(280,170)。
+        Assert.True(snapshot.TryMapFramebufferToViewport(
+            new Vector2(280f, 170f),
+            panelOriginFramebuffer,
+            dpi,
+            out Vector2 viewportPoint));
+        Assert.Equal(160f, viewportPoint.X, precision: 3);
+        Assert.Equal(90f, viewportPoint.Y, precision: 3);
+
+        // 同一面板的下方 letterbox 空白不能命中 runtime GUI。
+        Assert.False(snapshot.TryMapFramebufferToViewport(
+            new Vector2(280f, 300f),
+            panelOriginFramebuffer,
+            dpi,
+            out _));
+        Assert.False(GameViewViewportSnapshot.Empty.TryMapFramebufferToViewport(
+            new Vector2(280f, 170f),
+            panelOriginFramebuffer,
+            dpi,
+            out _));
+        Assert.False(snapshot.TryMapFramebufferToViewport(
+            new Vector2(float.NaN, 170f),
+            panelOriginFramebuffer,
+            dpi,
+            out _));
     }
 
     /// <summary>
@@ -717,10 +825,10 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
-    /// 验证 Game View UI present target provider 只在 Play 模式、面板可见且 snapshot 有效时输出 framebuffer-space 目标。
+    /// 验证 Game View UI present target provider 只在 runtime 模式、面板可见且 snapshot 有效时输出纹理内全尺寸目标。
     /// </summary>
     [Fact]
-    public void GameViewUiPresentTargetProviderUsesVisiblePlayModeFramebufferImageRect()
+    public void GameViewUiPresentTargetProviderUsesVisibleRuntimeTextureRect()
     {
         // Arrange：准备输入与初始状态
         GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
@@ -731,19 +839,15 @@ public sealed class EditorShellGameViewContractTests
         GameViewUiPresentTargetProvider provider = new(
             () => Editor.EditorMode.Play,
             () => snapshot,
-            () => new Vector2(100f, 40f),
-            () => Vector2.One,
             () => true);
 
         // Assert：验证预期结果
         Assert.True(provider.TryGetPresentTarget(out UiPresentTarget target));
-        Assert.Equal(new UiPresentTarget(110, 60, 160, 90, 1f), target);
+        Assert.Equal(new UiPresentTarget(0, 0, 320, 180, 1f), target);
 
         provider = new GameViewUiPresentTargetProvider(
             () => Editor.EditorMode.Play,
             () => snapshot,
-            () => new Vector2(100f, 40f),
-            () => Vector2.One,
             () => false);
 
         Assert.False(provider.TryGetPresentTarget(out _));
@@ -751,11 +855,20 @@ public sealed class EditorShellGameViewContractTests
         provider = new GameViewUiPresentTargetProvider(
             () => Editor.EditorMode.Edit,
             () => snapshot,
-            () => new Vector2(100f, 40f),
-            () => Vector2.One,
             () => true);
 
         Assert.False(provider.TryGetPresentTarget(out _));
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory?.FullName ?? throw new DirectoryNotFoundException("未找到 PixelEngine 仓库根目录。");
     }
 
     private sealed class NullGuiHost : IManagedFallbackGuiHost

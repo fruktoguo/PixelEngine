@@ -102,6 +102,7 @@ public sealed class LevelDirector : Behaviour
     protected override void OnStart()
     {
         // 启动阶段：解析材质 → 铺设像素世界 → 排队刚体结构 → 注册实体构建系统
+        ResolveAuthoringAnchors();
         ResolveMaterials();
         if (!_materialsResolved)
         {
@@ -118,6 +119,11 @@ public sealed class LevelDirector : Behaviour
     {
         _ = dt;
         // 容错重试：材质未就绪或世界未建成时延迟补建
+        if (!_worldBuilt)
+        {
+            ResolveAuthoringAnchors();
+        }
+
         ResolveMaterials();
         if (!_materialsResolved)
         {
@@ -143,6 +149,25 @@ public sealed class LevelDirector : Behaviour
 
         Context.Scene.RegisterSystem(new EntityBuildSystem(this));
         _entityBuildSystemRegistered = true;
+    }
+
+    private void ResolveAuthoringAnchors()
+    {
+        // 新版场景把关键点建模为真实 GameObject；旧 v1/probe 场景仍回退到序列化坐标字段。
+        // 所有场景实体已在 Behaviour.OnStart 前完成装配，所以这里可安全读取兄弟实体 Transform。
+        if (Context.Scene.TryGetFirstComponent(out PlayerSpawnPoint? spawnPoint) &&
+            spawnPoint.Entity.TryGetComponent(out Transform spawnTransform))
+        {
+            PlayerSpawnX = spawnTransform.X;
+            PlayerSpawnY = spawnTransform.Y;
+        }
+
+        if (Context.Scene.TryGetFirstComponent(out GoalPoint? goalPoint) &&
+            goalPoint.Entity.TryGetComponent(out Transform goalTransform))
+        {
+            GoalX = goalTransform.X;
+            GoalY = goalTransform.Y;
+        }
     }
 
     private void ResolveMaterials()
@@ -252,9 +277,7 @@ public sealed class LevelDirector : Behaviour
         }
 
         _ = playerEntity.AddComponent<PlayerVisual>();
-        PlayableHud playableHud = playerEntity.AddComponent<PlayableHud>();
-        playableHud.X = 14f;
-        playableHud.Y = 14f;
+        _ = playerEntity.AddComponent<PlayableHud>();
         _ = playerEntity.AddComponent<PauseMenu>();
         _ = playerEntity.AddComponent<GameUiDemoController>();
 

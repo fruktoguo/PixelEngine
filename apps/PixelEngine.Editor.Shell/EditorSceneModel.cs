@@ -1,4 +1,5 @@
 using PixelEngine.Hosting;
+using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -28,6 +29,12 @@ internal sealed class EditorSceneModel
     public bool IsDirty { get; private set; }
 
     public int Version { get; private set; }
+
+    /// <summary>
+    /// 当前场景内容世代；仅在 <see cref="ReplaceWith"/> 整体替换场景时递增。
+    /// 连续编辑事务用它区分不同场景中可能复用的 StableId。
+    /// </summary>
+    public long SceneGeneration { get; private set; }
 
     public IReadOnlyList<int> RootIds => _roots;
 
@@ -412,6 +419,7 @@ internal sealed class EditorSceneModel
         RebuildChildren();
         SelectedStableId = source.SelectedStableId;
         IsDirty = markDirty;
+        SceneGeneration++;
         Version++;
     }
 
@@ -433,6 +441,40 @@ internal sealed class EditorSceneModel
         return gameObject.ParentId.HasValue
             ? Compose(ComputeWorldTransform(gameObject.ParentId.Value), local)
             : local;
+    }
+
+    /// <summary>
+    /// 把目标世界 TRS 转换为对象相对于当前父节点的局部 TRS。
+    /// Scene gizmo 操纵的是 world matrix，写盘必须保留 .scene 的 local Transform 语义。
+    /// </summary>
+    public bool TryConvertWorldToLocalTransform(
+        int stableId,
+        EditorSceneTransform worldTransform,
+        out EditorSceneTransform localTransform)
+    {
+        ArgumentNullException.ThrowIfNull(worldTransform);
+        EditorGameObject gameObject = Get(stableId);
+        if (!gameObject.ParentId.HasValue)
+        {
+            localTransform = worldTransform.Clone();
+            return IsFinite(localTransform);
+        }
+
+        Matrix4x4 parentWorld = ComputeWorldMatrix(gameObject.ParentId.Value);
+        if (!Matrix4x4.Invert(parentWorld, out Matrix4x4 inverseParent))
+        {
+            localTransform = gameObject.Transform.Clone();
+            return false;
+        }
+
+        Matrix4x4 localMatrix = ComposeMatrix(worldTransform) * inverseParent;
+        if (!TryDecomposeMatrix(localMatrix, out localTransform))
+        {
+            localTransform = gameObject.Transform.Clone();
+            return false;
+        }
+
+        return true;
     }
 
     public int IndexInParent(int stableId)
@@ -711,6 +753,52 @@ internal sealed class EditorSceneModel
             ScaleX = parent.ScaleX * local.ScaleX,
             ScaleY = parent.ScaleY * local.ScaleY,
         };
+    }
+
+    private Matrix4x4 ComputeWorldMatrix(int stableId)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        Matrix4x4 local = ComposeMatrix(gameObject.Transform);
+        return gameObject.ParentId.HasValue
+            ? local * ComputeWorldMatrix(gameObject.ParentId.Value)
+            : local;
+    }
+
+    private static Matrix4x4 ComposeMatrix(EditorSceneTransform transform)
+    {
+        return Matrix4x4.CreateScale(transform.ScaleX, transform.ScaleY, 1f) *
+            Matrix4x4.CreateRotationZ(transform.RotationRadians) *
+            Matrix4x4.CreateTranslation(transform.X, transform.Y, 0f);
+    }
+
+    private static bool TryDecomposeMatrix(Matrix4x4 matrix, out EditorSceneTransform transform)
+    {
+        if (!Matrix4x4.Decompose(matrix, out Vector3 scale, out Quaternion rotation, out Vector3 translation))
+        {
+            transform = new EditorSceneTransform();
+            return false;
+        }
+
+        transform = new EditorSceneTransform
+        {
+            X = translation.X,
+            Y = translation.Y,
+            RotationRadians = MathF.Atan2(
+                2f * ((rotation.W * rotation.Z) + (rotation.X * rotation.Y)),
+                1f - (2f * ((rotation.Y * rotation.Y) + (rotation.Z * rotation.Z)))),
+            ScaleX = scale.X,
+            ScaleY = scale.Y,
+        };
+        return IsFinite(transform);
+    }
+
+    private static bool IsFinite(EditorSceneTransform transform)
+    {
+        return float.IsFinite(transform.X) &&
+            float.IsFinite(transform.Y) &&
+            float.IsFinite(transform.RotationRadians) &&
+            float.IsFinite(transform.ScaleX) &&
+            float.IsFinite(transform.ScaleY);
     }
 }
 

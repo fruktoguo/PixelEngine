@@ -758,7 +758,7 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
-    /// 验证过载降级只降低 Game UI present cadence，不跳过 UI update / event drain。
+    /// 验证过载降级记录 Game UI paint cadence 偏好，但不跳过 final composite、UI update 或 event drain。
     /// </summary>
     [Fact]
     public void OverloadThrottlesGameUiPresentWithoutSkippingUiUpdate()
@@ -795,15 +795,15 @@ public sealed class EnginePhaseDriverTests
         host.Composite(default);
         host.Composite(default);
 
-        Assert.Equal(2, backend.CompositeCount);
-        Assert.Equal(2, host.SkippedPresentationFrames);
+        Assert.Equal(4, backend.CompositeCount);
+        Assert.Equal(0, host.SkippedPresentationFrames);
 
         _ = engine.RunOneTick(realDeltaSeconds: 0);
 
         Assert.Equal(4, backend.UpdateCount);
         Assert.Equal(4, sink.TotalEventCount);
         Assert.Equal(3, engine.Context.Counters.UiPresentationIntervalFrames);
-        Assert.Equal(2, engine.Context.Counters.UiSkippedPresentationFrames);
+        Assert.Equal(0, engine.Context.Counters.UiSkippedPresentationFrames);
     }
 
     /// <summary>

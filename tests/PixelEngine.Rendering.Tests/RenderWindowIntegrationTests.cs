@@ -383,6 +383,99 @@ public sealed class RenderWindowIntegrationTests
     }
 
     /// <summary>
+    /// Game View 消费的 runtime viewport 纹理已经包含 gameplay overlay，而不是裸 world post-process 结果。
+    /// </summary>
+    [NativeSmokeFact]
+    public void RenderPipelineCurrentViewportTextureContainsGameplayOverlayWhenExplicitlyEnabled()
+    {
+        using RenderWindow window = CreateSmokeWindow("PixelEngine runtime viewport overlay smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 16, 16);
+        RenderBuffer buffer = new(16, 16);
+        RenderAuxBuffers aux = new(16, 16);
+        buffer.Pixels.Fill(0xFF101010u);
+        OverlayCommand[] overlays =
+        [
+            OverlayCommand.SolidRectangle(6f, 7f, 4f, 5f, 0xFFF2D05Eu),
+        ];
+
+        pipeline.Settings.QualityLevel = LightingQualityLevel.BloomDisabled;
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 16), [], overlays);
+
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] pixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] player = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 8, y: 9);
+
+        Assert.Equal(1, pipeline.CurrentViewportOverlayCount);
+        Assert.True(
+            player[0] > 230 && player[1] > 190 && player[2] is > 70 and < 120 && player[3] > 240,
+            $"runtime viewport 中应读回玩家黄色 overlay，actual rgba=({player[0]},{player[1]},{player[2]},{player[3]})");
+    }
+
+    /// <summary>
+    /// Game UI 写入 runtime viewport，而 Editor UI 只写窗口 framebuffer；两者层级与目标表面不得串线。
+    /// </summary>
+    [NativeSmokeFact]
+    public void UiPresentLayersCompositeRuntimeBeforePublishingViewportAndEditorAfterWindowPresent()
+    {
+        using RenderWindow window = CreateSmokeWindow("PixelEngine runtime/editor UI surface smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 16, 16);
+        RenderBuffer buffer = new(16, 16);
+        RenderAuxBuffers aux = new(16, 16);
+        buffer.Pixels.Fill(0xFF101010u);
+        SolidUiProbeLayer runtimeLayer = new(0xFF00FF00u, left: 4f, top: 4f, size: 8f);
+        SolidUiProbeLayer legacyWindowLayer = new(0xFF0000FFu, left: 4f, top: 4f, size: 8f);
+        SolidUiProbeLayer editorLayer = new(0xFFFF0000u, left: 20f, top: 4f, size: 8f);
+        using IDisposable runtimeRegistration = pipeline.RegisterUiLayer(
+            UiPresentSurface.RuntimeViewport,
+            UiPresentLayerOrders.Game,
+            runtimeLayer);
+        // 兼容 overload 即使 order 低于 Editor，也必须固定写 WindowFramebuffer，不能再由 order 推断 surface。
+        using IDisposable legacyRegistration = pipeline.RegisterUiLayer(
+            UiPresentLayerOrders.Game + 50,
+            legacyWindowLayer);
+        using IDisposable editorRegistration = pipeline.RegisterUiLayer(
+            UiPresentSurface.WindowFramebuffer,
+            UiPresentLayerOrders.Editor,
+            editorLayer);
+        byte[]? windowPixels = null;
+        pipeline.BeforeSwapBuffers += gl =>
+        {
+            gl.ReadBuffer(ReadBufferMode.Back);
+            windowPixels = ReadFramebufferRgba(gl, window.Width, window.Height);
+        };
+
+        pipeline.Settings.QualityLevel = LightingQualityLevel.BloomDisabled;
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 16));
+
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] viewportPixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] runtimeCenter = PixelAtTopLeftOrigin(viewportPixels, viewport.Width, x: 8, y: 8);
+        Assert.NotNull(windowPixels);
+        PresentationViewport presentation = PresentationViewport.Fit(16, 16, window.Width, window.Height);
+        int presentedCenterX = presentation.X + (presentation.Width / 2);
+        int presentedTop = presentation.TargetHeight - presentation.Y - presentation.Height;
+        int presentedCenterY = presentedTop + (presentation.Height / 2);
+        byte[] legacyWindowCenter = PixelAtTopLeftOrigin(windowPixels, window.Width, x: 8, y: 8);
+        byte[] editorCenter = PixelAtTopLeftOrigin(windowPixels, window.Width, x: 24, y: 8);
+        byte[] scaledRuntimeCenter = PixelAtTopLeftOrigin(windowPixels, window.Width, x: presentedCenterX, y: presentedCenterY);
+
+        Assert.Equal((16, 16), (runtimeLayer.FramebufferWidth, runtimeLayer.FramebufferHeight));
+        Assert.Equal((window.Width, window.Height), (legacyWindowLayer.FramebufferWidth, legacyWindowLayer.FramebufferHeight));
+        Assert.Equal((window.Width, window.Height), (editorLayer.FramebufferWidth, editorLayer.FramebufferHeight));
+        Assert.True(runtimeCenter[1] > 240 && runtimeCenter[0] < 20, PixelMessage("runtime texture", runtimeCenter));
+        Assert.True(legacyWindowCenter[2] > 240 && legacyWindowCenter[0] < 20, PixelMessage("legacy window layer", legacyWindowCenter));
+        Assert.True(editorCenter[0] > 240 && editorCenter[1] < 20, PixelMessage("window editor layer", editorCenter));
+        Assert.True(scaledRuntimeCenter[1] > 240 && scaledRuntimeCenter[0] < 20, PixelMessage("window runtime present", scaledRuntimeCenter));
+        Assert.Equal(GLEnum.NoError, runtimeLayer.GlError);
+        Assert.Equal(GLEnum.NoError, legacyWindowLayer.GlError);
+        Assert.Equal(GLEnum.NoError, editorLayer.GlError);
+    }
+
+    /// <summary>
     /// 泛光后视口上下半区颜色不互相镜像。
     /// </summary>
     [NativeSmokeFact]
@@ -756,5 +849,47 @@ public sealed class RenderWindowIntegrationTests
         target.BindFramebuffer();
         window.Gl.ReadPixels(0, 0, (uint)target.Width, (uint)target.Height, GLEnum.Rgba, GLEnum.UnsignedByte, out rgba[0]);
         return rgba;
+    }
+
+    private static byte[] ReadFramebufferRgba(GL gl, int width, int height)
+    {
+        byte[] rgba = new byte[checked(width * height * 4)];
+        gl.ReadPixels(0, 0, (uint)width, (uint)height, GLEnum.Rgba, GLEnum.UnsignedByte, out rgba[0]);
+        return rgba;
+    }
+
+    private static string PixelMessage(string label, byte[] pixel)
+    {
+        return $"{label} rgba=({pixel[0]},{pixel[1]},{pixel[2]},{pixel[3]})";
+    }
+
+    private sealed class SolidUiProbeLayer(uint colorBgra, float left, float top, float size) : IUiPresentLayer
+    {
+        private readonly UiVertex[] _vertices =
+        [
+            new UiVertex(left, top, 0f, 0f, colorBgra),
+            new UiVertex(left + size, top, 0f, 0f, colorBgra),
+            new UiVertex(left + size, top + size, 0f, 0f, colorBgra),
+            new UiVertex(left, top + size, 0f, 0f, colorBgra),
+        ];
+        private readonly ushort[] _indices = [0, 1, 2, 0, 2, 3];
+
+        public int FramebufferWidth { get; private set; }
+
+        public int FramebufferHeight { get; private set; }
+
+        public GLEnum GlError { get; private set; }
+
+        public void Present(in UiPresentContext context)
+        {
+            FramebufferWidth = context.FramebufferWidth;
+            FramebufferHeight = context.FramebufferHeight;
+            while (context.Gl.GetError() != GLEnum.NoError)
+            {
+            }
+
+            context.SubmitTriangles(_vertices, _indices, UiDrawState.Default);
+            GlError = context.Gl.GetError();
+        }
     }
 }

@@ -36,12 +36,22 @@ public sealed class PlayableHud : Behaviour
     /// <summary>
     /// HUD 左上角 X 坐标，单位像素。
     /// </summary>
-    public float X { get; set; } = 14f;
+    public float X { get; set; } = 340f;
 
     /// <summary>
     /// HUD 左上角 Y 坐标，单位像素。
     /// </summary>
-    public float Y { get; set; } = 14f;
+    public float Y { get; set; } = 12f;
+
+    /// <summary>
+    /// HUD 宽度，默认收敛在 640×360 Game View 的右侧，不遮挡左侧出生区。
+    /// </summary>
+    public float Width { get; set; } = 288f;
+
+    /// <summary>
+    /// 是否展开性能、坍塌扫描与材质图例等诊断信息；默认只显示游玩必需信息。
+    /// </summary>
+    public bool ShowDiagnostics { get; set; }
 
     /// <inheritdoc />
     protected override void OnStart()
@@ -53,12 +63,14 @@ public sealed class PlayableHud : Behaviour
     protected override void OnGui(IGuiContext gui)
     {
         ResolveComponents();
-        gui.SetNextWindow(X, Y, 380f, 248f, GuiCondition.FirstUseEver);
+        float height = ShowDiagnostics ? 304f : 176f;
+        gui.SetNextWindow(X, Y, Width, height, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
             GuiWindowFlags.NoSavedSettings |
             GuiWindowFlags.NoTitleBar |
-            GuiWindowFlags.NoScrollbar;
+            GuiWindowFlags.NoScrollbar |
+            GuiWindowFlags.NoInputs;
         if (!gui.BeginWindow("playable-hud", "Playable HUD", flags))
         {
             gui.EndWindow();
@@ -67,12 +79,18 @@ public sealed class PlayableHud : Behaviour
 
         DrawHealth(gui);
         DrawGoal(gui);
-        DrawMissionDiagnostics(gui);
         DrawWeapon(gui);
         _ = _text.Clear()
             .Append("射击 ")
             .Append(_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0);
         gui.Text(_text.WrittenSpan);
+        if (!ShowDiagnostics)
+        {
+            gui.EndWindow();
+            return;
+        }
+
+        DrawMissionDiagnostics(gui);
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
         _ = _text.Clear()
             .Append("FX ")
@@ -264,7 +282,7 @@ public sealed class PlayableHud : Behaviour
         gui.TextColored(
             _goal?.Reached == true
                 ? "目标 已抵达右侧出口"
-                : "目标 左起点 -> 右出口，穿过熔岩坑与路障",
+                : "目标 → 右侧出口",
             color);
     }
 

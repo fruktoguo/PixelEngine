@@ -11,21 +11,47 @@ namespace PixelEngine.Hosting;
 /// <summary>
 /// 从 Silk.NET 窗口输入上下文采样键鼠状态，并在相位 0 写入脚本输入快照。
 /// </summary>
+/// <param name="window">输入所属渲染窗口。</param>
+/// <param name="input">脚本输入 API。</param>
+/// <param name="routeProvider">可选输入仲裁路由。</param>
+/// <param name="logicalViewportWidth">逻辑 viewport 宽度；0 表示直接使用 framebuffer 坐标。</param>
+/// <param name="logicalViewportHeight">逻辑 viewport 高度；0 表示直接使用 framebuffer 坐标。</param>
+/// <param name="gameplayViewportMapper">可选嵌入式 gameplay viewport 映射器。</param>
 public sealed class SilkInputPhaseDriver(
     RenderWindow window,
     ScriptInputApi input,
-    Func<EngineTickContext, ScriptInputRoute>? routeProvider = null,
-    int logicalViewportWidth = 0,
-    int logicalViewportHeight = 0) : IEnginePhaseDriver
+    Func<EngineTickContext, ScriptInputRoute>? routeProvider,
+    int logicalViewportWidth,
+    int logicalViewportHeight,
+    IGameplayViewportInputMapper? gameplayViewportMapper) : IEnginePhaseDriver
 {
     private readonly RenderWindow _window = window ?? throw new ArgumentNullException(nameof(window));
     private readonly ScriptInputApi _input = input ?? throw new ArgumentNullException(nameof(input));
     private readonly Func<EngineTickContext, ScriptInputRoute> _routeProvider = routeProvider ?? (_ => ScriptInputRoute.Allowed);
     private readonly int _logicalViewportWidth = logicalViewportWidth;
     private readonly int _logicalViewportHeight = logicalViewportHeight;
+    private readonly IGameplayViewportInputMapper? _gameplayViewportMapper = gameplayViewportMapper;
     private readonly ScriptKey[] _keyBuffer = new ScriptKey[20];
     private readonly ScriptMouseButton[] _mouseBuffer = new ScriptMouseButton[3];
     private float _lastWheelY;
+
+    /// <summary>
+    /// 使用独立窗口坐标映射创建输入驱动；保留既有五参数 CLR 构造器的二进制兼容性。
+    /// </summary>
+    /// <param name="window">输入所属渲染窗口。</param>
+    /// <param name="input">脚本输入 API。</param>
+    /// <param name="routeProvider">可选输入仲裁路由。</param>
+    /// <param name="logicalViewportWidth">逻辑 viewport 宽度；0 表示直接使用 framebuffer 坐标。</param>
+    /// <param name="logicalViewportHeight">逻辑 viewport 高度；0 表示直接使用 framebuffer 坐标。</param>
+    public SilkInputPhaseDriver(
+        RenderWindow window,
+        ScriptInputApi input,
+        Func<EngineTickContext, ScriptInputRoute>? routeProvider = null,
+        int logicalViewportWidth = 0,
+        int logicalViewportHeight = 0)
+        : this(window, input, routeProvider, logicalViewportWidth, logicalViewportHeight, gameplayViewportMapper: null)
+    {
+    }
 
     /// <summary>
     /// 注册输入采样相位。
@@ -114,8 +140,27 @@ public sealed class SilkInputPhaseDriver(
         float currentWheelY = mouse.ScrollWheels.Count == 0 ? 0f : mouse.ScrollWheels[0].Y;
         float wheelDelta = allowMouse ? currentWheelY - _lastWheelY : 0f;
         _lastWheelY = currentWheelY;
+        if (!allowMouse)
+        {
+            return (0f, 0f, 0f);
+        }
+
         float framebufferX = mouse.Position.X * _window.FramebufferScaleX;
         float framebufferY = mouse.Position.Y * _window.FramebufferScaleY;
+        // 嵌入式宿主（Editor Game View）拥有 runtime viewport 的真实图像矩形；玩法与 Game UI
+        // 必须复用当前窗口事件坐标的同一映射，不能依赖上一帧 panel hover 快照。
+        if (_gameplayViewportMapper is not null)
+        {
+            return TryMapGameplayViewportPointer(
+                    _gameplayViewportMapper,
+                    framebufferX,
+                    framebufferY,
+                    out float viewportX,
+                    out float viewportY)
+                    ? (viewportX, viewportY, wheelDelta)
+                    : (0f, 0f, 0f);
+        }
+
         // 逻辑视口与帧缓冲不一致时，将鼠标坐标映射回 sim 内部分辨率空间。
         if (_logicalViewportWidth > 0 && _logicalViewportHeight > 0)
         {
@@ -132,6 +177,48 @@ public sealed class SilkInputPhaseDriver(
             framebufferX,
             framebufferY,
             wheelDelta);
+    }
+
+    internal static bool TryMapGameplayViewportPointer(
+        IGameplayViewportInputMapper mapper,
+        out float viewportX,
+        out float viewportY)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        return ValidateMappedPointer(
+            mapper.TryMapPointerToViewport(out viewportX, out viewportY),
+            ref viewportX,
+            ref viewportY);
+    }
+
+    internal static bool TryMapGameplayViewportPointer(
+        IGameplayViewportInputMapper mapper,
+        float framebufferX,
+        float framebufferY,
+        out float viewportX,
+        out float viewportY)
+    {
+        ArgumentNullException.ThrowIfNull(mapper);
+        return ValidateMappedPointer(
+            mapper.TryMapFramebufferPointerToViewport(
+                framebufferX,
+                framebufferY,
+                out viewportX,
+                out viewportY),
+            ref viewportX,
+            ref viewportY);
+    }
+
+    private static bool ValidateMappedPointer(bool mapped, ref float viewportX, ref float viewportY)
+    {
+        if (mapped && float.IsFinite(viewportX) && float.IsFinite(viewportY))
+        {
+            return true;
+        }
+
+        viewportX = 0f;
+        viewportY = 0f;
+        return false;
     }
 
     private static void AddIfDown(IKeyboard keyboard, SilkKey source, ScriptKey target, Span<ScriptKey> destination, ref int count)

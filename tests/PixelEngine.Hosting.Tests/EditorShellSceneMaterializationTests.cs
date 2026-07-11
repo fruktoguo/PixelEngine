@@ -244,6 +244,34 @@ public sealed class EditorShellSceneMaterializationTests
     }
 
     /// <summary>
+    /// 验证属性命令 Undo/Redo 同时恢复 prefab override 元数据，避免视觉值已撤销但保存时仍残留 override。
+    /// </summary>
+    [Fact]
+    public void TransformUndoRedoRestoresPrefabOverrideMetadataSymmetrically()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("prefab-command-undo");
+        EditorGameObject instance = scene.Create("Instance");
+        instance.PrefabLink = new EditorPrefabLink
+        {
+            AssetId = "prefab-rock",
+            AssetPath = "prefabs/rock.prefab",
+            SourceStableId = "1",
+        };
+        EditorUndoStack undo = new();
+        EditorSceneTransform after = new() { X = 12f, Y = 18f, RotationRadians = 0.2f, ScaleX = 2f, ScaleY = 3f };
+
+        undo.Execute(scene, new SetTransformCommand(instance.StableId, after));
+
+        Assert.Equal(5, instance.PrefabLink.Overrides.Count);
+        Assert.True(undo.Undo(scene));
+        Assert.Equal(0f, instance.Transform.X);
+        Assert.Empty(instance.PrefabLink.Overrides);
+        Assert.True(undo.Redo(scene));
+        Assert.Equal(12f, instance.Transform.X);
+        Assert.Equal(5, instance.PrefabLink.Overrides.Count);
+    }
+
+    /// <summary>
     /// 验证 prefab 实例化、override、Revert 与资产 baseline 更新传播。
     /// </summary>
     [Fact]

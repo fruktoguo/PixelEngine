@@ -13,6 +13,8 @@ internal sealed class EditorMainMenuBar
 {
     private const float ToolbarHeight = 36f;
     private const float ToolbarButtonWidth = 92f;
+    private const float PlayControlButtonSize = 28f;
+    private const float PlayControlGap = 4f;
     private const string ToolbarWindowName = "##PixelEngineEditorToolbar";
     private const ImGuiWindowFlags ToolbarWindowFlags =
         ImGuiWindowFlags.NoTitleBar |
@@ -107,26 +109,41 @@ internal sealed class EditorMainMenuBar
             app.ShowBuildSettings();
         }
 
+        float scaledPlayButtonSize = EditorUiScale.Scale(PlayControlButtonSize, uiScale);
+        float scaledPlayGap = EditorUiScale.Scale(PlayControlGap, uiScale);
+        float playControlsWidth = (scaledPlayButtonSize * 3f) + (scaledPlayGap * 2f);
         float playControlsX = Math.Max(
             EditorUiScale.Scale(390f, uiScale),
-            (viewport.Size.X * 0.5f) - (((EditorUiScale.Scale(ToolbarButtonWidth, uiScale) * 3f) + EditorUiScale.Scale(16f, uiScale)) * 0.5f));
+            (viewport.Size.X * 0.5f) - (playControlsWidth * 0.5f));
         ImGui.SameLine(playControlsX);
-        if (ToolbarButton(L.Get("action.play", "Play"), state.CanEnterPlay, uiScale))
+        if (PlayControlButton(
+            EditorToolbarPlayIcon.Play,
+            state.IsPlaySessionActive,
+            state.HasSession,
+            state.IsPlaySessionActive ? L.Get("action.stop", "Stop") : L.Get("action.play", "Play"),
+            uiScale))
         {
-            app.EnterPlayMode();
+            TogglePlayMode(app, state);
         }
 
-        ImGui.SameLine();
-        if (ToolbarButton(
-            state.IsPaused ? L.Get("action.resume", "Resume") : L.Get("action.pause", "Pause"),
+        ImGui.SameLine(0f, scaledPlayGap);
+        if (PlayControlButton(
+            EditorToolbarPlayIcon.Pause,
+            state.IsPaused,
             state.CanPause,
+            state.IsPaused ? L.Get("action.resume", "Resume") : L.Get("action.pause", "Pause"),
             uiScale))
         {
             app.TogglePauseMode();
         }
 
-        ImGui.SameLine();
-        if (ToolbarButton(L.Get("action.step", "Step"), state.CanStep, uiScale))
+        ImGui.SameLine(0f, scaledPlayGap);
+        if (PlayControlButton(
+            EditorToolbarPlayIcon.Step,
+            selected: false,
+            state.CanStep,
+            L.Get("action.step", "Step"),
+            uiScale))
         {
             app.StepOnce();
         }
@@ -150,6 +167,98 @@ internal sealed class EditorMainMenuBar
         }
 
         return clicked && enabled;
+    }
+
+    private static bool PlayControlButton(
+        EditorToolbarPlayIcon icon,
+        bool selected,
+        bool enabled,
+        string tooltip,
+        float uiScale)
+    {
+        float size = EditorUiScale.Scale(PlayControlButtonSize, uiScale);
+        Vector2 min = ImGui.GetCursorScreenPos();
+        if (!enabled)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        bool clicked = ImGui.InvisibleButton($"toolbar-play-{icon}", new Vector2(size));
+        bool hovered = ImGui.IsItemHovered();
+        if (!enabled)
+        {
+            ImGui.EndDisabled();
+        }
+
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        uint background = selected
+            ? 0xFFDA874C
+            : hovered && enabled ? 0xFF45474D : 0xFF2C2E33;
+        drawList.AddRectFilled(min, min + new Vector2(size), background, EditorUiScale.Scale(4f, uiScale));
+        uint foreground = enabled ? 0xFFF1F3F6 : 0xFF70737A;
+        float unit = size / 14f;
+        Vector2 center = min + new Vector2(size * 0.5f);
+        switch (icon)
+        {
+            case EditorToolbarPlayIcon.Play:
+                drawList.AddTriangleFilled(
+                    center + new Vector2(-unit * 2.5f, -unit * 3.5f),
+                    center + new Vector2(-unit * 2.5f, unit * 3.5f),
+                    center + new Vector2(unit * 3.5f, 0f),
+                    foreground);
+                break;
+            case EditorToolbarPlayIcon.Pause:
+                drawList.AddRectFilled(
+                    center + new Vector2(-unit * 3f, -unit * 3.5f),
+                    center + new Vector2(-unit, unit * 3.5f),
+                    foreground,
+                    unit * 0.5f);
+                drawList.AddRectFilled(
+                    center + new Vector2(unit, -unit * 3.5f),
+                    center + new Vector2(unit * 3f, unit * 3.5f),
+                    foreground,
+                    unit * 0.5f);
+                break;
+            case EditorToolbarPlayIcon.Step:
+                drawList.AddTriangleFilled(
+                    center + new Vector2(-unit * 3.5f, -unit * 3.5f),
+                    center + new Vector2(-unit * 3.5f, unit * 3.5f),
+                    center + new Vector2(unit * 1.75f, 0f),
+                    foreground);
+                drawList.AddRectFilled(
+                    center + new Vector2(unit * 2.25f, -unit * 3.5f),
+                    center + new Vector2(unit * 3.5f, unit * 3.5f),
+                    foreground,
+                    unit * 0.4f);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(icon), icon, "未知 Editor 播放控制图标。");
+        }
+
+        if (hovered)
+        {
+            ImGui.SetTooltip(tooltip);
+        }
+
+        return clicked && enabled;
+    }
+
+    internal static void TogglePlayMode(EditorShellApp app, in EditorMainToolbarState state)
+    {
+        ArgumentNullException.ThrowIfNull(app);
+        if (!state.HasSession)
+        {
+            return;
+        }
+
+        if (state.ShouldExitPlayOnToggle)
+        {
+            app.EnterEditMode();
+        }
+        else
+        {
+            app.EnterPlayMode();
+        }
     }
 
     private static void DrawFileMenu(EditorShellApp app)
@@ -427,16 +536,16 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
+        EditorMainToolbarState state = CaptureToolbarState(app);
         if (ImGui.MenuItem(
-            L.Get("action.play", "Play"),
+            state.IsPlaySessionActive ? L.Get("action.stop", "Stop") : L.Get("action.play", "Play"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.TogglePlayMode).DisplayText,
             selected: false,
-            enabled: app.CurrentSession is not null))
+            enabled: state.HasSession))
         {
-            app.EnterPlayMode();
+            TogglePlayMode(app, state);
         }
 
-        EditorMainToolbarState state = CaptureToolbarState(app);
         if (ImGui.MenuItem(
             state.IsPaused ? L.Get("action.resume", "Resume") : L.Get("action.pause", "Pause"),
             string.Empty,
@@ -449,11 +558,6 @@ internal sealed class EditorMainMenuBar
         if (ImGui.MenuItem(L.Get("action.step", "Step"), string.Empty, selected: false, enabled: state.CanStep))
         {
             app.StepOnce();
-        }
-
-        if (ImGui.MenuItem(L.Get("action.stop", "Stop"), string.Empty, selected: false, enabled: state.CanEnterEdit))
-        {
-            app.EnterEditMode();
         }
 
         ImGui.EndMenu();
@@ -528,16 +632,17 @@ internal sealed class EditorMainMenuBar
 
         if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.TogglePlayMode))
         {
-            if (app.CurrentSession.CaptureEditorPlaySession().Mode == Hosting.EditorMode.Play)
-            {
-                app.EnterEditMode();
-            }
-            else
-            {
-                app.EnterPlayMode();
-            }
+            EditorMainToolbarState state = CaptureToolbarState(app);
+            TogglePlayMode(app, state);
         }
     }
+}
+
+internal enum EditorToolbarPlayIcon
+{
+    Play,
+    Pause,
+    Step,
 }
 
 internal readonly record struct EditorMainToolbarState(
@@ -551,13 +656,17 @@ internal readonly record struct EditorMainToolbarState(
     int ObjectCount,
     string Mode)
 {
-    public bool CanEnterPlay => HasSession && !IsPlaying;
+    public bool CanEnterPlay => HasSession && !IsPlaySessionActive;
 
     public bool CanEnterEdit => HasSession && (IsPlaying || IsPaused);
 
     public bool CanPause => HasSession && (IsPlaying || IsPaused);
 
-    public bool CanStep => HasSession && !IsPlaying;
+    public bool CanStep => HasSession && IsPlaySessionActive;
+
+    public bool IsPlaySessionActive => IsPlaying || IsPaused;
+
+    public bool ShouldExitPlayOnToggle => IsPlaySessionActive;
 
     public string StatusText =>
         HasOpenProject

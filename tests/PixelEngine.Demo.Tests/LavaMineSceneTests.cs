@@ -27,6 +27,14 @@ public sealed class LavaMineSceneTests
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         LevelDirector director = FindBehaviour<LevelDirector>(scene);
+        PlayerSpawnPoint spawnPoint = FindBehaviour<PlayerSpawnPoint>(scene);
+        GoalPoint goalPoint = FindBehaviour<GoalPoint>(scene);
+        Assert.True(spawnPoint.Entity.TryGetComponent(out Transform spawnTransform));
+        Assert.True(goalPoint.Entity.TryGetComponent(out Transform goalTransform));
+        Assert.Equal(spawnTransform.X, director.PlayerSpawnX);
+        Assert.Equal(spawnTransform.Y, director.PlayerSpawnY);
+        Assert.Equal(goalTransform.X, director.GoalX);
+        Assert.Equal(goalTransform.Y, director.GoalY);
         // Assert：验证预期结果
         Assert.True(director.RigidStructuresQueued);
         Assert.Equal(12, director.RigidStructureCount);

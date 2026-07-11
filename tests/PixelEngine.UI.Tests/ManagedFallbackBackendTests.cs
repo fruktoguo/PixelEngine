@@ -64,23 +64,23 @@ public sealed class ManagedFallbackBackendTests
         host.Composite(default);
         host.Composite(default);
 
-        Assert.Equal(1, gui.DrawCount);
+        Assert.Equal(2, gui.DrawCount);
         Assert.False(host.NeedsComposite);
-        Assert.Equal(0, host.LastPaintMilliseconds);
+        Assert.True(host.LastPaintMilliseconds >= 0);
 
         UiPathId health = new(UiStableId.Hash("hud.health"));
         host.SetModelValue(screen, health, new UiValue(0.75));
         host.Composite(default);
 
-        Assert.Equal(2, gui.DrawCount);
+        Assert.Equal(3, gui.DrawCount);
         Assert.False(host.NeedsComposite);
     }
 
     /// <summary>
-    /// 验证托管回退Draw Gui跳过静态屏幕直到模型变更。
+    /// 验证托管回退每帧重放静态屏幕，模型变更后继续使用同一 runtime surface 路径。
     /// </summary>
     [Fact]
-    public void ManagedFallbackDrawGuiSkipsStaticScreenUntilModelChanges()
+    public void ManagedFallbackDrawGuiReplaysStaticScreenEveryFrame()
     {
         string path = WriteUi("""
             <ui title="Hud">
@@ -97,15 +97,14 @@ public sealed class ManagedFallbackBackendTests
         host.DrawGui(gui.Context);
         host.DrawGui(gui.Context);
 
-        string button = Assert.Single(gui.Context.Buttons);
-        Assert.Equal("Refresh", button);
+        Assert.Equal(["Refresh", "Refresh"], gui.Context.Buttons);
         Assert.False(host.NeedsComposite);
-        Assert.Equal(0, host.LastPaintMilliseconds);
+        Assert.True(host.LastPaintMilliseconds >= 0);
 
         Assert.True(host.InvokeAction(screen, new UiActionId(UiStableId.Hash("refresh")), new UiValue(1L)));
         host.DrawGui(gui.Context);
 
-        Assert.Equal(2, gui.Context.Buttons.Count);
+        Assert.Equal(3, gui.Context.Buttons.Count);
         Assert.False(host.NeedsComposite);
     }
 

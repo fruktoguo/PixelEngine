@@ -52,7 +52,7 @@ internal sealed class GameObjectHierarchyPanel(
         }
 
         DrawGeneratedMarkers();
-        DrawRuntimeHierarchy();
+        DrawRuntimeHierarchy(context.Selection);
 
         if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
         {
@@ -94,7 +94,7 @@ internal sealed class GameObjectHierarchyPanel(
         ImGui.TreePop();
     }
 
-    private void DrawRuntimeHierarchy()
+    private void DrawRuntimeHierarchy(EditorSelection selection)
     {
         if (_runtimeSnapshot is null || _modeProvider?.Invoke() == EditorMode.Edit)
         {
@@ -112,13 +112,27 @@ internal sealed class GameObjectHierarchyPanel(
         for (int i = 0; i < snapshot.Entities.Count; i++)
         {
             SceneHierarchyEntityItem entity = snapshot.Entities[i];
-            ImGui.BulletText($"{entity.DisplayName}  [{entity.ComponentCount} components]");
+            bool selected = string.Equals(selection.EntityHandle, entity.Handle, StringComparison.Ordinal);
+            if (ImGui.Selectable(
+                $"{entity.DisplayName}  [{entity.ComponentCount} components]##runtime_entity_{entity.Handle}",
+                selected))
+            {
+                _scene.Select(null);
+                selection.SelectEntity(entity.Handle);
+            }
         }
 
         for (int i = 0; i < snapshot.Bodies.Count; i++)
         {
             SceneHierarchyBodyItem body = snapshot.Bodies[i];
-            ImGui.BulletText($"{body.DisplayName}  ({body.X:0.0}, {body.Y:0.0})");
+            bool selected = selection.BodyId == body.BodyKey;
+            if (ImGui.Selectable(
+                $"{body.DisplayName}  ({body.X:0.0}, {body.Y:0.0})##runtime_body_{body.BodyKey}",
+                selected))
+            {
+                _scene.Select(null);
+                selection.SelectBody(body.BodyKey);
+            }
         }
 
         ImGui.TreePop();
@@ -126,7 +140,18 @@ internal sealed class GameObjectHierarchyPanel(
 
     internal void SyncSelection(EditorSelection selection)
     {
-        if (!string.IsNullOrWhiteSpace(selection.AssetPath) || selection.FolderPath is not null)
+        if (_modeProvider?.Invoke() == EditorMode.Edit &&
+            (!string.IsNullOrWhiteSpace(selection.EntityHandle) || selection.BodyId.HasValue))
+        {
+            _scene.Select(null);
+            selection.Clear();
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(selection.AssetPath) ||
+            selection.FolderPath is not null ||
+            !string.IsNullOrWhiteSpace(selection.EntityHandle) ||
+            selection.BodyId.HasValue)
         {
             if (_scene.SelectedStableId.HasValue)
             {
@@ -144,6 +169,11 @@ internal sealed class GameObjectHierarchyPanel(
             }
 
             return;
+        }
+
+        if (selection.GameObjectStableId.HasValue)
+        {
+            selection.Clear();
         }
 
         if (_scene.SelectedStableId.HasValue)
@@ -182,6 +212,11 @@ internal sealed class GameObjectHierarchyPanel(
     {
         EditorGameObject gameObject = _scene.Get(stableId);
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanAvailWidth;
+        if (!gameObject.ParentId.HasValue)
+        {
+            flags |= ImGuiTreeNodeFlags.DefaultOpen;
+        }
+
         if (gameObject.Children.Count == 0)
         {
             flags |= ImGuiTreeNodeFlags.Leaf;

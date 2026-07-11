@@ -13,6 +13,7 @@ internal sealed class EditorAssetBrowserDataSource :
     IAssetBrowserDiagnosticDataSource,
     IAssetBrowserFolderDataSource,
     IAssetBrowserContextDataSource,
+    IAssetBrowserThumbnailDataSource,
     IDisposable
 {
     private const string ScriptManifestRelativePath = ".pixelengine/script-assets.json";
@@ -100,6 +101,32 @@ internal sealed class EditorAssetBrowserDataSource :
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _folderSnapshot;
+    }
+
+    /// <inheritdoc />
+    public bool TryAcquireThumbnail(string assetPath, out AssetThumbnail thumbnail)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        thumbnail = default;
+        ITextureThumbnailProvider? provider = _thumbnailProvider;
+        return provider is not null &&
+            TryGetRelativePath(assetPath, EditorAssetRootKind.Content, out string relativePath) &&
+            (provider is IEditorTextureThumbnailLeaseProvider leaseProvider
+                ? leaseProvider.TryAcquireThumbnail(relativePath, out thumbnail)
+                : provider.TryGetThumbnail(relativePath, out thumbnail));
+    }
+
+    /// <inheritdoc />
+    public void ReleaseThumbnail(string assetPath, uint textureHandle)
+    {
+        if (_disposed || textureHandle == 0 ||
+            _thumbnailProvider is not IEditorTextureThumbnailLeaseProvider leaseProvider ||
+            !TryGetRelativePath(assetPath, EditorAssetRootKind.Content, out string relativePath))
+        {
+            return;
+        }
+
+        leaseProvider.ReleaseThumbnail(relativePath, textureHandle);
     }
 
     /// <inheritdoc />
@@ -606,19 +633,15 @@ internal sealed class EditorAssetBrowserDataSource :
 
     private AssetBrowserItem BuildBrowserItem(EditorAssetRootKind root, EditorAssetRecord record)
     {
-        AssetThumbnail? thumbnail = root == EditorAssetRootKind.Content &&
-            TryResolveThumbnail(record.LogicalPath, out AssetThumbnail resolved)
-                ? resolved
-                : null;
         AssetBrowserItemKind kind = MapKind(record.AssetType);
         return new AssetBrowserItem(
             ToBrowserPath(new EditorAssetPath(root, record.LogicalPath)),
             kind,
             record.SizeBytes,
             record.LastModifiedUtc,
-            thumbnail,
+            Thumbnail: null,
             record.Id,
-            BuildPreviewSummary(root, record, kind, thumbnail),
+            BuildPreviewSummary(root, record, kind),
             BuildDescriptor(root, record, kind));
     }
 
@@ -1270,12 +1293,6 @@ internal sealed class EditorAssetBrowserDataSource :
             NotSupportedException;
     }
 
-    private bool TryResolveThumbnail(string logicalPath, out AssetThumbnail thumbnail)
-    {
-        thumbnail = default;
-        return _thumbnailProvider is not null && _thumbnailProvider.TryGetThumbnail(logicalPath, out thumbnail);
-    }
-
     private static AssetBrowserDescriptor BuildDescriptor(
         EditorAssetRootKind root,
         EditorAssetRecord record,
@@ -1431,15 +1448,12 @@ internal sealed class EditorAssetBrowserDataSource :
     private string BuildPreviewSummary(
         EditorAssetRootKind root,
         EditorAssetRecord record,
-        AssetBrowserItemKind kind,
-        AssetThumbnail? thumbnail)
+        AssetBrowserItemKind kind)
     {
         return kind switch
         {
             AssetBrowserItemKind.Folder => "文件夹",
-            AssetBrowserItemKind.Texture => thumbnail is { } image
-                ? $"纹理：{image.Width.ToString(CultureInfo.InvariantCulture)}×{image.Height.ToString(CultureInfo.InvariantCulture)}，{FormatSize(record.SizeBytes)}"
-                : $"纹理：{FormatSize(record.SizeBytes)}",
+            AssetBrowserItemKind.Texture => $"纹理：{FormatSize(record.SizeBytes)}",
             AssetBrowserItemKind.Audio => $"音频：{FormatSize(record.SizeBytes)}",
             AssetBrowserItemKind.Material => BuildJsonAssetPreview(root, record, "材质定义"),
             AssetBrowserItemKind.Scene => BuildSceneAssetPreview(root, record, "场景"),

@@ -83,6 +83,55 @@ public enum AssetBrowserSortMode
 }
 
 /// <summary>
+/// Project Window 右侧内容区的 Unity-like 展示模式。
+/// </summary>
+public enum AssetBrowserViewMode
+{
+    /// <summary>
+    /// 使用可缩放图标网格展示当前文件夹内容。
+    /// </summary>
+    Grid,
+
+    /// <summary>
+    /// 使用紧凑列表展示当前文件夹内容与类型信息。
+    /// </summary>
+    List,
+}
+
+/// <summary>
+/// Project Window 的稳定矢量图标语义；UI 可据此绘制图标而不依赖字体 glyph。
+/// </summary>
+public enum AssetBrowserIconKind
+{
+    /// <summary>文件夹。</summary>
+    Folder,
+    /// <summary>材质或反应定义。</summary>
+    Material,
+    /// <summary>纹理；有真实缩略图时由缩略图取代。</summary>
+    Texture,
+    /// <summary>音频。</summary>
+    Audio,
+    /// <summary>场景。</summary>
+    Scene,
+    /// <summary>Prefab。</summary>
+    Prefab,
+    /// <summary>C# 脚本。</summary>
+    Script,
+    /// <summary>Web-first UI Screen。</summary>
+    UiScreen,
+    /// <summary>JSON 配置。</summary>
+    Json,
+    /// <summary>字体。</summary>
+    Font,
+    /// <summary>文本文档。</summary>
+    Text,
+    /// <summary>Editor 或工程配置文件。</summary>
+    Configuration,
+    /// <summary>未知文件。</summary>
+    Other,
+}
+
+/// <summary>
 /// Project Window 资产的上下文 badge。
 /// </summary>
 [Flags]
@@ -135,7 +184,7 @@ public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int 
 /// <param name="Kind">资产类型。</param>
 /// <param name="SizeBytes">文件大小。</param>
 /// <param name="LastModifiedUtc">最后修改 UTC 时间。</param>
-/// <param name="Thumbnail">可用缩略图；没有时为 null。</param>
+/// <param name="Thumbnail">由快照拥有且生命周期稳定的缩略图；生产数据源通常为 null，并通过 <see cref="IAssetBrowserThumbnailDataSource"/> 懒加载。</param>
 /// <param name="AssetId">工程级 stable asset id；旧文件系统数据源可为空。</param>
 /// <param name="PreviewSummary">Project Window 可展示的只读资产预览摘要。</param>
 /// <param name="Descriptor">面向用户的类型、用途与静态 badge。</param>
@@ -153,6 +202,11 @@ public readonly record struct AssetBrowserItem(
     /// UI 显示名。
     /// </summary>
     public string DisplayName => System.IO.Path.GetFileName(Path);
+
+    /// <summary>
+    /// 返回当前资产应使用的稳定矢量图标语义。
+    /// </summary>
+    public AssetBrowserIconKind IconKind => AssetBrowserPresentation.ResolveIconKind(this);
 }
 
 /// <summary>
@@ -167,7 +221,61 @@ public readonly record struct AssetBrowserFolderItem(
     /// <summary>
     /// UI 显示名。
     /// </summary>
-    public string DisplayName => string.IsNullOrWhiteSpace(Path) ? "content/" : Path + "/";
+    public string DisplayName
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Path))
+            {
+                return "Project";
+            }
+
+            string normalized = Path.TrimEnd('/').Replace('\\', '/');
+            int separator = normalized.LastIndexOf('/');
+            return separator < 0 ? normalized : normalized[(separator + 1)..];
+        }
+    }
+}
+
+/// <summary>
+/// Project Window 与具体 ImGui 绘制解耦的展示语义解析器。
+/// </summary>
+public static class AssetBrowserPresentation
+{
+    /// <summary>
+    /// 根据资产类型与扩展名解析稳定图标语义。
+    /// </summary>
+    /// <param name="item">资产项。</param>
+    /// <returns>应绘制的图标类型。</returns>
+    public static AssetBrowserIconKind ResolveIconKind(in AssetBrowserItem item)
+    {
+        if (item.Kind != AssetBrowserItemKind.Other)
+        {
+            return item.Kind switch
+            {
+                AssetBrowserItemKind.Folder => AssetBrowserIconKind.Folder,
+                AssetBrowserItemKind.Material => AssetBrowserIconKind.Material,
+                AssetBrowserItemKind.Texture => AssetBrowserIconKind.Texture,
+                AssetBrowserItemKind.Audio => AssetBrowserIconKind.Audio,
+                AssetBrowserItemKind.Scene => AssetBrowserIconKind.Scene,
+                AssetBrowserItemKind.Prefab => AssetBrowserIconKind.Prefab,
+                AssetBrowserItemKind.Script => AssetBrowserIconKind.Script,
+                AssetBrowserItemKind.UiScreen => AssetBrowserIconKind.UiScreen,
+                AssetBrowserItemKind.Json => AssetBrowserIconKind.Json,
+                AssetBrowserItemKind.Other => AssetBrowserIconKind.Other,
+                _ => throw new ArgumentOutOfRangeException(nameof(item), item.Kind, "未知 Project Window 资产类型。"),
+            };
+        }
+
+        string extension = System.IO.Path.GetExtension(item.Path).ToLowerInvariant();
+        return extension switch
+        {
+            ".ttf" or ".otf" or ".woff" or ".woff2" => AssetBrowserIconKind.Font,
+            ".txt" or ".md" => AssetBrowserIconKind.Text,
+            ".ini" or ".editorconfig" or ".config" or ".props" or ".targets" => AssetBrowserIconKind.Configuration,
+            _ => AssetBrowserIconKind.Other,
+        };
+    }
 }
 
 /// <summary>
@@ -444,6 +552,31 @@ public interface IAssetBrowserContextDataSource
     /// <param name="assetPath">资产 rooted logical path。</param>
     /// <returns>当前上下文 badge。</returns>
     AssetBrowserBadge GetContextBadges(string assetPath);
+}
+
+/// <summary>
+/// 为 Project Window 可见项提供带生命周期的纹理缩略图。
+/// </summary>
+/// <remarks>
+/// 资产快照不得长期保存可能被 LRU 淘汰的原始 GL handle。面板仅为本帧实际可见项申请 lease，
+/// 并在离开可见区域后释放；实现方在 lease 释放前必须保证句柄持续有效。
+/// </remarks>
+public interface IAssetBrowserThumbnailDataSource
+{
+    /// <summary>
+    /// 为指定资产申请一个缩略图 lease。
+    /// </summary>
+    /// <param name="assetPath">数据源使用的资产 logical path。</param>
+    /// <param name="thumbnail">lease 期间有效的缩略图。</param>
+    /// <returns>缩略图可用时返回 true。</returns>
+    bool TryAcquireThumbnail(string assetPath, out AssetThumbnail thumbnail);
+
+    /// <summary>
+    /// 释放先前申请的缩略图 lease。
+    /// </summary>
+    /// <param name="assetPath">申请时使用的资产 logical path。</param>
+    /// <param name="textureHandle">申请返回的 GL texture handle。</param>
+    void ReleaseThumbnail(string assetPath, uint textureHandle);
 }
 
 /// <summary>

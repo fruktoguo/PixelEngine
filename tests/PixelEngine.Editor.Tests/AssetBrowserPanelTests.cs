@@ -9,6 +9,156 @@ namespace PixelEngine.Editor.Tests;
 public sealed class AssetBrowserPanelTests
 {
     /// <summary>
+    /// 验证 Unity-like 文件夹树只展示当前段名称，而 rooted logical path 仍保留用于导航。
+    /// </summary>
+    [Fact]
+    public void FolderPresentationUsesBasenameWithoutDiscardingRootedPath()
+    {
+        AssetBrowserFolderItem root = new("Content", 4);
+        AssetBrowserFolderItem nested = new("Content/ui/screens", 2);
+
+        Assert.Equal("Content", root.DisplayName);
+        Assert.Equal("screens", nested.DisplayName);
+        Assert.Equal("Content/ui/screens", nested.Path);
+    }
+
+    /// <summary>
+    /// 验证每种资产都能解析到确定的矢量图标，Other 会按常见扩展名进一步细分。
+    /// </summary>
+    [Fact]
+    public void AssetPresentationResolvesStableIconsForKnownAndAuxiliaryFiles()
+    {
+        Assert.Equal(AssetBrowserIconKind.Texture, Item("Content/a.png", AssetBrowserItemKind.Texture).IconKind);
+        Assert.Equal(AssetBrowserIconKind.Script, Item("ScriptSource/A.cs", AssetBrowserItemKind.Script).IconKind);
+        Assert.Equal(AssetBrowserIconKind.Font, Item("Content/ui/a.ttf", AssetBrowserItemKind.Other).IconKind);
+        Assert.Equal(AssetBrowserIconKind.Text, Item("Content/readme.md", AssetBrowserItemKind.Other).IconKind);
+        Assert.Equal(AssetBrowserIconKind.Configuration, Item("Content/imgui.ini", AssetBrowserItemKind.Other).IconKind);
+        Assert.Equal(AssetBrowserIconKind.Other, Item("Content/data.bin", AssetBrowserItemKind.Other).IconKind);
+        return;
+
+        static AssetBrowserItem Item(string path, AssetBrowserItemKind kind)
+        {
+            return new AssetBrowserItem(path, kind, 0, DateTimeOffset.UnixEpoch, null);
+        }
+    }
+
+    /// <summary>
+    /// 验证 Project Window 默认使用网格，并对用户缩放输入作稳定收敛。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserViewModeAndThumbnailSizeAreExplicitAndBounded()
+    {
+        AssetBrowserPanel panel = new(new RecordingAssetSource([]));
+
+        Assert.Equal(AssetBrowserViewMode.Grid, panel.ViewMode);
+        panel.SetViewMode(AssetBrowserViewMode.List);
+        Assert.Equal(AssetBrowserViewMode.List, panel.ViewMode);
+
+        panel.SetThumbnailSize(1f);
+        Assert.Equal(AssetBrowserPanel.MinimumThumbnailSize, panel.ThumbnailSize);
+        panel.SetThumbnailSize(1000f);
+        Assert.Equal(AssetBrowserPanel.MaximumThumbnailSize, panel.ThumbnailSize);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => panel.SetThumbnailSize(float.NaN));
+        Assert.Equal(new System.Numerics.Vector2(0f, 1f), AssetBrowserPanel.ThumbnailUv0);
+        Assert.Equal(new System.Numerics.Vector2(1f, 0f), AssetBrowserPanel.ThumbnailUv1);
+    }
+
+    /// <summary>
+    /// 验证生产缩略图只为通过裁剪的纹理申请 lease，同一文件签名跨帧复用而不重复申请。
+    /// </summary>
+    [Fact]
+    public void ThumbnailLeaseCacheAcquiresOnlyVisibleTexturesAndReusesStableLease()
+    {
+        RecordingThumbnailLeaseSource source = new();
+        AssetBrowserThumbnailLeaseCache cache = new(source);
+        AssetBrowserItem visible = Texture("Content/textures/visible.png", 10, DateTimeOffset.UnixEpoch);
+        AssetBrowserItem clipped = Texture("Content/textures/clipped.png", 20, DateTimeOffset.UnixEpoch);
+        AssetBrowserItem script = new(
+            "ScriptSource/Player.cs",
+            AssetBrowserItemKind.Script,
+            30,
+            DateTimeOffset.UnixEpoch,
+            null);
+
+        cache.BeginFrame();
+        AssetThumbnail? acquired = cache.Resolve(in visible, visible: true);
+        Assert.Null(cache.Resolve(in clipped, visible: false));
+        Assert.Null(cache.Resolve(in script, visible: true));
+        cache.EndFrame();
+
+        cache.BeginFrame();
+        AssetThumbnail? reused = cache.Resolve(in visible, visible: true);
+        cache.EndFrame();
+
+        _ = Assert.NotNull(acquired);
+        Assert.Equal(acquired, reused);
+        Assert.Equal([visible.Path], source.AcquiredPaths);
+        Assert.Empty(source.Released);
+        Assert.Equal(1, cache.Count);
+    }
+
+    /// <summary>
+    /// 验证缩略图离开可见区域后在下一帧末尾释放，避免隐藏目录持续占用 GPU 缓存。
+    /// </summary>
+    [Fact]
+    public void ThumbnailLeaseCacheReleasesItemsThatLeaveTheVisibleFrame()
+    {
+        RecordingThumbnailLeaseSource source = new();
+        AssetBrowserThumbnailLeaseCache cache = new(source);
+        AssetBrowserItem first = Texture("Content/textures/first.png", 10, DateTimeOffset.UnixEpoch);
+        AssetBrowserItem second = Texture("Content/textures/second.png", 20, DateTimeOffset.UnixEpoch);
+
+        cache.BeginFrame();
+        AssetThumbnail firstThumbnail = Assert.IsType<AssetThumbnail>(cache.Resolve(in first, visible: true));
+        cache.EndFrame();
+
+        cache.BeginFrame();
+        AssetThumbnail secondThumbnail = Assert.IsType<AssetThumbnail>(cache.Resolve(in second, visible: true));
+        cache.EndFrame();
+
+        Assert.Equal([first.Path, second.Path], source.AcquiredPaths);
+        Assert.Equal([(first.Path, firstThumbnail.TextureHandle)], source.Released);
+        Assert.Equal(1, cache.Count);
+
+        cache.ReleaseAll();
+
+        Assert.Equal(
+            [(first.Path, firstThumbnail.TextureHandle), (second.Path, secondThumbnail.TextureHandle)],
+            source.Released);
+        Assert.Equal(0, cache.Count);
+    }
+
+    /// <summary>
+    /// 验证同路径文件签名变化会先释放旧 lease、再申请新纹理，不继续绘制失效内容。
+    /// </summary>
+    [Fact]
+    public void ThumbnailLeaseCacheReacquiresWhenAssetSignatureChanges()
+    {
+        RecordingThumbnailLeaseSource source = new();
+        AssetBrowserThumbnailLeaseCache cache = new(source);
+        AssetBrowserItem original = Texture("Content/textures/sand.png", 10, DateTimeOffset.UnixEpoch);
+        AssetBrowserItem changed = Texture("Content/textures/sand.png", 11, DateTimeOffset.UnixEpoch.AddSeconds(1));
+
+        cache.BeginFrame();
+        AssetThumbnail originalThumbnail = Assert.IsType<AssetThumbnail>(cache.Resolve(in original, visible: true));
+        cache.EndFrame();
+
+        cache.BeginFrame();
+        AssetThumbnail changedThumbnail = Assert.IsType<AssetThumbnail>(cache.Resolve(in changed, visible: true));
+        cache.EndFrame();
+
+        Assert.NotEqual(originalThumbnail.TextureHandle, changedThumbnail.TextureHandle);
+        Assert.Equal([original.Path, changed.Path], source.AcquiredPaths);
+        Assert.Equal([(original.Path, originalThumbnail.TextureHandle)], source.Released);
+        Assert.Equal(1, cache.Count);
+    }
+
+    private static AssetBrowserItem Texture(string path, long sizeBytes, DateTimeOffset modifiedUtc)
+    {
+        return new AssetBrowserItem(path, AssetBrowserItemKind.Texture, sizeBytes, modifiedUtc, null);
+    }
+
+    /// <summary>
     /// 验证文件系统数据源会分类 content 资产并接入缩略图提供器。
     /// </summary>
     [Fact]
@@ -1412,6 +1562,27 @@ public sealed class AssetBrowserPanelTests
 
             thumbnail = default;
             return false;
+        }
+    }
+
+    private sealed class RecordingThumbnailLeaseSource : IAssetBrowserThumbnailDataSource
+    {
+        private uint _nextHandle = 100;
+
+        public List<string> AcquiredPaths { get; } = [];
+
+        public List<(string Path, uint TextureHandle)> Released { get; } = [];
+
+        public bool TryAcquireThumbnail(string assetPath, out AssetThumbnail thumbnail)
+        {
+            AcquiredPaths.Add(assetPath);
+            thumbnail = new AssetThumbnail(_nextHandle++, 16, 16);
+            return true;
+        }
+
+        public void ReleaseThumbnail(string assetPath, uint textureHandle)
+        {
+            Released.Add((assetPath, textureHandle));
         }
     }
 

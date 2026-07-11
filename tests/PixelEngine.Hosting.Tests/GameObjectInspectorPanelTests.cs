@@ -185,6 +185,58 @@ public sealed class GameObjectInspectorPanelTests
         }
     }
 
+    /// <summary>
+    /// 验证从 A 的连续 Transform 编辑直接切换到 B 时，会显式收口一条 Undo，
+    /// 不依赖已经不再绘制的 A 控件触发 IsItemDeactivatedAfterEdit。
+    /// </summary>
+    [Fact]
+    public void InspectorSelectionChangeCommitsPendingTransformAsOneUndo()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("inspector-transform-transaction");
+        EditorGameObject first = scene.Create("A");
+        EditorGameObject second = scene.Create("B");
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+        EditorSceneTransform changed = first.Transform.Clone();
+        changed.X = 42f;
+
+        Assert.True(panel.BeginTransformEdit(first.StableId));
+        Assert.True(panel.ApplyTransformEdit(first.StableId, changed));
+        panel.PrepareFrame(second.StableId);
+
+        Assert.True(undo.CanUndo);
+        Assert.Equal(42f, scene.Get(first.StableId).Transform.X);
+        Assert.True(undo.Undo(scene));
+        Assert.Equal(0f, scene.Get(first.StableId).Transform.X);
+        Assert.False(undo.CanUndo);
+    }
+
+    /// <summary>
+    /// 验证 ReplaceWith 后复用相同 StableId 的新对象不会继承旧 Inspector transaction baseline。
+    /// </summary>
+    [Fact]
+    public void InspectorDropsPendingTransformWhenSceneReplacesTargetIdentity()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("old-scene");
+        EditorGameObject oldObject = scene.Create("Old");
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+        EditorSceneTransform changed = oldObject.Transform.Clone();
+        changed.X = 15f;
+        Assert.True(panel.ApplyTransformEdit(oldObject.StableId, changed));
+
+        EditorSceneModel replacement = EditorSceneModel.Empty("new-scene");
+        EditorGameObject newObject = replacement.Create("New");
+        Assert.Equal(oldObject.StableId, newObject.StableId);
+        newObject.Transform.X = 99f;
+        scene.ReplaceWith(replacement, markDirty: false);
+
+        panel.PrepareFrame(newObject.StableId);
+
+        Assert.False(undo.CanUndo);
+        Assert.Equal(99f, scene.Get(newObject.StableId).Transform.X);
+    }
+
 
     private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) : IAssetBrowserDataSource, IAssetBrowserFolderDataSource
     {

@@ -60,16 +60,23 @@ internal static class SceneAuthoringPreviewBuilder
         float width = DefaultWidth;
         float height = DefaultHeight;
         bool hasProceduralWorld = false;
+        bool hasPlayerSpawnObject = false;
+        bool hasGoalObject = false;
+        Vector2? legacyPlayerSpawn = null;
+        Vector2? legacyGoal = null;
 
         foreach (EditorGameObject gameObject in scene.EnumerateDepthFirst())
         {
             EditorSceneTransform transform = scene.ComputeWorldTransform(gameObject.StableId);
             Vector2 position = new(transform.X, transform.Y);
+            SceneAuthoringMarkerKind markerKind = ResolveMarkerKind(gameObject);
             markers.Add(new SceneAuthoringMarker(
                 gameObject.StableId,
                 gameObject.Name,
                 position,
-                SceneAuthoringMarkerKind.GameObject));
+                markerKind));
+            hasPlayerSpawnObject |= markerKind == SceneAuthoringMarkerKind.PlayerSpawn;
+            hasGoalObject |= markerKind == SceneAuthoringMarkerKind.Goal;
             minX = MathF.Min(minX, position.X);
             minY = MathF.Min(minY, position.Y);
             maxX = MathF.Max(maxX, position.X);
@@ -90,10 +97,30 @@ internal static class SceneAuthoringPreviewBuilder
                 float spawnY = ReadFiniteFloat(component, "PlayerSpawnY", height * 0.7f, -height, height * 2f);
                 float goalX = ReadFiniteFloat(component, "GoalX", width * 0.9f, -width, width * 2f);
                 float goalY = ReadFiniteFloat(component, "GoalY", height * 0.6f, -height, height * 2f);
-                markers.Add(new SceneAuthoringMarker(null, EditorLocalization.Get("scene.playerSpawn", "Player Spawn"), new Vector2(spawnX, spawnY), SceneAuthoringMarkerKind.PlayerSpawn));
-                markers.Add(new SceneAuthoringMarker(null, EditorLocalization.Get("scene.goal", "Goal"), new Vector2(goalX, goalY), SceneAuthoringMarkerKind.Goal));
+                legacyPlayerSpawn = new Vector2(spawnX, spawnY);
+                legacyGoal = new Vector2(goalX, goalY);
                 hasProceduralWorld = true;
             }
+        }
+
+        // v1/probe 场景没有真实 anchor GameObject 时仍显示只读兼容 marker；
+        // v2 场景的 PlayerSpawnPoint/GoalPoint 拥有 StableId，会走标准选择、Inspector、gizmo 与保存链。
+        if (!hasPlayerSpawnObject && legacyPlayerSpawn.HasValue)
+        {
+            markers.Add(new SceneAuthoringMarker(
+                null,
+                EditorLocalization.Get("scene.playerSpawn", "Player Spawn"),
+                legacyPlayerSpawn.Value,
+                SceneAuthoringMarkerKind.PlayerSpawn));
+        }
+
+        if (!hasGoalObject && legacyGoal.HasValue)
+        {
+            markers.Add(new SceneAuthoringMarker(
+                null,
+                EditorLocalization.Get("scene.goal", "Goal"),
+                legacyGoal.Value,
+                SceneAuthoringMarkerKind.Goal));
         }
 
         bool explicitEmpty = scene.Count == 0;
@@ -145,5 +172,26 @@ internal static class SceneAuthoringPreviewBuilder
     {
         return sceneName.EndsWith("-probe", StringComparison.OrdinalIgnoreCase) ||
             sceneName.Contains("probe", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static SceneAuthoringMarkerKind ResolveMarkerKind(EditorGameObject gameObject)
+    {
+        for (int i = 0; i < gameObject.Components.Count; i++)
+        {
+            string typeName = gameObject.Components[i].TypeName;
+            if (typeName.EndsWith(".PlayerSpawnPoint", StringComparison.Ordinal) ||
+                string.Equals(typeName, "PlayerSpawnPoint", StringComparison.Ordinal))
+            {
+                return SceneAuthoringMarkerKind.PlayerSpawn;
+            }
+
+            if (typeName.EndsWith(".GoalPoint", StringComparison.Ordinal) ||
+                string.Equals(typeName, "GoalPoint", StringComparison.Ordinal))
+            {
+                return SceneAuthoringMarkerKind.Goal;
+            }
+        }
+
+        return SceneAuthoringMarkerKind.GameObject;
     }
 }

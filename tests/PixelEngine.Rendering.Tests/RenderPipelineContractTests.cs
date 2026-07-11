@@ -121,7 +121,10 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("_crt.Render", source, StringComparison.Ordinal);
         Assert.Contains("BeforePresentUi?.Invoke", source, StringComparison.Ordinal);
         Assert.Contains("RegisterUiLayer", source, StringComparison.Ordinal);
-        Assert.Contains("PresentUiLayers(new UiPresentContext", source, StringComparison.Ordinal);
+        Assert.Contains("PresentUiLayers(", source, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.RuntimeViewport", source, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.WindowFramebuffer", source, StringComparison.Ordinal);
+        Assert.Contains("_uiLayers[i].Surface != surface", source, StringComparison.Ordinal);
         Assert.Contains("CompareUiLayers", source, StringComparison.Ordinal);
         Assert.Contains("PrepareUiState", source, StringComparison.Ordinal);
         Assert.Contains("UiGlStateSnapshot.Capture", source, StringComparison.Ordinal);
@@ -142,13 +145,17 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("Settings.PreferComputeLighting = false", source, StringComparison.Ordinal);
         Assert.Contains("CreateComputeResourcesSnapshot", source, StringComparison.Ordinal);
         Assert.Contains("CurrentViewportTexture = new RenderViewportTexture", source, StringComparison.Ordinal);
+        Assert.Contains("CurrentViewportOverlayCount = overlays.Length", source, StringComparison.Ordinal);
         Assert.Contains("ReadOnlySpan<LightSource> pointLights", source, StringComparison.Ordinal);
         Assert.Contains("UploadVisibility(fogOfWar, pointLights)", source, StringComparison.Ordinal);
         Assert.Contains("ApplyPointLights(mask, pointLights)", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));
         Assert.True(source.IndexOf("_composite.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
+        Assert.True(source.IndexOf("_overlay.Render(overlays, current)", StringComparison.Ordinal) < source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal));
         Assert.True(source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal) < source.IndexOf("_present.Render", StringComparison.Ordinal));
-        Assert.True(source.IndexOf("PresentUiLayers(new UiPresentContext", StringComparison.Ordinal) < source.IndexOf("BeforePresentUi?.Invoke", StringComparison.Ordinal));
+        Assert.True(source.IndexOf("UiPresentSurface.RuntimeViewport", StringComparison.Ordinal) < source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal));
+        Assert.Contains("UiPresentSurface.WindowFramebuffer);", source, StringComparison.Ordinal);
+        Assert.True(source.IndexOf("_present.Render", StringComparison.Ordinal) < source.IndexOf("BeforePresentUi?.Invoke", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -186,6 +193,11 @@ public sealed class RenderPipelineContractTests
 
         Assert.Contains("public readonly struct UiPresentContext", context, StringComparison.Ordinal);
         Assert.Contains("public UiPresentTarget Target", context, StringComparison.Ordinal);
+        Assert.DoesNotContain("public UiPresentSurface Surface", context, StringComparison.Ordinal);
+        Assert.Null(typeof(UiPresentContext).GetProperty("Surface"));
+        Assert.DoesNotContain(
+            typeof(UiPresentContext).GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic),
+            static field => field.FieldType == typeof(UiPresentSurface));
         Assert.Contains("public UiScissorRect Clip", context, StringComparison.Ordinal);
         Assert.Contains("public UiPresentContext WithTarget(UiPresentTarget target)", context, StringComparison.Ordinal);
         Assert.Contains("WithTarget(target, target.Scissor)", context, StringComparison.Ordinal);
@@ -210,8 +222,10 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("public const int Game = 100", orders, StringComparison.Ordinal);
         Assert.Contains("public const int Editor = 200", orders, StringComparison.Ordinal);
         Assert.Contains("while (index > 0 && CompareUiLayers(entry, _uiLayers[index - 1]) < 0)", pipeline, StringComparison.Ordinal);
-        Assert.Contains("UiLayerEntry(int Order, int Sequence, IUiPresentLayer Layer)", pipeline, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface Surface,", pipeline, StringComparison.Ordinal);
+        Assert.Contains("int Order,", pipeline, StringComparison.Ordinal);
         Assert.Contains("new UiPrimitiveRenderer(_gl, profile)", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("_gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);", primitive, StringComparison.Ordinal);
         Assert.Contains("DrawElements", primitive, StringComparison.Ordinal);
         Assert.Contains("BufferSubData(BufferTargetARB.ArrayBuffer", primitive, StringComparison.Ordinal);
         Assert.Contains("BufferSubData(BufferTargetARB.ElementArrayBuffer", primitive, StringComparison.Ordinal);
@@ -231,19 +245,52 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("UnpackSkipRows", state, StringComparison.Ordinal);
         Assert.Contains("BindBuffer(BufferTargetARB.PixelUnpackBuffer", state, StringComparison.Ordinal);
         Assert.Contains("PixelStore(PixelStoreParameter.UnpackAlignment", state, StringComparison.Ordinal);
-        Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("RegisterUiLayer(surface, UiPresentLayerOrders.Game, this)", guiBridge, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.WindowFramebuffer", guiBridge, StringComparison.Ordinal);
         Assert.Contains("private readonly Action<IGuiContext>? _scriptGui;", guiBridge, StringComparison.Ordinal);
         Assert.Contains("_scriptGui = scriptRuntime is null ? null : scriptRuntime.DrawGui;", guiBridge, StringComparison.Ordinal);
         Assert.DoesNotContain("_scriptRuntime is null ? null : _scriptRuntime.DrawGui", guiBridge, StringComparison.Ordinal);
-        Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Game, this)", uiCompositor, StringComparison.Ordinal);
+        Assert.Contains("RegisterUiLayer(surface, UiPresentLayerOrders.Game, this)", uiCompositor, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.WindowFramebuffer", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("IUiPresentTargetProvider? targetProvider", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("context.WithTarget(target)", uiCompositor, StringComparison.Ordinal);
-        Assert.Contains("RegisterUiLayer(UiPresentLayerOrders.Editor, this)", editorBridge, StringComparison.Ordinal);
+        Assert.Contains("UiPresentSurface.WindowFramebuffer", editorBridge, StringComparison.Ordinal);
+        Assert.Contains("UiPresentLayerOrders.Editor", editorBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", guiBridge, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", uiCompositor, StringComparison.Ordinal);
         Assert.Contains("IUiPresentLayer, IDisposable", editorBridge, StringComparison.Ordinal);
         Assert.Contains("ApplyUiPresentClip(context)", pipeline, StringComparison.Ordinal);
         Assert.Contains("_gl.Scissor(", pipeline, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证旧两参数 RegisterUiLayer CLR 签名保留，并与显式 surface overload 并存。
+    /// </summary>
+    [Fact]
+    public void RegisterUiLayerRetainsLegacySignatureAndAddsExplicitSurfaceOverload()
+    {
+        System.Reflection.MethodInfo[] methods =
+        [
+            .. typeof(RenderPipeline).GetMethods()
+                .Where(static method => method.Name == nameof(RenderPipeline.RegisterUiLayer)),
+        ];
+
+        System.Reflection.MethodInfo legacy = Assert.Single(methods, static method =>
+        {
+            System.Reflection.ParameterInfo[] parameters = method.GetParameters();
+            return parameters.Length == 2 &&
+                parameters[0].ParameterType == typeof(int) &&
+                parameters[1].ParameterType == typeof(IUiPresentLayer);
+        });
+        Assert.Null(legacy.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false).SingleOrDefault());
+        _ = Assert.Single(methods, static method =>
+        {
+            System.Reflection.ParameterInfo[] parameters = method.GetParameters();
+            return parameters.Length == 3 &&
+                parameters[0].ParameterType == typeof(UiPresentSurface) &&
+                parameters[1].ParameterType == typeof(int) &&
+                parameters[2].ParameterType == typeof(IUiPresentLayer);
+        });
     }
 
     private static string ProjectPath(params string[] parts)

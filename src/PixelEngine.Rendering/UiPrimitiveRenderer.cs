@@ -110,7 +110,8 @@ internal sealed unsafe class UiPrimitiveRenderer : IDisposable
         }
 
         indices.CopyTo(_indices);
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        // framebuffer 所有权属于 RenderPipeline：Game 层写 runtime FBO，Editor 层写默认 framebuffer。
+        // 这里若强制绑定 0，会让 Game View 采样的 CurrentViewportTexture 丢失所有 primitive UI。
         _gl.Viewport(0, 0, (uint)framebufferWidth, (uint)framebufferHeight);
         ApplyScissor(draw.Scissor, framebufferHeight);
         _gl.Disable(EnableCap.DepthTest);

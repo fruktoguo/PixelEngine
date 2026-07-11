@@ -4,7 +4,6 @@ using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
-using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.UI;
@@ -14,7 +13,12 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Hosting 扩展：将 Editor Shell 接入 Engine 的输入、UI present 与 Game View 契约。
 /// </summary>
-internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorInputCaptureSource, IGameUiInputSourceFactory, IUiPresentTargetProvider
+internal sealed class EditorShellHostExtension :
+    IEditorHostExtension,
+    IEditorInputCaptureSource,
+    IGameUiInputSourceFactory,
+    IGameplayViewportInputMapper,
+    IUiPresentTargetProvider
 {
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
@@ -28,7 +32,12 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
     private BuildSettingsPanel? _buildSettingsPanel;
     private SceneViewPanel? _sceneViewPanel;
     private GameViewPanel? _gameViewPanel;
+    private GameObjectInspectorPanel? _gameObjectInspectorPanel;
+    private EditorConsolePanel? _consolePanel;
+    private RuntimeSceneHierarchyDataSource? _runtimeHierarchy;
     private EditorAssetBrowserDataSource? _assetBrowserDataSource;
+    private EditorTextureThumbnailProvider? _textureThumbnailProvider;
+    private EditorMode _lastPreparedMode = EditorMode.Edit;
     private bool _panelsRegistered;
 
     public EditorShellHostExtension(EditorProject project, EditorShellApp app)
@@ -46,8 +55,6 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _gameUiPresentTargetProvider = new GameViewUiPresentTargetProvider(
             CapturePlayMode,
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
-            () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
-            () => _gameViewPanel?.LastFramebufferScale ?? System.Numerics.Vector2.One,
             () => _gameViewPanel is { Visible: true });
     }
 
@@ -69,6 +76,19 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
 
     public void PrepareFrame()
     {
+        EditorMode mode = CapturePlayMode();
+        if (_lastPreparedMode is EditorMode.Play or EditorMode.Paused && mode == EditorMode.Edit)
+        {
+            // Runtime Inspector 即使被用户关闭，也必须在退出 Play 时结束临时编辑事务，
+            // 不能把恢复/清理职责绑定到面板是否继续 Draw。
+            _runtimeHierarchy?.RestoreTemporaryEdits();
+        }
+
+        _lastPreparedMode = mode;
+        _gameObjectInspectorPanel?.PrepareFrame(_editor.Selection.GameObjectStableId);
+        // Scene View 关闭后 EditorApp 不再 Draw 面板；gizmo 事务仍须响应 selection/mode/scene 生命周期。
+        _sceneViewPanel?.PrepareFrame(_editor.Selection.GameObjectStableId, mode);
+        _consolePanel?.PrepareFrame();
         _editor.SetUiScale(_app.UiScale);
         _editor.SetLayoutPersistence(_app.Preferences.Current.SaveLayoutOnExit);
     }
@@ -179,6 +199,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(pipeline);
         engine.Context.RegisterService<IEditorInputCaptureSource>(this);
+        _textureThumbnailProvider ??= new EditorTextureThumbnailProvider(_project.ContentRootPath, window);
         // 注册层级/Inspector/资产浏览器/构建设置等 ImGui 面板
         RegisterPanels(engine, pipeline);
         EditorWindowInputConnector input = new(window, _editor.Input);
@@ -187,9 +208,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             _editor,
             engine.Context.Counters,
             engine.Context.Profiler,
-            () => BuildRuntimeDiagnostics(engine),
-            engine.Context.TryGetService(out IScriptRuntime scriptRuntime) ? scriptRuntime : null);
-        return new CompositeDisposable(input, Bridge, _assetBrowserDataSource, _editor);
+            () => BuildRuntimeDiagnostics(engine));
+        return new CompositeDisposable(input, Bridge, _assetBrowserDataSource, _textureThumbnailProvider, _editor);
     }
 
     public bool TryGetInputCapture(out EditorHostInputCapture capture)
@@ -209,7 +229,53 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         capture = EditorGameViewContract.ResolveEditorInputCapture(
             contract,
             editorCapture,
-            viewportHasInputFocus: _gameViewPanel is { Visible: true, InputFocused: true });
+            pointerHasInputFocus: _gameViewPanel is { Visible: true, PointerHovered: true },
+            keyboardHasInputFocus: _gameViewPanel is { Visible: true, KeyboardFocused: true });
+        return true;
+    }
+
+    public bool TryMapPointerToViewport(out float viewportX, out float viewportY)
+    {
+        viewportX = 0f;
+        viewportY = 0f;
+        EditorMode mode = CapturePlayMode();
+        if (mode is not (EditorMode.Play or EditorMode.Paused) ||
+            _gameViewPanel is not { Visible: true, PointerHovered: true } gameView ||
+            !gameView.LastViewportSnapshot.TryMapPanelToViewport(gameView.LastPointerPanelPoint, out System.Numerics.Vector2 viewportPoint))
+        {
+            return false;
+        }
+
+        viewportX = viewportPoint.X;
+        viewportY = viewportPoint.Y;
+        return true;
+    }
+
+    public bool AllowsRuntimeGuiKeyboardInput =>
+        CapturePlayMode() is EditorMode.Play or EditorMode.Paused &&
+        _gameViewPanel is { Visible: true, KeyboardFocused: true };
+
+    public bool TryMapFramebufferPointerToViewport(
+        float framebufferX,
+        float framebufferY,
+        out float viewportX,
+        out float viewportY)
+    {
+        viewportX = 0f;
+        viewportY = 0f;
+        if (CapturePlayMode() is not (EditorMode.Play or EditorMode.Paused) ||
+            _gameViewPanel is not { Visible: true } gameView ||
+            !gameView.LastViewportSnapshot.TryMapFramebufferToViewport(
+                new System.Numerics.Vector2(framebufferX, framebufferY),
+                gameView.LastPanelOriginFramebuffer,
+                gameView.LastFramebufferScale,
+                out System.Numerics.Vector2 viewportPoint))
+        {
+            return false;
+        }
+
+        viewportX = viewportPoint.X;
+        viewportY = viewportPoint.Y;
         return true;
     }
 
@@ -222,9 +288,10 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             CapturePlayMode,
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
             () => _gameViewPanel?.LastPointerPanelPoint ?? default,
-            () => _gameViewPanel is { Visible: true, InputFocused: true },
+            () => _gameViewPanel is { Visible: true, PointerHovered: true },
             () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
-            () => _gameViewPanel?.LastFramebufferScale ?? System.Numerics.Vector2.One);
+            () => _gameViewPanel?.LastFramebufferScale ?? System.Numerics.Vector2.One,
+            () => _gameViewPanel is { Visible: true, KeyboardFocused: true });
     }
 
     public bool TryGetPresentTarget(out UiPresentTarget target)
@@ -253,6 +320,7 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         _editor.AddPanel(_app.PreferencesWindow);
         _assetBrowserDataSource = new EditorAssetBrowserDataSource(
             _project,
+            _textureThumbnailProvider,
             activeScene: _sceneModel,
             currentScenePath: () => _app.CurrentSession?.CurrentSceneRelativePath);
         EditorAssetBrowserDataSource assetBrowserDataSource = _assetBrowserDataSource;
@@ -271,21 +339,27 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
             PhysicsSystem? runtimePhysics = engine.Context.TryGetService(out PhysicsSystem registeredPhysics)
                 ? registeredPhysics
                 : null;
-            RuntimeSceneHierarchyDataSource runtimeHierarchy = new(engine.CurrentScene?.ScriptScene, runtimePhysics);
+            RuntimeSceneHierarchyDataSource runtimeHierarchy = RuntimeSceneHierarchyDataSource.CreateDynamic(
+                () => engine.CurrentScene?.ScriptScene,
+                runtimePhysics);
+            _runtimeHierarchy = runtimeHierarchy;
             _editor.AddPanel(new GameObjectHierarchyPanel(
                 _sceneModel,
                 _undoStack,
                 _prefabs,
                 runtimeHierarchy.Capture,
                 CapturePlayMode));
-            _editor.AddPanel(new GameObjectInspectorPanel(
+            _gameObjectInspectorPanel = new GameObjectInspectorPanel(
                 _sceneModel,
                 _undoStack,
                 engine.Context.GetService<ScriptAssemblyRegistry>(),
                 _app.ConsoleStore,
                 assetBrowserDataSource,
                 _app.InstantiatePrefab,
-                _app.OpenScriptAsset));
+                _app.OpenScriptAsset,
+                runtimeSource: runtimeHierarchy,
+                modeProvider: CapturePlayMode);
+            _editor.AddPanel(_gameObjectInspectorPanel);
         }
 
         MaterialBrushPalettePanel? brushPanel = null;
@@ -329,7 +403,8 @@ internal sealed class EditorShellHostExtension : IEditorHostExtension, IEditorIn
         AddHiddenPanel(_projectSettingsPanel);
         AddHiddenPanel(_playerSettingsPanel);
         AddHiddenPanel(_buildSettingsPanel);
-        _editor.AddPanel(new EditorConsolePanel(_app));
+        _consolePanel = new EditorConsolePanel(_app);
+        _editor.AddPanel(_consolePanel);
         AddHiddenPanel(new PerformanceHudPanel());
         AddHiddenPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         AddHiddenPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));

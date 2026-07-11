@@ -9,7 +9,7 @@ public sealed class SerializeFieldAttribute : Attribute
 }
 
 /// <summary>
-/// 标记字段在脚本热重载时应尝试保留状态。
+/// 标记字段或属性在脚本热重载时应尝试保留状态。
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class PersistAttribute : Attribute
@@ -17,7 +17,7 @@ public sealed class PersistAttribute : Attribute
 }
 
 /// <summary>
-/// 标记字段不在 Inspector 中显示。
+/// 标记字段或属性不在 Inspector 中显示。
 /// </summary>
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class HideInInspectorAttribute : Attribute
@@ -25,9 +25,9 @@ public sealed class HideInInspectorAttribute : Attribute
 }
 
 /// <summary>
-/// 标记数值字段在 Inspector 中使用范围滑条编辑。
+/// 标记数值字段或属性在 Inspector 中使用范围滑条编辑。
 /// </summary>
-[AttributeUsage(AttributeTargets.Field)]
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class RangeAttribute : Attribute
 {
     /// <summary>
@@ -94,13 +94,13 @@ public enum ScriptAssetKind
 }
 
 /// <summary>
-/// 标记字符串或 <see cref="ScriptAssetReference"/> 字段为 typed asset reference Inspector 字段。
+/// 标记字符串或 <see cref="ScriptAssetReference"/> 成员为 typed asset reference Inspector 成员。
 /// </summary>
-[AttributeUsage(AttributeTargets.Field)]
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property)]
 public sealed class AssetFieldAttribute(ScriptAssetKind assetType) : Attribute
 {
     /// <summary>
-    /// 字段允许绑定的工程资产类别。
+    /// 成员允许绑定的工程资产类别。
     /// </summary>
     public ScriptAssetKind AssetType { get; } = assetType;
 }

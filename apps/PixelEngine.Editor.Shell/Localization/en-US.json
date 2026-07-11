@@ -11,6 +11,9 @@
     "prefs.appearance": "Appearance", "prefs.general": "General", "prefs.externalTools": "External Tools", "prefs.shortcuts": "Shortcuts", "prefs.language": "Language",
     "prefs.uiScale": "UI Scale", "prefs.theme": "Theme", "prefs.saveLayout": "Save layout continuously", "prefs.reopenProject": "Reopen last project on startup", "prefs.restoreScene": "Restore last open scene", "prefs.resetLayout": "Reset to Default Layout",
     "hierarchy.sceneRoot": "Scene Root", "hierarchy.generated": "Generated Markers", "hierarchy.runtime": "Runtime (Play) · {0} entities · {1} bodies", "game.waiting": "Waiting for the Game View texture",
-    "scene.playerSpawn": "Player Spawn", "scene.goal": "Goal", "status.noProject": "No Project", "status.noScene": "No Scene"
+    "scene.playerSpawn": "Player Spawn", "scene.goal": "Goal", "status.noProject": "No Project", "status.noScene": "No Scene",
+    "console.clear": "Clear", "console.collapse": "Collapse", "console.clearOnPlay": "Clear on Play", "console.errorPause": "Error Pause",
+    "console.searchHint": "Search", "console.log": "Log", "console.warning": "Warning", "console.error": "Error", "console.autoScroll": "Auto scroll",
+    "console.empty": "No console messages", "console.visibleRows": "{0} visible rows", "console.copy": "Copy", "console.openSource": "Open Source", "console.selectMessage": "Select a message to inspect its details."
   }
 }

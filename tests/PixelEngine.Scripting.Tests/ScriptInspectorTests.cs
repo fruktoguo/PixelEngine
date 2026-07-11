@@ -22,7 +22,11 @@ public sealed class ScriptInspectorTests
         };
         behaviour.SetPrivateValue(13);
 
-        ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
+        ScriptFieldDescriptor[] fields =
+        [
+            .. ScriptInspector.InspectFields(behaviour)
+                .Where(static member => member.Name is "PublicValue" or "privateValue"),
+        ];
 
         // Assert：验证预期结果
         Assert.Equal(["PublicValue", "privateValue"], [.. fields.Select(field => field.Name).Order(StringComparer.Ordinal)]);
@@ -56,6 +60,103 @@ public sealed class ScriptInspectorTests
         Assert.Equal(21, behaviour.PublicValue);
         Assert.Equal(34, behaviour.GetPrivateValue());
         Assert.Equal(0, behaviour.HiddenValue);
+    }
+
+    /// <summary>
+    /// 验证 Inspector 与场景 SerializedFieldBinder 一致地暴露 public property，
+    /// 可写属性可修改，只读/隐藏属性不会被错误写回。
+    /// </summary>
+    [Fact]
+    public void InspectFieldsAndSetterSupportPublicProperties()
+    {
+        InspectableBehaviour behaviour = new() { PublicProperty = 17 };
+
+        ScriptFieldDescriptor[] members = ScriptInspector.InspectFields(behaviour);
+
+        ScriptFieldDescriptor writable = members.Single(member => member.Name == nameof(InspectableBehaviour.PublicProperty));
+        Assert.Equal(typeof(int), writable.FieldType);
+        Assert.Equal(17, writable.Value);
+        Assert.True(writable.CanWrite);
+        ScriptFieldDescriptor readOnly = members.Single(member => member.Name == nameof(InspectableBehaviour.ReadOnlyProperty));
+        Assert.False(readOnly.CanWrite);
+        Assert.DoesNotContain(members, member => member.Name == nameof(InspectableBehaviour.HiddenProperty));
+
+        Assert.True(ScriptInspector.TrySetFieldValue(behaviour, nameof(InspectableBehaviour.PublicProperty), 23));
+        Assert.False(ScriptInspector.TrySetFieldValue(behaviour, nameof(InspectableBehaviour.ReadOnlyProperty), 99));
+        Assert.False(ScriptInspector.TrySetFieldValue(behaviour, nameof(InspectableBehaviour.HiddenProperty), 99));
+        Assert.Equal(23, behaviour.PublicProperty);
+    }
+
+    /// <summary>
+    /// 验证用户 getter 抛错只降级当前属性，且引擎 Behaviour 基类运行态属性不会污染脚本 Inspector。
+    /// </summary>
+    [Fact]
+    public void InspectFieldsContainsThrowingPropertyGetterWithoutCrashingEditor()
+    {
+        ThrowingPropertyBehaviour behaviour = new();
+
+        ScriptFieldDescriptor[] members = ScriptInspector.InspectFields(behaviour);
+
+        ScriptFieldDescriptor broken = members.Single(member => member.Name == nameof(ThrowingPropertyBehaviour.Broken));
+        Assert.Equal(ScriptFieldKind.Unsupported, broken.Kind);
+        Assert.False(broken.CanWrite);
+        Assert.Contains("getter error", Assert.IsType<string>(broken.Value), StringComparison.Ordinal);
+        Assert.DoesNotContain(members, member => member.Name is nameof(Behaviour.Entity) or nameof(Behaviour.Enabled) or nameof(Behaviour.Faulted) or nameof(Behaviour.LastException));
+        Assert.DoesNotContain(members, member => member.Name == nameof(ThrowingPropertyBehaviour.Span));
+        Assert.False(ScriptInspector.TrySetFieldValue(behaviour, nameof(ThrowingPropertyBehaviour.Rejected), 12));
+    }
+
+    /// <summary>
+    /// 验证十参数描述器构造器继续存在，保护已编译 Editor 扩展的 CLR 调用点。
+    /// </summary>
+    [Fact]
+    public void ScriptFieldDescriptorRetainsLegacyTenParameterConstructor()
+    {
+        ScriptFieldDescriptor descriptor = new(
+            "Legacy",
+            typeof(int),
+            7,
+            true,
+            true,
+            false,
+            ScriptFieldKind.Number,
+            null,
+            null,
+            null);
+
+        System.Reflection.ConstructorInfo constructor = Assert.Single(
+            typeof(ScriptFieldDescriptor).GetConstructors(),
+            constructor => constructor.GetParameters().Length == 10);
+        Assert.Equal(
+            ["Name", "FieldType", "Value", "CanWrite", "IsPublic", "IsSerializedPrivate", "Kind", "RangeMinimum", "RangeMaximum", "AssetKind"],
+            constructor.GetParameters().Select(parameter => parameter.Name));
+        System.Reflection.MethodInfo deconstruct = Assert.Single(
+            typeof(ScriptFieldDescriptor).GetMethods().Where(method => method.Name == nameof(ScriptFieldDescriptor.Deconstruct)),
+            method => method.GetParameters().Length == 10);
+        Assert.Equal(
+            ["Name", "FieldType", "Value", "CanWrite", "IsPublic", "IsSerializedPrivate", "Kind", "RangeMinimum", "RangeMaximum", "AssetKind"],
+            deconstruct.GetParameters().Select(parameter => parameter.Name));
+
+        (string name,
+            Type fieldType,
+            object? value,
+            bool canWrite,
+            bool isPublic,
+            bool isSerializedPrivate,
+            ScriptFieldKind kind,
+            double? rangeMinimum,
+            double? rangeMaximum,
+            ScriptAssetKind? assetKind) = descriptor;
+        Assert.Equal("Legacy", name);
+        Assert.Equal(typeof(int), fieldType);
+        Assert.Equal(7, value);
+        Assert.True(canWrite);
+        Assert.True(isPublic);
+        Assert.False(isSerializedPrivate);
+        Assert.Equal(ScriptFieldKind.Number, kind);
+        Assert.Null(rangeMinimum);
+        Assert.Null(rangeMaximum);
+        Assert.Null(assetKind);
     }
 
     /// <summary>
@@ -118,6 +219,13 @@ public sealed class ScriptInspectorTests
         [HideInInspector]
         public int HiddenValue;
 
+        public int PublicProperty { get; set; }
+
+        public int ReadOnlyProperty => PublicProperty + 1;
+
+        [HideInInspector]
+        public int HiddenProperty { get; set; }
+
         public int GetPrivateValue()
         {
             return privateValue;
@@ -126,6 +234,21 @@ public sealed class ScriptInspectorTests
         public void SetPrivateValue(int value)
         {
             privateValue = value;
+        }
+    }
+
+    private sealed class ThrowingPropertyBehaviour : Behaviour
+    {
+        private static readonly int[] SpanValues = [1, 2, 3];
+
+        public int Broken => throw new InvalidOperationException("not attached");
+
+        public ReadOnlySpan<int> Span => SpanValues;
+
+        public int Rejected
+        {
+            get => 0;
+            set => throw new InvalidOperationException("rejected");
         }
     }
 

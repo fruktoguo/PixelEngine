@@ -37,6 +37,11 @@ internal sealed class SceneViewPanel(
     private string _previewSceneName = string.Empty;
     private string _framedSceneName = string.Empty;
     private SceneAuthoringPreview _preview = SceneAuthoringPreviewBuilder.Build(EditorSceneModel.Empty());
+    private int? _gizmoTransactionStableId;
+    private long _gizmoTransactionSceneGeneration = -1;
+    private EditorSceneTransform? _gizmoBefore;
+    private bool _gizmoChanged;
+    private EditorMode _preparedMode = EditorMode.Edit;
 
     public string Title => EditorDockSpace.ViewportWindowTitle;
 
@@ -45,10 +50,15 @@ internal sealed class SceneViewPanel(
         get;
         set
         {
+            bool closing = field && !value;
             field = value;
             if (!value)
             {
                 InputFocused = false;
+                if (closing)
+                {
+                    _ = CommitGizmoTransform();
+                }
             }
         }
     } = true;
@@ -59,8 +69,36 @@ internal sealed class SceneViewPanel(
 
     public SceneAuthoringCameraSnapshot CameraSnapshot => _camera.Snapshot;
 
+    /// <summary>
+    /// 推进与面板绘制无关的 gizmo 连续编辑生命周期。
+    /// </summary>
+    /// <remarks>
+    /// Scene View 被关闭或切到后台时仍可能发生 selection、mode、对象删除与场景替换，
+    /// 因此事务收尾不能只依赖 ImGuizmo 的 IsUsing 边沿。
+    /// </remarks>
+    internal void PrepareFrame(int? selectedStableId, EditorMode mode)
+    {
+        _preparedMode = mode;
+        if (!_gizmoTransactionStableId.HasValue)
+        {
+            return;
+        }
+
+        if (!IsGizmoTransactionTargetAlive())
+        {
+            ClearGizmoTransaction();
+            return;
+        }
+
+        if (mode != EditorMode.Edit || selectedStableId != _gizmoTransactionStableId)
+        {
+            _ = CommitGizmoTransform();
+        }
+    }
+
     public void Draw(in EditorContext context)
     {
+        PrepareFrame(context.Selection.GameObjectStableId ?? _scene.SelectedStableId, _preparedMode);
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
@@ -114,24 +152,144 @@ internal sealed class SceneViewPanel(
 
     internal bool TryPick(Vector2 panelPoint, out int stableId)
     {
-        stableId = 0;
         Vector2 world = _camera.CanvasToWorld(panelPoint);
+        return TryPickWorld(world, out stableId);
+    }
+
+    internal bool TryPickWorld(Vector2 world, out int stableId)
+    {
+        stableId = 0;
         float pickRadius = MathF.Max(8f, _camera.CellsPerPixel * 12f);
         float bestDistanceSquared = pickRadius * pickRadius;
-        foreach (EditorGameObject gameObject in _scene.EnumerateDepthFirst())
+        SceneAuthoringMarker[] markers = EnsurePreview().Markers;
+        for (int i = 0; i < markers.Length; i++)
         {
-            EditorSceneTransform transform = _scene.ComputeWorldTransform(gameObject.StableId);
-            float dx = transform.X - world.X;
-            float dy = transform.Y - world.Y;
+            SceneAuthoringMarker marker = markers[i];
+            if (!marker.StableId.HasValue)
+            {
+                continue;
+            }
+
+            float dx = marker.Position.X - world.X;
+            float dy = marker.Position.Y - world.Y;
             float distanceSquared = (dx * dx) + (dy * dy);
             if (distanceSquared <= bestDistanceSquared)
             {
                 bestDistanceSquared = distanceSquared;
-                stableId = gameObject.StableId;
+                stableId = marker.StableId.Value;
             }
         }
 
         return stableId != 0;
+    }
+
+    internal bool BeginGizmoTransform(int stableId)
+    {
+        if (_preparedMode != EditorMode.Edit)
+        {
+            _ = CommitGizmoTransform();
+            return false;
+        }
+
+        if (_gizmoTransactionStableId.HasValue && !IsGizmoTransactionTargetAlive())
+        {
+            ClearGizmoTransaction();
+        }
+
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject))
+        {
+            return false;
+        }
+
+        if (_gizmoTransactionStableId.HasValue && _gizmoTransactionStableId != stableId)
+        {
+            _ = CommitGizmoTransform();
+        }
+
+        if (!_gizmoTransactionStableId.HasValue)
+        {
+            _gizmoTransactionStableId = stableId;
+            _gizmoTransactionSceneGeneration = _scene.SceneGeneration;
+            _gizmoBefore = gameObject.Transform.Clone();
+            _gizmoChanged = false;
+        }
+
+        return true;
+    }
+
+    internal bool ApplyGizmoWorldTransform(int stableId, EditorSceneTransform worldTransform)
+    {
+        ArgumentNullException.ThrowIfNull(worldTransform);
+        if (!BeginGizmoTransform(stableId) ||
+            !_scene.TryConvertWorldToLocalTransform(stableId, worldTransform, out EditorSceneTransform localTransform))
+        {
+            return false;
+        }
+
+        _scene.SetTransform(stableId, localTransform);
+        _gizmoChanged = _gizmoBefore is not null && !TransformEquals(_gizmoBefore, localTransform);
+        return true;
+    }
+
+    internal bool CommitGizmoTransform()
+    {
+        if (!_gizmoTransactionStableId.HasValue || _gizmoBefore is null)
+        {
+            return false;
+        }
+
+        int stableId = _gizmoTransactionStableId.Value;
+        EditorSceneTransform before = _gizmoBefore;
+        if (!IsGizmoTransactionTargetAlive() || !_scene.TryGet(stableId, out EditorGameObject? gameObject))
+        {
+            ClearGizmoTransaction();
+            return false;
+        }
+
+        EditorSceneTransform after = gameObject.Transform.Clone();
+        bool committed = _gizmoChanged && !TransformEquals(before, after);
+        if (!committed)
+        {
+            ClearGizmoTransaction();
+            return false;
+        }
+
+        try
+        {
+            // live drag 已更新画面；释放时只向 Undo 栈提交一条显式 before/after 命令。
+            _undo.Execute(_scene, new SetTransformCommand(stableId, before, after));
+            return true;
+        }
+        finally
+        {
+            // 命令异常也不能把旧 scene/stableId 事务遗留到下一帧。
+            ClearGizmoTransaction();
+        }
+    }
+
+    internal bool CancelGizmoTransform()
+    {
+        if (!_gizmoTransactionStableId.HasValue || _gizmoBefore is null)
+        {
+            return false;
+        }
+
+        int stableId = _gizmoTransactionStableId.Value;
+        if (!IsGizmoTransactionTargetAlive() || !_scene.TryGet(stableId, out _))
+        {
+            ClearGizmoTransaction();
+            return false;
+        }
+
+        try
+        {
+            _scene.SetTransform(stableId, _gizmoBefore);
+            return true;
+        }
+        finally
+        {
+            ClearGizmoTransaction();
+        }
     }
 
     private void DrawToolbar(EditorSelection selection)
@@ -391,6 +549,7 @@ internal sealed class SceneViewPanel(
     private void DrawGizmo(EditorSelection selection)
     {
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
+        PrepareFrame(stableId, _preparedMode);
         if (!stableId.HasValue || !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject))
         {
             return;
@@ -414,10 +573,24 @@ internal sealed class SceneViewPanel(
         ImGuizmo.SetOrthographic(true);
         ImGuizmo.SetDrawlist();
         ImGuizmo.SetRect(_canvasMin.X, _canvasMin.Y, _canvasSize.X, _canvasSize.Y);
-        if (ImGuizmo.Manipulate(ref view, ref projection, _operation, ImGuizmoMode.Local, ref model))
+        bool manipulated = ImGuizmo.Manipulate(ref view, ref projection, _operation, ImGuizmoMode.Local, ref model);
+        bool usingGizmo = ImGuizmo.IsUsing();
+        if (manipulated)
         {
-            EditorSceneTransform next = DecomposeModel(model, gameObject.Transform);
-            _undo.Execute(_scene, new SetTransformCommand(gameObject.StableId, next));
+            EditorSceneTransform nextWorld = DecomposeModel(model, world);
+            _ = ApplyGizmoWorldTransform(gameObject.StableId, nextWorld);
+        }
+
+        if (_gizmoTransactionStableId.HasValue)
+        {
+            if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+            {
+                _ = CancelGizmoTransform();
+            }
+            else if (!usingGizmo)
+            {
+                _ = CommitGizmoTransform();
+            }
         }
     }
 
@@ -460,5 +633,30 @@ internal sealed class SceneViewPanel(
                 ScaleY = scale.Y,
             }
             : fallback.Clone();
+    }
+
+    private void ClearGizmoTransaction()
+    {
+        _gizmoTransactionStableId = null;
+        _gizmoTransactionSceneGeneration = -1;
+        _gizmoBefore = null;
+        _gizmoChanged = false;
+    }
+
+    private bool IsGizmoTransactionTargetAlive()
+    {
+        return _gizmoTransactionStableId.HasValue &&
+            _gizmoTransactionSceneGeneration == _scene.SceneGeneration &&
+            _scene.TryGet(_gizmoTransactionStableId.Value, out _);
+    }
+
+    private static bool TransformEquals(EditorSceneTransform left, EditorSceneTransform right)
+    {
+        const float Epsilon = 0.0001f;
+        return MathF.Abs(left.X - right.X) <= Epsilon &&
+            MathF.Abs(left.Y - right.Y) <= Epsilon &&
+            MathF.Abs(left.RotationRadians - right.RotationRadians) <= Epsilon &&
+            MathF.Abs(left.ScaleX - right.ScaleX) <= Epsilon &&
+            MathF.Abs(left.ScaleY - right.ScaleY) <= Epsilon;
     }
 }

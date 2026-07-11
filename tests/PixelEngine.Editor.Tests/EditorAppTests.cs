@@ -15,6 +15,24 @@ namespace PixelEngine.Editor.Tests;
 public sealed class EditorAppTests
 {
     /// <summary>
+    /// 旧版带 IScriptRuntime 的 Editor bridge 重载继续存在且不强制产生弃用 warning，
+    /// 保护 TreatWarningsAsErrors 外部扩展的源码兼容性。
+    /// </summary>
+    [Fact]
+    public void EditorRenderBridgeKeepsLegacyScriptRuntimeOverloadForCompatibility()
+    {
+        System.Reflection.MethodInfo? legacy = typeof(EditorRenderBridge)
+            .GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .SingleOrDefault(method =>
+                method.Name == nameof(EditorRenderBridge.AttachIfEnabled) &&
+                method.GetParameters() is { Length: 6 } parameters &&
+                parameters[^1].ParameterType == typeof(PixelEngine.Scripting.IScriptRuntime));
+
+        Assert.NotNull(legacy);
+        Assert.Null(legacy.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false).SingleOrDefault());
+    }
+
+    /// <summary>
     /// 验证禁用开关不会初始化 ImGui 后端，也不会绘制面板。
     /// </summary>
     [Fact]

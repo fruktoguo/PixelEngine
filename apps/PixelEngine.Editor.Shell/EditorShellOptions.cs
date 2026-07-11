@@ -35,6 +35,11 @@ internal sealed record EditorShellOptions(
     /// </summary>
     public bool ReopenLastProject { get; init; } = true;
 
+    /// <summary>
+    /// 是否运行保持在 Play 状态的 Game View 玩家可见性与移动验收探针。
+    /// </summary>
+    public bool ScriptedGameViewProbe { get; init; }
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -52,6 +57,7 @@ internal sealed record EditorShellOptions(
         bool scriptedHierarchyProbe = false;
         bool scriptedDefaultWorkbenchProbe = false;
         bool scriptedPreferencesProbe = false;
+        bool scriptedGameViewProbe = false;
         bool ephemeralUserState = false;
         bool reopenLastProject = true;
         string? userDataDirectory = null;
@@ -104,6 +110,9 @@ internal sealed record EditorShellOptions(
                 case "--scripted-preferences-probe":
                     scriptedPreferencesProbe = true;
                     break;
+                case "--scripted-gameview-probe":
+                    scriptedGameViewProbe = true;
+                    break;
                 case "--build-output":
                     buildOutputPath = RequireValue(args, ref i, arg);
                     break;
@@ -135,12 +144,14 @@ internal sealed record EditorShellOptions(
             scriptedMenuLayoutProbe ||
             scriptedHierarchyProbe ||
             scriptedDefaultWorkbenchProbe ||
-            scriptedPreferencesProbe;
+            scriptedPreferencesProbe ||
+            scriptedGameViewProbe;
         return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory)
         {
             UserDataDirectory = string.IsNullOrWhiteSpace(userDataDirectory) ? null : userDataDirectory.Trim(),
             EphemeralUserState = ephemeralUserState || hasScriptedProbe,
             ReopenLastProject = reopenLastProject,
+            ScriptedGameViewProbe = scriptedGameViewProbe,
         };
     }
 

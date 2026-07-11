@@ -11,7 +11,8 @@ public static class UiPresentLayerOrders
     public const int Game = 100;
 
     /// <summary>
-    /// 编辑器 UI 层，仅编辑器/开发构建注册，覆盖在游戏 UI 之上。
+    /// 编辑器 UI 层，仅编辑器/开发构建注册。
+    /// Surface 必须由注册 overload 显式声明；order 不隐含 framebuffer 所有权。
     /// </summary>
     public const int Editor = 200;
 }
