@@ -61,7 +61,7 @@ public sealed class UiContractTests
             ["PixelEngine.Core", "PixelEngine.Gui", "PixelEngine.Rendering"],
             [
                 .. ReadIncludes(project, "ProjectReference")
-                    .Select(static include => Path.GetFileNameWithoutExtension(include)!),
+                    .Select(static include => Path.GetFileNameWithoutExtension(include)),
             ]);
         Assert.Empty(ReadIncludes(project, "PackageReference"));
     }

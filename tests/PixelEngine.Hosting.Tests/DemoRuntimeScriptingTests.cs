@@ -23,7 +23,7 @@ public sealed class DemoRuntimeScriptingTests
         using Engine engine = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode()
-            .AddScene(new SceneDescriptor("demo", SceneSourceKind.Procedural, typeof(DemoRuntimeBehaviour).FullName!))
+            .AddScene(new SceneDescriptor("demo", SceneSourceKind.Procedural, typeof(DemoRuntimeBehaviour).FullName))
             .WithStartScene("demo")
             .Build();
         engine.Context.RegisterService(materials);
@@ -77,7 +77,7 @@ public sealed class DemoRuntimeScriptingTests
         using Engine engine = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode()
-            .AddScene(new SceneDescriptor("lighting", SceneSourceKind.Procedural, typeof(HostingLightingProbeBehaviour).FullName!))
+            .AddScene(new SceneDescriptor("lighting", SceneSourceKind.Procedural, typeof(HostingLightingProbeBehaviour).FullName))
             .WithStartScene("lighting")
             .Build();
         engine.Context.RegisterService(materials);
@@ -113,7 +113,7 @@ public sealed class DemoRuntimeScriptingTests
             using Engine engine = new EngineBuilder()
                 .UseHeadless()
                 .UseDeterministicMode()
-                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName))
                 .WithStartScene("reload")
                 .Build();
             engine.Context.RegisterService(materials);
@@ -222,7 +222,7 @@ public sealed class DemoRuntimeScriptingTests
             using Engine engine = new EngineBuilder()
                 .UseHeadless()
                 .UseDeterministicMode()
-                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+                .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName))
                 .WithStartScene("reload")
                 .Build();
             engine.Context.RegisterService(materials);
@@ -282,7 +282,7 @@ public sealed class DemoRuntimeScriptingTests
         using Engine engine = new EngineBuilder()
             .UseHeadless()
             .UseDeterministicMode()
-            .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName!))
+            .AddScene(new SceneDescriptor("reload", SceneSourceKind.Procedural, typeof(HostingHotReloadProbeBehaviour).FullName))
             .WithStartScene("reload")
             .Build();
         engine.Context.RegisterService(materials);

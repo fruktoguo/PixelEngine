@@ -732,7 +732,7 @@ public sealed class SceneAndHeadlessTests
     {
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
-            .AddScene(new SceneDescriptor("proc", SceneSourceKind.Procedural, typeof(ProceduralEntryBehaviour).FullName!))
+            .AddScene(new SceneDescriptor("proc", SceneSourceKind.Procedural, typeof(ProceduralEntryBehaviour).FullName))
             .Build();
         engine.RegisterScriptAssembly(typeof(ProceduralEntryBehaviour).Assembly);
 

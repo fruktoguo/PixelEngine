@@ -651,7 +651,7 @@ public sealed class EditorProjectAssetModelTests
             Assert.True(moved.Succeeded);
             Assert.False(rejected.Succeeded);
             Assert.Contains("改变资产类型", rejected.Diagnostic, StringComparison.Ordinal);
-            Assert.True(manifest.TryResolveAssetId(created.AssetId!, out EditorAssetRecord screen));
+            Assert.True(manifest.TryResolveAssetId(created.AssetId, out EditorAssetRecord screen));
             Assert.Equal("ui/screens/hud/Hud.xhtml", screen.LogicalPath);
             using JsonDocument uiManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "ui", "ui-manifest.json")));
             JsonElement screenEntry = Assert.Single(uiManifest.RootElement.GetProperty("screens").EnumerateArray());

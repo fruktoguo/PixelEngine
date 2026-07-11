@@ -79,7 +79,7 @@ public sealed class HostingProjectDisciplineTests
             ["PixelEngine.Hosting", "PixelEngine.Scripting"],
             [
                 .. ReadIncludes(project, "ProjectReference")
-                    .Select(include => Path.GetFileNameWithoutExtension(include)!),
+                    .Select(include => Path.GetFileNameWithoutExtension(include)),
             ]);
         Assert.Empty(ReadIncludes(project, "PackageReference"));
     }
@@ -97,7 +97,7 @@ public sealed class HostingProjectDisciplineTests
             ["PixelEngine.Hosting", "PixelEngine.Editor", "PixelEngine.Gui"],
             [
                 .. ReadIncludes(project, "ProjectReference")
-                    .Select(include => Path.GetFileNameWithoutExtension(include)!),
+                    .Select(include => Path.GetFileNameWithoutExtension(include)),
             ]);
     }
 

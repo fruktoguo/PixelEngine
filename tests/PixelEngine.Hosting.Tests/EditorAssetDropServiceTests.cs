@@ -485,7 +485,7 @@ public sealed class EditorAssetDropServiceTests
                     [
                         new EngineSceneBehaviourDocument
                         {
-                            TypeName = typeof(AssetDropProbeBehaviour).FullName!,
+                            TypeName = typeof(AssetDropProbeBehaviour).FullName,
                             SerializedFields = new Dictionary<string, string>
                             {
                                 ["Texture"] = reference,
