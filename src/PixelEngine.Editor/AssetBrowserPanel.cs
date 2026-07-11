@@ -59,7 +59,7 @@ public sealed class AssetBrowserPanel(
     /// </summary>
     public const float MaximumThumbnailSize = 128f;
 
-    private const float DefaultThumbnailSize = 72f;
+    private const float DefaultThumbnailSize = 64f;
     private const float GridLabelHeight = 38f;
     private const float GridCellPadding = 10f;
     private const uint SelectedTileColor = 0xCC744C2F;
@@ -81,8 +81,8 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
     private readonly AssetBrowserImportHandler? _importAsset = importAsset;
     private readonly AssetBrowserImportSourcePickHandler? _pickImportSource = pickImportSource;
-    private static readonly string[] KindFilterLabels = ["全部", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
-    private static readonly string[] SortModeLabels = ["路径", "类型 / 路径", "最近修改", "大小"];
+    private static readonly string[] KindFilterLabels = ["All", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
+    private static readonly string[] SortModeLabels = ["Name", "Type / Name", "Last Modified", "Size"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
     [
         AssetBrowserItemKind.Folder,
@@ -160,7 +160,7 @@ public sealed class AssetBrowserPanel(
     /// 当前 folder scope 的可点击 breadcrumb。
     /// </summary>
     public IReadOnlyList<AssetBrowserBreadcrumbItem> Breadcrumbs { get; private set; } =
-        [new AssetBrowserBreadcrumbItem("工程", string.Empty)];
+        [new AssetBrowserBreadcrumbItem("Project", string.Empty)];
 
     /// <summary>
     /// 当前 Project Window 文件夹作用域；空字符串表示双根总览。
@@ -205,7 +205,7 @@ public sealed class AssetBrowserPanel(
     /// <summary>
     /// Project Window 当前右侧内容展示模式。
     /// </summary>
-    public AssetBrowserViewMode ViewMode { get; private set; } = AssetBrowserViewMode.Grid;
+    public AssetBrowserViewMode ViewMode { get; private set; } = AssetBrowserViewMode.List;
 
     /// <summary>
     /// 网格模式当前图标边长。
@@ -970,23 +970,30 @@ public sealed class AssetBrowserPanel(
                 ApplyFilter();
             }
 
+            float layoutHeight = MathF.Max(
+                ImGui.GetFrameHeight(),
+                ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeight() - ImGui.GetStyle().ItemSpacing.Y - 1f);
             if (ImGui.BeginTable(
                 "project_window_layout",
                 2,
                 ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV))
             {
-                ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 150f);
+                ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 124f);
                 ImGui.TableSetupColumn("Contents", ImGuiTableColumnFlags.WidthStretch);
                 ImGui.TableNextRow();
                 _ = ImGui.TableNextColumn();
-                _ = ImGui.BeginChild("project_folder_tree");
+                _ = ImGui.BeginChild("project_folder_tree", new Vector2(0f, layoutHeight));
                 DrawFolderTree(context.Selection);
                 ImGui.EndChild();
 
                 _ = ImGui.TableNextColumn();
+                float contentStartY = ImGui.GetCursorPosY();
                 DrawBreadcrumbs(context.Selection);
                 ImGui.Separator();
-                _ = ImGui.BeginChild("project_folder_contents");
+                float contentHeight = MathF.Max(
+                    ImGui.GetFrameHeight(),
+                    layoutHeight - (ImGui.GetCursorPosY() - contentStartY));
+                _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, contentHeight));
                 DrawFolderContents(context.Selection);
 
                 ImGui.EndChild();
@@ -994,7 +1001,7 @@ public sealed class AssetBrowserPanel(
             }
 
             DrawPendingActionEditors();
-            ImGui.TextUnformatted(Status);
+            DrawFooter();
             ImGui.End();
         }
         finally
@@ -1005,46 +1012,46 @@ public sealed class AssetBrowserPanel(
 
     private void DrawToolbar(EditorSelection selection)
     {
-        if (ImGui.Button("刷新"))
+        if (ImGui.Button("+##project-create"))
         {
-            _ = Refresh(selection);
+            ImGui.OpenPopup("project-create-menu");
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Create or import asset");
+        }
+
+        DrawCreateMenu(selection);
+
+        const float ReservedControlsWidth = 142f;
+        ImGui.SameLine();
+        float searchWidth = MathF.Max(72f, ImGui.GetContentRegionAvail().X - ReservedControlsWidth);
+        ImGui.SetNextItemWidth(searchWidth);
+        string search = _search;
+        if (ImGui.InputTextWithHint("##project-search", "Search", ref search, 128))
+        {
+            SetSearch(search);
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("新建..."))
-        {
-            _showCreateEditor = !_showCreateEditor;
-            _showImportEditor = false;
-            _ = BeginCreateAssetInFolder(ActiveFolderPath, CreateKind);
-        }
-
+        DrawKindFilter();
         ImGui.SameLine();
-        if (ImGui.Button("导入..."))
+        DrawViewModeButton(AssetBrowserViewMode.Grid, "project-grid-view");
+        ImGui.SameLine();
+        DrawViewModeButton(AssetBrowserViewMode.List, "project-list-view");
+        ImGui.SameLine();
+        if (ImGui.Button("...##project-options"))
         {
-            _showImportEditor = !_showImportEditor;
-            _showCreateEditor = false;
+            ImGui.OpenPopup("project-options-menu");
         }
 
-        AssetBrowserItem? selectedAsset = string.IsNullOrWhiteSpace(selection.AssetPath)
-            ? null
-            : FindAsset(selection.AssetPath);
-        if (selectedAsset is { } selected)
+        if (ImGui.IsItemHovered())
         {
-            ImGui.SameLine();
-            DrawPrimaryAssetAction(selected);
-            ImGui.SameLine();
-            if (ImGui.Button("重命名"))
-            {
-                _ = BeginMoveAsset(selected.Path);
-            }
-
-            ImGui.SameLine();
-            if (ImGui.Button("删除"))
-            {
-                _ = TryRequestDeleteAsset(selected.Path);
-            }
+            ImGui.SetTooltip("Project options");
         }
 
+        DrawOptionsMenu(selection);
         if (_showCreateEditor)
         {
             DrawCreateControls(selection);
@@ -1055,58 +1062,134 @@ public sealed class AssetBrowserPanel(
         }
 
         ImGui.Separator();
-        string search = _search;
-        ImGui.SetNextItemWidth(-1f);
-        if (ImGui.InputTextWithHint("##project-search", "搜索", ref search, 128))
+    }
+
+    private void DrawCreateMenu(EditorSelection selection)
+    {
+        if (!ImGui.BeginPopup("project-create-menu"))
         {
-            SetSearch(search);
+            return;
         }
 
-        int kindIndex = KindFilter.HasValue ? (int)KindFilter.Value + 1 : 0;
-        ImGui.SetNextItemWidth(94f);
-        if (ImGui.Combo("##project-kind", ref kindIndex, KindFilterLabels, KindFilterLabels.Length))
+        string folder = selection.FolderPath ?? ActiveFolderPath;
+        for (int i = 0; i < CreateKinds.Length; i++)
         {
-            SetKindFilter(kindIndex == 0 ? null : (AssetBrowserItemKind)(kindIndex - 1));
+            AssetBrowserItemKind kind = CreateKinds[i];
+            if (ImGui.MenuItem($"Create {CreateKindLabels[i]}"))
+            {
+                _showCreateEditor = true;
+                _showImportEditor = false;
+                CreateKind = kind;
+                _ = BeginCreateAssetInFolder(folder, kind);
+            }
+        }
+
+        ImGui.Separator();
+        for (int i = 0; i < ImportKinds.Length; i++)
+        {
+            AssetBrowserItemKind kind = ImportKinds[i];
+            if (ImGui.MenuItem($"Import {ImportKindLabels[i]}..."))
+            {
+                _showCreateEditor = false;
+                _showImportEditor = true;
+                _ = BeginImportAssetInFolder(string.Empty, folder, kind);
+            }
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawKindFilter()
+    {
+        string label = KindFilter.HasValue ? KindFilter.Value.ToString() : "All";
+        if (ImGui.Button($"{label}##project-kind"))
+        {
+            ImGui.OpenPopup("project-kind-menu");
         }
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("按资产类型过滤");
+            ImGui.SetTooltip("Filter by asset type");
+        }
+
+        if (!ImGui.BeginPopup("project-kind-menu"))
+        {
+            return;
+        }
+
+        for (int i = 0; i < KindFilterLabels.Length; i++)
+        {
+            AssetBrowserItemKind? kind = i == 0 ? null : (AssetBrowserItemKind)(i - 1);
+            if (ImGui.MenuItem(KindFilterLabels[i], string.Empty, KindFilter == kind))
+            {
+                SetKindFilter(kind);
+            }
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawOptionsMenu(EditorSelection selection)
+    {
+        if (!ImGui.BeginPopup("project-options-menu"))
+        {
+            return;
+        }
+
+        if (ImGui.MenuItem("Refresh"))
+        {
+            _ = Refresh(selection);
+        }
+
+        if (ImGui.BeginMenu("Sort"))
+        {
+            for (int i = 0; i < SortModeLabels.Length; i++)
+            {
+                AssetBrowserSortMode mode = (AssetBrowserSortMode)i;
+                if (ImGui.MenuItem(SortModeLabels[i], string.Empty, SortMode == mode))
+                {
+                    SetSortMode(mode);
+                }
+            }
+
+            ImGui.EndMenu();
+        }
+
+        ImGui.EndPopup();
+    }
+
+    private void DrawFooter()
+    {
+        ImGui.Separator();
+        int visibleItemCount = VisibleFolders.Count + FilteredAssets.Count;
+        float sliderWidth = ViewMode == AssetBrowserViewMode.Grid ? 96f : 0f;
+        float labelWidth = MathF.Max(48f, ImGui.GetContentRegionAvail().X - sliderWidth - ImGui.GetStyle().ItemSpacing.X);
+        string footer = Status == "就绪"
+            ? $"{visibleItemCount.ToString(CultureInfo.InvariantCulture)} items"
+            : $"{visibleItemCount.ToString(CultureInfo.InvariantCulture)} items · {Status}";
+        ImGui.TextDisabled(FitLabel(footer, labelWidth));
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(footer);
+        }
+
+        if (ViewMode != AssetBrowserViewMode.Grid)
+        {
+            return;
         }
 
         ImGui.SameLine();
-        int sortMode = (int)SortMode;
-        ImGui.SetNextItemWidth(94f);
-        if (ImGui.Combo("##project-sort", ref sortMode, SortModeLabels, SortModeLabels.Length) &&
-            sortMode >= 0 &&
-            sortMode < SortModeLabels.Length)
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0f, ImGui.GetContentRegionAvail().X - sliderWidth));
+        ImGui.SetNextItemWidth(sliderWidth);
+        float thumbnailSize = ThumbnailSize;
+        if (ImGui.SliderFloat("##project-thumbnail-size", ref thumbnailSize, MinimumThumbnailSize, MaximumThumbnailSize, string.Empty))
         {
-            SetSortMode((AssetBrowserSortMode)sortMode);
+            SetThumbnailSize(thumbnailSize);
         }
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("排序方式");
-        }
-
-        ImGui.SameLine();
-        DrawViewModeButton(AssetBrowserViewMode.Grid, "project-grid-view");
-        ImGui.SameLine();
-        DrawViewModeButton(AssetBrowserViewMode.List, "project-list-view");
-        if (ViewMode == AssetBrowserViewMode.Grid)
-        {
-            ImGui.SameLine();
-            ImGui.SetNextItemWidth(110f);
-            float thumbnailSize = ThumbnailSize;
-            if (ImGui.SliderFloat("##project-thumbnail-size", ref thumbnailSize, MinimumThumbnailSize, MaximumThumbnailSize, "%.0f"))
-            {
-                SetThumbnailSize(thumbnailSize);
-            }
-
-            if (ImGui.IsItemHovered())
-            {
-                ImGui.SetTooltip("缩略图大小");
-            }
+            ImGui.SetTooltip("Thumbnail size");
         }
     }
 
@@ -1186,7 +1269,7 @@ public sealed class AssetBrowserPanel(
     private void DrawFolderTree(EditorSelection selection)
     {
         bool rootSelected = string.IsNullOrWhiteSpace(selection.FolderPath);
-        if (ImGui.Selectable("工程##project-root", rootSelected))
+        if (ImGui.Selectable("Project##project-root", rootSelected))
         {
             _ = SelectFolder(string.Empty, selection);
         }
@@ -1219,7 +1302,7 @@ public sealed class AssetBrowserPanel(
             flags |= ImGuiTreeNodeFlags.DefaultOpen;
         }
 
-        bool open = ImGui.TreeNodeEx($"{folder.DisplayName} ({folder.AssetCount})##tree-{folder.Path}", flags);
+        bool open = ImGui.TreeNodeEx($"{folder.DisplayName}##tree-{folder.Path}", flags);
         if (ImGui.IsItemClicked())
         {
             _ = SelectFolder(folder.Path, selection);
@@ -1408,18 +1491,23 @@ public sealed class AssetBrowserPanel(
         DrawInlinePreview(AssetBrowserIconKind.Folder, thumbnail: null);
         ImGui.SameLine();
         bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.OrdinalIgnoreCase);
-        if (ImGui.Selectable($"{folder.DisplayName}  {folder.AssetCount} 项##content-folder-{folder.Path}", selected))
+        if (ImGui.Selectable($"{folder.DisplayName}##content-folder-{folder.Path}", selected))
         {
             _ = SelectFolder(folder.Path, selection);
         }
 
-        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && ImGui.IsItemHovered())
+        bool hovered = ImGui.IsItemHovered();
+        if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && hovered)
         {
             _ = SelectFolder(folder.Path, selection);
         }
 
         DrawFolderDropTarget(folder);
         DrawFolderContextMenu(folder);
+        if (hovered)
+        {
+            ImGui.SetTooltip($"{folder.Path}\n{folder.AssetCount.ToString(CultureInfo.InvariantCulture)} items");
+        }
     }
 
     private void DrawFolderDropTarget(AssetBrowserFolderItem folder)
@@ -1516,7 +1604,8 @@ public sealed class AssetBrowserPanel(
             _ = SelectAsset(item.Path, selection);
         }
 
-        if (ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
+        bool hovered = ImGui.IsItemHovered();
+        if (hovered && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
         {
             OpenPrimaryAsset(item);
         }
@@ -1533,25 +1622,25 @@ public sealed class AssetBrowserPanel(
         }
 
         DrawAssetContextMenu(item);
-        if (!string.IsNullOrWhiteSpace(_search))
+        if (hovered)
         {
-            ImGui.TextUnformatted($"路径：{item.Path}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(item.Descriptor?.Purpose))
-        {
-            ImGui.TextUnformatted($"用途：{item.Descriptor.Value.Purpose}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(item.PreviewSummary))
-        {
-            ImGui.TextUnformatted($"摘要：{item.PreviewSummary}");
+            string details = string.Join(
+                '\n',
+                new[]
+                {
+                    item.Path,
+                    typeLabel,
+                    item.Descriptor?.Purpose,
+                    item.PreviewSummary,
+                    badgeLabel,
+                }.Where(static value => !string.IsNullOrWhiteSpace(value)));
+            ImGui.SetTooltip(details);
         }
     }
 
     private static void DrawInlinePreview(AssetBrowserIconKind iconKind, AssetThumbnail? thumbnail)
     {
-        const float size = 28f;
+        const float size = 18f;
         Vector2 min = ImGui.GetCursorScreenPos();
         _ = ImGui.InvisibleButton($"inline-preview-{iconKind}-{min.X:0}-{min.Y:0}", new Vector2(size));
         if (thumbnail is { TextureHandle: not 0 } image)
@@ -1827,36 +1916,6 @@ public sealed class AssetBrowserPanel(
         else if (item.Kind == AssetBrowserItemKind.Audio)
         {
             _ = TryPreviewAudio(item.Path);
-        }
-    }
-
-    private void DrawPrimaryAssetAction(AssetBrowserItem item)
-    {
-        if (item.Kind == AssetBrowserItemKind.Scene)
-        {
-            if (ImGui.Button("打开场景"))
-            {
-                _ = TryOpenSceneAsset(item.Path);
-            }
-        }
-        else if (item.Kind == AssetBrowserItemKind.Script)
-        {
-            if (ImGui.Button("打开脚本"))
-            {
-                _ = TryOpenScriptAsset(item.Path);
-            }
-        }
-        else if (item.Kind == AssetBrowserItemKind.Audio)
-        {
-            if (ImGui.Button("试听"))
-            {
-                _ = TryPreviewAudio(item.Path);
-            }
-        }
-        else if (item.Kind == AssetBrowserItemKind.Prefab && ImGui.Button("实例化"))
-        {
-            _instantiatePrefab?.Invoke(item.Path);
-            Status = $"实例化 {item.Path}";
         }
     }
 
@@ -2588,7 +2647,7 @@ public sealed class AssetBrowserPanel(
             .. FolderTargets.Where(folder => IsDirectFolderChild(folder.Path, ActiveFolderPath)),
         ];
 
-        List<AssetBrowserBreadcrumbItem> breadcrumbs = [new("工程", string.Empty)];
+        List<AssetBrowserBreadcrumbItem> breadcrumbs = [new("Project", string.Empty)];
         if (!string.IsNullOrWhiteSpace(ActiveFolderPath))
         {
             string[] segments = ActiveFolderPath.Split('/', StringSplitOptions.RemoveEmptyEntries);

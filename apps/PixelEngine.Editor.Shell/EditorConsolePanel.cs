@@ -85,6 +85,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
 
     private void DrawToolbar()
     {
+        bool expandedControls = ImGui.GetContentRegionAvail().X >= 620f;
         if (ImGui.Button(L.Get("console.clear", "Clear")))
         {
             _app.ConsoleStore.Clear();
@@ -93,41 +94,128 @@ internal sealed class EditorConsolePanel : IEditorPanel
         }
 
         ImGui.SameLine();
-        _ = ImGui.Checkbox(L.Get("console.collapse", "Collapse"), ref _collapse);
+        DrawToolbarToggle(
+            expandedControls ? $"{L.Get("console.collapse", "Collapse")}##console-collapse" : "C##console-collapse",
+            L.Get("console.collapse", "Collapse"),
+            ref _collapse);
+        if (expandedControls)
+        {
+            ImGui.SameLine();
+            DrawToolbarToggle(
+                $"{L.Get("console.clearOnPlay", "Clear on Play")}##console-clear-on-play",
+                L.Get("console.clearOnPlay", "Clear on Play"),
+                ref _clearOnPlay);
+            ImGui.SameLine();
+            DrawToolbarToggle(
+                $"{L.Get("console.errorPause", "Error Pause")}##console-error-pause",
+                L.Get("console.errorPause", "Error Pause"),
+                ref _errorPause);
+        }
 
-        _ = ImGui.Checkbox(L.Get("console.clearOnPlay", "Clear on Play"), ref _clearOnPlay);
         ImGui.SameLine();
-        _ = ImGui.Checkbox(L.Get("console.errorPause", "Error Pause"), ref _errorPause);
+        if (ImGui.Button("...##console-options"))
+        {
+            ImGui.OpenPopup("console-options-menu");
+        }
 
-        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Console options");
+        }
+
+        if (ImGui.BeginPopup("console-options-menu"))
+        {
+            if (!expandedControls)
+            {
+                _ = ImGui.MenuItem(L.Get("console.clearOnPlay", "Clear on Play"), string.Empty, ref _clearOnPlay);
+                _ = ImGui.MenuItem(L.Get("console.errorPause", "Error Pause"), string.Empty, ref _errorPause);
+                ImGui.Separator();
+            }
+
+            _ = ImGui.MenuItem(L.Get("console.autoScroll", "Auto scroll"), string.Empty, ref _autoScroll);
+            ImGui.EndPopup();
+        }
+
+        EditorConsoleCounts counts = _app.ConsoleStore.CaptureCounts();
+        const float SeverityControlsWidth = 114f;
+        ImGui.SameLine();
+        float remaining = ImGui.GetContentRegionAvail().X;
+        float searchWidth = Math.Clamp(remaining - SeverityControlsWidth, 56f, 320f);
+        float leadingSpace = MathF.Max(0f, remaining - SeverityControlsWidth - searchWidth);
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + leadingSpace);
+        ImGui.SetNextItemWidth(searchWidth);
         _ = ImGui.InputTextWithHint(
             "##console-search",
             L.Get("console.searchHint", "Search"),
             ref _search,
             256);
 
-        EditorConsoleCounts counts = _app.ConsoleStore.CaptureCounts();
+        ImGui.SameLine();
         DrawSeverityToggle(
-            $"{L.Get("console.log", "Log")} {counts.Logs}",
+            L.Get("console.log", "Log"),
+            counts.Logs,
             ref _showLogs,
             LogColor);
         ImGui.SameLine();
         DrawSeverityToggle(
-            $"{L.Get("console.warning", "Warning")} {counts.Warnings}",
+            L.Get("console.warning", "Warning"),
+            counts.Warnings,
             ref _showWarnings,
             WarningColor);
         ImGui.SameLine();
         DrawSeverityToggle(
-            $"{L.Get("console.error", "Error")} {counts.Errors}",
+            L.Get("console.error", "Error"),
+            counts.Errors,
             ref _showErrors,
             ErrorColor);
     }
 
-    private static void DrawSeverityToggle(string label, ref bool value, Vector4 color)
+    private static void DrawToolbarToggle(string label, string tooltip, ref bool value)
     {
+        if (value)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.24f, 0.42f, 0.60f, 1f));
+        }
+
+        if (ImGui.Button(label))
+        {
+            value = !value;
+        }
+
+        if (value)
+        {
+            ImGui.PopStyleColor();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(tooltip);
+        }
+    }
+
+    private static void DrawSeverityToggle(string tooltip, int count, ref bool value, Vector4 color)
+    {
+        if (value)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(color.X * 0.28f, color.Y * 0.28f, color.Z * 0.28f, 1f));
+        }
+
         ImGui.PushStyleColor(ImGuiCol.Text, value ? color : new Vector4(color.X, color.Y, color.Z, 0.38f));
-        _ = ImGui.Checkbox(label, ref value);
+        if (ImGui.Button($"{count.ToString(CultureInfo.InvariantCulture)}##console-{tooltip}"))
+        {
+            value = !value;
+        }
+
         ImGui.PopStyleColor();
+        if (value)
+        {
+            ImGui.PopStyleColor();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip($"{tooltip}: {count.ToString(CultureInfo.InvariantCulture)}");
+        }
     }
 
     private void DrawEntries()
@@ -140,7 +228,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
             newestFirst: false,
             collapse: _collapse);
         float availableHeight = ImGui.GetContentRegionAvail().Y;
-        float listHeight = Math.Max(90f, availableHeight - 132f);
+        float listHeight = Math.Max(80f, availableHeight * 0.68f);
         bool listVisible = ImGui.BeginChild(
             "editor_console_rows",
             new Vector2(0f, listHeight),
@@ -173,15 +261,15 @@ internal sealed class EditorConsolePanel : IEditorPanel
             _lastRenderedSequence = latestSequence;
         }
 
+        if (rows.Length == 0)
+        {
+            ImGui.TextDisabled(L.Get("console.empty", "No console messages"));
+        }
+
         ImGui.EndChild();
-        ImGui.Separator();
-        _ = ImGui.Checkbox(L.Get("console.autoScroll", "Auto scroll"), ref _autoScroll);
-        ImGui.SameLine();
-        ImGui.TextDisabled(rows.Length == 0
-            ? L.Get("console.empty", "No console messages")
-            : L.Format("console.visibleRows", "{0} visible rows", rows.Count(row => IsSeverityVisible(row.Entry.Severity))));
-        ImGui.Separator();
+        _ = ImGui.BeginChild("editor_console_details", new Vector2(0f, 0f), ImGuiChildFlags.Borders);
         DrawSelectedDetails(selectedRow);
+        ImGui.EndChild();
     }
 
     private void DrawEntryRow(EditorConsoleRow row)
@@ -193,7 +281,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
         ImGui.Dummy(new Vector2(14f, ImGui.GetTextLineHeight()));
         ImGui.SameLine();
         string repeat = row.RepeatCount > 1 ? $"  ×{row.RepeatCount.ToString(CultureInfo.InvariantCulture)}" : string.Empty;
-        string label = $"{entry.Timestamp.ToLocalTime():HH:mm:ss}  {entry.Text}{repeat}##console-{row.Sequence}";
+        string label = $"{entry.Text}{repeat}##console-{row.Sequence}";
         bool selected = RowMatchesSelection(row, _collapse, _selectedSequence, _selectedCollapseKey);
         if (ImGui.Selectable(label, selected, ImGuiSelectableFlags.SpanAllColumns))
         {

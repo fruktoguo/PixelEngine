@@ -50,9 +50,9 @@ public sealed class AssetBrowserPanelTests
     {
         AssetBrowserPanel panel = new(new RecordingAssetSource([]));
 
-        Assert.Equal(AssetBrowserViewMode.Grid, panel.ViewMode);
-        panel.SetViewMode(AssetBrowserViewMode.List);
         Assert.Equal(AssetBrowserViewMode.List, panel.ViewMode);
+        panel.SetViewMode(AssetBrowserViewMode.Grid);
+        Assert.Equal(AssetBrowserViewMode.Grid, panel.ViewMode);
 
         panel.SetThumbnailSize(1f);
         Assert.Equal(AssetBrowserPanel.MinimumThumbnailSize, panel.ThumbnailSize);
@@ -1412,7 +1412,7 @@ public sealed class AssetBrowserPanelTests
 
         Assert.Equal(["Content", "ScriptSource"], panel.VisibleFolders.Select(static folder => folder.Path));
         Assert.Empty(panel.FilteredAssets);
-        Assert.Equal([new AssetBrowserBreadcrumbItem("工程", string.Empty)], panel.Breadcrumbs);
+        Assert.Equal([new AssetBrowserBreadcrumbItem("Project", string.Empty)], panel.Breadcrumbs);
 
         Assert.True(panel.SelectFolder("Content/audio", selection));
         Assert.Equal(["Content/audio/loops"], panel.VisibleFolders.Select(static folder => folder.Path));
