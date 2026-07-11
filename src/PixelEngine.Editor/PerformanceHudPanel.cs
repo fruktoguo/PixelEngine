@@ -103,7 +103,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     public PerformanceHudStatistics FixedOverheadStatistics { get; private set; }
 
     /// <inheritdoc />
-    public unsafe void Draw(in EditorContext context)
+    public void Draw(in EditorContext context)
     {
         PerformanceHudSample sample = CaptureSample(in context);
         bool visible = Visible;
