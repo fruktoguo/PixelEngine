@@ -754,7 +754,8 @@ public sealed class HostingProjectDisciplineTests
         }
 
         Assert.Contains("DrawPanelMenuItem", menu, StringComparison.Ordinal);
-        Assert.Contains("app.ShowPanel(panelTitle)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.TryGetPanelVisibility(panelTitle, out visible)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.TrySetPanelVisibility(panelTitle, !visible)", menu, StringComparison.Ordinal);
         Assert.Contains("DrawToolbar(app)", menu, StringComparison.Ordinal);
         Assert.Contains("EditorMainToolbarState", menu, StringComparison.Ordinal);
         Assert.Contains("CaptureToolbarState", menu, StringComparison.Ordinal);
@@ -767,6 +768,27 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ToolbarHeight", menu, StringComparison.Ordinal);
         Assert.Contains("StatusBarHeight", menu, StringComparison.Ordinal);
         Assert.Contains("IEditorChromePanel", host, StringComparison.Ordinal);
+        Assert.True(
+            host.IndexOf("_editor.AddPanel(_consolePanel)", StringComparison.Ordinal) <
+            host.IndexOf("_editor.AddPanel(_gameObjectInspectorPanel)", StringComparison.Ordinal),
+            "默认右侧 dock 必须最后注册 Inspector，使新布局优先显示选择上下文而不是 Console。");
+        Assert.Contains("_focusInspectorOnInitialLayout = !File.Exists(app.LayoutPath)", host, StringComparison.Ordinal);
+        Assert.Contains("if (_focusInspectorOnInitialLayout)", host, StringComparison.Ordinal);
+        Assert.Contains("_gameObjectInspectorPanel.RequestFocus()", host, StringComparison.Ordinal);
+        Assert.Contains("ImGui.SetNextWindowFocus()", File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameObjectInspectorPanel.cs")), StringComparison.Ordinal);
+        foreach (string panelPath in new[]
+        {
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameObjectHierarchyPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameObjectInspectorPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "SceneViewPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameViewPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorConsolePanel.cs"),
+            Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs"),
+        })
+        {
+            Assert.DoesNotContain("ref visible", File.ReadAllText(panelPath), StringComparison.Ordinal);
+        }
+
         Assert.Contains("DrawPanels(in context, chromeOnly: true)", File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorApp.cs")), StringComparison.Ordinal);
         Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.NewProject)", menu, StringComparison.Ordinal);
         Assert.Contains("app.FocusProjectPicker(ProjectPickerMode.OpenProject)", menu, StringComparison.Ordinal);

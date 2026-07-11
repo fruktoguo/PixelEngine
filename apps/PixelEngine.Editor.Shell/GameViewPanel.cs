@@ -60,7 +60,6 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
     public void Draw(in EditorContext context)
     {
         _ = context;
-        bool visible = Visible;
         if (_focusRequested)
         {
             ImGui.SetNextWindowFocus();
@@ -69,18 +68,15 @@ internal sealed class GameViewPanel(Func<RenderViewportTexture> textureProvider)
 
         if (!ImGui.Begin(
                 Title,
-                ref visible,
                 ImGuiWindowFlags.NoScrollbar |
                 ImGuiWindowFlags.NoScrollWithMouse |
                 ImGuiWindowFlags.NoNavInputs))
         {
-            Visible = visible;
             ClearInputState();
             ImGui.End();
             return;
         }
 
-        Visible = visible;
         RenderViewportTexture texture = _textureProvider();
         if (!texture.IsValid)
         {

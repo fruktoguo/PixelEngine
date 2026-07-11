@@ -957,16 +957,7 @@ public sealed class AssetBrowserPanel(
         {
             _trackedSelection = context.Selection;
             _ = ApplyPendingChanges();
-            bool visible = Visible;
-            if (!ImGui.Begin(Title, ref visible))
-            {
-                Visible = visible;
-                ImGui.End();
-                return;
-            }
-
-            Visible = visible;
-            if (!visible)
+            if (!ImGui.Begin(Title))
             {
                 ImGui.End();
                 return;

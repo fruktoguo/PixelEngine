@@ -1,3 +1,4 @@
+using Hexa.NET.ImGuizmo;
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
@@ -14,6 +15,28 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class SceneAuthoringPreviewTests
 {
+    /// <summary>
+    /// 验证 Scene toolbar 的 active tool、grid 与 local/global 都映射到真实 authoring 状态。
+    /// </summary>
+    [Fact]
+    public void SceneToolbarStateControlsGizmoAndGridBehaviour()
+    {
+        SceneViewPanel panel = new(EditorSceneModel.Empty(), new EditorUndoStack());
+
+        Assert.Equal(ImGuizmoOperation.Translate, panel.Operation);
+        Assert.Equal(ImGuizmoMode.Local, panel.GizmoMode);
+        Assert.True(panel.ShowGrid);
+
+        panel.SetOperation(ImGuizmoOperation.RotateZ);
+        panel.ToggleGrid();
+        panel.ToggleGizmoMode();
+
+        Assert.Equal(ImGuizmoOperation.RotateZ, panel.Operation);
+        Assert.Equal(ImGuizmoMode.World, panel.GizmoMode);
+        Assert.False(panel.ShowGrid);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => panel.SetOperation(ImGuizmoOperation.Bounds));
+    }
+
     /// <summary>
     /// 验证 lava-mine 的 LevelDirector 字段会生成非空世界边界与关键 marker。
     /// </summary>

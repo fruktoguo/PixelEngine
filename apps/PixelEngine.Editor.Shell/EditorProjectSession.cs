@@ -369,6 +369,18 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.TryShowPanel(title);
     }
 
+    public bool TryGetPanelVisibility(string title, out bool visible)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryGetPanelVisibility(title, out visible);
+    }
+
+    public bool TrySetPanelVisibility(string title, bool visible)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySetPanelVisibility(title, visible);
+    }
+
     public void ResetLayout()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

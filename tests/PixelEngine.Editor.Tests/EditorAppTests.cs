@@ -151,7 +151,7 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
-    /// 验证 EditorApp 可按标题重新显示已注册面板，未知标题不会伪造成功。
+    /// 验证 EditorApp 可按标题读写已注册面板的可见性，未知标题不会伪造成功。
     /// </summary>
     [Fact]
     public void TryShowPanelSetsRegisteredPanelVisible()
@@ -164,7 +164,14 @@ public sealed class EditorAppTests
         Assert.True(panel.Visible);
         Assert.False(app.TryShowPanel("missing"));
 
-        panel.Visible = false;
+        Assert.True(app.TryGetPanelVisibility(panel.Title, out bool visible));
+        Assert.True(visible);
+        Assert.True(app.TrySetPanelVisibility(panel.Title, visible: false));
+        Assert.False(panel.Visible);
+        Assert.False(app.TryGetPanelVisibility("missing", out visible));
+        Assert.False(visible);
+        Assert.False(app.TrySetPanelVisibility("missing", visible: true));
+
         Assert.Equal(1, app.ShowAllPanels());
         Assert.True(panel.Visible);
     }
@@ -313,6 +320,8 @@ public sealed class EditorAppTests
         Assert.Equal("Unity 6 Editor Dark", tokens.Name);
         Assert.Equal(0f, tokens.WindowRounding);
         Assert.Equal(0f, tokens.TabRounding);
+        Assert.Equal(0f, tokens.TabCloseButtonMinWidthSelected);
+        Assert.Equal(float.MaxValue, tokens.TabCloseButtonMinWidthUnselected);
         Assert.Equal(new Vector2(6f, 6f), tokens.WindowPadding);
         Assert.Equal(new Vector2(5f, 3f), tokens.FramePadding);
         Assert.Equal(new Vector4(0x2B / 255f, 0x2B / 255f, 0x2B / 255f, 1f), tokens.WindowBg);

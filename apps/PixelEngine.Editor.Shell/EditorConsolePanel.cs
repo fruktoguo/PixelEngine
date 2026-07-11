@@ -54,15 +54,12 @@ internal sealed class EditorConsolePanel : IEditorPanel
     {
         _ = context;
         ObservePlayTransitions();
-        bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        if (!ImGui.Begin(Title))
         {
-            Visible = visible;
             ImGui.End();
             return;
         }
 
-        Visible = visible;
         DrawToolbar();
         ImGui.Separator();
         DrawEntries();

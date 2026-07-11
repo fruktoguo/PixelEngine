@@ -91,13 +91,47 @@ public sealed class EditorApp : IDisposable
     /// <returns>找到并打开面板时为 true。</returns>
     public bool TryShowPanel(string title)
     {
+        return TrySetPanelVisibility(title, visible: true);
+    }
+
+    /// <summary>
+    /// 尝试读取指定标题面板的当前可见性。
+    /// </summary>
+    /// <param name="title">面板标题。</param>
+    /// <param name="visible">找到面板时返回其当前可见性；否则为 false。</param>
+    /// <returns>找到面板时为 true。</returns>
+    public bool TryGetPanelVisibility(string title, out bool visible)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         for (int i = 0; i < _panels.Count; i++)
         {
             IEditorPanel panel = _panels[i];
             if (string.Equals(panel.Title, title, StringComparison.Ordinal))
             {
-                panel.Visible = true;
+                visible = panel.Visible;
+                return true;
+            }
+        }
+
+        visible = false;
+        return false;
+    }
+
+    /// <summary>
+    /// 尝试设置指定标题面板的可见性。
+    /// </summary>
+    /// <param name="title">面板标题。</param>
+    /// <param name="visible">目标可见性。</param>
+    /// <returns>找到并更新面板时为 true。</returns>
+    public bool TrySetPanelVisibility(string title, bool visible)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        for (int i = 0; i < _panels.Count; i++)
+        {
+            IEditorPanel panel = _panels[i];
+            if (string.Equals(panel.Title, title, StringComparison.Ordinal))
+            {
+                panel.Visible = visible;
                 return true;
             }
         }

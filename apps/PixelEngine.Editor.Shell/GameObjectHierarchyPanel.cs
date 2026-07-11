@@ -27,15 +27,12 @@ internal sealed class GameObjectHierarchyPanel(
 
     public void Draw(in EditorContext context)
     {
-        bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        if (!ImGui.Begin(Title))
         {
-            Visible = visible;
             ImGui.End();
             return;
         }
 
-        Visible = visible;
         SyncSelection(context.Selection);
         DrawToolbar();
         ImGui.Separator();

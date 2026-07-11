@@ -29,6 +29,8 @@ public readonly record struct GuiThemeTokens(
     float FrameRounding,
     float PopupRounding,
     float TabRounding,
+    float TabCloseButtonMinWidthSelected,
+    float TabCloseButtonMinWidthUnselected,
     float DockingSeparatorSize,
     Vector2 WindowPadding,
     Vector2 FramePadding,
@@ -66,6 +68,8 @@ public static class GuiTheme
                 FrameRounding: 2f,
                 PopupRounding: 2f,
                 TabRounding: 2f,
+                TabCloseButtonMinWidthSelected: -1f,
+                TabCloseButtonMinWidthUnselected: 0f,
                 DockingSeparatorSize: 2f,
                 WindowPadding: new Vector2(8f, 8f),
                 FramePadding: new Vector2(6f, 4f),
@@ -90,6 +94,8 @@ public static class GuiTheme
                 FrameRounding: 2f,
                 PopupRounding: 2f,
                 TabRounding: 0f,
+                TabCloseButtonMinWidthSelected: 0f,
+                TabCloseButtonMinWidthUnselected: float.MaxValue,
                 DockingSeparatorSize: 2f,
                 WindowPadding: new Vector2(6f, 6f),
                 FramePadding: new Vector2(5f, 3f),
@@ -127,6 +133,8 @@ public static class GuiTheme
         style.FrameRounding = tokens.FrameRounding;
         style.PopupRounding = tokens.PopupRounding;
         style.TabRounding = tokens.TabRounding;
+        style.TabCloseButtonMinWidthSelected = tokens.TabCloseButtonMinWidthSelected;
+        style.TabCloseButtonMinWidthUnselected = tokens.TabCloseButtonMinWidthUnselected;
         style.DockingSeparatorSize = tokens.DockingSeparatorSize;
         style.WindowPadding = tokens.WindowPadding;
         style.FramePadding = tokens.FramePadding;

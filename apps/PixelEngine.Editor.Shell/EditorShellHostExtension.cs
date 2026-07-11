@@ -24,6 +24,7 @@ internal sealed class EditorShellHostExtension :
     private readonly EditorShellApp _app;
     private readonly EditorApp _editor;
     private readonly GameViewUiPresentTargetProvider _gameUiPresentTargetProvider;
+    private readonly bool _focusInspectorOnInitialLayout;
     private EditorSceneModel? _sceneModel;
     private EditorUndoStack? _undoStack;
     private EditorPrefabAssetStore? _prefabs;
@@ -44,6 +45,7 @@ internal sealed class EditorShellHostExtension :
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _app = app ?? throw new ArgumentNullException(nameof(app));
+        _focusInspectorOnInitialLayout = !File.Exists(app.LayoutPath);
         _editor = new EditorApp(
             new HexaImGuiBackend(),
             new EditorAppOptions
@@ -67,6 +69,16 @@ internal sealed class EditorShellHostExtension :
     public bool TryShowPanel(string title)
     {
         return _editor.TryShowPanel(title);
+    }
+
+    public bool TryGetPanelVisibility(string title, out bool visible)
+    {
+        return _editor.TryGetPanelVisibility(title, out visible);
+    }
+
+    public bool TrySetPanelVisibility(string title, bool visible)
+    {
+        return _editor.TrySetPanelVisibility(title, visible);
     }
 
     public void ResetLayout()
@@ -334,6 +346,8 @@ internal sealed class EditorShellHostExtension :
                 assetBrowserDataSource.LastDiagnostic));
         }
 
+        _consolePanel = new EditorConsolePanel(_app);
+        _editor.AddPanel(_consolePanel);
         if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
             PhysicsSystem? runtimePhysics = engine.Context.TryGetService(out PhysicsSystem registeredPhysics)
@@ -359,6 +373,13 @@ internal sealed class EditorShellHostExtension :
                 _app.OpenScriptAsset,
                 runtimeSource: runtimeHierarchy,
                 modeProvider: CapturePlayMode);
+            // Console 先注册、Inspector 后注册，使共享右侧 dock 默认落在选择上下文；
+            // Inspector 仍在 Scene View 前绘制，保持首帧 dock 尺寸和相机 framing 稳定。
+            if (_focusInspectorOnInitialLayout)
+            {
+                _gameObjectInspectorPanel.RequestFocus();
+            }
+
             _editor.AddPanel(_gameObjectInspectorPanel);
         }
 
@@ -403,8 +424,6 @@ internal sealed class EditorShellHostExtension :
         AddHiddenPanel(_projectSettingsPanel);
         AddHiddenPanel(_playerSettingsPanel);
         AddHiddenPanel(_buildSettingsPanel);
-        _consolePanel = new EditorConsolePanel(_app);
-        _editor.AddPanel(_consolePanel);
         AddHiddenPanel(new PerformanceHudPanel());
         AddHiddenPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         AddHiddenPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));

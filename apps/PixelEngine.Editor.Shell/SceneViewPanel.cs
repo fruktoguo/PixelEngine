@@ -25,11 +25,14 @@ internal sealed class SceneViewPanel(
     private const uint SpawnColor = 0xFF_74_D6_7A;
     private const uint GoalColor = 0xFF_72_D8_FF;
     private const uint TestColor = 0xFF_AE_83_F2;
+    private const uint ToolbarSelectedColor = 0xFF_C5_85_3B;
+    private const uint ToolbarHoveredColor = 0xFF_4A_4A_4A;
+    private const uint ToolbarIconColor = 0xFF_D2_D2_D2;
+    private const uint ToolbarIconDisabledColor = 0xFF_78_78_78;
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
     private readonly SceneAuthoringCamera _camera = new();
-    private ImGuizmoOperation _operation = ImGuizmoOperation.Translate;
     private Vector2 _canvasMin;
     private Vector2 _canvasSize;
     private bool _canvasHovered;
@@ -69,6 +72,12 @@ internal sealed class SceneViewPanel(
 
     public SceneAuthoringCameraSnapshot CameraSnapshot => _camera.Snapshot;
 
+    internal ImGuizmoOperation Operation { get; private set; } = ImGuizmoOperation.Translate;
+
+    internal ImGuizmoMode GizmoMode { get; private set; } = ImGuizmoMode.Local;
+
+    internal bool ShowGrid { get; private set; } = true;
+
     /// <summary>
     /// 推进与面板绘制无关的 gizmo 连续编辑生命周期。
     /// </summary>
@@ -99,16 +108,13 @@ internal sealed class SceneViewPanel(
     public void Draw(in EditorContext context)
     {
         PrepareFrame(context.Selection.GameObjectStableId ?? _scene.SelectedStableId, _preparedMode);
-        bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+        if (!ImGui.Begin(Title, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
-            Visible = visible;
             InputFocused = false;
             ImGui.End();
             return;
         }
 
-        Visible = visible;
         DrawToolbar(context.Selection);
         DrawAuthoringCanvas();
         InputFocused = _canvasHovered && (ImGui.IsWindowHovered() || ImGui.IsWindowFocused());
@@ -294,33 +300,68 @@ internal sealed class SceneViewPanel(
 
     private void DrawToolbar(EditorSelection selection)
     {
-        if (ImGui.Button("W"))
+        if (SceneToolbarButton(
+            SceneToolbarIcon.Move,
+            Operation == ImGuizmoOperation.Translate,
+            enabled: true,
+            "Move (W)"))
         {
-            _operation = ImGuizmoOperation.Translate;
+            SetOperation(ImGuizmoOperation.Translate);
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button("E"))
+        ImGui.SameLine(0f, 2f);
+        if (SceneToolbarButton(
+            SceneToolbarIcon.Rotate,
+            Operation == ImGuizmoOperation.RotateZ,
+            enabled: true,
+            "Rotate (E)"))
         {
-            _operation = ImGuizmoOperation.RotateZ;
+            SetOperation(ImGuizmoOperation.RotateZ);
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button("R"))
+        ImGui.SameLine(0f, 2f);
+        if (SceneToolbarButton(
+            SceneToolbarIcon.Scale,
+            Operation == ImGuizmoOperation.Scale,
+            enabled: true,
+            "Scale (R)"))
         {
-            _operation = ImGuizmoOperation.Scale;
+            SetOperation(ImGuizmoOperation.Scale);
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button("Frame All"))
+        ImGui.SameLine(0f, 8f);
+        if (SceneToolbarButton(SceneToolbarIcon.FrameAll, selected: false, enabled: true, "Frame All"))
         {
             _ = FrameAll();
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button("Frame Selected"))
+        int? selectedStableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
+        bool canFrameSelected = selectedStableId.HasValue && _scene.TryGet(selectedStableId.Value, out _);
+        ImGui.SameLine(0f, 2f);
+        if (SceneToolbarButton(
+            SceneToolbarIcon.FrameSelected,
+            selected: false,
+            canFrameSelected,
+            "Frame Selected"))
         {
             _ = FrameSelected(selection);
+        }
+
+        ImGui.SameLine(0f, 8f);
+        if (SceneToolbarButton(SceneToolbarIcon.Grid, ShowGrid, enabled: true, "Show Grid"))
+        {
+            ToggleGrid();
+        }
+
+        ImGui.SameLine(0f, 4f);
+        if (ImGui.Button(GizmoMode == ImGuizmoMode.Local ? "Local" : "Global"))
+        {
+            ToggleGizmoMode();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Toggle Local / Global gizmo orientation");
         }
 
         SceneAuthoringPreview preview = EnsurePreview();
@@ -328,17 +369,169 @@ internal sealed class SceneViewPanel(
         ImGui.TextUnformatted($"{preview.StatusLabel} · {preview.SceneName}");
         if (ImGui.IsKeyPressed(ImGuiKey.W))
         {
-            _operation = ImGuizmoOperation.Translate;
+            SetOperation(ImGuizmoOperation.Translate);
         }
 
         if (ImGui.IsKeyPressed(ImGuiKey.E))
         {
-            _operation = ImGuizmoOperation.RotateZ;
+            SetOperation(ImGuizmoOperation.RotateZ);
         }
 
         if (ImGui.IsKeyPressed(ImGuiKey.R))
         {
-            _operation = ImGuizmoOperation.Scale;
+            SetOperation(ImGuizmoOperation.Scale);
+        }
+    }
+
+    internal void SetOperation(ImGuizmoOperation operation)
+    {
+        if (operation is not ImGuizmoOperation.Translate and
+            not ImGuizmoOperation.RotateZ and
+            not ImGuizmoOperation.Scale)
+        {
+            throw new ArgumentOutOfRangeException(nameof(operation), operation, "Scene View 仅支持 Move、Rotate Z 与 Scale gizmo。");
+        }
+
+        Operation = operation;
+    }
+
+    internal void ToggleGrid()
+    {
+        ShowGrid = !ShowGrid;
+    }
+
+    internal void ToggleGizmoMode()
+    {
+        GizmoMode = GizmoMode == ImGuizmoMode.Local ? ImGuizmoMode.World : ImGuizmoMode.Local;
+    }
+
+    private static bool SceneToolbarButton(
+        SceneToolbarIcon icon,
+        bool selected,
+        bool enabled,
+        string tooltip)
+    {
+        float size = ImGui.GetFrameHeight();
+        Vector2 min = ImGui.GetCursorScreenPos();
+        if (!enabled)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        bool clicked = ImGui.InvisibleButton($"scene-toolbar-{icon}", new Vector2(size));
+        bool hovered = ImGui.IsItemHovered();
+        if (!enabled)
+        {
+            ImGui.EndDisabled();
+        }
+
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        if (selected || (hovered && enabled))
+        {
+            drawList.AddRectFilled(
+                min,
+                min + new Vector2(size),
+                selected ? ToolbarSelectedColor : ToolbarHoveredColor,
+                2f);
+        }
+
+        DrawToolbarIcon(
+            drawList,
+            icon,
+            min + new Vector2(size * 0.5f),
+            size / 16f,
+            enabled ? ToolbarIconColor : ToolbarIconDisabledColor);
+        if (hovered)
+        {
+            ImGui.SetTooltip(tooltip);
+        }
+
+        return clicked && enabled;
+    }
+
+    private static void DrawToolbarIcon(
+        ImDrawListPtr drawList,
+        SceneToolbarIcon icon,
+        Vector2 center,
+        float unit,
+        uint color)
+    {
+        float thickness = MathF.Max(1f, unit * 1.2f);
+        switch (icon)
+        {
+            case SceneToolbarIcon.Move:
+                drawList.AddLine(center + new Vector2(-unit * 4f, 0f), center + new Vector2(unit * 4f, 0f), color, thickness);
+                drawList.AddLine(center + new Vector2(0f, unit * 4f), center + new Vector2(0f, -unit * 4f), color, thickness);
+                drawList.AddTriangleFilled(
+                    center + new Vector2(unit * 5f, 0f),
+                    center + new Vector2(unit * 2.5f, -unit * 1.6f),
+                    center + new Vector2(unit * 2.5f, unit * 1.6f),
+                    color);
+                drawList.AddTriangleFilled(
+                    center + new Vector2(0f, -unit * 5f),
+                    center + new Vector2(-unit * 1.6f, -unit * 2.5f),
+                    center + new Vector2(unit * 1.6f, -unit * 2.5f),
+                    color);
+                break;
+            case SceneToolbarIcon.Rotate:
+                drawList.AddCircle(center, unit * 4.2f, color, 16, thickness);
+                drawList.AddTriangleFilled(
+                    center + new Vector2(unit * 4.8f, -unit * 2.4f),
+                    center + new Vector2(unit * 1.8f, -unit * 2.5f),
+                    center + new Vector2(unit * 3.9f, unit * 0.1f),
+                    color);
+                break;
+            case SceneToolbarIcon.Scale:
+                drawList.AddLine(
+                    center + new Vector2(-unit * 3.5f, unit * 3.5f),
+                    center + new Vector2(unit * 3.5f, -unit * 3.5f),
+                    color,
+                    thickness);
+                drawList.AddRectFilled(
+                    center + new Vector2(unit * 2.2f, -unit * 4.8f),
+                    center + new Vector2(unit * 4.8f, -unit * 2.2f),
+                    color);
+                drawList.AddRect(
+                    center + new Vector2(-unit * 4.8f, unit * 2.2f),
+                    center + new Vector2(-unit * 2.2f, unit * 4.8f),
+                    color,
+                    0f,
+                    ImDrawFlags.None,
+                    thickness);
+                break;
+            case SceneToolbarIcon.FrameAll:
+                drawList.AddRect(
+                    center - new Vector2(unit * 4f),
+                    center + new Vector2(unit * 4f),
+                    color,
+                    0f,
+                    ImDrawFlags.None,
+                    thickness);
+                drawList.AddCircleFilled(center, unit, color);
+                break;
+            case SceneToolbarIcon.FrameSelected:
+                drawList.AddCircle(center, unit * 4f, color, 16, thickness);
+                drawList.AddCircleFilled(center, unit * 1.5f, color);
+                break;
+            case SceneToolbarIcon.Grid:
+                for (int i = -1; i <= 1; i++)
+                {
+                    float offset = i * unit * 3f;
+                    drawList.AddLine(
+                        center + new Vector2(-unit * 4.5f, offset),
+                        center + new Vector2(unit * 4.5f, offset),
+                        color,
+                        thickness);
+                    drawList.AddLine(
+                        center + new Vector2(offset, -unit * 4.5f),
+                        center + new Vector2(offset, unit * 4.5f),
+                        color,
+                        thickness);
+                }
+
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(icon), icon, "未知 Scene View 工具栏图标。");
         }
     }
 
@@ -354,7 +547,10 @@ internal sealed class SceneViewPanel(
         Vector2 canvasMax = _canvasMin + _canvasSize;
         drawList.AddRectFilled(_canvasMin, canvasMax, CanvasColor);
         DrawWorldPreview(drawList, preview);
-        DrawGrid(drawList);
+        if (ShowGrid)
+        {
+            DrawGrid(drawList);
+        }
         DrawBoundary(drawList, preview.Bounds);
         DrawMarkers(drawList, preview);
         DrawCanvasLabel(drawList, preview);
@@ -573,7 +769,7 @@ internal sealed class SceneViewPanel(
         ImGuizmo.SetOrthographic(true);
         ImGuizmo.SetDrawlist();
         ImGuizmo.SetRect(_canvasMin.X, _canvasMin.Y, _canvasSize.X, _canvasSize.Y);
-        bool manipulated = ImGuizmo.Manipulate(ref view, ref projection, _operation, ImGuizmoMode.Local, ref model);
+        bool manipulated = ImGuizmo.Manipulate(ref view, ref projection, Operation, GizmoMode, ref model);
         bool usingGizmo = ImGuizmo.IsUsing();
         if (manipulated)
         {
@@ -659,4 +855,14 @@ internal sealed class SceneViewPanel(
             MathF.Abs(left.ScaleX - right.ScaleX) <= Epsilon &&
             MathF.Abs(left.ScaleY - right.ScaleY) <= Epsilon;
     }
+}
+
+internal enum SceneToolbarIcon
+{
+    Move,
+    Rotate,
+    Scale,
+    FrameAll,
+    FrameSelected,
+    Grid,
 }

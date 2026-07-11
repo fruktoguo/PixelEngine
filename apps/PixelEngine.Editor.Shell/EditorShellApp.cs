@@ -1688,6 +1688,22 @@ internal sealed class EditorShellApp
         return CurrentSession?.ShowPanel(title) == true;
     }
 
+    public bool TryGetPanelVisibility(string title, out bool visible)
+    {
+        if (CurrentSession is not null)
+        {
+            return CurrentSession.TryGetPanelVisibility(title, out visible);
+        }
+
+        visible = false;
+        return false;
+    }
+
+    public bool TrySetPanelVisibility(string title, bool visible)
+    {
+        return CurrentSession?.TrySetPanelVisibility(title, visible) == true;
+    }
+
     public bool Undo()
     {
         return CurrentSession?.Undo() == true;

@@ -581,9 +581,11 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawPanelMenuItem(EditorShellApp app, string label, string panelTitle)
     {
-        if (ImGui.MenuItem(label, string.Empty, selected: false, enabled: app.HasOpenProject))
+        bool visible = false;
+        bool enabled = app.HasOpenProject && app.TryGetPanelVisibility(panelTitle, out visible);
+        if (ImGui.MenuItem(label, string.Empty, selected: visible, enabled: enabled))
         {
-            _ = app.ShowPanel(panelTitle);
+            _ = app.TrySetPanelVisibility(panelTitle, !visible);
         }
     }
 

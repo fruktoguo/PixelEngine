@@ -36,6 +36,8 @@ internal sealed class GameObjectInspectorPanel(
     private int? _transformEditStableId;
     private EditorSceneTransform? _transformEditBefore;
     private EditorGameObject? _transformEditTarget;
+    private int _focusDelayFrames;
+    private bool _focusRequested;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
@@ -43,18 +45,33 @@ internal sealed class GameObjectInspectorPanel(
 
     public bool Visible { get; set; } = true;
 
+    internal void RequestFocus()
+    {
+        // 先让 Scene View 用稳定 dock 尺寸完成首次 framing，再切换右侧 Inspector。
+        // 在 dock 创建帧直接 SetNextWindowFocus 会让 Scene 当帧不可见并按错误尺寸 framing。
+        _focusDelayFrames = 2;
+        _focusRequested = true;
+    }
+
     public void Draw(in EditorContext context)
     {
         PrepareFrame(context.Selection.GameObjectStableId);
-        bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        if (_focusDelayFrames > 0)
         {
-            Visible = visible;
+            _focusDelayFrames--;
+        }
+        else if (_focusRequested)
+        {
+            ImGui.SetNextWindowFocus();
+            _focusRequested = false;
+        }
+
+        if (!ImGui.Begin(Title))
+        {
             ImGui.End();
             return;
         }
 
-        Visible = visible;
         if (!string.IsNullOrWhiteSpace(context.Selection.EntityHandle))
         {
             DrawRuntimeEntityInspector(context.Selection.EntityHandle);
