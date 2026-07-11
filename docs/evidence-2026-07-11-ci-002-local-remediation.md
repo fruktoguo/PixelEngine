@@ -5,7 +5,7 @@ Evidence Index: `ci-002-local-remediation-20260711`
 ## 结论与边界
 
 - CI 修复源码已提交为 `97d7c0b99cedbd907f8b82a716684aec320f4a47`。本轮把 standard hosted Windows 的 build/test/TRX 聚合、disassembly guard 与 benchmark regression 同专用真实 GPU smoke 分离，并对两条链路都采用 fail-closed 合同。
-- `CI-002` 仍保持 `[~]`：当前提交尚未 push，也没有绑定当前完整 SHA 的 GitHub Actions Windows artifact，因此本文只登记“本地修复与验证完成”，不冒充远端首次全绿。
+- `CI-002` 现保持 `[!]`：当前提交尚未 push，也没有绑定当前完整 SHA 的 GitHub Actions Windows artifact；所有可在本地可靠执行的验证均已完成，剩余条件需要用户明确授权 push 与远端 Actions 状态变化。本文只登记“本地修复与验证完成”，不冒充远端首次全绿。
 - `TEST-003` 仍保持 `[!]`：当前仓库没有注册满足交互桌面、Desktop GL 3.3+、真实 ANGLE/GLES 3.0+ 与隔离标签要求的 Windows x64 self-hosted runner。
 - 2026-07-12 已在 detached clean worktree 中直接 checkout 完整实现提交 `97d7c0b9`，初始化该提交锁定的全部递归 submodule 后，按 Windows CI 顺序重新执行 native build、solution build、13-TRX test aggregate、disassembly guard 与正式 benchmark regression。新本地摘要直接绑定 `97d7c0b9`，取代首轮 pre-commit 工作树结果；它仍是本地证据，不是 GitHub Actions artifact。
 

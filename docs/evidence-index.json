@@ -504,8 +504,8 @@
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64",
       "command": "detached clean worktree at 97d7c0b9; git submodule update --init --recursive; build-native.ps1 win-x64 Release; dotnet build PixelEngine.sln Release; dotnet test PixelEngine.sln Release --no-build --logger trx; summarize-ci-test-results.ps1; disassembly-guard.ps1; benchmark-regression.ps1 against ci-baseline.json; actionlint; validate-task-catalog.ps1; validate-target-hardware-matrix.ps1",
       "reportPath": "docs/evidence-2026-07-11-ci-002-local-remediation.md",
-      "sha256": "7bb1cb2248d9c0317083322108768198709f568082c1dc18fe9a3d9bac49f4e4",
-      "notes": "修复实现提交 97d7c0b9 已在同 SHA detached clean worktree 完成 native/solution build、13-TRX 聚合、disassembly 与正式 benchmark guard；本地 runner/run id 明确不冒充 GitHub Actions。CI-002 保持 active，仍需 push 后当前完整 SHA 的远端 Windows artifact；真实 ANGLE runner 缺失由 TEST-003 保持 blocked。"
+      "sha256": "59d32ab311e1abd7c7e8499332d0419a02146b565a4ba222155cfaf0b9f872d2",
+      "notes": "修复实现提交 97d7c0b9 已在同 SHA detached clean worktree 完成 native/solution build、13-TRX 聚合、disassembly 与正式 benchmark guard；本地 runner/run id 明确不冒充 GitHub Actions。CI-002 保持 blocked，解除条件是用户明确授权 push 后取得当前完整 SHA 的远端 Windows artifact；真实 ANGLE runner 缺失由 TEST-003 保持 blocked。"
     }
   ]
 }
