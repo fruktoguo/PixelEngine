@@ -2902,7 +2902,7 @@ public sealed class PlayerControllerIntegrationTests
         if (entryType is not null)
         {
             _ = builder
-                .AddScene(new SceneDescriptor("test", SceneSourceKind.Procedural, entryType.FullName!))
+                .AddScene(new SceneDescriptor("test", SceneSourceKind.Procedural, entryType.FullName))
                 .WithStartScene("test");
         }
 

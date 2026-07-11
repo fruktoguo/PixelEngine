@@ -43,7 +43,7 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal("lava-mine", project.StartScene);
         Assert.Equal(SceneSourceKind.SceneFile, scene.SourceKind);
         Assert.False(string.IsNullOrEmpty(scene.Source));
-        string source = scene.Source!;
+        string source = scene.Source;
         Assert.EndsWith("content/scenes/lava-mine.scene", source.Replace('\\', '/'), StringComparison.Ordinal);
     }
 

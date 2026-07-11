@@ -305,7 +305,7 @@ internal sealed class EditorSceneModel
         EditorPrefabLink link = gameObject.PrefabLink;
         string sourceStableId = string.IsNullOrWhiteSpace(link.SourceStableId)
             ? stableId.ToString(System.Globalization.CultureInfo.InvariantCulture)
-            : link.SourceStableId!;
+            : link.SourceStableId;
         for (int i = 0; i < link.Overrides.Count; i++)
         {
             EditorPrefabOverride existing = link.Overrides[i];

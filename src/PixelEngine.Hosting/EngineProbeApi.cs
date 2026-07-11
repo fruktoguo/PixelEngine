@@ -352,11 +352,7 @@ public sealed class EngineProbeApi
 
         public void Dispose()
         {
-            RenderPipeline? current = Interlocked.Exchange(ref _pipeline, null);
-            if (current is not null)
-            {
-                current.BeforeSwapBuffers -= _handler;
-            }
+            Interlocked.Exchange(ref _pipeline, null)?.BeforeSwapBuffers -= _handler;
         }
     }
 }

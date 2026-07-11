@@ -56,21 +56,21 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
 
         Assert.NotNull(framebuffer);
         Assert.NotNull(texturePixels);
-        Assert.True(CountWhitePixelsRaw(texturePixels!, width: 4, x0: 1, y0: 1, x1: 3, y1: 3) == 4, "overlay texture dirty rect 应已上传为 2x2 白色区域。");
+        Assert.True(CountWhitePixelsRaw(texturePixels, width: 4, x0: 1, y0: 1, x1: 3, y1: 3) == 4, "overlay texture dirty rect 应已上传为 2x2 白色区域。");
         Assert.True(layer.PresentCount >= 2, $"UI layer 应被 RenderPipeline 调用，actual={layer.PresentCount}");
         Assert.Equal(GLEnum.NoError, layer.PresenterGlError);
         Assert.Equal(GLEnum.NoError, layer.ProbeGlError);
         Assert.True(
             CountWhitePixels(
-                framebuffer!,
+                framebuffer,
                 window.Width,
                 x0: layer.ProbeX,
                 y0: layer.ProbeY,
                 x1: layer.ProbeX + 8,
                 y1: layer.ProbeY + 8) > 0,
-            MaxPixelMessage(framebuffer!, window.Width));
-        Assert.True(CountWhitePixels(framebuffer!, window.Width, x0: 4, y0: 4, x1: 12, y1: 12) > 0, MaxPixelMessage(framebuffer!, window.Width));
-        byte[] outside = PixelAtTopLeftOrigin(framebuffer!, window.Width, x: 1, y: 1);
+            MaxPixelMessage(framebuffer, window.Width));
+        Assert.True(CountWhitePixels(framebuffer, window.Width, x0: 4, y0: 4, x1: 12, y1: 12) > 0, MaxPixelMessage(framebuffer, window.Width));
+        byte[] outside = PixelAtTopLeftOrigin(framebuffer, window.Width, x: 1, y: 1);
         Assert.True(outside[0] < 240 || outside[1] < 240 || outside[2] < 240, $"脏矩形外不应被错误涂成白色，actual rgba=({outside[0]},{outside[1]},{outside[2]},{outside[3]})");
         Assert.True(profiler.LastSubFrame[(int)FrameSubPhase.UiUpload] > 0);
         Assert.NotEqual(0u, layer.TextureHandle);

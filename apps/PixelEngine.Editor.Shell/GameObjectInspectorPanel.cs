@@ -54,7 +54,7 @@ internal sealed class GameObjectInspectorPanel(
 
         if (!context.Selection.GameObjectStableId.HasValue && !string.IsNullOrWhiteSpace(context.Selection.AssetPath))
         {
-            DrawAssetInspector(context.Selection.AssetPath!);
+            DrawAssetInspector(context.Selection.AssetPath);
             ImGui.End();
             return;
         }

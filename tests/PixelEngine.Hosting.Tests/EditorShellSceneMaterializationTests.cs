@@ -137,7 +137,7 @@ public sealed class EditorShellSceneMaterializationTests
                     [
                         new EngineSceneBehaviourDocument
                         {
-                            TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                            TypeName = typeof(EditorShellProjectionProbe).FullName,
                             SerializedFields = new Dictionary<string, string>
                             {
                                 ["Label"] = "child",
@@ -372,7 +372,7 @@ public sealed class EditorShellSceneMaterializationTests
                     [
                         new EngineSceneBehaviourDocument
                         {
-                            TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                            TypeName = typeof(EditorShellProjectionProbe).FullName,
                             SerializedFields = new Dictionary<string, string>
                             {
                                 ["TextureReference"] = ScriptAssetReference.Encode("asset_texture", "textures/sand.png", ScriptAssetKind.Texture),
@@ -419,7 +419,7 @@ public sealed class EditorShellSceneMaterializationTests
                     [
                         new EngineSceneBehaviourDocument
                         {
-                            TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                            TypeName = typeof(EditorShellProjectionProbe).FullName,
                             SerializedFields = new Dictionary<string, string>
                             {
                                 [fieldName] = "mutated",
@@ -479,7 +479,7 @@ public sealed class EditorShellSceneMaterializationTests
                         [
                             new EngineSceneBehaviourDocument
                             {
-                                TypeName = typeof(EditorShellProjectionProbe).FullName!,
+                                TypeName = typeof(EditorShellProjectionProbe).FullName,
                                 SerializedFields = new Dictionary<string, string>
                                 {
                                     ["Label"] = label,
