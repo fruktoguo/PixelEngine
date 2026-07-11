@@ -36,6 +36,9 @@ internal sealed class GameObjectInspectorPanel(
     private int? _transformEditStableId;
     private EditorSceneTransform? _transformEditBefore;
     private EditorGameObject? _transformEditTarget;
+    private int? _nameEditStableId;
+    private string _nameEditBuffer = string.Empty;
+    private EditorGameObject? _nameEditTarget;
     private int _focusDelayFrames;
     private bool _focusRequested;
 
@@ -110,12 +113,31 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         DrawHeader(gameObject);
-        ImGui.SeparatorText("Transform");
-        DrawTransform(gameObject);
-        ImGui.SeparatorText("Components");
+        bool transformOpen = DrawInspectorComponentHeader("Transform##gameobject-transform");
+        bool resetTransform = false;
+        if (ImGui.BeginPopupContextItem("gameobject-transform-context"))
+        {
+            resetTransform = ImGui.MenuItem("Reset");
+            ImGui.EndPopup();
+        }
+
+        if (resetTransform)
+        {
+            _undo.Execute(_scene, new SetTransformCommand(gameObject.StableId, new EditorSceneTransform()));
+        }
+
+        if (transformOpen)
+        {
+            DrawTransform(gameObject);
+        }
+
         DrawComponents(gameObject);
-        ImGui.SeparatorText("Inspector 状态");
-        ImGui.TextUnformatted(Status);
+        if (!string.Equals(Status, ReadyStatus, StringComparison.Ordinal))
+        {
+            ImGui.Separator();
+            ImGui.TextColored(new Vector4(0.95f, 0.70f, 0.25f, 1f), Status);
+        }
+
         ImGui.End();
     }
 
@@ -130,7 +152,16 @@ internal sealed class GameObjectInspectorPanel(
         bool targetReplaced = _transformEditStableId.HasValue &&
             (!_scene.TryGet(_transformEditStableId.Value, out EditorGameObject? currentTarget) ||
              !ReferenceEquals(currentTarget, _transformEditTarget));
+        bool nameTargetReplaced = _nameEditStableId.HasValue &&
+            (!_scene.TryGet(_nameEditStableId.Value, out EditorGameObject? currentNameTarget) ||
+             !ReferenceEquals(currentNameTarget, _nameEditTarget));
         UpdateRuntimeEditLifetime();
+        if (_nameEditStableId.HasValue &&
+            (!Visible || mode != EditorMode.Edit || selectedStableId != _nameEditStableId || nameTargetReplaced))
+        {
+            CommitPendingNameEdit();
+        }
+
         if (_transformEditStableId.HasValue &&
             (!Visible || mode != EditorMode.Edit || selectedStableId != _transformEditStableId || targetReplaced))
         {
@@ -537,76 +568,178 @@ internal sealed class GameObjectInspectorPanel(
 
     private void DrawHeader(EditorGameObject gameObject)
     {
-        string name = gameObject.Name;
-        if (ImGui.InputText("Name", ref name, 128) && !string.IsNullOrWhiteSpace(name) && name != gameObject.Name)
-        {
-            _undo.Execute(_scene, new RenameGameObjectCommand(gameObject.StableId, name));
-        }
-
         bool enabled = gameObject.Enabled;
-        if (ImGui.Checkbox("Enabled", ref enabled) && enabled != gameObject.Enabled)
+        if (ImGui.Checkbox("##gameobject-active", ref enabled) && enabled != gameObject.Enabled)
         {
             _undo.Execute(_scene, new SetGameObjectEnabledCommand(gameObject.StableId, enabled));
         }
 
-        ImGui.TextUnformatted($"StableId: {gameObject.StableId}");
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(enabled ? "GameObject active" : "GameObject inactive");
+        }
+
+        if (!_nameEditStableId.HasValue)
+        {
+            _nameEditBuffer = gameObject.Name;
+        }
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(-1f);
+        bool submitted = ImGui.InputText(
+            "##gameobject-name",
+            ref _nameEditBuffer,
+            128,
+            ImGuiInputTextFlags.EnterReturnsTrue);
+        if (ImGui.IsItemActivated())
+        {
+            _nameEditStableId = gameObject.StableId;
+            _nameEditTarget = gameObject;
+        }
+
+        if (submitted || ImGui.IsItemDeactivatedAfterEdit())
+        {
+            CommitPendingNameEdit();
+        }
+
+        ImGui.TextDisabled($"2D GameObject  ·  ID {gameObject.StableId}");
         if (gameObject.PrefabLink?.AssetPath is { Length: > 0 } prefab)
         {
-            ImGui.TextUnformatted($"Prefab: {prefab}");
-            ImGui.TextUnformatted($"Overrides: {gameObject.PrefabLink.Overrides.Count}");
+            ImGui.TextColored(new Vector4(0.45f, 0.72f, 1f, 1f), $"Prefab  ·  {prefab}");
+            ImGui.SameLine();
+            ImGui.TextDisabled($"{gameObject.PrefabLink.Overrides.Count} overrides");
             if (gameObject.PrefabLink.Overrides.Count != 0 && ImGui.Button("Revert Overrides"))
             {
                 _undo.Execute(_scene, new RevertPrefabOverridesCommand(gameObject.StableId));
             }
         }
-        else
-        {
-            ImGui.TextUnformatted("Prefab: none");
-        }
+
+        ImGui.Separator();
     }
 
     private void DrawTransform(EditorGameObject gameObject)
     {
         EditorSceneTransform transform = gameObject.Transform.Clone();
+        if (!ImGui.BeginTable("gameobject-transform-fields", 5, ImGuiTableFlags.SizingStretchProp))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 68f);
+        ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, 12f);
+        ImGui.TableSetupColumn("ValueA", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn("AxisB", ImGuiTableColumnFlags.WidthFixed, 12f);
+        ImGui.TableSetupColumn("ValueB", ImGuiTableColumnFlags.WidthStretch);
+
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.TextUnformatted("Position");
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.TextDisabled("X");
+        _ = ImGui.TableSetColumnIndex(2);
         float x = transform.X;
         float y = transform.Y;
-        bool changed = ImGui.InputFloat("X", ref x);
+        ImGui.SetNextItemWidth(-1f);
+        bool changed = ImGui.InputFloat("##position-x", ref x);
         if (changed)
         {
             transform.X = x;
         }
         HandleTransformInput(gameObject, transform, changed);
 
-        changed = ImGui.InputFloat("Y", ref y);
+        _ = ImGui.TableSetColumnIndex(3);
+        ImGui.TextDisabled("Y");
+        _ = ImGui.TableSetColumnIndex(4);
+        ImGui.SetNextItemWidth(-1f);
+        changed = ImGui.InputFloat("##position-y", ref y);
         if (changed)
         {
             transform.Y = y;
         }
         HandleTransformInput(gameObject, transform, changed);
 
-        float rotation = transform.RotationRadians;
-        changed = ImGui.InputFloat("Rotation", ref rotation);
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.TextUnformatted("Rotation");
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.TextDisabled("Z");
+        _ = ImGui.TableSetColumnIndex(2);
+        float rotation = RadiansToDegrees(transform.RotationRadians);
+        ImGui.SetNextItemWidth(-1f);
+        changed = ImGui.InputFloat("##rotation-z", ref rotation);
         if (changed)
         {
-            transform.RotationRadians = rotation;
+            transform.RotationRadians = DegreesToRadians(rotation);
         }
         HandleTransformInput(gameObject, transform, changed);
 
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.TextUnformatted("Scale");
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.TextDisabled("X");
+        _ = ImGui.TableSetColumnIndex(2);
         float scaleX = transform.ScaleX;
         float scaleY = transform.ScaleY;
-        changed = ImGui.InputFloat("Scale X", ref scaleX);
+        ImGui.SetNextItemWidth(-1f);
+        changed = ImGui.InputFloat("##scale-x", ref scaleX);
         if (changed)
         {
             transform.ScaleX = scaleX;
         }
         HandleTransformInput(gameObject, transform, changed);
 
-        changed = ImGui.InputFloat("Scale Y", ref scaleY);
+        _ = ImGui.TableSetColumnIndex(3);
+        ImGui.TextDisabled("Y");
+        _ = ImGui.TableSetColumnIndex(4);
+        ImGui.SetNextItemWidth(-1f);
+        changed = ImGui.InputFloat("##scale-y", ref scaleY);
         if (changed)
         {
             transform.ScaleY = scaleY;
         }
         HandleTransformInput(gameObject, transform, changed);
+        ImGui.EndTable();
+    }
+
+    internal static float RadiansToDegrees(float radians)
+    {
+        return radians * (180f / MathF.PI);
+    }
+
+    internal static float DegreesToRadians(float degrees)
+    {
+        return degrees * (MathF.PI / 180f);
+    }
+
+    private void CommitPendingNameEdit()
+    {
+        if (!_nameEditStableId.HasValue)
+        {
+            return;
+        }
+
+        int stableId = _nameEditStableId.Value;
+        EditorGameObject? expectedTarget = _nameEditTarget;
+        string name = _nameEditBuffer.Trim();
+        _nameEditStableId = null;
+        _nameEditTarget = null;
+        bool found = _scene.TryGet(stableId, out EditorGameObject? gameObject);
+        if (name.Length == 0 ||
+            !found ||
+            !ReferenceEquals(gameObject, expectedTarget) ||
+            string.Equals(gameObject.Name, name, StringComparison.Ordinal))
+        {
+            if (gameObject is not null && ReferenceEquals(gameObject, expectedTarget))
+            {
+                _nameEditBuffer = gameObject.Name;
+            }
+
+            return;
+        }
+
+        _undo.Execute(_scene, new RenameGameObjectCommand(stableId, name));
+        _nameEditBuffer = name;
     }
 
     private void HandleTransformInput(EditorGameObject gameObject, EditorSceneTransform transform, bool changed)
@@ -669,57 +802,123 @@ internal sealed class GameObjectInspectorPanel(
 
     private void DrawComponents(EditorGameObject gameObject)
     {
-        // 遍历已有组件并提供 Add Component 搜索下拉
+        // 遍历已有组件并提供 Unity 式 Add Component 搜索弹层。
         for (int i = 0; i < gameObject.Components.Count; i++)
         {
             DrawComponent(gameObject, i);
         }
 
-        ImGui.Separator();
-        _ = ImGui.InputText("Search", ref _componentSearch, 128);
-        Type[] behaviours = GetBehaviourTypes(_componentSearch);
-        if (ImGui.BeginCombo("Add Component", behaviours.Length == 0 ? "No Behaviour" : "Select Behaviour"))
+        ImGui.Spacing();
+        float available = ImGui.GetContentRegionAvail().X;
+        float addWidth = MathF.Min(220f, available);
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0f, (available - addWidth) * 0.5f));
+        if (ImGui.Button("Add Component", new Vector2(addWidth, 0f)))
         {
+            _componentSearch = string.Empty;
+            ImGui.OpenPopup("add-component-popup");
+        }
+
+        if (ImGui.BeginPopup("add-component-popup"))
+        {
+            ImGui.SetNextItemWidth(280f);
+            _ = ImGui.InputTextWithHint("##component-search", "Search components", ref _componentSearch, 128);
+            ImGui.Separator();
+            Type[] behaviours = GetBehaviourTypes(_componentSearch);
             for (int i = 0; i < behaviours.Length; i++)
             {
                 Type behaviour = behaviours[i];
                 string label = behaviour.FullName ?? behaviour.Name;
-                if (ImGui.Selectable(label))
+                if (ImGui.Selectable($"{GetComponentDisplayName(label)}##add-component-{label}"))
                 {
                     _undo.Execute(_scene, new AddComponentCommand(gameObject.StableId, new EditorComponentModel(label)));
                     _componentSearch = string.Empty;
+                    ImGui.CloseCurrentPopup();
+                }
+
+                if (ImGui.IsItemHovered())
+                {
+                    ImGui.SetTooltip(label);
                 }
             }
 
-            ImGui.EndCombo();
+            if (behaviours.Length == 0)
+            {
+                ImGui.TextDisabled("No matching Behaviour");
+            }
+
+            ImGui.EndPopup();
         }
     }
 
     private void DrawComponent(EditorGameObject gameObject, int componentIndex)
     {
         EditorComponentModel component = gameObject.Components[componentIndex];
-        if (!ImGui.CollapsingHeader($"{component.TypeName}##component_{componentIndex}", ImGuiTreeNodeFlags.DefaultOpen))
+        string displayName = GetComponentDisplayName(component.TypeName);
+        Vector2 headerMin = ImGui.GetCursorScreenPos();
+        bool open = DrawInspectorComponentHeader($"   {displayName}##component_{componentIndex}");
+        if (ImGui.IsItemHovered())
         {
-            return;
+            ImGui.SetTooltip($"{component.TypeName}\nRight-click for component actions");
         }
 
-        if (ImGui.Button($"Remove##component_remove_{componentIndex}"))
+        int moveTarget = -1;
+        bool remove = false;
+        if (ImGui.BeginPopupContextItem($"component_context_{componentIndex}"))
+        {
+            if (ImGui.MenuItem("Move Up", string.Empty, selected: false, enabled: componentIndex > 0))
+            {
+                moveTarget = componentIndex - 1;
+            }
+
+            if (ImGui.MenuItem(
+                "Move Down",
+                string.Empty,
+                selected: false,
+                enabled: componentIndex < gameObject.Components.Count - 1))
+            {
+                moveTarget = componentIndex + 1;
+            }
+
+            ImGui.Separator();
+            remove = ImGui.MenuItem("Remove Component");
+            ImGui.EndPopup();
+        }
+
+        Vector2 cursorAfterHeader = ImGui.GetCursorScreenPos();
+        bool componentEnabled = IsComponentEnabled(component);
+        ImGui.SetCursorScreenPos(headerMin + new Vector2(19f, 2f));
+        if (ImGui.Checkbox($"##component-enabled-{componentIndex}", ref componentEnabled))
+        {
+            _undo.Execute(
+                _scene,
+                new SetComponentFieldCommand(
+                    gameObject.StableId,
+                    componentIndex,
+                    nameof(Behaviour.Enabled),
+                    componentEnabled.ToString()));
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(componentEnabled ? "Component enabled" : "Component disabled");
+        }
+
+        ImGui.SetCursorScreenPos(cursorAfterHeader);
+
+        if (remove)
         {
             _undo.Execute(_scene, new RemoveComponentCommand(gameObject.StableId, componentIndex));
             return;
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button($"Up##component_up_{componentIndex}") && componentIndex > 0)
+        if (moveTarget >= 0)
         {
-            _undo.Execute(_scene, new MoveComponentCommand(gameObject.StableId, componentIndex, componentIndex - 1));
+            _undo.Execute(_scene, new MoveComponentCommand(gameObject.StableId, componentIndex, moveTarget));
             return;
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button($"Down##component_down_{componentIndex}") && componentIndex < gameObject.Components.Count - 1)
+        if (!open)
         {
-            _undo.Execute(_scene, new MoveComponentCommand(gameObject.StableId, componentIndex, componentIndex + 1));
             return;
         }
 
@@ -730,17 +929,71 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
+        if (!ImGui.BeginTable(
+            $"component-fields-{componentIndex}",
+            2,
+            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.PadOuterX))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 116f);
+        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
         for (int i = 0; i < fields.Length; i++)
         {
             DrawField(gameObject.StableId, componentIndex, component, fields[i]);
         }
+
+        ImGui.EndTable();
+    }
+
+    private static bool DrawInspectorComponentHeader(string label)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(0.22f, 0.22f, 0.22f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.HeaderHovered, new Vector4(0.27f, 0.27f, 0.27f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.HeaderActive, new Vector4(0.30f, 0.30f, 0.30f, 1f));
+        bool open = ImGui.CollapsingHeader(
+            label,
+            ImGuiTreeNodeFlags.DefaultOpen |
+            ImGuiTreeNodeFlags.SpanAvailWidth |
+            ImGuiTreeNodeFlags.AllowOverlap);
+        ImGui.PopStyleColor();
+        ImGui.PopStyleColor();
+        ImGui.PopStyleColor();
+        return open;
+    }
+
+    internal static bool IsComponentEnabled(EditorComponentModel component)
+    {
+        ArgumentNullException.ThrowIfNull(component);
+        return !component.SerializedFields.TryGetValue(nameof(Behaviour.Enabled), out string? serialized) ||
+            !bool.TryParse(serialized, out bool enabled) ||
+            enabled;
+    }
+
+    internal static string GetComponentDisplayName(string typeName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(typeName);
+        int separator = Math.Max(typeName.LastIndexOf('.'), typeName.LastIndexOf('+'));
+        return separator >= 0 && separator < typeName.Length - 1
+            ? typeName[(separator + 1)..]
+            : typeName;
     }
 
     private void DrawField(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.TextUnformatted(field.Name);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(field.Name);
+        }
+
+        _ = ImGui.TableSetColumnIndex(1);
         if (!field.CanWrite || field.Kind == ScriptFieldKind.Unsupported)
         {
-            ImGui.TextUnformatted($"{field.Name}: {ReadFieldValue(component, field)}");
+            ImGui.TextUnformatted(ReadFieldValue(component, field));
             return;
         }
 
@@ -776,7 +1029,7 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawBoolean(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         bool value = bool.TryParse(ReadFieldValue(component, field), out bool parsed) && parsed;
-        if (ImGui.Checkbox(field.Name, ref value))
+        if (ImGui.Checkbox($"##field-{stableId}-{componentIndex}-{field.Name}", ref value))
         {
             _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, value.ToString()));
         }
@@ -787,7 +1040,8 @@ internal sealed class GameObjectInspectorPanel(
         float value = float.TryParse(ReadFieldValue(component, field), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsed)
             ? parsed
             : 0f;
-        if (ImGui.InputFloat(field.Name, ref value))
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.InputFloat($"##field-{stableId}-{componentIndex}-{field.Name}", ref value))
         {
             _undo.Execute(_scene, new SetComponentFieldCommand(
                 stableId,
@@ -800,7 +1054,8 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawString(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         string value = ReadFieldValue(component, field);
-        if (ImGui.InputText(field.Name, ref value, 256))
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.InputText($"##field-{stableId}-{componentIndex}-{field.Name}", ref value, 256))
         {
             _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, value));
         }
@@ -812,7 +1067,8 @@ internal sealed class GameObjectInspectorPanel(
         string[] names = Enum.GetNames(enumType);
         string current = ReadFieldValue(component, field);
         int index = Math.Max(0, Array.IndexOf(names, current));
-        if (ImGui.Combo(field.Name, ref index, names, names.Length) && index >= 0 && index < names.Length)
+        ImGui.SetNextItemWidth(-1f);
+        if (ImGui.Combo($"##field-{stableId}-{componentIndex}-{field.Name}", ref index, names, names.Length) && index >= 0 && index < names.Length)
         {
             _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, names[index]));
         }
@@ -822,7 +1078,7 @@ internal sealed class GameObjectInspectorPanel(
     {
         string value = ReadFieldValue(component, field);
         string typeLabel = field.AssetKind?.ToString() ?? "Unknown";
-        ImGui.TextUnformatted($"{field.Name} ({typeLabel}): {FormatAssetReferenceDisplay(field, value)}");
+        ImGui.TextUnformatted($"{FormatAssetReferenceDisplay(field, value)} ({typeLabel})");
         DrawAssetReferenceDropTarget(stableId, componentIndex, field);
         if (!string.IsNullOrWhiteSpace(value))
         {

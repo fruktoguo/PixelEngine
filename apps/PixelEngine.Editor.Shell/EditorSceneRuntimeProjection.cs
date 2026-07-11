@@ -29,10 +29,14 @@ internal sealed class EditorSceneRuntimeProjection
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
         EditorSceneRuntimeProjection projection = new(new Scripting.Scene());
+        Dictionary<int, bool> enabledByStableId = new(model.Count);
         foreach (EditorGameObject gameObject in model.EnumerateDepthFirst())
         {
             Entity entity = projection.Scene.CreateEntity();
             projection._stableToRuntime.Add(gameObject.StableId, entity.Id);
+            bool effectivelyEnabled = gameObject.Enabled &&
+                (!gameObject.ParentId.HasValue || enabledByStableId[gameObject.ParentId.Value]);
+            enabledByStableId.Add(gameObject.StableId, effectivelyEnabled);
             Transform transform = entity.AddComponent<Transform>();
             ApplyTransform(transform, model.ComputeWorldTransform(gameObject.StableId));
             for (int i = 0; i < gameObject.Components.Count; i++)
@@ -41,6 +45,10 @@ internal sealed class EditorSceneRuntimeProjection
                 Type type = ResolveBehaviourType(component.TypeName, scriptAssemblies);
                 IComponent runtimeComponent = entity.AddComponent(type);
                 BindSerializedFields(runtimeComponent, component.SerializedFields);
+                if (!effectivelyEnabled && runtimeComponent is Behaviour behaviour)
+                {
+                    behaviour.Enabled = false;
+                }
             }
         }
 

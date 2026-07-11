@@ -1,5 +1,6 @@
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
+using PixelEngine.Scripting;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -10,6 +11,40 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class GameObjectInspectorPanelTests
 {
+    /// <summary>
+    /// 验证 Unity 式 Hierarchy 搜索会保留命中节点的祖先路径，并隐藏无关分支。
+    /// </summary>
+    [Fact]
+    public void HierarchySearchKeepsMatchingAncestorPath()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("hierarchy-search");
+        EditorGameObject root = scene.Create("World");
+        EditorGameObject player = scene.Create("Player Camera", root.StableId);
+        EditorGameObject unrelated = scene.Create("Lighting");
+
+        Assert.True(GameObjectHierarchyPanel.MatchesSearch(scene, root.StableId, "camera"));
+        Assert.True(GameObjectHierarchyPanel.MatchesSearch(scene, player.StableId, "CAMERA"));
+        Assert.False(GameObjectHierarchyPanel.MatchesSearch(scene, unrelated.StableId, "camera"));
+        Assert.True(GameObjectHierarchyPanel.MatchesSearch(scene, unrelated.StableId, "  "));
+    }
+
+    /// <summary>
+    /// 验证 Inspector 使用短组件名并以角度显示 2D Rotation，同时保持弧度存储往返。
+    /// </summary>
+    [Fact]
+    public void InspectorFormatsUnityLikeComponentAndRotationLabels()
+    {
+        Assert.Equal("PlayerController", GameObjectInspectorPanel.GetComponentDisplayName("Game.Scripts.PlayerController"));
+        Assert.Equal("Nested", GameObjectInspectorPanel.GetComponentDisplayName("Game.Outer+Nested"));
+        Assert.Equal(180f, GameObjectInspectorPanel.RadiansToDegrees(MathF.PI), precision: 3);
+        Assert.Equal(MathF.PI / 2f, GameObjectInspectorPanel.DegreesToRadians(90f), precision: 3);
+
+        EditorComponentModel component = new("Game.Scripts.PlayerController");
+        Assert.True(GameObjectInspectorPanel.IsComponentEnabled(component));
+        component.SerializedFields[nameof(Behaviour.Enabled)] = bool.FalseString;
+        Assert.False(GameObjectInspectorPanel.IsComponentEnabled(component));
+    }
+
     /// <summary>
     /// 验证 Inspector 能从 Project Window 共享数据源生成资产摘要，并对缺失资产给出诊断。
     /// </summary>

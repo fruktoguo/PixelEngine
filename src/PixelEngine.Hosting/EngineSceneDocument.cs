@@ -50,6 +50,12 @@ public sealed class EngineSceneEntityDocument
     public int? ParentId { get; init; }
 
     /// <summary>
+    /// GameObject authoring 激活位；旧场景缺失时按启用处理。
+    /// 父级禁用会在运行时物化阶段递归覆盖子级。
+    /// </summary>
+    public bool? Enabled { get; init; }
+
+    /// <summary>
     /// 编辑态局部 Transform；v1 场景缺失时按单位 Transform 处理。
     /// </summary>
     public EngineSceneTransformDocument? Transform { get; init; }

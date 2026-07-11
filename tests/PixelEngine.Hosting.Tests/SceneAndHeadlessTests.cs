@@ -1,3 +1,4 @@
+using PixelEngine.Editor.Shell;
 using PixelEngine.Serialization;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
@@ -199,6 +200,57 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal(Vector2.Zero, behaviour.Position);
             Assert.False(behaviour.Enabled);
             Assert.Same(loaded.ScriptScene, engine.Context.GetService<Scripting.Scene>());
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证旧 .scene 缺失 GameObject enabled 字段时仍按启用读取，而不是被 JSON bool 默认值误判为禁用。
+    /// </summary>
+    [Fact]
+    public void LegacySceneWithoutGameObjectEnabledDefaultsToActive()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-enabled-{Guid.NewGuid():N}");
+        try
+        {
+            string scenePath = Path.Combine(contentRoot, "scenes", "legacy.scene");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(scenePath)!);
+            File.WriteAllText(
+                scenePath,
+                $$"""
+                {
+                  "formatVersion": 2,
+                  "name": "legacy",
+                  "entities": [
+                    {
+                      "stableId": 1,
+                      "name": "active-by-default",
+                      "behaviours": [
+                        { "typeName": "{{typeof(SceneFileTestBehaviour).FullName}}" }
+                      ]
+                    }
+                  ]
+                }
+                """);
+            EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
+            Assert.Null(Assert.Single(document.Entities!).Enabled);
+
+            ScriptAssemblyRegistry scripts = new();
+            scripts.Register(typeof(SceneFileTestBehaviour).Assembly);
+            Scripting.Scene runtime = EngineSceneDocumentLoader.Build(document, scripts);
+            SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(
+                Assert.Single(Assert.Single(runtime.CaptureInspectionSnapshot()).Components).Behaviour);
+            Assert.True(behaviour.Enabled);
+
+            EditorSceneModel editor = EditorSceneModel.FromDocument(document);
+            Assert.True(editor.Get(1).Enabled);
+            Assert.True(Assert.Single(editor.ToDocument().Entities!).Enabled!.Value);
         }
         finally
         {
@@ -418,6 +470,7 @@ public sealed class SceneAndHeadlessTests
                         StableId = 30,
                         Name = "child",
                         ParentId = 20,
+                        Enabled = false,
                         Transform = new EngineSceneTransformDocument { X = 3, Y = 4, RotationRadians = 0.25f, ScaleX = 0.5f, ScaleY = 0.75f },
                         Prefab = new EngineScenePrefabDocument
                         {
@@ -474,6 +527,7 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal([10, 20, 30], [.. loadedAgain.Entities!.Select(static entity => entity.StableId)]);
             EngineSceneEntityDocument child = EntityByStableId(loadedAgain, 30);
             Assert.Equal(20, child.ParentId);
+            Assert.False(child.Enabled!.Value);
             AssertTransform(child.Transform!, x: 3, y: 4, rotation: 0.25f, scaleX: 0.5f, scaleY: 0.75f);
             Assert.Equal(["Health", "Label", "Position"], [.. child.Behaviours![0].SerializedFields!.Keys]);
             Assert.Equal("3.5,4.25", child.Behaviours[0].SerializedFields!["Position"]);
@@ -485,6 +539,7 @@ public sealed class SceneAndHeadlessTests
             scripts.Register(typeof(SceneFileTestBehaviour).Assembly);
             Scripting.Scene runtimeScene = EngineSceneDocumentLoader.Build(loadedAgain, scripts);
             SceneFileTestBehaviour behaviour = Assert.IsType<SceneFileTestBehaviour>(Assert.Single(runtimeScene.CaptureInspectionSnapshot()[2].Components).Behaviour);
+            Assert.False(behaviour.Enabled);
             Assert.Equal(new Vector2(3.5f, 4.25f), behaviour.Position);
         }
         finally

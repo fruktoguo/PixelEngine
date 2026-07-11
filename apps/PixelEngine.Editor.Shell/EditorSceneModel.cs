@@ -59,6 +59,7 @@ internal sealed class EditorSceneModel
             EngineSceneEntityDocument entity = entities[i];
             EditorGameObject gameObject = new(entity.StableId, string.IsNullOrWhiteSpace(entity.Name) ? $"GameObject {entity.StableId}" : entity.Name!)
             {
+                Enabled = entity.Enabled ?? true,
                 ParentId = entity.ParentId,
                 Transform = FromDocumentTransform(entity.Transform),
                 PrefabLink = FromDocumentPrefab(entity.Prefab),
@@ -122,6 +123,7 @@ internal sealed class EditorSceneModel
                 StableId = gameObject.StableId,
                 Name = gameObject.Name,
                 ParentId = gameObject.ParentId,
+                Enabled = gameObject.Enabled,
                 Transform = ToDocumentTransform(gameObject.Transform),
                 Prefab = ToDocumentPrefab(gameObject.PrefabLink),
                 Behaviours = behaviours,

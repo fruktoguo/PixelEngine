@@ -125,6 +125,7 @@ public sealed class EditorShellSceneMaterializationTests
                 {
                     StableId = 10,
                     Name = "root",
+                    Enabled = false,
                     Transform = new EngineSceneTransformDocument { X = 10, Y = 20, ScaleX = 2, ScaleY = 3 },
                 },
                 new EngineSceneEntityDocument
@@ -154,6 +155,9 @@ public sealed class EditorShellSceneMaterializationTests
         ScriptAssemblyRegistry scripts = new();
         scripts.Register(typeof(EditorShellProjectionProbe).Assembly);
 
+        Assert.False(model.Get(10).Enabled);
+        Assert.False(Assert.Single(model.ToDocument().Entities!, entity => entity.StableId == 10).Enabled!.Value);
+
         EditorSceneRuntimeProjection projection = EditorSceneRuntimeProjection.Build(model, scripts);
 
         // Assert：验证预期结果
@@ -169,6 +173,7 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal(8, child.Transform.ScaleX);
         Assert.Equal(15, child.Transform.ScaleY);
         EditorShellProjectionProbe probe = Assert.IsType<EditorShellProjectionProbe>(Assert.Single(child.Components).Behaviour);
+        Assert.False(probe.Enabled);
         Assert.Equal("child", probe.Label);
         Assert.Equal(new Vector2(3.5f, 4.25f), probe.Position);
         Assert.Equal(new MaterialId(4), probe.Material);

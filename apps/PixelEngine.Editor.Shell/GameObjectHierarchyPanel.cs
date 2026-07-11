@@ -1,4 +1,5 @@
 using Hexa.NET.ImGui;
+using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -20,6 +21,7 @@ internal sealed class GameObjectHierarchyPanel(
     private int _renameTarget;
     private int? _draggingStableId;
     private string _renameBuffer = string.Empty;
+    private string _search = string.Empty;
 
     public string Title => EditorDockSpace.SceneHierarchyWindowTitle;
 
@@ -36,20 +38,39 @@ internal sealed class GameObjectHierarchyPanel(
         SyncSelection(context.Selection);
         DrawToolbar();
         ImGui.Separator();
-        if (ImGui.Selectable(EditorLocalization.Get("hierarchy.sceneRoot", "Scene Root"), _scene.SelectedStableId is null))
+        ImGuiTreeNodeFlags sceneFlags = ImGuiTreeNodeFlags.DefaultOpen |
+            ImGuiTreeNodeFlags.OpenOnArrow |
+            ImGuiTreeNodeFlags.SpanAvailWidth;
+        if (_scene.SelectedStableId is null &&
+            context.Selection.AssetPath is null &&
+            context.Selection.FolderPath is null)
+        {
+            sceneFlags |= ImGuiTreeNodeFlags.Selected;
+        }
+
+        Vector2 sceneRowMin = ImGui.GetCursorScreenPos();
+        bool sceneOpen = ImGui.TreeNodeEx(
+            $"   {_scene.Name}{(_scene.IsDirty ? "*" : string.Empty)}##scene_root",
+            sceneFlags);
+        DrawObjectIcon(sceneRowMin, scene: true, enabled: true);
+        if (ImGui.IsItemClicked())
         {
             _scene.Select(null);
             context.Selection.Clear();
         }
 
         DrawRootDropTarget();
-        for (int i = 0; i < _scene.RootIds.Count; i++)
+        if (sceneOpen)
         {
-            DrawNode(_scene.RootIds[i], context.Selection);
-        }
+            for (int i = 0; i < _scene.RootIds.Count; i++)
+            {
+                DrawNode(_scene.RootIds[i], context.Selection);
+            }
 
-        DrawGeneratedMarkers();
-        DrawRuntimeHierarchy(context.Selection);
+            DrawGeneratedMarkers();
+            DrawRuntimeHierarchy(context.Selection);
+            ImGui.TreePop();
+        }
 
         if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
         {
@@ -181,35 +202,49 @@ internal sealed class GameObjectHierarchyPanel(
 
     private void DrawToolbar()
     {
-        if (ImGui.Button("Create"))
+        if (ImGui.Button("+##hierarchy-create"))
         {
-            _undo.Execute(_scene, new CreateGameObjectCommand("GameObject", _scene.SelectedStableId));
+            ImGui.OpenPopup("hierarchy-create-menu");
+        }
+
+        bool createHovered = ImGui.IsItemHovered();
+
+        if (ImGui.BeginPopup("hierarchy-create-menu"))
+        {
+            if (ImGui.MenuItem("Create Empty"))
+            {
+                _undo.Execute(_scene, new CreateGameObjectCommand("GameObject"));
+            }
+
+            bool hasParent = _scene.SelectedStableId.HasValue;
+            if (ImGui.MenuItem("Create Empty Child", string.Empty, selected: false, enabled: hasParent))
+            {
+                _undo.Execute(_scene, new CreateGameObjectCommand("GameObject", _scene.SelectedStableId));
+            }
+
+            ImGui.EndPopup();
+        }
+
+        if (createHovered)
+        {
+            ImGui.SetTooltip("Create GameObject");
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("Undo") && _undo.CanUndo)
-        {
-            _ = _undo.Undo(_scene);
-        }
-
-        ImGui.SameLine();
-        if (ImGui.Button("Redo") && _undo.CanRedo)
-        {
-            _ = _undo.Redo(_scene);
-        }
-
-        if (_undo.UndoName is not null || _undo.RedoName is not null)
-        {
-            ImGui.SameLine();
-            ImGui.TextUnformatted($"U:{_undo.UndoName ?? "-"}  R:{_undo.RedoName ?? "-"}");
-        }
+        ImGui.SetNextItemWidth(-1f);
+        _ = ImGui.InputTextWithHint("##hierarchy-search", "Search", ref _search, 128);
     }
 
     private void DrawNode(int stableId, EditorSelection selection)
     {
         EditorGameObject gameObject = _scene.Get(stableId);
+        if (!MatchesSearch(_scene, stableId, _search))
+        {
+            return;
+        }
+
         ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanAvailWidth;
-        if (!gameObject.ParentId.HasValue)
+        if (!gameObject.ParentId.HasValue || !string.IsNullOrWhiteSpace(_search))
         {
             flags |= ImGuiTreeNodeFlags.DefaultOpen;
         }
@@ -224,14 +259,25 @@ internal sealed class GameObjectHierarchyPanel(
             flags |= ImGuiTreeNodeFlags.Selected;
         }
 
-        bool enabled = gameObject.Enabled;
-        if (ImGui.Checkbox($"##enabled_{stableId}", ref enabled))
+        if (DrawVisibilityToggle(stableId, gameObject.Enabled))
         {
-            _undo.Execute(_scene, new SetGameObjectEnabledCommand(stableId, enabled));
+            _undo.Execute(_scene, new SetGameObjectEnabledCommand(stableId, !gameObject.Enabled));
         }
 
         ImGui.SameLine();
-        bool open = ImGui.TreeNodeEx($"{gameObject.Name}##go_{stableId}", flags);
+        if (!gameObject.Enabled)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]);
+        }
+
+        Vector2 rowMin = ImGui.GetCursorScreenPos();
+        bool open = ImGui.TreeNodeEx($"   {gameObject.Name}##go_{stableId}", flags);
+        DrawObjectIcon(rowMin, scene: false, enabled: gameObject.Enabled);
+        if (!gameObject.Enabled)
+        {
+            ImGui.PopStyleColor();
+        }
+
         if (ImGui.IsItemClicked())
         {
             Select(stableId, selection);
@@ -254,6 +300,86 @@ internal sealed class GameObjectHierarchyPanel(
 
             ImGui.TreePop();
         }
+    }
+
+    internal static bool MatchesSearch(EditorSceneModel scene, int stableId, string? search)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        EditorGameObject gameObject = scene.Get(stableId);
+        string query = search?.Trim() ?? string.Empty;
+        if (query.Length == 0 || gameObject.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        for (int i = 0; i < gameObject.Children.Count; i++)
+        {
+            if (MatchesSearch(scene, gameObject.Children[i], query))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool DrawVisibilityToggle(int stableId, bool enabled)
+    {
+        float size = ImGui.GetFrameHeight();
+        Vector2 min = ImGui.GetCursorScreenPos();
+        bool clicked = ImGui.InvisibleButton($"##hierarchy-visible-{stableId}", new Vector2(size));
+        bool hovered = ImGui.IsItemHovered();
+        uint color = enabled ? 0xFFD7D7D7 : 0xFF777777;
+        if (hovered)
+        {
+            color = 0xFFFFFFFF;
+            ImGui.SetTooltip(enabled ? "Disable GameObject" : "Enable GameObject");
+        }
+
+        Vector2 center = min + new Vector2(size * 0.5f);
+        float unit = size / 16f;
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.AddLine(center + new Vector2(-unit * 5f, 0f), center + new Vector2(0f, -unit * 3f), color, 1.2f);
+        drawList.AddLine(center + new Vector2(0f, -unit * 3f), center + new Vector2(unit * 5f, 0f), color, 1.2f);
+        drawList.AddLine(center + new Vector2(unit * 5f, 0f), center + new Vector2(0f, unit * 3f), color, 1.2f);
+        drawList.AddLine(center + new Vector2(0f, unit * 3f), center + new Vector2(-unit * 5f, 0f), color, 1.2f);
+        drawList.AddCircleFilled(center, unit * 1.5f, color);
+        if (!enabled)
+        {
+            drawList.AddLine(
+                center + new Vector2(-unit * 4f, -unit * 4f),
+                center + new Vector2(unit * 4f, unit * 4f),
+                color,
+                1.5f);
+        }
+
+        return clicked;
+    }
+
+    private static void DrawObjectIcon(Vector2 rowMin, bool scene, bool enabled)
+    {
+        float frameHeight = ImGui.GetFrameHeight();
+        float size = MathF.Max(6f, frameHeight * 0.42f);
+        Vector2 center = rowMin + new Vector2(frameHeight + (size * 0.5f), frameHeight * 0.5f);
+        uint color = enabled ? (scene ? 0xFFB3B7BD : 0xFF8EB8D8) : 0xFF686A6E;
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        if (scene)
+        {
+            drawList.AddRect(
+                center - new Vector2(size * 0.5f),
+                center + new Vector2(size * 0.5f),
+                color,
+                1f,
+                ImDrawFlags.None,
+                1.2f);
+            return;
+        }
+
+        drawList.AddRectFilled(
+            center - new Vector2(size * 0.5f),
+            center + new Vector2(size * 0.5f),
+            color,
+            1f);
     }
 
     private void Select(int stableId, EditorSelection selection)

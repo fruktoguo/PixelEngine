@@ -318,6 +318,7 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
                 ParentId = gameObject.ParentId.HasValue && remap.TryGetValue(gameObject.ParentId.Value, out int parentId)
                     ? parentId
                     : null,
+                Enabled = gameObject.Enabled,
                 Transform = ToDocumentTransform(gameObject.Transform),
                 Prefab = ToDocumentPrefab(gameObject.PrefabLink),
                 Behaviours = behaviours,

@@ -82,6 +82,7 @@ public static class EngineSceneDocumentLoader
         Scripting.Scene scene = new();
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
         Dictionary<int, EngineSceneTransformDocument> transformsByStableId = new(entities.Length);
+        Dictionary<int, bool> enabledByStableId = new(entities.Length);
         for (int i = 0; i < entities.Length; i++)
         {
             Entity entity = scene.CreateEntity();
@@ -89,12 +90,18 @@ public static class EngineSceneDocumentLoader
             EngineSceneTransformDocument worldTransform = ResolveWorldTransform(entities, i, transformsByStableId, []);
             ApplyTransform(transform, worldTransform);
             transformsByStableId[entities[i].StableId] = worldTransform;
+            bool effectivelyEnabled = ResolveEffectiveEnabled(entities, i, enabledByStableId, []);
+            enabledByStableId[entities[i].StableId] = effectivelyEnabled;
             EngineSceneBehaviourDocument[] behaviours = entities[i].Behaviours ?? [];
             for (int j = 0; j < behaviours.Length; j++)
             {
                 Type behaviourType = ResolveBehaviourType(behaviours[j], scriptAssemblies);
                 IComponent component = entity.AddComponent(behaviourType);
                 BindSerializedFields(component, behaviours[j].SerializedFields);
+                if (!effectivelyEnabled && component is Behaviour behaviour)
+                {
+                    behaviour.Enabled = false;
+                }
             }
         }
 
@@ -152,6 +159,7 @@ public static class EngineSceneDocumentLoader
                 StableId = sorted[i].StableId,
                 Name = sorted[i].Name,
                 ParentId = sorted[i].ParentId,
+                Enabled = sorted[i].Enabled ?? true,
                 Transform = sorted[i].Transform ?? new EngineSceneTransformDocument(),
                 Prefab = NormalizePrefab(sorted[i].Prefab),
                 Behaviours = normalizedBehaviours,
@@ -258,6 +266,36 @@ public static class EngineSceneDocumentLoader
             ScaleX = parent.ScaleX * local.ScaleX,
             ScaleY = parent.ScaleY * local.ScaleY,
         };
+    }
+
+    private static bool ResolveEffectiveEnabled(
+        EngineSceneEntityDocument[] entities,
+        int index,
+        Dictionary<int, bool> resolved,
+        HashSet<int> resolving)
+    {
+        EngineSceneEntityDocument entity = entities[index];
+        if (!resolving.Add(entity.StableId))
+        {
+            throw new InvalidOperationException($".scene 实体层级包含循环引用：{entity.StableId}。");
+        }
+
+        bool enabled = entity.Enabled ?? true;
+        if (enabled && entity.ParentId.HasValue)
+        {
+            int parentIndex = FindEntityIndex(entities, entity.ParentId.Value);
+            if (parentIndex < 0)
+            {
+                throw new InvalidOperationException($".scene 实体 {entity.StableId} 引用了不存在的父实体 {entity.ParentId.Value}。");
+            }
+
+            enabled = resolved.TryGetValue(entity.ParentId.Value, out bool parentEnabled)
+                ? parentEnabled
+                : ResolveEffectiveEnabled(entities, parentIndex, resolved, resolving);
+        }
+
+        _ = resolving.Remove(entity.StableId);
+        return enabled;
     }
 
     private static int FindEntityIndex(EngineSceneEntityDocument[] entities, int stableId)
