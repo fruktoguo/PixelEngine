@@ -27,5 +27,6 @@ Evidence Index: `editor-008-stability-workspace-localization-20260711`
 - `PixelEngine.UI.Tests`：106 passed / 9 native GL 条件 skipped。
 - Hosting 定向回归：108/108 passed，覆盖 EngineExecutionMode、Game View contract、layout migration、preferences、scene authoring 与 hosting discipline。
 - `tools/validate-task-catalog.ps1`：Task catalog valid。
+- 官方 `tools/update-final-output.ps1`：exit code 0；Editor default-workbench probe、Demo 80 tick window probe 与独立 `verify-final-output.ps1` 全部通过，checksum 共 270 项。发布 manifest 绑定实现提交 `5565e0e2107f850ef1b6c1ce63ef8546e1b95441`，发布目录含 `Localization/en-US.json` 与 `Localization/zh-CN.json`。
 
 全量 Hosting 回归曾启动，但既有窗口测试进程超过 8 分钟未退出且未给出失败；本证据不将该次运行计为通过，EDITOR-008 仅采用上述 108 项定向回归作为验收证据。
