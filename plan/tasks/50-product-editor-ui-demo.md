@@ -65,7 +65,7 @@
   - 优先级：P1。
   - 验收：resize/DPI 切换无一帧旧坐标；面板空白区阻断；图像透明区透传；交互区捕获；IME caret/candidate 锚点位于实际控件。
 
-- [~] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。2026-07-12 已在 Windows 真实运行 Unity 6.5 `6000.5.3f1` 与当前 Editor，建立默认布局、Hierarchy→Inspector、Play Mode、Project/Console、Project Picker 和窗口捕获的首轮差异基线，并完成全局 chrome、Scene 工具/dock、Hierarchy/Inspector、Project/Console 四轮收敛；Hierarchy 的 Scene Visibility/Picking 已与 GameObject active 正确分离，Project/Console 的宽窄信息层级已由真实输入与 framebuffer 验证。Project Picker、WGC、DPI/resize/dock/undock 与完整路线仍未清零，任务继续保持进行中。
+- [~] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。2026-07-12 已在 Windows 真实运行 Unity 6.5 `6000.5.3f1`、Unity Hub 3.19.4 与当前 Editor，建立默认布局、Hierarchy→Inspector、Play Mode、Project/Console、Project Browser 和窗口捕获的差异基线，并完成全局 chrome、Scene 工具/dock、Hierarchy/Inspector、Project/Console、Project Browser 五轮收敛；Hierarchy 的 Scene Visibility/Picking 已与 GameObject active 正确分离，Project/Console 的宽窄信息层级以及 Project Browser 的 Recent/New/Open/收藏路径均已由真实输入与 framebuffer 验证。WGC、DPI/resize/dock/undock、IME/drag-drop 与完整路线仍未清零，任务继续保持进行中。
   - 优先级：P1。
   - 验收：Hierarchy/Inspector/Scene View/gizmo/Undo/Redo/Console/Prefab/Settings/外部脚本编辑/Build And Run 可理解、可恢复；720p 和高 DPI 无标签截断或工具区溢出。对 PixelEngine 已支持的编辑器表面，以 Windows Unity 6.5 `6000.5.3f1` 默认工作台为交互与视觉参照：菜单/顶栏/底部状态栏、Play/Pause/Step 状态、面板停靠与切换、选择高亮、Hierarchy→Inspector 联动、Scene/Game 模式切换、Project/Console 密度、Project Picker、resize/DPI/键盘鼠标焦点以及系统录屏捕获均须达到相同心智模型和等价反馈；不得用未接线按钮或不支持的 Unity 子系统占位冒充对标。
   - 完成证据：必须同时包含可重跑自动化、PixelEngine framebuffer 证据、真实窗口输入路线和与同机 Unity 参照图的逐项差异表；仅 source-contract 测试、静态截图或“观感接近”均不能关闭本任务。每轮若仍发现可复现差异，保持 `[~]` 并继续修复。

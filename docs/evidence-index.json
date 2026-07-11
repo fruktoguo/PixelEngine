@@ -547,6 +547,19 @@
       "notes": "Project 单行工具栏、双栏导航、紧凑列表与稳定底栏，以及 Console 宽窄响应式工具栏、severity 计数、日志/详情分区已由真实窗口与 framebuffer 验证；Picker、DPI/resize/dock、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
     },
     {
+      "entryId": "editor-003-unity-parity-cycle05-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "8964b0880453ffa202409d3e805cbab25e52d287",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle05",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; Unity Hub 3.19.4 and Unity 6.5 6000.5.3f1 live references; PixelEngine 1280x720 framebuffer real-input probes",
+      "command": "Unity Hub live Projects/New project reference; PixelEngine real favorite menu and New project click through computer-use; EditorShell internal capture-frame v5g/v5h; full Hosting with blame-hang; targeted Hosting; Editor/UI tests; solution Release build; task catalog validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-05.md",
+      "sha256": "bd611660486d37162180884d079afcf30ad452ddb25cc71c0728263e942db18a",
+      "notes": "全工作区 Project Browser、Recent 搜索/收藏/移除/缺失状态、真实 New/Open 页面、路径校验和主次 CTA 已由 Unity Hub 同机参照、真实输入、持久化 JSON 与 framebuffer 验证；DPI/resize/dock、IME/drag-drop、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
