@@ -11,12 +11,12 @@
   - 验收：`actionlint`/GitHub validator 通过；push 后 workflow 不再 0-job；修复不能缩减计划矩阵来规避错误。
   - 证据：`.github/workflows/ci.yml` 已改为 Windows/non-Windows 静态 shell steps；PyYAML 解析通过；`go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/ci.yml` 通过；静态矩阵保持 6 个 build/test RID、4 个 verify-publish RID，`win-arm64` 仍为 build-only。首次远端 run 留给 `CI-002`，未以本地证据冒充远端成功。
 
-- [~] `CI-002` 取得当前 HEAD 的 Windows build/test/benchmark guard 首次远端全绿。
+- [x] `CI-002` 取得当前 HEAD 的 Windows build/test/benchmark guard 首次远端全绿。
   - 优先级：P0。
   - 恢复说明：2026-07-11 已在当前候选 HEAD 恢复执行；首次远端 run 暴露 hosted Windows 子进程编码/Bash 解析、benchmark 重复 filter 与 standard runner 无 WGL 三类问题，按普通 CI 与专用 GPU smoke 的真实能力边界修正。
   - 验收：win-x64 build、1492+ tests、disassembly guard、benchmark regression 实际执行；artifact/report 绑定 run id 和 commit SHA，并持久化逐程序集 TRX 与聚合计数。该任务只证明 standard hosted Windows 的 build/test/benchmark/disassembly，不声称独立 native GPU smoke 已执行。
   - 本地修复证据：`docs/evidence-2026-07-11-ci-002-local-remediation.md`；实现提交 `97d7c0b9` 已在 detached clean worktree 中按同一 SHA 完成 Windows native/solution build、13-TRX 聚合、disassembly guard 与正式 benchmark regression，全部通过。
-  - 远端恢复说明：用户授权后已把 `0a766c45` 推送到 `main`，GitHub Actions run `29165262888` 的 win-x64 native/solution build 与 verify-publish 成功，但 build-test 暴露 8 个 hosted Windows tooling contract 失败（4 个 native-smoke 诊断文本、4 个 Bash release audit fixture）；当前继续修复并等待同一完整 SHA 的重跑证据，不能以本地 pass 关闭任务。
+  - 远端证据：GitHub Actions run `29166221230`、attempt `1`、SHA `1148ca8732d4c7645ef4cfed1bb30352d8449d70`；`build-test (win-x64)`、`benchmark-guard (win-x64)`、`verify-publish (win-x64)` 与 `build-test (win-arm64, build-only)` 全部成功。win-x64 artifact 持久化 13/13 TRX，1776 total / 1739 executed / 1739 passed / 0 failed / 37 个 native GPU scope NotExecuted，最低 1492 门槛满足；benchmark artifact 同 run/SHA 记录 disassembly 与正式 regression success。该 workflow 的 Linux/macOS 长期矩阵失败仍由 `CI-003` 跟踪，不反向否定本任务明确限定的 Windows 首绿。
 
 - [!] `CI-003` 取得长期 6-RID build/test 与 4-RID verify-publish 矩阵证据。阻塞：`CI-002` 未完成，且需要对应 hosted runner/native 构建可用。
   - 优先级：P1。

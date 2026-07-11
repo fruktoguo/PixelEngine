@@ -497,15 +497,15 @@
     {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
-      "evidenceState": "remote_windows_run_captured_hosted_fixture_remediation_validated_rerun_required",
-      "commit": "0a766c459b31ab29002d3fb00ac8e889aa100bc3",
-      "runSessionId": "github-actions-29165262888-attempt-1",
-      "runIdentityStatus": "captured_remote_push_run_and_local_followup_validation",
-      "hardware": "GitHub-hosted windows-latest for run 29165262888; follow-up validation on Microsoft Windows 11 build 26100, AMD Ryzen 7 5800X, AMD Radeon RX 7900 XT, .NET SDK 10.0.108, win-x64",
-      "command": "push 0a766c45 to main; GitHub Actions CI run 29165262888; download benchmark-guard and win-x64 build-test evidence; local WAE Hosting build; focused 26-test hosted-fixture regression; full Hosting test 666 total; bash -n audit-release-artifacts.sh",
+      "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
+      "commit": "1148ca8732d4c7645ef4cfed1bb30352d8449d70",
+      "runSessionId": "github-actions-29166221230-attempt-1",
+      "runIdentityStatus": "captured_remote_push_run_and_artifacts",
+      "hardware": "GitHub-hosted windows-latest for run 29166221230; win-x64 build/test/verify-publish and benchmark/disassembly; win-arm64 build-only",
+      "command": "GitHub Actions CI run 29166221230; download ci-evidence-build-test-win-x64 and ci-evidence-benchmark-guard artifacts; verify 13 TRX, aggregate counters, run id, attempt and full SHA",
       "reportPath": "docs/evidence-2026-07-11-ci-002-local-remediation.md",
-      "sha256": "55a96ace3c2f2a587ed446b712e7aac822f7ece3462fbb56749aa66d6d886682",
-      "notes": "远端 run 29165262888 真实确认 benchmark/disassembly、win-x64 verify-publish 与 win-arm64 build-only 成功，并以 13-TRX 报告暴露 8 个 hosted Windows fixture 失败；UTF-8 PowerShell 与 Python CRLF ZIP listing 根因已完成本地修复和 666 项 Hosting 回归，CI-002 保持 active 等待新 SHA 重跑。真实 ANGLE runner 缺失仍由 TEST-003 保持 blocked。"
+      "sha256": "94833a822df9d0215cfd91e3a83fe1bc8288187d80869aa4f41ffc4f0a2394ff",
+      "notes": "远端 run 29166221230 在完整 SHA 1148ca87 上确认 win-x64 build/test、13-TRX 聚合、disassembly、benchmark regression、verify-publish 与 win-arm64 build-only 全部成功；1776 total、1739 executed/passed、0 failed、37 个 native GPU scope NotExecuted。真实 ANGLE runner 仍由 TEST-003 阻塞，Linux/macOS 长期矩阵由 CI-003 跟踪。"
     }
   ]
 }

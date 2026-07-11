@@ -40,6 +40,6 @@
 | `editor-007-scene-authoring-20260711` | `EDITOR-007` | `complete_local_scene_authoring_contract_and_window_smoke` | `c3e08ba2` | `local-20260711-editor007-scene-authoring` | [EDITOR-007 Scene authoring](evidence-2026-07-11-editor-007-scene-authoring.md) | `e71ee81f…100c1b` |
 | `doc-001-getting-started-20260711` | `DOC-001` | `documentation_skeleton_and_local_clean_project_complete_pending_dependencies` | `a324c5fc` | `local-20260711-doc001-clean-project-r2r` | [DOC-001 Getting Started](evidence-2026-07-11-doc-001-getting-started.md) | `4bdf8804…2b9cad2` |
 | `editor-preferences-ui-scale-20260710` | `EDITOR-003` | `automated_preferences_slice_complete_pending_human_review` | `8d8598fc` | `local-20260710-editor-preferences-150` | [Editor Preferences and 150% UI Scale](evidence-2026-07-10-editor-preferences-ui-scale.md) | `cf028de4…faa78f` |
-| `ci-002-local-remediation-20260711` | `CI-002`, `TEST-003` | `local_remediation_validated_remote_ci_and_gpu_runner_required` | `97d7c0b9` | `local-20260712-ci002-clean-97d7` | [CI-002 Windows hosted remediation](evidence-2026-07-11-ci-002-local-remediation.md) | `59d32ab3…f872d2` |
+| `ci-002-local-remediation-20260711` | `CI-002`, `TEST-003` | `complete_remote_windows_build_test_disassembly_benchmark_guard` | `1148ca87` | `github-actions-29166221230-attempt-1` | [CI-002 Windows hosted remediation](evidence-2026-07-11-ci-002-local-remediation.md) | `94833a82…a2394ff` |
 
 完整硬件、命令、报告路径、SHA256、状态和备注以 JSON 为准；此表使用短 hash 仅便于人工浏览。当前索引中的历史条目保留“可追溯但未完成”的状态，不能据此把 `CI-*`、`PERF-*`、`DEMO-*`、`EDITOR-*` 或 `UI-*` 的阻塞任务改成 `[x]`。

@@ -6,6 +6,7 @@ Evidence Index: `ci-002-local-remediation-20260711`
 
 - CI 修复源码已提交为 `97d7c0b99cedbd907f8b82a716684aec320f4a47`。本轮把 standard hosted Windows 的 build/test/TRX 聚合、disassembly guard 与 benchmark regression 同专用真实 GPU smoke 分离，并对两条链路都采用 fail-closed 合同。
 - 用户授权后，`main` 的 `0a766c459b31ab29002d3fb00ac8e889aa100bc3` 已推送并触发 GitHub Actions run `29165262888`。该 run 的 Windows benchmark/disassembly、win-x64 verify-publish 与 win-arm64 build-only 均成功；win-x64 build-test 在 1774 项测试中暴露 8 个 hosted Windows tooling contract 失败。因此 `CI-002` 恢复为 `[~]`，当前继续修复并重跑，本文不把部分成功冒充首次全绿。
+- 后续完整修复 SHA `1148ca8732d4c7645ef4cfed1bb30352d8449d70` 的 GitHub Actions run `29166221230` 已闭合 `CI-002`：Windows win-x64 build/test、13-TRX 聚合、disassembly、benchmark regression、verify-publish 与 win-arm64 build-only 全部成功。该 run 的 Linux/macOS 长期矩阵仍失败并归 `CI-003`，不混入 Windows 首绿结论。
 - `TEST-003` 仍保持 `[!]`：当前仓库没有注册满足交互桌面、Desktop GL 3.3+、真实 ANGLE/GLES 3.0+ 与隔离标签要求的 Windows x64 self-hosted runner。
 - 2026-07-12 已在 detached clean worktree 中直接 checkout 完整实现提交 `97d7c0b9`，初始化该提交锁定的全部递归 submodule 后，按 Windows CI 顺序重新执行 native build、solution build、13-TRX test aggregate、disassembly guard 与正式 benchmark regression。新本地摘要直接绑定 `97d7c0b9`，取代首轮 pre-commit 工作树结果；它仍是本地证据，不是 GitHub Actions artifact。
 
@@ -84,6 +85,15 @@ GitHub Actions run `29165262888`（workflow=`CI`、event=`push`、attempt=`1`、
 - 本机所谓 `GlEs30Angle` 实际返回 AMD 原生 GLES，`IsAngle=false`；新合同正确拒绝把它记成 ANGLE 证据。没有生成或声称虚假的 ANGLE pass。
 - GitHub 仓库当前没有可用的专用 self-hosted GPU runner，因此 `TEST-003` 只能等待外部 runner 条件，不回退到 standard hosted runner。
 
-## 解除 `CI-002` 的精确条件
+## `CI-002` 关闭证据
 
-把本轮 hosted Windows fixture 修复提交并推送后，对新的完整 SHA 运行 GitHub Actions。只有 win-x64 build/test、13 个程序集 TRX 聚合、disassembly guard 与 benchmark regression jobs 全部成功，且 artifact/report 的 run id、attempt 与完整 commit SHA 同源，才能将 `CI-002` 改为 `[x]`。专用真实 GPU 结果仍由 `TEST-003` 独立闭合；非 Windows 长期矩阵失败由 `CI-003` 管理，本文不声称其已修复。
+GitHub Actions run `29166221230`（workflow=`CI`、event=`push`、attempt=`1`、SHA=`1148ca8732d4c7645ef4cfed1bb30352d8449d70`）满足本任务的全部 Windows 验收合同：
+
+| Windows job / artifact | 结果 |
+|---|---|
+| `build-test (win-x64)` | success；native/solution build 成功；13/13 TRX；1776 total、1739 executed/passed、0 failed、37 NotExecuted；最低 1492 门槛满足 |
+| `benchmark-guard (win-x64)` | success；native/solution build、disassembly guard、正式 benchmark regression 与 evidence upload 全部成功 |
+| `verify-publish (win-x64)` | success |
+| `build-test (win-arm64, build-only)` | success；测试步骤按合同明确 skipped，不冒充可执行测试 |
+
+下载的 `ci-evidence-build-test-win-x64` 与 `ci-evidence-benchmark-guard` artifact 都显式记录 run id `29166221230` 和完整 SHA `1148ca8732d4c7645ef4cfed1bb30352d8449d70`；前者逐程序集列出 13 份 TRX 与聚合计数，后者记录 conclusion=`success`。因此 `CI-002` 可改为 `[x]`。专用真实 GPU 仍由 `TEST-003` 独立闭合；Linux/macOS build/test/verify-publish 与最终跨 RID evidence manifest 仍由 `CI-003` 管理，本文不声称其已修复。
