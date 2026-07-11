@@ -262,6 +262,15 @@ public sealed class DemoRuntimeScriptingTests
                 entry.Category == EditorConsoleCategory.Script &&
                 entry.Severity == EditorConsoleSeverity.Error &&
                 entry.Text.Contains("error", StringComparison.OrdinalIgnoreCase));
+            EditorConsoleEntry[] locatedDiagnostics =
+            [
+                .. console.Snapshot().Where(
+                    entry => string.Equals(entry.FilePath, "BrokenBehaviour.cs", StringComparison.OrdinalIgnoreCase)),
+            ];
+            Assert.NotEmpty(locatedDiagnostics);
+            EditorConsoleEntry locatedDiagnostic = locatedDiagnostics[0];
+            Assert.Equal(1, locatedDiagnostic.Line);
+            Assert.True(locatedDiagnostic.Column > 0);
         }
         finally
         {

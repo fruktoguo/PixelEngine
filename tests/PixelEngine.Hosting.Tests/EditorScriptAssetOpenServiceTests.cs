@@ -21,7 +21,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
         const string command = "\"C:/Program Files/Code/code.exe\" --goto \"{file}:12\"";
-        EditorScriptAssetOpenService service = new(manifest, () => command, launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => command, launcher, new CustomLocator());
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -47,7 +47,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
         const string command = "\"C:/Program Files/Code/code.exe\" --reuse-window";
-        EditorScriptAssetOpenService service = new(manifest, () => command, launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => command, launcher, new CustomLocator());
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -71,7 +71,7 @@ public sealed class EditorScriptAssetOpenServiceTests
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out string scriptPath);
         RecordingLauncher launcher = new();
-        EditorScriptAssetOpenService service = new(manifest, () => string.Empty, launcher);
+        EditorScriptAssetOpenService service = new(manifest, () => ExternalCodeEditorPreference.SystemDefault, launcher);
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -94,7 +94,11 @@ public sealed class EditorScriptAssetOpenServiceTests
         using TempDir temp = new();
         EditorAssetManifestStore manifest = CreateManifestWithScript(temp.Path, out _);
         RecordingLauncher launcher = new(succeed: false, diagnostic: "configured editor not found");
-        EditorScriptAssetOpenService service = new(manifest, () => "missing-editor --open {file}", launcher);
+        EditorScriptAssetOpenService service = new(
+            manifest,
+            () => "missing-editor --open {file}",
+            launcher,
+            new CustomLocator());
 
         EditorScriptAssetOpenResult result = service.OpenScriptAsset("scripts/PlayerController.cs");
 
@@ -182,6 +186,24 @@ public sealed class EditorScriptAssetOpenServiceTests
             Starts.Add(startInfo);
             launchDiagnostic = diagnostic;
             return succeed;
+        }
+    }
+
+    private sealed class CustomLocator : IExternalCodeEditorLocator
+    {
+        public bool TryLocate(ExternalCodeEditorKind kind, out ExternalCodeEditorInstallation installation, out string diagnostic)
+        {
+            _ = kind;
+            installation = default;
+            diagnostic = "preset locator 不应由 custom 测试调用。";
+            return false;
+        }
+
+        public bool TryResolveCustomExecutable(string command, out string executablePath, out string diagnostic)
+        {
+            executablePath = Path.IsPathRooted(command) ? command : @"C:\Tools\missing-editor.exe";
+            diagnostic = string.Empty;
+            return true;
         }
     }
 

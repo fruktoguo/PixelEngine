@@ -1622,6 +1622,11 @@ internal sealed class EditorShellApp
 
     public bool OpenScriptAsset(string assetPath, out string diagnostic)
     {
+        return OpenScriptAsset(assetPath, line: 1, column: 1, out diagnostic);
+    }
+
+    public bool OpenScriptAsset(string assetPath, int line, int column, out string diagnostic)
+    {
         if (CurrentSession is null)
         {
             diagnostic = "当前没有打开的工程，无法打开脚本资产。";
@@ -1629,10 +1634,26 @@ internal sealed class EditorShellApp
             return false;
         }
 
-        EditorScriptAssetOpenResult result = CurrentSession.OpenScriptAsset(assetPath);
+        EditorScriptAssetOpenResult result = CurrentSession.OpenScriptAsset(assetPath, line, column);
         diagnostic = result.Diagnostic;
         LastAssetOpenDiagnostic = diagnostic;
         ConsoleStore.AddAssetOpenResult(result);
+        return result.Success;
+    }
+
+    public bool OpenCSharpProject(out string diagnostic)
+    {
+        if (CurrentSession is null)
+        {
+            diagnostic = "当前没有打开的工程，无法打开 C# 工程。";
+            LastAssetOpenDiagnostic = diagnostic;
+            return false;
+        }
+
+        EditorCodeWorkspaceOpenResult result = CurrentSession.OpenCodeProject();
+        diagnostic = result.Diagnostic;
+        LastAssetOpenDiagnostic = diagnostic;
+        ConsoleStore.AddCodeWorkspaceOpenResult(result);
         return result.Success;
     }
 

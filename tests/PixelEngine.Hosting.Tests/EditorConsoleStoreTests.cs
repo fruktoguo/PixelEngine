@@ -206,6 +206,29 @@ public sealed class EditorConsoleStoreTests
     }
 
     /// <summary>
+    /// 验证 Roslyn 标准诊断文本保留文件与一基行列，供 Console 双击精确跳转。
+    /// </summary>
+    [Fact]
+    public void ScriptDiagnosticsPreserveRoslynSourceLocationAndColumn()
+    {
+        EditorConsoleStore store = new();
+        const string diagnostic = "Gameplay/Player (Copy).cs(27,14): error CS1002: ; expected";
+
+        store.AddScriptDiagnostics(
+            "script-hot-reload",
+            "脚本编译失败",
+            [diagnostic],
+            success: false);
+
+        EditorConsoleEntry detail = Assert.Single(store.Snapshot(), entry => entry.Text == diagnostic);
+        Assert.Equal("Gameplay/Player (Copy).cs", detail.FilePath);
+        Assert.Equal(27, detail.Line);
+        Assert.Equal(14, detail.Column);
+        Assert.Contains("Gameplay/Player (Copy).cs", detail.CollapseKey, StringComparison.Ordinal);
+        Assert.EndsWith("\u001f27\u001f14", detail.CollapseKey, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Build Settings 面板保留局部日志同时汇入统一 Console。
     /// </summary>
     [Fact]

@@ -54,12 +54,7 @@ internal sealed class EditorConsoleScriptHotReloadDiagnosticSink(IEditorConsoleS
     {
         for (int i = 0; i < diagnostics.Count; i++)
         {
-            _console.Add(new EditorConsoleEntry(
-                DateTimeOffset.UtcNow,
-                EditorConsoleCategory.Script,
-                EditorConsoleSeverity.Error,
-                Source,
-                diagnostics[i]));
+            _console.AddScriptDiagnostic(Source, diagnostics[i], success: false);
         }
     }
 

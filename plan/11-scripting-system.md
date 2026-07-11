@@ -228,7 +228,7 @@ public interface IGameTime    { float DeltaTime { get; } float FixedStep { get; 
 
 ### 3.6 IDE 集成（轻量）
 
-`internal sealed class IdeLauncher`：探测已安装 IDE——Rider（`%LOCALAPPDATA%\Programs\Rider*`/Toolbox、`rider` on PATH）、Visual Studio（`vswhere`）、VS Code（`code` on PATH / 注册表）；按优先级 `Process.Start` 打开游戏 `.sln`。`internal sealed class ProjectGenerator`：从模板生成/刷新游戏 `.csproj`（引用引擎公开程序集集合，开 `GenerateDocumentationFile` 以承接引擎 XML 注释）与 `.sln`，确保「新建脚本」后 IDE 立即可见。**不做**额外语言服务——标准 .NET 项目 + 引擎 XML 注释已提供补全/跳转/签名提示（用户明确「倒也不需要额外支持」）。
+IDE 产品入口以 Editor 用户级 Preferences 为选择真相源，默认 VS Code；Windows 探测覆盖 PATH command shim、User/System Installer、注册表，且不得把 `code.cmd` 直接交给 `CreateProcess`。脚本打开必须携带完整工程上下文和精确 `file:line:column`：VS Code 打开工程根/根级 `.code-workspace` 并 `--goto`，Visual Studio/Rider 打开真正包含当前项目的根级或祖先 solution。`Assets > Open C# Project` 复用同一解析结果；Demo 等已有工程绝不覆盖 `.csproj/.sln/.slnx`，standalone 新工程才生成带 ownership marker 的 `Library` IDE project/solution，显式纳入 `ScriptSource/**/*.cs`。生成项目固定引用发行包 `ScriptReferenceAssemblies/` 中的公开 runtime DLL + 同名 XML 文档，内容不变不重写；不得依赖不会随 publish 分发的源码模板/NuGet，也不得引用 Editor/Shell 实现程序集。**不做**额外语言服务——标准 .NET 项目 + 引擎 XML 注释已提供补全/跳转/签名提示（用户明确「倒也不需要额外支持」）。
 
 ### 3.7 与编辑器（plan/12）协作
 

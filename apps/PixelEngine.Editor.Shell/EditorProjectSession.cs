@@ -20,6 +20,7 @@ internal sealed class EditorProjectSession : IDisposable
     private readonly EngineEditorPlaySessionService _playSession;
     private readonly EngineSimulationControlService _simulationControl;
     private readonly EditorScriptAssetOpenService _scriptAssetOpenService;
+    private readonly EditorCodeWorkspaceOpenService _codeWorkspaceOpenService;
     private int _runtimeProjectionVersion;
     private bool _disposed;
 
@@ -32,6 +33,7 @@ internal sealed class EditorProjectSession : IDisposable
         EditorSceneRuntimeProjection runtimeProjection,
         EditorPrefabAssetStore prefabs,
         EditorScriptAssetOpenService scriptAssetOpenService,
+        EditorCodeWorkspaceOpenService codeWorkspaceOpenService,
         string currentSceneRelativePath)
     {
         Project = project;
@@ -42,6 +44,7 @@ internal sealed class EditorProjectSession : IDisposable
         RuntimeProjection = runtimeProjection;
         Prefabs = prefabs;
         _scriptAssetOpenService = scriptAssetOpenService ?? throw new ArgumentNullException(nameof(scriptAssetOpenService));
+        _codeWorkspaceOpenService = codeWorkspaceOpenService ?? throw new ArgumentNullException(nameof(codeWorkspaceOpenService));
         CurrentSceneRelativePath = currentSceneRelativePath;
         _runtimeProjectionVersion = sceneModel.Version;
         _snapshotStore = new EngineWorldSnapshotStore(engine);
@@ -96,6 +99,9 @@ internal sealed class EditorProjectSession : IDisposable
             EditorScriptAssetOpenService scriptAssetOpenService = new(
                 project,
                 () => app.Preferences.Current.ExternalScriptEditor);
+            EditorCodeWorkspaceOpenService codeWorkspaceOpenService = new(
+                project,
+                () => app.Preferences.Current.ExternalScriptEditor);
             engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
             RegisterInitialProjectScriptAssembly(project, engine, app.ConsoleStore);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
@@ -109,7 +115,7 @@ internal sealed class EditorProjectSession : IDisposable
                 app.ConsoleStore.AddUiBackendSelection(uiBackendSelection);
             }
 
-            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, scriptAssetOpenService, sceneRelativePath);
+            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
         }
         catch
         {
@@ -325,6 +331,18 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _scriptAssetOpenService.OpenScriptAsset(assetPath);
+    }
+
+    public EditorScriptAssetOpenResult OpenScriptAsset(string assetPath, int line, int column = 1)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _scriptAssetOpenService.OpenScriptAsset(assetPath, line, column);
+    }
+
+    public EditorCodeWorkspaceOpenResult OpenCodeProject()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _codeWorkspaceOpenService.OpenCodeProject();
     }
 
     public bool ShowProjectSettings()
