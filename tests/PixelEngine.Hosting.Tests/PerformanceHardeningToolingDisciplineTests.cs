@@ -8699,14 +8699,25 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         process.StartInfo.RedirectStandardError = true;
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.CreateNoWindow = true;
-        foreach (string argument in arguments)
+        bool injectDisableBuildServers = arguments.Length > 0 &&
+            string.Equals(arguments[0], "run", StringComparison.Ordinal) &&
+            !arguments.Contains("--disable-build-servers", StringComparer.Ordinal);
+        for (int i = 0; i < arguments.Length; i++)
         {
-            process.StartInfo.ArgumentList.Add(argument);
+            process.StartInfo.ArgumentList.Add(arguments[i]);
+            if (i == 0 && injectDisableBuildServers)
+            {
+                // 可复用 MSBuild node 会继承重定向管道；dotnet run 主进程退出后它们仍持有 writer，
+                // ReadToEnd 因而永远等不到 EOF。工具纪律测试必须让每个子进程完整收口。
+                process.StartInfo.ArgumentList.Add("--disable-build-servers");
+            }
         }
 
         _ = process.Start();
-        string output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
+        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+        Task<string> standardError = process.StandardError.ReadToEndAsync();
         process.WaitForExit();
+        string output = standardOutput.GetAwaiter().GetResult() + standardError.GetAwaiter().GetResult();
         return new ScriptResult(process.ExitCode, output);
     }
 
