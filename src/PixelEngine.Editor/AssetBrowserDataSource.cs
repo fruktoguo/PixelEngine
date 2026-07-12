@@ -230,6 +230,48 @@ public readonly record struct AssetBrowserDescriptor(
 public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int Height);
 
 /// <summary>
+/// Project Window 底部资产预览的主要内容形态。
+/// </summary>
+public enum AssetBrowserPreviewContentKind
+{
+    /// <summary>以类型图标、摘要和元数据为主。</summary>
+    Summary,
+
+    /// <summary>显示真实纹理缩略图。</summary>
+    Image,
+
+    /// <summary>显示音频元数据与试听入口。</summary>
+    Audio,
+
+    /// <summary>显示有界只读文本内容。</summary>
+    Text,
+}
+
+/// <summary>
+/// Project Window 预览中的一项只读元数据。
+/// </summary>
+/// <param name="Label">短标签。</param>
+/// <param name="Value">面向用户的值。</param>
+public readonly record struct AssetBrowserPreviewProperty(string Label, string Value);
+
+/// <summary>
+/// 按选择懒加载的 Project Window 详细预览。
+/// </summary>
+/// <param name="Title">预览标题。</param>
+/// <param name="ContentKind">主要内容形态。</param>
+/// <param name="Summary">类型化摘要。</param>
+/// <param name="Properties">只读元数据。</param>
+/// <param name="TextContent">可选的有界文本片段。</param>
+/// <param name="Diagnostic">可选的非致命预览诊断。</param>
+public sealed record AssetBrowserDetailedPreview(
+    string Title,
+    AssetBrowserPreviewContentKind ContentKind,
+    string Summary,
+    IReadOnlyList<AssetBrowserPreviewProperty> Properties,
+    string? TextContent = null,
+    string? Diagnostic = null);
+
+/// <summary>
 /// 资源浏览器资产项。
 /// </summary>
 /// <param name="Path">生产数据源使用 Content/... 或 ScriptSource/... rooted path；legacy 数据源可使用相对路径。</param>
@@ -632,6 +674,23 @@ public interface IAssetBrowserThumbnailDataSource
 }
 
 /// <summary>
+/// 为当前选择提供按需详细预览的数据源扩展。
+/// </summary>
+/// <remarks>
+/// 普通 <see cref="IAssetBrowserDataSource.ListAssets"/> 查询不得调用本接口；Project Window 仅在选择或文件版本变化时读取一次并缓存。
+/// </remarks>
+public interface IAssetBrowserPreviewDataSource
+{
+    /// <summary>
+    /// 尝试读取指定资产的类型化详细预览。
+    /// </summary>
+    /// <param name="assetPath">数据源使用的 rooted logical path。</param>
+    /// <param name="preview">成功时返回的详细预览。</param>
+    /// <returns>资产存在并能建立预览模型时返回 true。</returns>
+    bool TryGetPreview(string assetPath, out AssetBrowserDetailedPreview preview);
+}
+
+/// <summary>
 /// 纹理缩略图提供器。
 /// </summary>
 public interface ITextureThumbnailProvider
@@ -653,7 +712,7 @@ public interface IAudioPreviewService
     /// <summary>
     /// 尝试试听指定音频资产。
     /// </summary>
-    /// <param name="assetPath">相对 content 根目录的音频资产路径。</param>
+    /// <param name="assetPath">数据源使用的音频资产 logical path。</param>
     /// <returns>成功开始试听时返回 true。</returns>
     bool TryPlayPreview(string assetPath);
 }

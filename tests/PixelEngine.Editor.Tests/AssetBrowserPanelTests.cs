@@ -64,6 +64,64 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project 底部 Preview 在常规和极窄高度下都保留可用的资产列表区域。
+    /// </summary>
+    [Fact]
+    public void AssetPreviewLayoutIsResponsiveAndKeepsContentVisible()
+    {
+        ProjectAssetPreviewLayout hidden = AssetBrowserPanel.ResolveAssetPreviewLayout(300f, 150f, hasSelection: false);
+        ProjectAssetPreviewLayout regular = AssetBrowserPanel.ResolveAssetPreviewLayout(300f, 150f, hasSelection: true);
+        ProjectAssetPreviewLayout compact = AssetBrowserPanel.ResolveAssetPreviewLayout(90f, 150f, hasSelection: true);
+
+        Assert.False(hidden.ShowPreview);
+        Assert.Equal(300f, hidden.ContentHeight);
+        Assert.Equal(0f, hidden.PreviewHeight);
+        Assert.True(regular.ShowPreview);
+        Assert.Equal(145f, regular.ContentHeight);
+        Assert.Equal(150f, regular.PreviewHeight);
+        Assert.Equal(48f, compact.ContentHeight);
+        Assert.Equal(37f, compact.PreviewHeight);
+    }
+
+    /// <summary>
+    /// 验证详细预览只在选择或文件签名变化时读取，普通帧复用缓存而不重复 I/O。
+    /// </summary>
+    [Fact]
+    public void AssetPreviewIsLoadedOnDemandAndCachedByFileSignature()
+    {
+        AssetBrowserItem script = new(
+            "ScriptSource/Player.cs",
+            AssetBrowserItemKind.Script,
+            20,
+            DateTimeOffset.UnixEpoch,
+            null,
+            "asset_script");
+        RecordingAssetSource source = new([script]);
+        source.SetPreview(
+            script.Path,
+            new AssetBrowserDetailedPreview(
+                "Player.cs",
+                AssetBrowserPreviewContentKind.Text,
+                "脚本：Player",
+                [new AssetBrowserPreviewProperty("类型", "C# 脚本")],
+                "public sealed class Player {}"));
+        AssetBrowserPanel panel = new(source);
+
+        _ = panel.Refresh();
+        AssetBrowserDetailedPreview first = panel.CaptureAssetPreview(script.Path);
+        AssetBrowserDetailedPreview second = panel.CaptureAssetPreview(script.Path);
+
+        Assert.Same(first, second);
+        Assert.Equal(1, source.PreviewReadCount);
+
+        source.ReplaceAssets([script with { SizeBytes = 21 }]);
+        _ = panel.Refresh();
+        _ = panel.CaptureAssetPreview(script.Path);
+
+        Assert.Equal(2, source.PreviewReadCount);
+    }
+
+    /// <summary>
     /// 验证生产缩略图只为通过裁剪的纹理申请 lease，同一文件签名跨帧复用而不重复申请。
     /// </summary>
     [Fact]
@@ -1729,11 +1787,15 @@ public sealed class AssetBrowserPanelTests
     private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) :
         IAssetBrowserDataSource,
         IAssetBrowserFolderDataSource,
-        IAssetBrowserContextDataSource
+        IAssetBrowserContextDataSource,
+        IAssetBrowserPreviewDataSource
     {
         private IReadOnlyList<AssetBrowserItem> _assets = assets;
         private IReadOnlyList<AssetBrowserFolderItem> _folders = [];
         private readonly Dictionary<string, AssetBrowserBadge> _contextBadges = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, AssetBrowserDetailedPreview> _previews = new(StringComparer.OrdinalIgnoreCase);
+
+        public int PreviewReadCount { get; private set; }
 
         public IReadOnlyList<AssetBrowserItem> ListAssets()
         {
@@ -1752,6 +1814,12 @@ public sealed class AssetBrowserPanelTests
                 : AssetBrowserBadge.None;
         }
 
+        public bool TryGetPreview(string assetPath, out AssetBrowserDetailedPreview preview)
+        {
+            PreviewReadCount++;
+            return _previews.TryGetValue(assetPath, out preview!);
+        }
+
         public void ReplaceAssets(IReadOnlyList<AssetBrowserItem> assets)
         {
             _assets = assets;
@@ -1765,6 +1833,11 @@ public sealed class AssetBrowserPanelTests
         public void SetContextBadges(string assetPath, AssetBrowserBadge badges)
         {
             _contextBadges[assetPath] = badges;
+        }
+
+        public void SetPreview(string assetPath, AssetBrowserDetailedPreview preview)
+        {
+            _previews[assetPath] = preview;
         }
     }
 

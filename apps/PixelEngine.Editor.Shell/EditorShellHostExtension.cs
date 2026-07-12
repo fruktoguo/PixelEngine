@@ -1,3 +1,4 @@
+using PixelEngine.Audio;
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Editor.Shell.Build;
@@ -450,8 +451,14 @@ internal sealed class EditorShellHostExtension :
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
+        IAudioPreviewService? audioPreview =
+            engine.Context.TryGetService(out AudioSystem audioSystem) &&
+            engine.Context.TryGetService(out AudioClipCache audioClips)
+                ? new EditorAudioPreviewService(audioSystem, audioClips)
+                : null;
         _assetBrowserPanel = new AssetBrowserPanel(
             assetBrowserDataSource,
+            audioPreview: audioPreview,
             instantiatePrefab: _app.InstantiatePrefab,
             openScriptAsset: _app.OpenScriptAsset,
             openSceneAsset: _app.OpenSceneAsset,

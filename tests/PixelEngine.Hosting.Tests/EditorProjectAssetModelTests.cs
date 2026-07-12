@@ -1,3 +1,5 @@
+using System.Buffers.Binary;
+using System.Text;
 using System.Text.Json;
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
@@ -1152,6 +1154,48 @@ public sealed class EditorProjectAssetModelTests
     }
 
     /// <summary>
+    /// 验证当前选择的纹理、WAV 与脚本会按需生成 Unity-like 详细预览，而资产列表查询保持缓存读取。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserBuildsDetailedPreviewsForImageAudioAndScriptSelections()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Detailed Preview Project");
+            _ = Directory.CreateDirectory(Path.Combine(project.ContentRootPath, "textures"));
+            _ = Directory.CreateDirectory(Path.Combine(project.ContentRootPath, "audio"));
+            WritePngHeader(Path.Combine(project.ContentRootPath, "textures", "preview.png"), 64, 32);
+            WriteWave(Path.Combine(project.ContentRootPath, "audio", "preview.wav"), sampleRate: 48_000, sampleCount: 4_800);
+            File.WriteAllText(
+                Path.Combine(project.ScriptSourcePath, "Player.cs"),
+                "using PixelEngine.Scripting;\npublic sealed class Player : Behaviour { }\n");
+            using EditorAssetBrowserDataSource source = new(project);
+
+            Assert.True(source.TryGetPreview("Content/textures/preview.png", out AssetBrowserDetailedPreview image));
+            Assert.True(source.TryGetPreview("Content/audio/preview.wav", out AssetBrowserDetailedPreview audio));
+            Assert.True(source.TryGetPreview("ScriptSource/Player.cs", out AssetBrowserDetailedPreview script));
+
+            Assert.Equal(AssetBrowserPreviewContentKind.Image, image.ContentKind);
+            Assert.Equal("格式", image.Properties[0].Label);
+            Assert.Equal("64 × 32 px", Assert.Single(image.Properties, property => property.Label == "尺寸").Value);
+            Assert.Equal(AssetBrowserPreviewContentKind.Audio, audio.ContentKind);
+            Assert.Equal("格式", audio.Properties[0].Label);
+            Assert.Equal("0.100 s", Assert.Single(audio.Properties, property => property.Label == "时长").Value);
+            Assert.Equal("48,000 Hz", Assert.Single(audio.Properties, property => property.Label == "采样率").Value);
+            Assert.Equal("Mono", Assert.Single(audio.Properties, property => property.Label == "声道").Value);
+            Assert.Equal("16 bit", Assert.Single(audio.Properties, property => property.Label == "位深").Value);
+            Assert.Equal(AssetBrowserPreviewContentKind.Text, script.ContentKind);
+            Assert.Contains("public sealed class Player", script.TextContent, StringComparison.Ordinal);
+            Assert.Null(script.Diagnostic);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
     /// 验证生产双根 Project Window 只把 Content rooted path 映射给纹理 provider，并对称转发 lease 释放。
     /// </summary>
     [Fact]
@@ -1265,6 +1309,43 @@ public sealed class EditorProjectAssetModelTests
     private static AssetBrowserItem Find(IReadOnlyList<AssetBrowserItem> assets, string path)
     {
         return Assert.Single(assets, item => item.Path == path);
+    }
+
+    private static void WritePngHeader(string path, int width, int height)
+    {
+        byte[] header = new byte[24];
+        byte[] signature = [0x89, (byte)'P', (byte)'N', (byte)'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        signature.CopyTo(header, 0);
+        BinaryPrimitives.WriteUInt32BigEndian(header.AsSpan(8, 4), 13);
+        _ = Encoding.ASCII.GetBytes("IHDR", header.AsSpan(12, 4));
+        BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(16, 4), width);
+        BinaryPrimitives.WriteInt32BigEndian(header.AsSpan(20, 4), height);
+        File.WriteAllBytes(path, header);
+    }
+
+    private static void WriteWave(string path, int sampleRate, int sampleCount)
+    {
+        const short channels = 1;
+        const short bitsPerSample = 16;
+        const short blockAlign = channels * (bitsPerSample / 8);
+        int byteRate = sampleRate * blockAlign;
+        int dataBytes = sampleCount * blockAlign;
+        using FileStream stream = File.Create(path);
+        using BinaryWriter writer = new(stream, Encoding.ASCII, leaveOpen: false);
+        writer.Write(Encoding.ASCII.GetBytes("RIFF"));
+        writer.Write(36 + dataBytes);
+        writer.Write(Encoding.ASCII.GetBytes("WAVE"));
+        writer.Write(Encoding.ASCII.GetBytes("fmt "));
+        writer.Write(16);
+        writer.Write((short)1);
+        writer.Write(channels);
+        writer.Write(sampleRate);
+        writer.Write(byteRate);
+        writer.Write(blockAlign);
+        writer.Write(bitsPerSample);
+        writer.Write(Encoding.ASCII.GetBytes("data"));
+        writer.Write(dataBytes);
+        writer.Write(new byte[dataBytes]);
     }
 
     private sealed class FixedThumbnailProvider(string path, AssetThumbnail thumbnail) : IEditorTextureThumbnailLeaseProvider

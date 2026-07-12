@@ -61,6 +61,10 @@ public sealed class AssetBrowserPanel(
     public const float MaximumThumbnailSize = 128f;
 
     private const float DefaultThumbnailSize = 64f;
+    private const float DefaultPreviewPaneHeight = 180f;
+    private const float PreviewSplitterHeight = 5f;
+    private const float MinimumPreviewContentHeight = 48f;
+    private const float MinimumPreviewPaneHeight = 72f;
     private const float GridLabelHeight = 38f;
     private const float GridCellPadding = 10f;
     private const uint SelectedTileColor = 0xCC744C2F;
@@ -115,6 +119,11 @@ public sealed class AssetBrowserPanel(
     private bool _snapshotLoaded;
     private bool _showCreateEditor;
     private bool _showImportEditor;
+    private string _previewCachePath = string.Empty;
+    private long _previewCacheSizeBytes = -1;
+    private long _previewCacheModifiedTicks = -1;
+    private AssetBrowserDetailedPreview? _previewCache;
+    private float _previewPaneHeight = DefaultPreviewPaneHeight;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -135,6 +144,7 @@ public sealed class AssetBrowserPanel(
             {
                 _externalDropTargets.Clear();
                 _thumbnailLeases.ReleaseAll();
+                ClearPreviewCache();
             }
         }
     } = true;
@@ -1120,13 +1130,31 @@ public sealed class AssetBrowserPanel(
                 float contentStartY = ImGui.GetCursorPosY();
                 DrawBreadcrumbs(context.Selection);
                 ImGui.Separator();
-                float contentHeight = MathF.Max(
+                float availableContentHeight = MathF.Max(
                     ImGui.GetFrameHeight(),
                     layoutHeight - (ImGui.GetCursorPosY() - contentStartY));
-                _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, contentHeight));
+                AssetBrowserItem? selectedPreviewItem = FindSelectedAsset(context.Selection);
+                ProjectAssetPreviewLayout previewLayout = ResolveAssetPreviewLayout(
+                    availableContentHeight,
+                    _previewPaneHeight,
+                    selectedPreviewItem.HasValue);
+                _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, previewLayout.ContentHeight));
                 DrawFolderContents(context.Selection);
-
                 ImGui.EndChild();
+
+                if (selectedPreviewItem is { } previewItem && previewLayout.ShowPreview)
+                {
+                    DrawPreviewSplitter();
+                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.11f, 0.12f, 1f));
+                    _ = ImGui.BeginChild(
+                        "project_asset_preview",
+                        new Vector2(0f, previewLayout.PreviewHeight),
+                        ImGuiChildFlags.Borders);
+                    DrawAssetPreviewPane(in previewItem);
+                    ImGui.EndChild();
+                    ImGui.PopStyleColor();
+                }
+
                 ImGui.EndTable();
             }
 
@@ -1826,6 +1854,267 @@ public sealed class AssetBrowserPanel(
             _ => throw new ArgumentOutOfRangeException(nameof(item), item.IconKind, "未知 Project Window 图标类型。"),
         };
         DrawAssetIcon(drawList, item.IconKind, min, size, color);
+    }
+
+    private void DrawPreviewSplitter()
+    {
+        Vector2 minimum = ImGui.GetCursorScreenPos();
+        float width = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+        _ = ImGui.InvisibleButton("##project-preview-splitter", new Vector2(width, PreviewSplitterHeight));
+        bool hovered = ImGui.IsItemHovered();
+        bool active = ImGui.IsItemActive();
+        if (hovered || active)
+        {
+            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
+        }
+
+        uint color = active ? AccentIconColor : hovered ? 0xFF777A80 : 0xFF3A3C41;
+        ImGui.GetWindowDrawList().AddLine(
+            minimum + new Vector2(0f, PreviewSplitterHeight * 0.5f),
+            minimum + new Vector2(width, PreviewSplitterHeight * 0.5f),
+            color,
+            active ? 2f : 1f);
+        if (active)
+        {
+            _previewPaneHeight = MathF.Max(
+                1f,
+                _previewPaneHeight - ImGui.GetIO().MouseDelta.Y);
+        }
+    }
+
+    private void DrawAssetPreviewPane(in AssetBrowserItem item)
+    {
+        AssetBrowserDetailedPreview preview = ResolveDetailedPreview(in item);
+        ImGui.TextDisabled("Preview");
+        ImGui.SameLine();
+        ImGui.TextUnformatted(preview.Title);
+
+        if (preview.ContentKind == AssetBrowserPreviewContentKind.Text)
+        {
+            float availableWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+            float availableHeight = MathF.Max(1f, ImGui.GetContentRegionAvail().Y);
+            string? textContent = preview.TextContent;
+            bool hasTextContent = !string.IsNullOrWhiteSpace(textContent);
+            bool compactTextPreview = hasTextContent && (availableWidth < 220f || availableHeight < 200f);
+            if (!compactTextPreview)
+            {
+                ImGui.TextWrapped(preview.Summary);
+            }
+
+            DrawPreviewProperties(
+                preview.Properties,
+                maximumRows: compactTextPreview ? 1 : 3,
+                skipLongValues: true);
+            if (hasTextContent && ImGui.GetContentRegionAvail().Y > ImGui.GetFrameHeight())
+            {
+                ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.075f, 0.08f, 0.09f, 1f));
+                _ = ImGui.BeginChild(
+                    "project_asset_text_preview",
+                    new Vector2(0f, 0f),
+                    ImGuiChildFlags.Borders,
+                    ImGuiWindowFlags.HorizontalScrollbar);
+                ImGui.TextUnformatted(textContent!);
+                ImGui.EndChild();
+                ImGui.PopStyleColor();
+            }
+        }
+        else
+        {
+            float availableWidth = MathF.Max(32f, ImGui.GetContentRegionAvail().X);
+            float availableHeight = MathF.Max(32f, ImGui.GetContentRegionAvail().Y);
+            bool audioPreview = preview.ContentKind == AssetBrowserPreviewContentKind.Audio;
+            bool inlineDetails = availableWidth >= 160f;
+            float mediaSize = audioPreview
+                ? Math.Clamp(MathF.Min(availableHeight * 0.32f, availableWidth * 0.28f), 34f, 48f)
+                : inlineDetails
+                    ? Math.Clamp(MathF.Min(availableHeight, availableWidth * 0.38f), 40f, 104f)
+                    : Math.Clamp(MathF.Min(availableHeight * 0.48f, availableWidth * 0.5f), 36f, 72f);
+            Vector2 mediaMinimum = ImGui.GetCursorScreenPos();
+            _ = ImGui.InvisibleButton("##project-large-preview", new Vector2(mediaSize));
+            AssetThumbnail? thumbnail = preview.ContentKind == AssetBrowserPreviewContentKind.Image
+                ? _thumbnailLeases.Resolve(in item, visible: true)
+                : null;
+            DrawAssetPreview(
+                ImGui.GetWindowDrawList(),
+                item,
+                thumbnail,
+                mediaMinimum,
+                new Vector2(mediaSize));
+
+            bool groupBesideMedia = inlineDetails || audioPreview;
+            if (groupBesideMedia)
+            {
+                ImGui.SameLine();
+                ImGui.BeginGroup();
+            }
+
+            if (item.Kind == AssetBrowserItemKind.Audio && _audioPreview is not null &&
+                ImGui.Button("▶ 试听##project-audio-preview"))
+            {
+                _ = TryPreviewAudio(item.Path);
+            }
+
+            if ((!audioPreview && (inlineDetails || preview.ContentKind == AssetBrowserPreviewContentKind.Summary)) ||
+                (audioPreview && availableWidth >= 240f))
+            {
+                ImGui.TextWrapped(preview.Summary);
+            }
+
+            if (groupBesideMedia)
+            {
+                ImGui.EndGroup();
+            }
+
+            DrawPreviewProperties(
+                preview.Properties,
+                maximumRows: inlineDetails ? 6 : 3,
+                skipLongValues: true);
+        }
+
+        if (!string.IsNullOrWhiteSpace(preview.Diagnostic))
+        {
+            ImGui.TextDisabled(preview.Diagnostic);
+        }
+    }
+
+    private static void DrawPreviewProperties(
+        IReadOnlyList<AssetBrowserPreviewProperty> properties,
+        int maximumRows,
+        bool skipLongValues)
+    {
+        int shown = 0;
+        for (int i = 0; i < properties.Count && shown < maximumRows; i++)
+        {
+            AssetBrowserPreviewProperty property = properties[i];
+            if (skipLongValues &&
+                (string.Equals(property.Label, "路径", StringComparison.Ordinal) ||
+                    string.Equals(property.Label, "用途", StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            ImGui.TextDisabled($"{property.Label}:");
+            ImGui.SameLine();
+            ImGui.TextUnformatted(property.Value);
+            shown++;
+        }
+    }
+
+    internal AssetBrowserDetailedPreview CaptureAssetPreview(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem value = FindAsset(path) ?? throw new InvalidOperationException($"资产不存在：{path}");
+        return ResolveDetailedPreview(in value);
+    }
+
+    internal static ProjectAssetPreviewLayout ResolveAssetPreviewLayout(
+        float availableHeight,
+        float desiredPreviewHeight,
+        bool hasSelection)
+    {
+        float height = MathF.Max(1f, availableHeight);
+        if (!hasSelection)
+        {
+            return new ProjectAssetPreviewLayout(height, PreviewHeight: 0f, ShowPreview: false);
+        }
+
+        float maximumPreviewHeight = MathF.Max(
+            1f,
+            height - PreviewSplitterHeight - MinimumPreviewContentHeight);
+        float minimumPreviewHeight = MathF.Min(MinimumPreviewPaneHeight, maximumPreviewHeight);
+        float previewHeight = Math.Clamp(
+            MathF.Max(1f, desiredPreviewHeight),
+            minimumPreviewHeight,
+            maximumPreviewHeight);
+        float contentHeight = MathF.Max(1f, height - PreviewSplitterHeight - previewHeight);
+        return new ProjectAssetPreviewLayout(contentHeight, previewHeight, ShowPreview: true);
+    }
+
+    private AssetBrowserDetailedPreview ResolveDetailedPreview(in AssetBrowserItem item)
+    {
+        long modifiedTicks = item.LastModifiedUtc.UtcTicks;
+        if (_previewCache is not null &&
+            string.Equals(_previewCachePath, item.Path, StringComparison.OrdinalIgnoreCase) &&
+            _previewCacheSizeBytes == item.SizeBytes &&
+            _previewCacheModifiedTicks == modifiedTicks)
+        {
+            return _previewCache;
+        }
+
+        AssetBrowserDetailedPreview preview = _source is IAssetBrowserPreviewDataSource previewSource &&
+            previewSource.TryGetPreview(item.Path, out AssetBrowserDetailedPreview detailed)
+                ? detailed
+                : BuildFallbackPreview(in item);
+        _previewCachePath = item.Path;
+        _previewCacheSizeBytes = item.SizeBytes;
+        _previewCacheModifiedTicks = modifiedTicks;
+        _previewCache = preview;
+        return preview;
+    }
+
+    private static AssetBrowserDetailedPreview BuildFallbackPreview(in AssetBrowserItem item)
+    {
+        AssetBrowserPreviewContentKind contentKind = item.Kind switch
+        {
+            AssetBrowserItemKind.Texture => AssetBrowserPreviewContentKind.Image,
+            AssetBrowserItemKind.Audio => AssetBrowserPreviewContentKind.Audio,
+            AssetBrowserItemKind.Material or
+            AssetBrowserItemKind.Scene or
+            AssetBrowserItemKind.Prefab or
+            AssetBrowserItemKind.Script or
+            AssetBrowserItemKind.UiScreen or
+            AssetBrowserItemKind.Json => AssetBrowserPreviewContentKind.Text,
+            AssetBrowserItemKind.Folder or AssetBrowserItemKind.Other => AssetBrowserPreviewContentKind.Summary,
+            _ => throw new ArgumentOutOfRangeException(nameof(item), item.Kind, "未知资产类型。"),
+        };
+        AssetBrowserPreviewProperty[] properties =
+        [
+            new("类型", item.Descriptor?.TypeLabel ?? item.Kind.ToString()),
+            new("路径", item.Path),
+            new("大小", FormatPreviewSize(item.SizeBytes)),
+        ];
+        return new AssetBrowserDetailedPreview(
+            item.DisplayName,
+            contentKind,
+            item.PreviewSummary ?? item.Descriptor?.Purpose ?? "暂无摘要",
+            properties);
+    }
+
+    private static string FormatPreviewSize(long bytes)
+    {
+        return bytes < 1024
+            ? $"{bytes.ToString(CultureInfo.InvariantCulture)} B"
+            : $"{(bytes / 1024d).ToString("0.##", CultureInfo.InvariantCulture)} KB";
+    }
+
+    private AssetBrowserItem? FindSelectedAsset(EditorSelection selection)
+    {
+        if (!string.IsNullOrWhiteSpace(selection.AssetPath))
+        {
+            return FindAsset(selection.AssetPath);
+        }
+
+        if (!string.IsNullOrWhiteSpace(selection.AssetId))
+        {
+            EnsureSnapshotLoaded();
+            for (int i = 0; i < LastAssets.Count; i++)
+            {
+                if (string.Equals(LastAssets[i].AssetId, selection.AssetId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return LastAssets[i];
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void ClearPreviewCache()
+    {
+        _previewCachePath = string.Empty;
+        _previewCacheSizeBytes = -1;
+        _previewCacheModifiedTicks = -1;
+        _previewCache = null;
     }
 
     private static void DrawThumbnail(ImDrawListPtr drawList, AssetThumbnail thumbnail, Vector2 boundsMin, Vector2 boundsSize)
@@ -3067,6 +3356,7 @@ public sealed class AssetBrowserPanel(
     {
         LastAssets = _source.ListAssets();
         _snapshotLoaded = true;
+        ClearPreviewCache();
         ReconcileAssetSelection(_trackedSelection);
         RebuildFolderTargets();
         ReconcileFolderSelection(_trackedSelection);
@@ -3333,6 +3623,11 @@ public sealed class AssetBrowserPanel(
         Vector2 Maximum,
         string FolderPath);
 }
+
+internal readonly record struct ProjectAssetPreviewLayout(
+    float ContentHeight,
+    float PreviewHeight,
+    bool ShowPreview);
 
 /// <summary>
 /// Project Window 可见缩略图 lease 集合。每个 lease 至少跨过提交它的 ImGui render frame，

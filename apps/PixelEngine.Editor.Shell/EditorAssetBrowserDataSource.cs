@@ -14,6 +14,7 @@ internal sealed class EditorAssetBrowserDataSource :
     IAssetBrowserFolderDataSource,
     IAssetBrowserContextDataSource,
     IAssetBrowserThumbnailDataSource,
+    IAssetBrowserPreviewDataSource,
     IDisposable
 {
     private const string ScriptManifestRelativePath = ".pixelengine/script-assets.json";
@@ -127,6 +128,42 @@ internal sealed class EditorAssetBrowserDataSource :
         }
 
         leaseProvider.ReleaseThumbnail(relativePath, textureHandle);
+    }
+
+    /// <inheritdoc />
+    public bool TryGetPreview(string assetPath, out AssetBrowserDetailedPreview preview)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
+        for (int i = 0; i < _assetSnapshot.Length; i++)
+        {
+            AssetBrowserItem item = _assetSnapshot[i];
+            if (!string.Equals(item.Path, assetPath, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (TryGetRelativePath(item.Path, EditorAssetRootKind.Content, out string contentPath))
+            {
+                preview = EditorAssetPreviewBuilder.Build(
+                    in item,
+                    ResolveAssetFullPath(EditorAssetRootKind.Content, contentPath));
+                return true;
+            }
+
+            if (TryGetRelativePath(item.Path, EditorAssetRootKind.ScriptSource, out string scriptPath))
+            {
+                preview = EditorAssetPreviewBuilder.Build(
+                    in item,
+                    ResolveAssetFullPath(EditorAssetRootKind.ScriptSource, scriptPath));
+                return true;
+            }
+
+            break;
+        }
+
+        preview = null!;
+        return false;
     }
 
     /// <inheritdoc />
