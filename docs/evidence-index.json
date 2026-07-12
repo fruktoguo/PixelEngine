@@ -573,6 +573,19 @@
       "notes": "同 HWND desktop GL to D3D11/DXGI GPU presenter 已让 Hub 与完整工作台由 WGC 直接捕获；managed ImGui renderer、焦点/系统光标/IME 平台桥和 RmlUi 调用方 FBO 恢复已验证。跨屏 DPI、dock/undock、真实中文 IME、外部文件 drag/drop 与完整 Build And Run 路线仍保留，EDITOR-003 继续进行中。"
     },
     {
+      "entryId": "editor-003-unity-parity-cycle07-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "afcaaa8ab9f04d31f9ac7fd78c2c7ea9f5bf863d",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle07",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; per-monitor DPI aware at 144 DPI; PixelEngine WGC and native WM_DROPFILES probes",
+      "command": "Computer Use Layout Reset and same-UserData restart; same-HWND Windows Graphics Capture; PIXELENGINE_RENDERING_GL_SMOKE=1 native WM_DROPFILES smoke; Editor/Hosting/Rendering tests; solution Release build/test; task catalog and evidence index validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-07.md",
+      "sha256": "4849b6525301ba77b9cd28452c89eef07c6fd70c63b73cf74917f6187b75a358",
+      "notes": "系统 file-drop 的可见 Project/DPI 命中、全类型目录导入、批量诊断、manifest 事务回滚，以及 Reset Layout Inspector 焦点和跨 session persistence 已验证；Computer Use 不允许 Explorer 跨窗口 drag，tab undock/redock、跨屏 DPI、真实中文 IME 和完整 Build And Run 仍保留，EDITOR-003 继续进行中。"
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
