@@ -620,7 +620,13 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawTransform(EditorGameObject gameObject)
     {
         EditorSceneTransform transform = gameObject.Transform.Clone();
-        if (!ImGui.BeginTable("gameobject-transform-fields", 5, ImGuiTableFlags.SizingStretchProp))
+        TransformFieldLayout layout = ResolveTransformFieldLayout(ImGui.GetContentRegionAvail().X);
+        bool inlineAxes = layout == TransformFieldLayout.InlineAxes;
+        string tableId = inlineAxes
+            ? "gameobject-transform-fields-inline"
+            : "gameobject-transform-fields-stacked";
+        int columnCount = inlineAxes ? 5 : 3;
+        if (!ImGui.BeginTable(tableId, columnCount, ImGuiTableFlags.SizingStretchProp))
         {
             return;
         }
@@ -628,8 +634,11 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 68f);
         ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, 12f);
         ImGui.TableSetupColumn("ValueA", ImGuiTableColumnFlags.WidthStretch);
-        ImGui.TableSetupColumn("AxisB", ImGuiTableColumnFlags.WidthFixed, 12f);
-        ImGui.TableSetupColumn("ValueB", ImGuiTableColumnFlags.WidthStretch);
+        if (inlineAxes)
+        {
+            ImGui.TableSetupColumn("AxisB", ImGuiTableColumnFlags.WidthFixed, 12f);
+            ImGui.TableSetupColumn("ValueB", ImGuiTableColumnFlags.WidthStretch);
+        }
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
@@ -640,23 +649,34 @@ internal sealed class GameObjectInspectorPanel(
         float x = transform.X;
         float y = transform.Y;
         ImGui.SetNextItemWidth(-1f);
-        bool changed = ImGui.InputFloat("##position-x", ref x);
+        bool changed = ImGui.DragFloat("##position-x", ref x, 0.25f);
         if (changed)
         {
             transform.X = x;
         }
         HandleTransformInput(gameObject, transform, changed);
+        DrawTransformDragTooltip();
 
-        _ = ImGui.TableSetColumnIndex(3);
+        if (inlineAxes)
+        {
+            _ = ImGui.TableSetColumnIndex(3);
+        }
+        else
+        {
+            ImGui.TableNextRow();
+            _ = ImGui.TableSetColumnIndex(1);
+        }
+
         ImGui.TextDisabled("Y");
-        _ = ImGui.TableSetColumnIndex(4);
+        _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.InputFloat("##position-y", ref y);
+        changed = ImGui.DragFloat("##position-y", ref y, 0.25f);
         if (changed)
         {
             transform.Y = y;
         }
         HandleTransformInput(gameObject, transform, changed);
+        DrawTransformDragTooltip();
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
@@ -666,12 +686,13 @@ internal sealed class GameObjectInspectorPanel(
         _ = ImGui.TableSetColumnIndex(2);
         float rotation = RadiansToDegrees(transform.RotationRadians);
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.InputFloat("##rotation-z", ref rotation);
+        changed = ImGui.DragFloat("##rotation-z", ref rotation, 0.5f);
         if (changed)
         {
             transform.RotationRadians = DegreesToRadians(rotation);
         }
         HandleTransformInput(gameObject, transform, changed);
+        DrawTransformDragTooltip();
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
@@ -682,24 +703,51 @@ internal sealed class GameObjectInspectorPanel(
         float scaleX = transform.ScaleX;
         float scaleY = transform.ScaleY;
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.InputFloat("##scale-x", ref scaleX);
+        changed = ImGui.DragFloat("##scale-x", ref scaleX, 0.01f);
         if (changed)
         {
             transform.ScaleX = scaleX;
         }
         HandleTransformInput(gameObject, transform, changed);
+        DrawTransformDragTooltip();
 
-        _ = ImGui.TableSetColumnIndex(3);
+        if (inlineAxes)
+        {
+            _ = ImGui.TableSetColumnIndex(3);
+        }
+        else
+        {
+            ImGui.TableNextRow();
+            _ = ImGui.TableSetColumnIndex(1);
+        }
+
         ImGui.TextDisabled("Y");
-        _ = ImGui.TableSetColumnIndex(4);
+        _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.InputFloat("##scale-y", ref scaleY);
+        changed = ImGui.DragFloat("##scale-y", ref scaleY, 0.01f);
         if (changed)
         {
             transform.ScaleY = scaleY;
         }
         HandleTransformInput(gameObject, transform, changed);
+        DrawTransformDragTooltip();
         ImGui.EndTable();
+    }
+
+    internal static TransformFieldLayout ResolveTransformFieldLayout(float availableWidth)
+    {
+        const float InlineAxesMinimumWidth = 300f;
+        return float.IsFinite(availableWidth) && availableWidth >= InlineAxesMinimumWidth
+            ? TransformFieldLayout.InlineAxes
+            : TransformFieldLayout.StackedAxes;
+    }
+
+    private static void DrawTransformDragTooltip()
+    {
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("左右拖动快速修改；Ctrl+单击后可精确输入。");
+        }
     }
 
     internal static float RadiansToDegrees(float radians)
@@ -854,8 +902,9 @@ internal sealed class GameObjectInspectorPanel(
     {
         EditorComponentModel component = gameObject.Components[componentIndex];
         string displayName = GetComponentDisplayName(component.TypeName);
-        Vector2 headerMin = ImGui.GetCursorScreenPos();
-        bool open = DrawInspectorComponentHeader($"   {displayName}##component_{componentIndex}");
+        bool open = DrawInspectorComponentHeader($"##component_{componentIndex}");
+        Vector2 headerMin = ImGui.GetItemRectMin();
+        Vector2 headerMax = ImGui.GetItemRectMax();
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip($"{component.TypeName}\nRight-click for component actions");
@@ -886,7 +935,13 @@ internal sealed class GameObjectInspectorPanel(
 
         Vector2 cursorAfterHeader = ImGui.GetCursorScreenPos();
         bool componentEnabled = IsComponentEnabled(component);
-        ImGui.SetCursorScreenPos(headerMin + new Vector2(19f, 2f));
+        ComponentHeaderLayout headerLayout = ResolveComponentHeaderLayout(
+            headerMin,
+            headerMax,
+            ImGui.GetFrameHeight(),
+            ImGui.GetStyle().ItemInnerSpacing.X,
+            ImGui.GetTextLineHeight());
+        ImGui.SetCursorScreenPos(headerLayout.CheckboxPosition);
         if (ImGui.Checkbox($"##component-enabled-{componentIndex}", ref componentEnabled))
         {
             _undo.Execute(
@@ -902,6 +957,11 @@ internal sealed class GameObjectInspectorPanel(
         {
             ImGui.SetTooltip(componentEnabled ? "Component enabled" : "Component disabled");
         }
+
+        ImGui.GetWindowDrawList().AddText(
+            headerLayout.LabelPosition,
+            componentEnabled ? ImGui.GetColorU32(ImGuiCol.Text) : ImGui.GetColorU32(ImGuiCol.TextDisabled),
+            displayName);
 
         ImGui.SetCursorScreenPos(cursorAfterHeader);
 
@@ -961,6 +1021,25 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.PopStyleColor();
         ImGui.PopStyleColor();
         return open;
+    }
+
+    internal static ComponentHeaderLayout ResolveComponentHeaderLayout(
+        Vector2 headerMin,
+        Vector2 headerMax,
+        float frameHeight,
+        float innerSpacingX,
+        float textLineHeight)
+    {
+        float safeFrameHeight = MathF.Max(1f, frameHeight);
+        float headerHeight = MathF.Max(safeFrameHeight, headerMax.Y - headerMin.Y);
+        float checkboxX = headerMin.X + safeFrameHeight + MathF.Max(2f, innerSpacingX * 0.5f);
+        float checkboxY = headerMin.Y + MathF.Max(0f, (headerHeight - safeFrameHeight) * 0.5f);
+        float labelX = checkboxX + safeFrameHeight + MathF.Max(2f, innerSpacingX);
+        float labelY = headerMin.Y + MathF.Max(0f, (headerHeight - MathF.Max(1f, textLineHeight)) * 0.5f);
+        return new ComponentHeaderLayout(
+            new Vector2(checkboxX, checkboxY),
+            new Vector2(labelX, labelY),
+            headerMin.X + safeFrameHeight);
     }
 
     internal static bool IsComponentEnabled(EditorComponentModel component)
@@ -1222,6 +1301,17 @@ internal sealed class GameObjectInspectorPanel(
             typeof(Behaviour).IsAssignableFrom(type) &&
             type.GetConstructor(Type.EmptyTypes) is not null;
     }
+}
+
+internal readonly record struct ComponentHeaderLayout(
+    Vector2 CheckboxPosition,
+    Vector2 LabelPosition,
+    float ArrowLaneRight);
+
+internal enum TransformFieldLayout
+{
+    InlineAxes,
+    StackedAxes,
 }
 
 internal readonly record struct AssetInspectorSnapshot(

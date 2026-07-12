@@ -1,6 +1,7 @@
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
+using System.Numerics;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -43,6 +44,38 @@ public sealed class GameObjectInspectorPanelTests
         Assert.True(GameObjectInspectorPanel.IsComponentEnabled(component));
         component.SerializedFields[nameof(Behaviour.Enabled)] = bool.FalseString;
         Assert.False(GameObjectInspectorPanel.IsComponentEnabled(component));
+    }
+
+    /// <summary>
+    /// 验证组件 enable 复选框从折叠箭头命中区之后开始，标题也不会覆盖复选框。
+    /// </summary>
+    [Fact]
+    public void ComponentHeaderLayoutSeparatesArrowCheckboxAndLabel()
+    {
+        ComponentHeaderLayout layout = GameObjectInspectorPanel.ResolveComponentHeaderLayout(
+            new Vector2(100f, 20f),
+            new Vector2(420f, 44f),
+            frameHeight: 20f,
+            innerSpacingX: 8f,
+            textLineHeight: 16f);
+
+        Assert.Equal(120f, layout.ArrowLaneRight);
+        Assert.True(layout.CheckboxPosition.X > layout.ArrowLaneRight);
+        Assert.True(layout.LabelPosition.X >= layout.CheckboxPosition.X + 20f);
+        Assert.InRange(layout.CheckboxPosition.Y, 20f, 24f);
+    }
+
+    /// <summary>
+    /// 验证窄 Inspector 会把 Position/Scale 的 X、Y 改为分行布局，避免两个数值框互相挤压；
+    /// 宽面板仍保留紧凑横排。
+    /// </summary>
+    [Fact]
+    public void TransformFieldsAdaptToInspectorWidth()
+    {
+        Assert.Equal(TransformFieldLayout.StackedAxes, GameObjectInspectorPanel.ResolveTransformFieldLayout(220f));
+        Assert.Equal(TransformFieldLayout.StackedAxes, GameObjectInspectorPanel.ResolveTransformFieldLayout(299.5f));
+        Assert.Equal(TransformFieldLayout.InlineAxes, GameObjectInspectorPanel.ResolveTransformFieldLayout(300f));
+        Assert.Equal(TransformFieldLayout.InlineAxes, GameObjectInspectorPanel.ResolveTransformFieldLayout(480f));
     }
 
     /// <summary>

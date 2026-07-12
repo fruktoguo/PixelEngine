@@ -28,6 +28,12 @@ internal sealed class SceneViewPanel(
     private const uint ToolbarHoveredColor = 0xFF_4A_4A_4A;
     private const uint ToolbarIconColor = 0xFF_D2_D2_D2;
     private const uint ToolbarIconDisabledColor = 0xFF_78_78_78;
+    private const uint GizmoXAxisColor = 0xFF_5C_5C_E8;
+    private const uint GizmoYAxisColor = 0xFF_65_CE_64;
+    private const uint GizmoUniformColor = 0xFF_54_C8_E8;
+    private const uint GizmoHighlightColor = 0xFF_FF_FF_FF;
+    private const float GizmoAxisLength = 48f;
+    private const float GizmoRotationRadius = 38f;
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
@@ -37,6 +43,7 @@ internal sealed class SceneViewPanel(
     private Vector2 _canvasMin;
     private Vector2 _canvasSize;
     private bool _canvasHovered;
+    private bool _cameraAutoFit = true;
     private int _previewVersion = -1;
     private int _previewSceneViewVersion = -1;
     private long _previewAuthoringWorldVersion = -1;
@@ -47,6 +54,12 @@ internal sealed class SceneViewPanel(
     private long _gizmoTransactionSceneGeneration = -1;
     private EditorSceneTransform? _gizmoBefore;
     private bool _gizmoChanged;
+    private SceneGizmoHandle _hoveredGizmoHandle;
+    private SceneGizmoHandle _activeGizmoHandle;
+    private Vector2 _gizmoDragStartScreen;
+    private Vector2 _gizmoDragStartWorldPoint;
+    private Vector2 _gizmoDragCenterScreen;
+    private EditorSceneTransform? _gizmoDragStartWorldTransform;
     private EditorMode _preparedMode = EditorMode.Edit;
     private bool _disposed;
 
@@ -94,7 +107,7 @@ internal sealed class SceneViewPanel(
     /// </summary>
     /// <remarks>
     /// Scene View 被关闭或切到后台时仍可能发生 selection、mode、对象删除与场景替换，
-    /// 因此事务收尾不能只依赖 ImGuizmo 的 IsUsing 边沿。
+    /// 因此事务收尾不能只依赖当前帧鼠标 release 边沿。
     /// </remarks>
     internal void PrepareFrame(int? selectedStableId, EditorMode mode)
     {
@@ -135,8 +148,10 @@ internal sealed class SceneViewPanel(
         DrawAuthoringCanvas();
         InputFocused = _canvasHovered && (ImGui.IsWindowHovered() || ImGui.IsWindowFocused());
         HandleCameraInput();
-        HandleSceneMouse(context.Selection);
+        // gizmo 必须先更新本帧 hit-test / active 状态，Scene selection 才能正确让出左键。
+        // 否则首次按下 handle 时会被 selection 路径抢走输入。
         DrawGizmo(context.Selection);
+        HandleSceneMouse(context.Selection);
         ImGui.End();
     }
 
@@ -145,6 +160,7 @@ internal sealed class SceneViewPanel(
         SceneAuthoringPreview preview = EnsurePreview();
         _camera.FrameBounds(preview.Bounds);
         _framedSceneName = preview.SceneName;
+        _cameraAutoFit = true;
         return true;
     }
 
@@ -164,16 +180,22 @@ internal sealed class SceneViewPanel(
 
         EditorSceneTransform transform = _scene.ComputeWorldTransform(gameObject.StableId);
         _camera.FramePoint(new Vector2(transform.X, transform.Y));
+        // Frame Selected 与手动 pan/zoom 一样代表用户主动决定相机取景；后续 dock resize
+        // 只改变可见范围，不应再被默认的 Frame All 覆盖。
+        _cameraAutoFit = false;
         return true;
     }
 
     internal bool PrepareCanvas(Vector2 size)
     {
-        _canvasSize = new Vector2(MathF.Max(1f, size.X), MathF.Max(1f, size.Y));
+        Vector2 nextCanvasSize = new(MathF.Max(1f, size.X), MathF.Max(1f, size.Y));
+        bool viewportChanged = !ApproximatelyEqual(_canvasSize, nextCanvasSize);
+        _canvasSize = nextCanvasSize;
         _camera.SetViewport(_canvasSize);
         SceneAuthoringPreview preview = EnsurePreview();
-        bool shouldFrame = !string.Equals(_framedSceneName, preview.SceneName, StringComparison.Ordinal) &&
-            _canvasSize is { X: >= 64f, Y: >= 64f };
+        bool sceneChanged = !string.Equals(_framedSceneName, preview.SceneName, StringComparison.Ordinal);
+        bool shouldFrame = _canvasSize is { X: >= 64f, Y: >= 64f } &&
+            (sceneChanged || (viewportChanged && _cameraAutoFit));
         return shouldFrame && FrameAll();
     }
 
@@ -391,7 +413,7 @@ internal sealed class SceneViewPanel(
             SceneToolbarIcon.FrameSelected,
             selected: false,
             canFrameSelected,
-            "Frame Selected"))
+            "Frame Selected (F)"))
         {
             _ = FrameSelected(selection);
         }
@@ -443,6 +465,11 @@ internal sealed class SceneViewPanel(
             {
                 _ = SetMaterialBrushActive(true);
             }
+
+            if (canFrameSelected && ImGui.IsKeyPressed(ImGuiKey.F))
+            {
+                _ = FrameSelected(selection);
+            }
         }
     }
 
@@ -455,6 +482,12 @@ internal sealed class SceneViewPanel(
             throw new ArgumentOutOfRangeException(nameof(operation), operation, "Scene View 仅支持 Move、Rotate Z 与 Scale gizmo。");
         }
 
+        if (_gizmoTransactionStableId.HasValue)
+        {
+            _ = CommitGizmoTransform();
+        }
+
+        ClearGizmoInteraction();
         _ = SetMaterialBrushActive(false);
         Operation = operation;
     }
@@ -488,6 +521,12 @@ internal sealed class SceneViewPanel(
 
     internal void ToggleGizmoMode()
     {
+        if (_gizmoTransactionStableId.HasValue)
+        {
+            _ = CommitGizmoTransform();
+        }
+
+        ClearGizmoInteraction();
         GizmoMode = GizmoMode == ImGuizmoMode.Local ? ImGuizmoMode.World : ImGuizmoMode.Local;
     }
 
@@ -644,19 +683,30 @@ internal sealed class SceneViewPanel(
         _canvasMin = ImGui.GetCursorScreenPos();
         SceneAuthoringPreview preview = EnsurePreview();
 
-        _ = ImGui.InvisibleButton("scene-authoring-canvas", _canvasSize);
-        _canvasHovered = ImGui.IsItemHovered();
+        // Dummy 只占布局、不创建可抢占 ActiveId 的交互项；Scene 相机、画刷与 gizmo
+        // 通过同一 canvas rect 做显式仲裁，避免画布先于 2D gizmo 吞掉左键。
+        ImGui.Dummy(_canvasSize);
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
         Vector2 canvasMax = _canvasMin + _canvasSize;
+        _canvasHovered = ImGui.IsMouseHoveringRect(_canvasMin, canvasMax, clip: true);
         drawList.AddRectFilled(_canvasMin, canvasMax, CanvasColor);
-        DrawWorldPreview(drawList, preview);
-        if (ShowGrid)
+        drawList.PushClipRect(_canvasMin, canvasMax, true);
+        try
         {
-            DrawGrid(drawList);
+            DrawWorldPreview(drawList, preview);
+            if (ShowGrid)
+            {
+                DrawGrid(drawList);
+            }
+
+            DrawBoundary(drawList, preview.Bounds);
+            DrawMarkers(drawList, preview);
+            DrawCanvasLabel(drawList, preview);
         }
-        DrawBoundary(drawList, preview.Bounds);
-        DrawMarkers(drawList, preview);
-        DrawCanvasLabel(drawList, preview);
+        finally
+        {
+            drawList.PopClipRect();
+        }
     }
 
     private void DrawWorldPreview(ImDrawListPtr drawList, SceneAuthoringPreview preview)
@@ -672,7 +722,6 @@ internal sealed class SceneViewPanel(
         SceneWorldTextureSnapshot snapshot = _worldTexture.GetTexture(preview.Bounds);
         Vector2 imageMin = WorldToScreen(new Vector2(snapshot.Bounds.X, snapshot.Bounds.Y));
         Vector2 imageMax = WorldToScreen(new Vector2(snapshot.Bounds.Right, snapshot.Bounds.Bottom));
-        drawList.PushClipRect(_canvasMin, _canvasMin + _canvasSize, true);
         // SceneWorldTexture 是 CPU buffer 直接上传的原始纹理（无 FBO pass），数据 row 0 = 世界顶部 = 纹理 V=0，
         // 因此直通 UV (0,0)-(1,1) 即为正确朝向。运行时 ViewportPanel 采样的 CurrentViewportTexture 经过 GPU FBO
         // pass 会额外翻转一次 V，才需要 (0,1)-(1,0)；此处若照抄那份翻转会导致 Scene View 上下颠倒。
@@ -683,7 +732,6 @@ internal sealed class SceneViewPanel(
             new Vector2(0f, 0f),
             new Vector2(1f, 1f),
             0xFFFFFFFF);
-        drawList.PopClipRect();
     }
 
     private void DrawGrid(ImDrawListPtr drawList)
@@ -829,11 +877,13 @@ internal sealed class SceneViewPanel(
         if (io.MouseWheel != 0f)
         {
             _camera.ZoomAt(io.MousePos - _canvasMin, io.MouseWheel);
+            _cameraAutoFit = false;
         }
 
         if (ImGui.IsMouseDragging(ImGuiMouseButton.Middle) || ImGui.IsMouseDragging(ImGuiMouseButton.Right))
         {
             _camera.PanPixels(io.MouseDelta);
+            _cameraAutoFit = false;
         }
     }
 
@@ -906,9 +956,10 @@ internal sealed class SceneViewPanel(
         }
     }
 
-    private static bool IsGizmoCapturingMouse()
+    private bool IsGizmoCapturingMouse()
     {
-        return ImGuizmo.IsUsing() || ImGuizmo.IsOver();
+        return _activeGizmoHandle != SceneGizmoHandle.None ||
+            _hoveredGizmoHandle != SceneGizmoHandle.None;
     }
 
     private void DrawGizmo(EditorSelection selection)
@@ -926,46 +977,307 @@ internal sealed class SceneViewPanel(
                 _ = CommitGizmoTransform();
             }
 
+            ClearGizmoInteraction();
             return;
         }
 
-        SceneAuthoringCameraSnapshot snapshot = _camera.Snapshot;
-        float widthCells = snapshot.ViewportWidth * snapshot.CellsPerPixel;
-        float heightCells = snapshot.ViewportHeight * snapshot.CellsPerPixel;
-        Matrix4x4 view = Matrix4x4.Identity;
-        Matrix4x4 projection = Matrix4x4.CreateOrthographicOffCenter(
-            snapshot.OriginX,
-            snapshot.OriginX + widthCells,
-            snapshot.OriginY + heightCells,
-            snapshot.OriginY,
-            -1f,
-            1f);
         EditorSceneTransform world = _scene.ComputeWorldTransform(gameObject.StableId);
-        Matrix4x4 model = ComposeModel(world);
+        SceneGizmoGeometry geometry = BuildGizmoGeometry(
+            world,
+            WorldToScreen(new Vector2(world.X, world.Y)),
+            GizmoMode);
+        ImGuiIOPtr io = ImGui.GetIO();
+        _hoveredGizmoHandle = _canvasHovered
+            ? ResolveGizmoHandle(in geometry, Operation, io.MousePos)
+            : SceneGizmoHandle.None;
 
-        ImGuizmo.BeginFrame();
-        ImGuizmo.SetOrthographic(true);
-        ImGuizmo.SetDrawlist();
-        ImGuizmo.SetRect(_canvasMin.X, _canvasMin.Y, _canvasSize.X, _canvasSize.Y);
-        bool manipulated = ImGuizmo.Manipulate(ref view, ref projection, Operation, GizmoMode, ref model);
-        bool usingGizmo = ImGuizmo.IsUsing();
-        if (manipulated)
+        if (_activeGizmoHandle == SceneGizmoHandle.None &&
+            _hoveredGizmoHandle != SceneGizmoHandle.None &&
+            ImGui.IsMouseClicked(ImGuiMouseButton.Left) &&
+            BeginGizmoTransform(gameObject.StableId))
         {
-            EditorSceneTransform nextWorld = DecomposeModel(model, world);
-            _ = ApplyGizmoWorldTransform(gameObject.StableId, nextWorld);
+            _activeGizmoHandle = _hoveredGizmoHandle;
+            _gizmoDragStartScreen = io.MousePos;
+            _gizmoDragStartWorldPoint = _camera.CanvasToWorld(io.MousePos - _canvasMin);
+            _gizmoDragCenterScreen = geometry.Center;
+            _gizmoDragStartWorldTransform = world.Clone();
         }
 
-        if (_gizmoTransactionStableId.HasValue)
+        if (_activeGizmoHandle != SceneGizmoHandle.None && _gizmoDragStartWorldTransform is not null)
         {
             if (ImGui.IsKeyPressed(ImGuiKey.Escape))
             {
                 _ = CancelGizmoTransform();
+                ClearGizmoInteraction();
             }
-            else if (!usingGizmo)
+            else if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                Vector2 currentWorldPoint = _camera.CanvasToWorld(io.MousePos - _canvasMin);
+                EditorSceneTransform nextWorld = ApplyGizmoDrag(
+                    _gizmoDragStartWorldTransform,
+                    _activeGizmoHandle,
+                    Operation,
+                    GizmoMode,
+                    _gizmoDragStartWorldPoint,
+                    currentWorldPoint,
+                    _gizmoDragStartScreen,
+                    io.MousePos,
+                    _gizmoDragCenterScreen);
+                _ = ApplyGizmoWorldTransform(gameObject.StableId, nextWorld);
+                world = _scene.ComputeWorldTransform(gameObject.StableId);
+                geometry = BuildGizmoGeometry(
+                    world,
+                    WorldToScreen(new Vector2(world.X, world.Y)),
+                    GizmoMode);
+            }
+            else
             {
                 _ = CommitGizmoTransform();
+                ClearGizmoInteraction();
             }
         }
+
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.PushClipRect(_canvasMin, _canvasMin + _canvasSize, true);
+        try
+        {
+            DrawGizmoGeometry(drawList, in geometry, world.RotationRadians, Operation);
+        }
+        finally
+        {
+            drawList.PopClipRect();
+        }
+    }
+
+    internal static SceneGizmoGeometry BuildGizmoGeometry(
+        EditorSceneTransform worldTransform,
+        Vector2 center,
+        ImGuizmoMode mode)
+    {
+        ArgumentNullException.ThrowIfNull(worldTransform);
+        ResolveGizmoAxes(worldTransform, mode, out Vector2 axisX, out Vector2 axisY);
+        Vector2 diagonal = Vector2.Normalize(axisX + axisY);
+        return new SceneGizmoGeometry(
+            center,
+            center + (axisX * GizmoAxisLength),
+            center + (axisY * GizmoAxisLength),
+            center + (diagonal * GizmoAxisLength),
+            axisX,
+            axisY,
+            GizmoRotationRadius);
+    }
+
+    internal static SceneGizmoHandle ResolveGizmoHandle(
+        in SceneGizmoGeometry geometry,
+        ImGuizmoOperation operation,
+        Vector2 pointer)
+    {
+        const float CenterHitRadius = 9f;
+        const float AxisHitRadius = 7f;
+        const float EndpointHitRadius = 10f;
+        if (operation == ImGuizmoOperation.RotateZ)
+        {
+            float distance = Vector2.Distance(pointer, geometry.Center);
+            return MathF.Abs(distance - geometry.RotationRadius) <= AxisHitRadius
+                ? SceneGizmoHandle.Rotate
+                : SceneGizmoHandle.None;
+        }
+
+        if (operation == ImGuizmoOperation.Scale &&
+            Vector2.DistanceSquared(pointer, geometry.UniformEnd) <= EndpointHitRadius * EndpointHitRadius)
+        {
+            return SceneGizmoHandle.Uniform;
+        }
+
+        if (operation == ImGuizmoOperation.Translate &&
+            Vector2.DistanceSquared(pointer, geometry.Center) <= CenterHitRadius * CenterHitRadius)
+        {
+            return SceneGizmoHandle.Both;
+        }
+
+        bool hitsAxisX = Vector2.DistanceSquared(pointer, geometry.AxisXEnd) <= EndpointHitRadius * EndpointHitRadius ||
+            DistanceToSegment(pointer, geometry.Center, geometry.AxisXEnd) <= AxisHitRadius;
+        bool hitsAxisY = Vector2.DistanceSquared(pointer, geometry.AxisYEnd) <= EndpointHitRadius * EndpointHitRadius ||
+            DistanceToSegment(pointer, geometry.Center, geometry.AxisYEnd) <= AxisHitRadius;
+        return hitsAxisX ? SceneGizmoHandle.AxisX : hitsAxisY ? SceneGizmoHandle.AxisY : SceneGizmoHandle.None;
+    }
+
+    internal static EditorSceneTransform ApplyGizmoDrag(
+        EditorSceneTransform start,
+        SceneGizmoHandle handle,
+        ImGuizmoOperation operation,
+        ImGuizmoMode mode,
+        Vector2 startPointerWorld,
+        Vector2 currentPointerWorld,
+        Vector2 startPointerScreen,
+        Vector2 currentPointerScreen,
+        Vector2 centerScreen)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        EditorSceneTransform next = start.Clone();
+        ResolveGizmoAxes(start, mode, out Vector2 axisX, out Vector2 axisY);
+        if (operation == ImGuizmoOperation.Translate)
+        {
+            Vector2 delta = currentPointerWorld - startPointerWorld;
+            Vector2 applied = handle switch
+            {
+                SceneGizmoHandle.AxisX => axisX * Vector2.Dot(delta, axisX),
+                SceneGizmoHandle.AxisY => axisY * Vector2.Dot(delta, axisY),
+                SceneGizmoHandle.Both => delta,
+                SceneGizmoHandle.None or SceneGizmoHandle.Rotate or SceneGizmoHandle.Uniform => Vector2.Zero,
+                _ => throw new ArgumentOutOfRangeException(nameof(handle), handle, "未知 Scene gizmo handle。"),
+            };
+            next.X += applied.X;
+            next.Y += applied.Y;
+            return next;
+        }
+
+        if (operation == ImGuizmoOperation.RotateZ && handle == SceneGizmoHandle.Rotate)
+        {
+            float startAngle = MathF.Atan2(startPointerScreen.Y - centerScreen.Y, startPointerScreen.X - centerScreen.X);
+            float currentAngle = MathF.Atan2(currentPointerScreen.Y - centerScreen.Y, currentPointerScreen.X - centerScreen.X);
+            next.RotationRadians += NormalizeAngleDelta(currentAngle - startAngle);
+            return next;
+        }
+
+        if (operation != ImGuizmoOperation.Scale)
+        {
+            return next;
+        }
+
+        Vector2 startDelta = startPointerScreen - centerScreen;
+        Vector2 currentDelta = currentPointerScreen - centerScreen;
+        if (handle == SceneGizmoHandle.AxisX)
+        {
+            next.ScaleX *= ResolveScaleFactor(Vector2.Dot(startDelta, axisX), Vector2.Dot(currentDelta, axisX));
+        }
+        else if (handle == SceneGizmoHandle.AxisY)
+        {
+            next.ScaleY *= ResolveScaleFactor(Vector2.Dot(startDelta, axisY), Vector2.Dot(currentDelta, axisY));
+        }
+        else if (handle == SceneGizmoHandle.Uniform)
+        {
+            float factor = ResolveScaleFactor(startDelta.Length(), currentDelta.Length());
+            next.ScaleX *= factor;
+            next.ScaleY *= factor;
+        }
+
+        return next;
+    }
+
+    private void DrawGizmoGeometry(
+        ImDrawListPtr drawList,
+        in SceneGizmoGeometry geometry,
+        float rotationRadians,
+        ImGuizmoOperation operation)
+    {
+        uint xColor = ResolveGizmoColor(SceneGizmoHandle.AxisX, GizmoXAxisColor);
+        uint yColor = ResolveGizmoColor(SceneGizmoHandle.AxisY, GizmoYAxisColor);
+        if (operation == ImGuizmoOperation.RotateZ)
+        {
+            uint color = ResolveGizmoColor(SceneGizmoHandle.Rotate, GizmoUniformColor);
+            drawList.AddCircle(geometry.Center, geometry.RotationRadius, color, 48, 2.5f);
+            Vector2 direction = new(MathF.Cos(rotationRadians), MathF.Sin(rotationRadians));
+            drawList.AddLine(geometry.Center, geometry.Center + (direction * geometry.RotationRadius), color, 2f);
+            drawList.AddCircleFilled(geometry.Center + (direction * geometry.RotationRadius), 4.5f, color);
+            return;
+        }
+
+        drawList.AddLine(geometry.Center, geometry.AxisXEnd, xColor, 3f);
+        drawList.AddLine(geometry.Center, geometry.AxisYEnd, yColor, 3f);
+        if (operation == ImGuizmoOperation.Translate)
+        {
+            DrawArrowHead(drawList, geometry.AxisXEnd, geometry.AxisX, xColor);
+            DrawArrowHead(drawList, geometry.AxisYEnd, geometry.AxisY, yColor);
+            uint centerColor = ResolveGizmoColor(SceneGizmoHandle.Both, GizmoUniformColor);
+            drawList.AddRectFilled(geometry.Center - new Vector2(5f), geometry.Center + new Vector2(5f), centerColor, 1f);
+            return;
+        }
+
+        DrawSquareHandle(drawList, geometry.AxisXEnd, xColor);
+        DrawSquareHandle(drawList, geometry.AxisYEnd, yColor);
+        uint uniformColor = ResolveGizmoColor(SceneGizmoHandle.Uniform, GizmoUniformColor);
+        drawList.AddLine(geometry.Center, geometry.UniformEnd, uniformColor, 1.5f);
+        DrawSquareHandle(drawList, geometry.UniformEnd, uniformColor);
+    }
+
+    private uint ResolveGizmoColor(SceneGizmoHandle handle, uint normalColor)
+    {
+        return _activeGizmoHandle == handle ||
+            (_activeGizmoHandle == SceneGizmoHandle.None && _hoveredGizmoHandle == handle)
+                ? GizmoHighlightColor
+                : normalColor;
+    }
+
+    private static void DrawArrowHead(ImDrawListPtr drawList, Vector2 end, Vector2 axis, uint color)
+    {
+        Vector2 perpendicular = new(-axis.Y, axis.X);
+        drawList.AddTriangleFilled(
+            end,
+            end - (axis * 10f) + (perpendicular * 5f),
+            end - (axis * 10f) - (perpendicular * 5f),
+            color);
+    }
+
+    private static void DrawSquareHandle(ImDrawListPtr drawList, Vector2 center, uint color)
+    {
+        drawList.AddRectFilled(center - new Vector2(5f), center + new Vector2(5f), color, 1f);
+    }
+
+    private static void ResolveGizmoAxes(
+        EditorSceneTransform transform,
+        ImGuizmoMode mode,
+        out Vector2 axisX,
+        out Vector2 axisY)
+    {
+        float rotation = mode == ImGuizmoMode.Local && float.IsFinite(transform.RotationRadians)
+            ? transform.RotationRadians
+            : 0f;
+        float cosine = MathF.Cos(rotation);
+        float sine = MathF.Sin(rotation);
+        axisX = new Vector2(cosine, sine);
+        axisY = new Vector2(-sine, cosine);
+    }
+
+    private static float DistanceToSegment(Vector2 point, Vector2 start, Vector2 end)
+    {
+        Vector2 segment = end - start;
+        float lengthSquared = segment.LengthSquared();
+        if (lengthSquared <= float.Epsilon)
+        {
+            return Vector2.Distance(point, start);
+        }
+
+        float t = Math.Clamp(Vector2.Dot(point - start, segment) / lengthSquared, 0f, 1f);
+        return Vector2.Distance(point, start + (segment * t));
+    }
+
+    private static float ResolveScaleFactor(float start, float current)
+    {
+        if (!float.IsFinite(start) || !float.IsFinite(current) || MathF.Abs(start) <= 0.0001f)
+        {
+            return 1f;
+        }
+
+        float factor = current / start;
+        return !float.IsFinite(factor)
+            ? 1f
+            : MathF.Abs(factor) < 0.01f ? MathF.CopySign(0.01f, factor == 0f ? 1f : factor) : factor;
+    }
+
+    private static float NormalizeAngleDelta(float radians)
+    {
+        while (radians > MathF.PI)
+        {
+            radians -= MathF.Tau;
+        }
+
+        while (radians < -MathF.PI)
+        {
+            radians += MathF.Tau;
+        }
+
+        return radians;
     }
 
     private SceneAuthoringPreview EnsurePreview()
@@ -992,35 +1304,23 @@ internal sealed class SceneViewPanel(
         return _canvasMin + _camera.WorldToCanvas(world);
     }
 
-    private static Matrix4x4 ComposeModel(EditorSceneTransform transform)
-    {
-        return Matrix4x4.CreateScale(transform.ScaleX, transform.ScaleY, 1f) *
-            Matrix4x4.CreateRotationZ(transform.RotationRadians) *
-            Matrix4x4.CreateTranslation(transform.X, transform.Y, 0f);
-    }
-
-    private static EditorSceneTransform DecomposeModel(Matrix4x4 model, EditorSceneTransform fallback)
-    {
-        return Matrix4x4.Decompose(model, out Vector3 scale, out Quaternion rotation, out Vector3 translation)
-            ? new EditorSceneTransform
-            {
-                X = translation.X,
-                Y = translation.Y,
-                RotationRadians = MathF.Atan2(
-                    2f * ((rotation.W * rotation.Z) + (rotation.X * rotation.Y)),
-                    1f - (2f * ((rotation.Y * rotation.Y) + (rotation.Z * rotation.Z)))),
-                ScaleX = scale.X,
-                ScaleY = scale.Y,
-            }
-            : fallback.Clone();
-    }
-
     private void ClearGizmoTransaction()
     {
         _gizmoTransactionStableId = null;
         _gizmoTransactionSceneGeneration = -1;
         _gizmoBefore = null;
         _gizmoChanged = false;
+        ClearGizmoInteraction();
+    }
+
+    private void ClearGizmoInteraction()
+    {
+        _hoveredGizmoHandle = SceneGizmoHandle.None;
+        _activeGizmoHandle = SceneGizmoHandle.None;
+        _gizmoDragStartScreen = default;
+        _gizmoDragStartWorldPoint = default;
+        _gizmoDragCenterScreen = default;
+        _gizmoDragStartWorldTransform = null;
     }
 
     private bool IsGizmoTransactionTargetAlive()
@@ -1040,6 +1340,13 @@ internal sealed class SceneViewPanel(
             MathF.Abs(left.ScaleY - right.ScaleY) <= Epsilon;
     }
 
+    private static bool ApproximatelyEqual(Vector2 left, Vector2 right)
+    {
+        const float Epsilon = 0.5f;
+        return MathF.Abs(left.X - right.X) <= Epsilon &&
+            MathF.Abs(left.Y - right.Y) <= Epsilon;
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -1051,6 +1358,25 @@ internal sealed class SceneViewPanel(
         _disposed = true;
     }
 }
+
+internal enum SceneGizmoHandle
+{
+    None,
+    AxisX,
+    AxisY,
+    Both,
+    Rotate,
+    Uniform,
+}
+
+internal readonly record struct SceneGizmoGeometry(
+    Vector2 Center,
+    Vector2 AxisXEnd,
+    Vector2 AxisYEnd,
+    Vector2 UniformEnd,
+    Vector2 AxisX,
+    Vector2 AxisY,
+    float RotationRadius);
 
 internal readonly record struct SceneGameObjectMarkerGeometry(
     Vector2 AxisX,

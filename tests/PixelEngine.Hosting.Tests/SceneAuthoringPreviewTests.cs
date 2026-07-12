@@ -67,6 +67,92 @@ public sealed class SceneAuthoringPreviewTests
     }
 
     /// <summary>
+    /// 验证 2D gizmo 的 Move/Rotate/Scale handle 在屏幕空间可见且命中区互不冒充。
+    /// </summary>
+    [Fact]
+    public void SceneGizmoGeometryExposesVisibleHitTargetsForEveryTool()
+    {
+        EditorSceneTransform transform = new()
+        {
+            X = 10f,
+            Y = 20f,
+            RotationRadians = 0f,
+            ScaleX = 1f,
+            ScaleY = 1f,
+        };
+        Vector2 center = new(100f, 100f);
+        SceneGizmoGeometry geometry = SceneViewPanel.BuildGizmoGeometry(transform, center, ImGuizmoMode.World);
+
+        Assert.Equal(SceneGizmoHandle.Both, SceneViewPanel.ResolveGizmoHandle(in geometry, ImGuizmoOperation.Translate, center));
+        Assert.Equal(SceneGizmoHandle.AxisX, SceneViewPanel.ResolveGizmoHandle(in geometry, ImGuizmoOperation.Translate, geometry.AxisXEnd));
+        Assert.Equal(SceneGizmoHandle.AxisY, SceneViewPanel.ResolveGizmoHandle(in geometry, ImGuizmoOperation.Translate, geometry.AxisYEnd));
+        Assert.Equal(SceneGizmoHandle.Rotate, SceneViewPanel.ResolveGizmoHandle(
+            in geometry,
+            ImGuizmoOperation.RotateZ,
+            center + new Vector2(geometry.RotationRadius, 0f)));
+        Assert.Equal(SceneGizmoHandle.Uniform, SceneViewPanel.ResolveGizmoHandle(in geometry, ImGuizmoOperation.Scale, geometry.UniformEnd));
+        Assert.Equal(SceneGizmoHandle.None, SceneViewPanel.ResolveGizmoHandle(
+            in geometry,
+            ImGuizmoOperation.Translate,
+            center + new Vector2(-40f, -40f)));
+    }
+
+    /// <summary>
+    /// 验证 2D gizmo drag 对世界平移、旋转与缩放产生确定结果，供真实指针路径与 Undo 共用。
+    /// </summary>
+    [Fact]
+    public void SceneGizmoDragAppliesMoveRotateAndScaleInWorldSpace()
+    {
+        EditorSceneTransform start = new()
+        {
+            X = 10f,
+            Y = 20f,
+            RotationRadians = 0f,
+            ScaleX = 2f,
+            ScaleY = 3f,
+        };
+        Vector2 center = new(100f, 100f);
+
+        EditorSceneTransform moved = SceneViewPanel.ApplyGizmoDrag(
+            start,
+            SceneGizmoHandle.Both,
+            ImGuizmoOperation.Translate,
+            ImGuizmoMode.World,
+            Vector2.Zero,
+            new Vector2(5f, -3f),
+            center,
+            center + new Vector2(5f, -3f),
+            center);
+        Assert.Equal(15f, moved.X, precision: 3);
+        Assert.Equal(17f, moved.Y, precision: 3);
+
+        EditorSceneTransform rotated = SceneViewPanel.ApplyGizmoDrag(
+            start,
+            SceneGizmoHandle.Rotate,
+            ImGuizmoOperation.RotateZ,
+            ImGuizmoMode.World,
+            Vector2.Zero,
+            Vector2.Zero,
+            center + new Vector2(38f, 0f),
+            center + new Vector2(0f, 38f),
+            center);
+        Assert.Equal(MathF.PI / 2f, rotated.RotationRadians, precision: 3);
+
+        EditorSceneTransform scaled = SceneViewPanel.ApplyGizmoDrag(
+            start,
+            SceneGizmoHandle.AxisX,
+            ImGuizmoOperation.Scale,
+            ImGuizmoMode.World,
+            Vector2.Zero,
+            Vector2.Zero,
+            center + new Vector2(48f, 0f),
+            center + new Vector2(72f, 0f),
+            center);
+        Assert.Equal(3f, scaled.ScaleX, precision: 3);
+        Assert.Equal(3f, scaled.ScaleY, precision: 3);
+    }
+
+    /// <summary>
     /// 验证世界画刷默认关闭，并与对象工具、selection 与 Play mode 形成单一互斥工具状态。
     /// </summary>
     [Fact]
@@ -770,6 +856,62 @@ public sealed class SceneAuthoringPreviewTests
         Assert.InRange(panel.CameraSnapshot.CellsPerPixel, 0.8f, 1.1f);
         Assert.Equal(320f, panel.CameraSnapshot.CenterX);
         Assert.Equal(180f, panel.CameraSnapshot.CenterY);
+    }
+
+    /// <summary>
+    /// 验证 dock 从初始全宽布局收敛到实际窄面板时，未被用户调整的相机会按最终 viewport 重新 Frame All；
+    /// 一旦用户 Frame Selected，后续 resize 则保留其主动取景。
+    /// </summary>
+    [Fact]
+    public void SceneViewRefitsDockResizeUntilUserFramesSelection()
+    {
+        EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "lava-mine",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "LevelDirector",
+                },
+                new EngineSceneEntityDocument
+                {
+                    StableId = 2,
+                    Name = "Player",
+                    ParentId = 1,
+                    Transform = new EngineSceneTransformDocument { X = 48f, Y = 244f },
+                },
+            ],
+        });
+        AuthoringWorldPreviewSnapshot world = new(
+            Version: 1,
+            HasWorld: true,
+            new SceneAuthoringBounds(0f, 0f, 640f, 360f),
+            WorldOwnerStableId: 1);
+        SceneViewPanel panel = new(
+            scene,
+            new EditorUndoStack(),
+            authoringWorldSnapshot: () => world);
+
+        Assert.True(panel.PrepareCanvas(new Vector2(960f, 540f)));
+        float wideCellsPerPixel = panel.CameraSnapshot.CellsPerPixel;
+
+        Assert.True(panel.PrepareCanvas(new Vector2(515f, 487f)));
+        Assert.True(panel.CameraSnapshot.CellsPerPixel > wideCellsPerPixel);
+        Assert.Equal(320f, panel.CameraSnapshot.CenterX);
+        Assert.Equal(180f, panel.CameraSnapshot.CenterY);
+
+        EditorSelection selection = new();
+        selection.SelectGameObject(2);
+        Assert.True(panel.FrameSelected(selection));
+        float selectedCellsPerPixel = panel.CameraSnapshot.CellsPerPixel;
+
+        Assert.False(panel.PrepareCanvas(new Vector2(700f, 487f)));
+        Assert.Equal(48f, panel.CameraSnapshot.CenterX);
+        Assert.Equal(244f, panel.CameraSnapshot.CenterY);
+        Assert.Equal(selectedCellsPerPixel, panel.CameraSnapshot.CellsPerPixel);
     }
 
     /// <summary>
