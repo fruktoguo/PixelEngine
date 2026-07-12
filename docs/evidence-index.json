@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-12",
-  "generatedFromCommit": "0a766c459b31ab29002d3fb00ac8e889aa100bc3",
+  "generatedFromCommit": "133967c2c6ff2780e77449182849d0dc384c193f",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -584,6 +584,19 @@
       "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-07.md",
       "sha256": "4849b6525301ba77b9cd28452c89eef07c6fd70c63b73cf74917f6187b75a358",
       "notes": "系统 file-drop 的可见 Project/DPI 命中、全类型目录导入、批量诊断、manifest 事务回滚，以及 Reset Layout Inspector 焦点和跨 session persistence 已验证；Computer Use 不允许 Explorer 跨窗口 drag，tab undock/redock、跨屏 DPI、真实中文 IME 和完整 Build And Run 仍保留，EDITOR-003 继续进行中。"
+    },
+    {
+      "entryId": "editor-003-unity-parity-cycle08-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "133967c2c6ff2780e77449182849d0dc384c193f",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle08",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; two 2560x1440 displays both at 144 DPI (150%); PixelEngine real IME, Build And Run, docking and WGC probes",
+      "command": "Computer Use real Play/Pause/Step, Chinese IME candidate/focus cleanup, Build And Run and independent Player, Project/Inspector undock-move-redock, same-UserData restart, Reset Layout and same-DPI cross-monitor routes; 13 test projects sequentially; solution Release build; task catalog and evidence index validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-08.md",
+      "sha256": "eeb0ef61bae496e62378daaf408285e994c1c2e23e27651b902f1709e8a9420f",
+      "notes": "Scene explicit Brush and bounds, global shortcuts, shared per-HWND IME, fixed Build Settings footer and Build And Run, ordered pointer coordinates and staged mouse release are verified. Project/Inspector docking, restart persistence and same-DPI cross-monitor rendering passed; different-DPI hardware, Explorer cross-window pointer drag and final Unity matrix remain, so EDITOR-003 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
