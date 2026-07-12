@@ -60,6 +60,7 @@ public sealed class GuiWindowInputConnector : IDisposable
 
     private void Subscribe()
     {
+        _window.FocusChanged += OnFocusChanged;
         for (int i = 0; i < _window.Input.Keyboards.Count; i++)
         {
             IKeyboard keyboard = _window.Input.Keyboards[i];
@@ -80,6 +81,7 @@ public sealed class GuiWindowInputConnector : IDisposable
 
     private void Unsubscribe()
     {
+        _window.FocusChanged -= OnFocusChanged;
         for (int i = 0; i < _window.Input.Keyboards.Count; i++)
         {
             IKeyboard keyboard = _window.Input.Keyboards[i];
@@ -113,6 +115,16 @@ public sealed class GuiWindowInputConnector : IDisposable
         {
             _ = _forwardedKeys.Add(key);
         }
+    }
+
+    private void OnFocusChanged(bool focused)
+    {
+        if (!focused)
+        {
+            ReleaseRoutedInput();
+        }
+
+        _input.Focus(focused);
     }
 
     private void OnKeyUp(IKeyboard keyboard, Key key, int scanCode)

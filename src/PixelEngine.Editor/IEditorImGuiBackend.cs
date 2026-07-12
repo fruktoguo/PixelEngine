@@ -8,7 +8,7 @@ namespace PixelEngine.Editor;
 public interface IEditorImGuiBackend
 {
     /// <summary>
-    /// 创建 ImGui context 并初始化 OpenGL3 后端。
+    /// 创建 ImGui context 并初始化当前引擎 GL renderer。
     /// </summary>
     /// <param name="options">Editor 选项。</param>
     void Initialize(EditorAppOptions options);
@@ -87,6 +87,12 @@ public interface IEditorImGuiBackend
     /// </summary>
     /// <param name="text">UTF-16 文本。</param>
     void AddText(string text);
+
+    /// <summary>
+    /// 注入平台窗口焦点变化。
+    /// </summary>
+    /// <param name="focused">窗口是否获得焦点。</param>
+    void AddFocus(bool focused);
 
     /// <summary>
     /// 设置关闭 backend 时是否把当前 ImGui 布局写回磁盘。

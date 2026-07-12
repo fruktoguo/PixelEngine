@@ -113,6 +113,25 @@ public sealed class ImGuiInputBridge
         _backend.AddText(text);
     }
 
+    /// <summary>
+    /// 注入平台窗口焦点变化；失焦时同步清空本地 modifier 聚合状态。
+    /// </summary>
+    /// <param name="focused">窗口是否获得焦点。</param>
+    public void Focus(bool focused)
+    {
+        if (!focused)
+        {
+            _leftCtrlDown = false;
+            _rightCtrlDown = false;
+            _leftShiftDown = false;
+            _rightShiftDown = false;
+            _leftAltDown = false;
+            _rightAltDown = false;
+        }
+
+        _backend.AddFocus(focused);
+    }
+
     private static ImGuiKey MapKey(Key key)
     {
         if (key == Silk.NET.Input.Key.Tab)

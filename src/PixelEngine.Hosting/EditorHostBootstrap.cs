@@ -68,7 +68,7 @@ public sealed class EditorHostBootstrap : IDisposable
         RenderWindow window = RenderWindow.Create(windowOptions, diagnostics);
         try
         {
-            GuiApp gui = new(new HexaImGuiBackend(), guiOptions);
+            GuiApp gui = new(new HexaImGuiBackend(window), guiOptions);
             try
             {
                 GuiWindowInputConnector input = new(window, gui.Input);

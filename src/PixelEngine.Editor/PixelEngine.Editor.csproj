@@ -18,7 +18,6 @@
 
   <ItemGroup>
     <PackageReference Include="Hexa.NET.ImGui" />
-    <PackageReference Include="Hexa.NET.ImGui.Backends" />
     <PackageReference Include="Hexa.NET.ImGuizmo" />
     <PackageReference Include="Hexa.NET.ImPlot" />
     <PackageReference Include="Hexa.NET.ImNodes" />

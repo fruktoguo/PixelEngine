@@ -15,6 +15,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
     private const int UseTextureOffset = 8;
 
     private readonly GL _gl;
+    private readonly uint _presentationFramebuffer;
     private readonly ShaderProgram _program;
     private readonly GlBuffer _vertexBuffer;
     private readonly float[] _vertices;
@@ -29,7 +30,8 @@ public sealed unsafe class OverlayRenderer : IDisposable
     /// <param name="gl">OpenGL 入口。</param>
     /// <param name="profile">GLSL profile。</param>
     /// <param name="maxCommandCount">单次 Render 可接受的最大命令数。</param>
-    public OverlayRenderer(GL gl, GlslProfile profile, int maxCommandCount = 1024)
+    /// <param name="presentationFramebuffer">最终呈现目标；普通窗口使用 0，DXGI interop 使用共享 backbuffer FBO。</param>
+    public OverlayRenderer(GL gl, GlslProfile profile, int maxCommandCount = 1024, uint presentationFramebuffer = 0)
     {
         ArgumentNullException.ThrowIfNull(gl);
         if (maxCommandCount <= 0)
@@ -38,6 +40,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
         }
 
         _gl = gl;
+        _presentationFramebuffer = presentationFramebuffer;
         MaxCommandCount = maxCommandCount;
         _vertices = new float[maxCommandCount * MaxVerticesPerCommand * FloatsPerVertex];
         _program = ShaderProgram.Create(gl, OverlayShaderSources.Vertex(profile), OverlayShaderSources.Fragment(profile));
@@ -124,7 +127,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
         // --- 准备 GL 状态：绑定默认 FBO、设置呈现 viewport 与 alpha 混合 ---
         if (bindDefaultFramebuffer)
         {
-            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _presentationFramebuffer);
         }
 
         _gl.Viewport(viewport.X, viewport.Y, (uint)viewport.Width, (uint)viewport.Height);

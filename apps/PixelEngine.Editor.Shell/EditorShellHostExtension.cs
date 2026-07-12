@@ -41,13 +41,14 @@ internal sealed class EditorShellHostExtension :
     private EditorMode _lastPreparedMode = EditorMode.Edit;
     private bool _panelsRegistered;
 
-    public EditorShellHostExtension(EditorProject project, EditorShellApp app)
+    public EditorShellHostExtension(EditorProject project, EditorShellApp app, RenderWindow window)
     {
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _app = app ?? throw new ArgumentNullException(nameof(app));
+        ArgumentNullException.ThrowIfNull(window);
         _focusInspectorOnInitialLayout = !File.Exists(app.LayoutPath);
         _editor = new EditorApp(
-            new HexaImGuiBackend(),
+            new HexaImGuiBackend(window),
             new EditorAppOptions
             {
                 LayoutPath = app.LayoutPath,

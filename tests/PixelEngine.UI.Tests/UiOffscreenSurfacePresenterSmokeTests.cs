@@ -30,7 +30,7 @@ public sealed class UiOffscreenSurfacePresenterSmokeTests
         });
         using RenderPipeline pipeline = new(window, 64, 64);
         string layoutPath = Path.Combine(Path.GetTempPath(), $"pixelengine-gui-smoke-{Guid.NewGuid():N}.ini");
-        using GuiApp gui = new(new HexaImGuiBackend(), new GuiAppOptions { LayoutPath = layoutPath });
+        using GuiApp gui = new(new HexaImGuiBackend(window), new GuiAppOptions { LayoutPath = layoutPath });
         gui.SetLayoutPersistence(false);
         ScriptGuiProbeRuntime runtime = new();
         using GuiRenderBridge bridge = GuiRenderBridge.AttachIfEnabled(

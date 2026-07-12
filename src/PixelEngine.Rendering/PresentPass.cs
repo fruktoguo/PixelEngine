@@ -8,6 +8,7 @@ namespace PixelEngine.Rendering;
 public sealed class PresentPass : IDisposable
 {
     private readonly GL _gl;
+    private readonly uint _presentationFramebuffer;
     private readonly ShaderProgram _program;
     private readonly int _sourceLocation;
     private bool _disposed;
@@ -15,13 +16,14 @@ public sealed class PresentPass : IDisposable
     /// <summary>
     /// 创建 present pass。
     /// </summary>
-    /// <param name="gl">OpenGL 入口。</param>
+    /// <param name="window">提供 OpenGL 入口与实际 presentation framebuffer 的窗口。</param>
     /// <param name="profile">GLSL profile。</param>
-    public PresentPass(GL gl, GlslProfile profile)
+    public PresentPass(RenderWindow window, GlslProfile profile)
     {
-        ArgumentNullException.ThrowIfNull(gl);
-        _gl = gl;
-        _program = ShaderProgram.Create(gl, LightingShaderSources.FullscreenVertex(profile), Fragment(profile));
+        ArgumentNullException.ThrowIfNull(window);
+        _gl = window.Gl;
+        _presentationFramebuffer = window.PresentationFramebuffer;
+        _program = ShaderProgram.Create(_gl, LightingShaderSources.FullscreenVertex(profile), Fragment(profile));
         _sourceLocation = _program.GetUniformLocation("uSourceTexture");
     }
 
@@ -37,7 +39,7 @@ public sealed class PresentPass : IDisposable
         ArgumentNullException.ThrowIfNull(quad);
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _presentationFramebuffer);
         _gl.Viewport(0, 0, (uint)viewport.TargetWidth, (uint)viewport.TargetHeight);
         _gl.Disable(EnableCap.Blend);
         _gl.Disable(EnableCap.DepthTest);

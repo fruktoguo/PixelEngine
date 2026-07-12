@@ -11,6 +11,11 @@ public enum RenderBackend
     DesktopGl33,
 
     /// <summary>
+    /// 桌面 OpenGL 3.3，经 WGL_NV_DX_interop2 写入 D3D11/DXGI swap-chain 后呈现。
+    /// </summary>
+    DesktopGl33DxgiInterop,
+
+    /// <summary>
     /// OpenGL ES 3.0 后端，Windows 上由 ANGLE 或系统 EGL/GLES 提供。
     /// </summary>
     GlEs30Angle,
@@ -35,4 +40,9 @@ public enum RenderBackendPreference
     /// 只尝试 OpenGL ES 3.0。
     /// </summary>
     GlEs30Angle,
+
+    /// <summary>
+    /// 优先 desktop GL + DXGI interop，创建失败时回退普通 desktop GL。Windows Editor 用此顺序保证系统捕获兼容性。
+    /// </summary>
+    CaptureCompatible,
 }

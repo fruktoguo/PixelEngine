@@ -107,6 +107,33 @@ public sealed class GuiAppCombinedFrameTests
             calls);
     }
 
+    /// <summary>
+    /// 验证窗口失焦会清空修饰键聚合状态，并把焦点事件按顺序交给 ImGui。
+    /// </summary>
+    [Fact]
+    public void GuiInputBridgeClearsModifierAggregationWhenWindowLosesFocus()
+    {
+        List<string> calls = [];
+        FakeGuiBackend backend = new(calls);
+        GuiInputBridge input = new(backend);
+
+        input.Key(Key.ControlLeft, down: true);
+        input.Focus(focused: false);
+        input.Key(Key.ControlRight, down: true);
+        input.Focus(focused: true);
+
+        Assert.Equal(
+            [
+                "key:LeftCtrl=True",
+                "key:ModCtrl=True",
+                "focus:False",
+                "key:RightCtrl=True",
+                "key:ModCtrl=True",
+                "focus:True",
+            ],
+            calls);
+    }
+
     private sealed class FakeGuiBackend(List<string> calls) : IGuiImGuiBackend
     {
         private readonly List<string> _calls = calls;
@@ -156,6 +183,11 @@ public sealed class GuiAppCombinedFrameTests
 
         public void AddText(string text)
         {
+        }
+
+        public void AddFocus(bool focused)
+        {
+            _calls.Add($"focus:{focused}");
         }
 
         public void SetLayoutPersistence(bool enabled)

@@ -67,7 +67,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         // 阶段 1：创建全屏几何与 fragment 后处理 pass。
         _quad = new FullscreenQuad(_gl);
         _worldBlit = new WorldBlitPass(_gl, profile);
-        _overlay = new OverlayRenderer(_gl, profile);
+        _overlay = new OverlayRenderer(_gl, profile, presentationFramebuffer: window.PresentationFramebuffer);
         _gpuParticles = new GpuParticleRenderer(_gl, profile);
         _composite = new CompositePass(_gl, profile);
         _bloom = new BloomPass(_gl, profile);
@@ -93,7 +93,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
         _crt = new CrtPass(_gl, profile);
-        _present = new PresentPass(_gl, profile);
+        _present = new PresentPass(window, profile);
         _uiPrimitives = new UiPrimitiveRenderer(_gl, profile);
         _worldTexture = new WorldTexture(_gl, width, height);
         _uploader = new PboUploader(_gl, checked(width * height * sizeof(uint)));

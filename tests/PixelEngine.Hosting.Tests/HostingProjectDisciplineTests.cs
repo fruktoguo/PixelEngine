@@ -574,10 +574,11 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证中性 Gui 与 Editor ImGui 后端在输入、frame 与 render 前都 pin 到自己的 native context。
+    /// 验证中性 Gui 与 Editor ImGui 后端在输入、frame 与 render 前都 pin 到自己的 context，
+    /// 并由共享的 managed GL renderer 提交 draw data。
     /// </summary>
     [Fact]
-    public void HexaImGuiBackendsPinCurrentContextBeforeFrameRenderAndInput()
+    public void HexaImGuiBackendsPinContextAndUseManagedGlRenderer()
     {
         // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
@@ -592,7 +593,9 @@ public sealed class HostingProjectDisciplineTests
             // Assert：验证预期结果
             Assert.Contains("private void SetCurrentContext()", source, StringComparison.Ordinal);
             Assert.Contains("ImGui.SetCurrentContext(_context);", source, StringComparison.Ordinal);
-            Assert.Contains("ImGuiImplOpenGL3.SetCurrentContext(_context);", source, StringComparison.Ordinal);
+            Assert.Contains("_renderer.NewFrame();", source, StringComparison.Ordinal);
+            Assert.Contains("_renderer.Render(ImGui.GetDrawData());", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("ImGuiImplOpenGL3", source, StringComparison.Ordinal);
             Assert.Contains("SetCurrentContext();ImGui.AddMouseButtonEvent", compact, StringComparison.Ordinal);
             Assert.Contains("SetCurrentContext();ImGui.AddMouseWheelEvent", compact, StringComparison.Ordinal);
             Assert.Contains("SetCurrentContext();ImGui.AddKeyEvent", compact, StringComparison.Ordinal);
@@ -601,6 +604,43 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("ImGuizmo.SetImGuiContext(_context);", editorBackend, StringComparison.Ordinal);
         Assert.Contains("ImPlot.SetCurrentContext(_plotContext);", editorBackend, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证替换 renderer backend 后仍保留系统光标、键盘导航回写、IME caret 与窗口焦点平台职责。
+    /// </summary>
+    [Fact]
+    public void ImGuiPlatformBridgeOwnsCursorImeAndFocusContracts()
+    {
+        string root = FindRepositoryRoot();
+        string platform = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "ImGuiPlatformBridge.cs"));
+        string renderWindow = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Rendering", "RenderWindow.cs"));
+        string guiConnector = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "GuiWindowInputConnector.cs"));
+        string editorConnector = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorWindowInputConnector.cs"));
+        string guiBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "HexaImGuiBackend.cs"));
+        string editorBackend = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "HexaImGuiBackend.cs"));
+
+        Assert.Contains("ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.HasSetMousePos", platform, StringComparison.Ordinal);
+        Assert.Contains("platform.PlatformSetImeDataFn", platform, StringComparison.Ordinal);
+        Assert.Contains("Win32ImeNative.SetCompositionWindow", platform, StringComparison.Ordinal);
+        Assert.Contains("Win32ImeNative.SetCandidateWindow", platform, StringComparison.Ordinal);
+        Assert.Contains("io.WantSetMousePos", platform, StringComparison.Ordinal);
+        Assert.Contains("public event Action<bool> FocusChanged", renderWindow, StringComparison.Ordinal);
+
+        foreach (string backend in new[] { guiBackend, editorBackend })
+        {
+            Assert.Contains("_platform.Attach();", backend, StringComparison.Ordinal);
+            Assert.Contains("_platform.NewFrame();", backend, StringComparison.Ordinal);
+            Assert.Contains("_platform.Dispose();", backend, StringComparison.Ordinal);
+            Assert.Contains("ImGui.AddFocusEvent(ImGui.GetIO(), focused);", backend, StringComparison.Ordinal);
+        }
+
+        foreach (string connector in new[] { guiConnector, editorConnector })
+        {
+            Assert.Contains("_window.FocusChanged += OnFocusChanged;", connector, StringComparison.Ordinal);
+            Assert.Contains("_window.FocusChanged -= OnFocusChanged;", connector, StringComparison.Ordinal);
+            Assert.Contains("_input.Focus(focused);", connector, StringComparison.Ordinal);
+        }
     }
 
     /// <summary>

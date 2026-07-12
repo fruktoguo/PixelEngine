@@ -271,6 +271,32 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
+    /// 验证窗口失焦会清空修饰键聚合状态，并把焦点事件按顺序交给 ImGui。
+    /// </summary>
+    [Fact]
+    public void EditorInputBridgeClearsModifierAggregationWhenWindowLosesFocus()
+    {
+        RecordingBackend backend = new();
+        ImGuiInputBridge input = new(backend);
+
+        input.Key(Key.ControlLeft, down: true);
+        input.Focus(focused: false);
+        input.Key(Key.ControlRight, down: true);
+        input.Focus(focused: true);
+
+        Assert.Equal(
+            [
+                "Key:LeftCtrl=True",
+                "Key:ModCtrl=True",
+                "Focus:False",
+                "Key:RightCtrl=True",
+                "Key:ModCtrl=True",
+                "Focus:True",
+            ],
+            backend.Events);
+    }
+
+    /// <summary>
     /// 验证 docking flags 默认启用 docking 与键盘导航，但不启用多视口。
     /// </summary>
     [Fact]
@@ -485,6 +511,11 @@ public sealed class EditorAppTests
 
         public void AddText(string text)
         {
+        }
+
+        public void AddFocus(bool focused)
+        {
+            Events.Add($"Focus:{focused}");
         }
 
         public void SetLayoutPersistence(bool enabled)

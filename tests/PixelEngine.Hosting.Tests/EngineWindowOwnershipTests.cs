@@ -161,7 +161,7 @@ public sealed class EngineWindowOwnershipTests
         string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "EditorHostBootstrap.cs");
 
         Assert.Contains("RenderWindow.Create(windowOptions, diagnostics)", source, StringComparison.Ordinal);
-        Assert.Contains("GuiApp gui = new(new HexaImGuiBackend(), guiOptions);", source, StringComparison.Ordinal);
+        Assert.Contains("GuiApp gui = new(new HexaImGuiBackend(window), guiOptions);", source, StringComparison.Ordinal);
         Assert.Contains("GuiWindowInputConnector", source, StringComparison.Ordinal);
         Assert.DoesNotContain("PixelEngine.Editor", source, StringComparison.Ordinal);
         Assert.DoesNotContain("EditorApp", source, StringComparison.Ordinal);

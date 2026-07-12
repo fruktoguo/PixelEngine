@@ -13,6 +13,9 @@ public static partial class Win32ImeNative
     /// <summary>CFS_POINT：按 ptCurrentPos 定位 composition 窗。</summary>
     public const int CompositionFormStylePoint = 0x0002;
 
+    /// <summary>CFS_FORCE_POSITION：强制按 ptCurrentPos 定位 composition 窗。</summary>
+    public const int CompositionFormStyleForcePosition = 0x0020;
+
     /// <summary>CFS_CANDIDATEPOS：按 ptCurrentPos 定位候选窗。</summary>
     public const int CandidateFormStyleCandidatePos = 0x0040;
 

@@ -406,7 +406,7 @@ public static class DemoProgram
         int width = window.Width;
         int height = window.Height;
         byte[] bgra = new byte[checked(width * height * 4)];
-        window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        window.BindPresentationFramebuffer();
         window.Gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
         WriteBgraBottomUpBmp(path, width, height, bgra);
     }

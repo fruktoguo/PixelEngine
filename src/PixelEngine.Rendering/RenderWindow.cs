@@ -1,5 +1,6 @@
 using Silk.NET.Input;
 using Silk.NET.Core.Contexts;
+using Silk.NET.GLFW;
 using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
@@ -14,6 +15,7 @@ public sealed class RenderWindow : IDisposable
     private readonly IWindow _window;
     private readonly INativeContext _nativeContext;
     private readonly GlDebugMessenger? _debugMessenger;
+    private readonly WindowsDxgiGlPresenter? _dxgiPresenter;
     private bool _disposed;
 
     private RenderWindow(
@@ -23,7 +25,8 @@ public sealed class RenderWindow : IDisposable
         INativeContext nativeContext,
         RenderBackend backend,
         GlCapabilities capabilities,
-        GlDebugMessenger? debugMessenger)
+        GlDebugMessenger? debugMessenger,
+        WindowsDxgiGlPresenter? dxgiPresenter)
     {
         _window = window;
         Input = input;
@@ -32,6 +35,7 @@ public sealed class RenderWindow : IDisposable
         Backend = backend;
         Capabilities = capabilities;
         _debugMessenger = debugMessenger;
+        _dxgiPresenter = dxgiPresenter;
     }
 
     /// <summary>
@@ -53,6 +57,31 @@ public sealed class RenderWindow : IDisposable
     /// 输入上下文。
     /// </summary>
     public IInputContext Input { get; }
+
+    /// <summary>
+    /// 平台窗口焦点变化。GUI 平台桥用它向 ImGui 注入 focus event，避免 Alt-Tab 后残留按键或文本焦点。
+    /// </summary>
+    public event Action<bool> FocusChanged
+    {
+        add
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _window.FocusChanged += value;
+        }
+
+        remove
+        {
+            if (!_disposed)
+            {
+                _window.FocusChanged -= value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 当前窗口的 presentation framebuffer；普通窗口为 0，DXGI interop 路径为共享 backbuffer FBO。
+    /// </summary>
+    public uint PresentationFramebuffer => _dxgiPresenter?.Framebuffer ?? 0;
 
     /// <summary>
     /// 窗口是否正在关闭。
@@ -130,13 +159,15 @@ public sealed class RenderWindow : IDisposable
         ArgumentNullException.ThrowIfNull(options);
         Exception? lastError = null;
 
-        foreach (RenderBackend backend in RenderBackendSelector.GetAttemptOrder(options.BackendPreference))
+        ReadOnlySpan<RenderBackend> attemptOrder = RenderBackendSelector.GetAttemptOrder(options.BackendPreference);
+        for (int i = 0; i < attemptOrder.Length; i++)
         {
+            RenderBackend backend = attemptOrder[i];
             try
             {
                 return CreateForBackend(options, backend, diagnostics);
             }
-            catch (Exception ex) when (options.BackendPreference == RenderBackendPreference.Auto)
+            catch (Exception ex) when (i + 1 < attemptOrder.Length)
             {
                 diagnostics?.Invoke($"{backend} 创建失败: {ex.Message}");
                 lastError = ex;
@@ -153,6 +184,7 @@ public sealed class RenderWindow : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _window.DoEvents();
+        _dxgiPresenter?.PrepareFrame(Width, Height);
     }
 
     /// <summary>
@@ -161,7 +193,22 @@ public sealed class RenderWindow : IDisposable
     public void SwapBuffers()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_dxgiPresenter is not null)
+        {
+            _dxgiPresenter.Present(VSyncEnabled);
+            return;
+        }
+
         _window.SwapBuffers();
+    }
+
+    /// <summary>
+    /// 绑定当前窗口实际 presentation framebuffer，供 present、overlay、UI 与截图共享同一输出目标。
+    /// </summary>
+    public void BindPresentationFramebuffer()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Gl.BindFramebuffer(FramebufferTarget.Framebuffer, PresentationFramebuffer);
     }
 
     /// <summary>
@@ -231,6 +278,7 @@ public sealed class RenderWindow : IDisposable
 
         _disposed = true;
         _debugMessenger?.Dispose();
+        _dxgiPresenter?.Dispose();
         Gl.Dispose();
         Input.Dispose();
         _window.Dispose();
@@ -243,11 +291,17 @@ public sealed class RenderWindow : IDisposable
     {
         // --- 窗口创建：DPI 感知 → Silk.NET 窗口 → 输入上下文 ---
         WindowsDpiAwareness.EnsureEnabled();
+        GlfwProvider.GLFW.Value.WindowHint(
+            WindowHintContextApi.ContextCreationApi,
+            backend == RenderBackend.GlEs30Angle
+                ? ContextApi.EglContextApi
+                : ContextApi.NativeContextApi);
         WindowOptions windowOptions = RenderBackendSelector.CreateWindowOptions(options, backend);
         IWindow window = Window.Create(windowOptions);
         IInputContext? input = null;
         GL? gl = null;
         GlDebugMessenger? debugMessenger = null;
+        WindowsDxgiGlPresenter? dxgiPresenter = null;
         try
         {
             window.Initialize();
@@ -260,19 +314,35 @@ public sealed class RenderWindow : IDisposable
             debugMessenger = options.EnableDebugContext && diagnostics is not null
                 ? GlDebugMessenger.TryCreate(gl, capabilities, diagnostics)
                 : null;
-            if (options.UseDarkWindowChrome && window.Native?.Win32 is { } win32)
+            if (options.UseDarkWindowChrome && window.Native?.Win32 is { } chromeHandles)
             {
                 WindowsWindowChrome.TryApply(
-                    win32.Hwnd,
+                    chromeHandles.Hwnd,
                     options.TitleBarColorRgb,
                     options.TitleBarTextColorRgb,
                     options.WindowBorderColorRgb);
             }
 
-            return new RenderWindow(window, input, gl, nativeContext, backend, capabilities, debugMessenger);
+            if (backend == RenderBackend.DesktopGl33DxgiInterop)
+            {
+                if (window.Native?.Win32 is not { } dxgiHandles)
+                {
+                    throw new InvalidOperationException("DXGI interop 后端未取得 Win32 HWND。");
+                }
+
+                dxgiPresenter = WindowsDxgiGlPresenter.Create(
+                    gl,
+                    nativeContext,
+                    dxgiHandles.Hwnd,
+                    Math.Max(1, window.FramebufferSize.X),
+                    Math.Max(1, window.FramebufferSize.Y));
+            }
+
+            return new RenderWindow(window, input, gl, nativeContext, backend, capabilities, debugMessenger, dxgiPresenter);
         }
         catch
         {
+            dxgiPresenter?.Dispose();
             debugMessenger?.Dispose();
             gl?.Dispose();
             input?.Dispose();
@@ -286,6 +356,7 @@ public sealed class RenderWindow : IDisposable
         switch (backend)
         {
             case RenderBackend.DesktopGl33:
+            case RenderBackend.DesktopGl33DxgiInterop:
                 if (capabilities.IsGles || !IsAtLeast(capabilities, 3, 3))
                 {
                     throw new InvalidOperationException(
@@ -298,6 +369,12 @@ public sealed class RenderWindow : IDisposable
                 {
                     throw new InvalidOperationException(
                         $"请求 OpenGL ES 3.0/ANGLE，但实际上下文为 {capabilities.Version} / {capabilities.Renderer}。");
+                }
+
+                if (OperatingSystem.IsWindows() && !capabilities.IsAngle)
+                {
+                    throw new InvalidOperationException(
+                        $"Windows 上请求 ANGLE，但实际 GLES provider 不是 ANGLE：{capabilities.Version} / {capabilities.Renderer}。");
                 }
 
                 break;

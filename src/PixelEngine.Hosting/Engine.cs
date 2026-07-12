@@ -675,7 +675,7 @@ public sealed class Engine : IDisposable
         bool guiInputOwned = false;
         if (needsGuiBridge && !hasGuiBridge)
         {
-            GuiApp gui = ResolveGuiApp();
+            GuiApp gui = ResolveGuiApp(window);
             IGuiViewportInputRoute? viewportInputRoute =
                 Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)
                     ? new GameplayViewportGuiInputRoute(gameplayViewportMapper)
@@ -751,7 +751,7 @@ public sealed class Engine : IDisposable
         return null;
     }
 
-    private GuiApp ResolveGuiApp()
+    private GuiApp ResolveGuiApp(RenderWindow window)
     {
         if (Context.TryGetService(out GuiApp existing))
         {
@@ -759,7 +759,7 @@ public sealed class Engine : IDisposable
         }
 
         GuiApp created = new(
-            new HexaImGuiBackend(),
+            new HexaImGuiBackend(window),
             new GuiAppOptions
             {
                 Enabled = true,
@@ -882,7 +882,7 @@ public sealed class Engine : IDisposable
 
     private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window)
     {
-        return new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp(), window));
+        return new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp(window), window));
     }
 
     private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window, out string? fallbackReason, string reason)

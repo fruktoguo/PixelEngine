@@ -22,6 +22,19 @@ public sealed class RenderBackendSelectorTests
     }
 
     /// <summary>
+    /// 验证系统捕获兼容偏好优先 desktop GL + DXGI interop，并保留普通桌面 GL 回退。
+    /// </summary>
+    [Fact]
+    public void CaptureCompatiblePreferenceTriesDxgiInteropThenDesktop()
+    {
+        ReadOnlySpan<RenderBackend> order = RenderBackendSelector.GetAttemptOrder(RenderBackendPreference.CaptureCompatible);
+
+        Assert.Equal(2, order.Length);
+        Assert.Equal(RenderBackend.DesktopGl33DxgiInterop, order[0]);
+        Assert.Equal(RenderBackend.DesktopGl33, order[1]);
+    }
+
+    /// <summary>
     /// 验证Desktop Options Request Open Gl33Core。
     /// </summary>
     [Fact]
@@ -47,6 +60,28 @@ public sealed class RenderBackendSelectorTests
         Assert.True(windowOptions.VSync);
         Assert.Equal(0, windowOptions.FramesPerSecond);
         Assert.Equal(0, windowOptions.UpdatesPerSecond);
+        Assert.False(windowOptions.ShouldSwapAutomatically);
+    }
+
+    /// <summary>
+    /// 验证 DXGI interop 后端仍创建 desktop OpenGL 3.3 core context，避免为捕获兼容性改变权威渲染 API。
+    /// </summary>
+    [Fact]
+    public void DxgiInteropOptionsRequestDesktopOpenGl33Core()
+    {
+        RenderWindowOptions options = new()
+        {
+            EnableDebugContext = true,
+        };
+
+        WindowOptions windowOptions = RenderBackendSelector.CreateWindowOptions(
+            options,
+            RenderBackend.DesktopGl33DxgiInterop);
+
+        Assert.Equal(ContextAPI.OpenGL, windowOptions.API.API);
+        Assert.Equal(ContextProfile.Core, windowOptions.API.Profile);
+        Assert.Equal(ContextFlags.Debug, windowOptions.API.Flags);
+        Assert.Equal(new APIVersion(3, 3), windowOptions.API.Version);
         Assert.False(windowOptions.ShouldSwapAutomatically);
     }
 

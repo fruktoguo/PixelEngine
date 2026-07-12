@@ -48,6 +48,7 @@ public static class RenderBackendSelector
             RenderBackendPreference.Auto => [RenderBackend.DesktopGl33, RenderBackend.GlEs30Angle],
             RenderBackendPreference.DesktopGl33 => [RenderBackend.DesktopGl33],
             RenderBackendPreference.GlEs30Angle => [RenderBackend.GlEs30Angle],
+            RenderBackendPreference.CaptureCompatible => [RenderBackend.DesktopGl33DxgiInterop, RenderBackend.DesktopGl33],
             _ => throw new ArgumentOutOfRangeException(nameof(preference)),
         };
     }
@@ -57,7 +58,7 @@ public static class RenderBackendSelector
         ContextFlags flags = debug ? ContextFlags.Debug : ContextFlags.Default;
         return backend switch
         {
-            RenderBackend.DesktopGl33 => new GraphicsAPI(
+            RenderBackend.DesktopGl33 or RenderBackend.DesktopGl33DxgiInterop => new GraphicsAPI(
                 ContextAPI.OpenGL,
                 ContextProfile.Core,
                 flags,

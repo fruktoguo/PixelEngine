@@ -33,6 +33,7 @@ internal sealed class EditorWindowInputConnector : IDisposable
 
     private void Subscribe()
     {
+        _window.FocusChanged += OnFocusChanged;
         for (int i = 0; i < _window.Input.Keyboards.Count; i++)
         {
             IKeyboard keyboard = _window.Input.Keyboards[i];
@@ -53,6 +54,7 @@ internal sealed class EditorWindowInputConnector : IDisposable
 
     private void Unsubscribe()
     {
+        _window.FocusChanged -= OnFocusChanged;
         for (int i = 0; i < _window.Input.Keyboards.Count; i++)
         {
             IKeyboard keyboard = _window.Input.Keyboards[i];
@@ -76,6 +78,11 @@ internal sealed class EditorWindowInputConnector : IDisposable
         _ = keyboard;
         _ = scanCode;
         _input.Key(key, down: true);
+    }
+
+    private void OnFocusChanged(bool focused)
+    {
+        _input.Focus(focused);
     }
 
     private void OnKeyUp(IKeyboard keyboard, Key key, int scanCode)

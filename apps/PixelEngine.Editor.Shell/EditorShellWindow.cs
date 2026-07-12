@@ -78,6 +78,9 @@ internal sealed class EditorShellWindow : IDisposable
             Title = "PixelEngine Editor",
             Width = normalizedWidth,
             Height = normalizedHeight,
+            BackendPreference = OperatingSystem.IsWindows()
+                ? RenderBackendPreference.CaptureCompatible
+                : RenderBackendPreference.Auto,
             VSync = true,
             UseDarkWindowChrome = true,
             TitleBarColorRgb = 0x202226,

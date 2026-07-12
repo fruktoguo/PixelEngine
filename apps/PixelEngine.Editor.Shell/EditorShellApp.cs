@@ -2206,7 +2206,7 @@ internal sealed class EditorShellApp
         int width = shellWindow.Window.Width;
         int height = shellWindow.Window.Height;
         byte[] bgra = new byte[checked(width * height * 4)];
-        shellWindow.Window.Gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        shellWindow.Window.BindPresentationFramebuffer();
         shellWindow.Window.Gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
         WriteBgraBottomUpBmp(path, width, height, bgra);
         Console.WriteLine($"EditorShell framebuffer 截图已写入：{path}");

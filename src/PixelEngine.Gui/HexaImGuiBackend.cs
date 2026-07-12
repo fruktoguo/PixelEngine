@@ -1,14 +1,17 @@
 using Hexa.NET.ImGui;
-using Hexa.NET.ImGui.Backends.OpenGL3;
+using PixelEngine.Rendering;
 using System.Diagnostics;
 
 namespace PixelEngine.Gui;
 
 /// <summary>
-/// 基于 Hexa.NET.ImGui 与 OpenGL3 backend 的中性 ImGui 后端。
+/// 基于 Hexa.NET.ImGui 与引擎 Silk GL renderer 的中性 ImGui 后端。
 /// </summary>
-public sealed class HexaImGuiBackend : IGuiImGuiBackend
+/// <param name="window">提供当前 GL context 的渲染窗口。</param>
+public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
 {
+    private readonly ImGuiGlRenderer _renderer = new(window ?? throw new ArgumentNullException(nameof(window)));
+    private readonly ImGuiPlatformBridge _platform = new(window);
     private readonly GuiFontManager _fontManager = new();
     private readonly GuiClipboardBridge _clipboard = new();
     private ImGuiContextPtr _context;
@@ -73,7 +76,8 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
             ImGui.LoadIniSettingsFromDisk(_layoutPath);
         }
 
-        _ = ImGuiImplOpenGL3.Init(options.GlslVersion);
+        _renderer.Initialize();
+        _platform.Attach();
         _initialized = true;
     }
 
@@ -110,7 +114,8 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         io.DisplaySize = metrics.DisplaySize;
         io.DisplayFramebufferScale = metrics.DisplayFramebufferScale;
         io.DeltaTime = deltaSeconds;
-        ImGuiImplOpenGL3.NewFrame();
+        _platform.NewFrame();
+        _renderer.NewFrame();
         ImGui.NewFrame();
     }
 
@@ -120,7 +125,7 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         ThrowIfNotInitialized();
         SetCurrentContext();
         ImGui.Render();
-        ImGuiImplOpenGL3.RenderDrawData(ImGui.GetDrawData());
+        _renderer.Render(ImGui.GetDrawData());
         TryAutoSaveLayout();
     }
 
@@ -186,6 +191,16 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     }
 
     /// <inheritdoc />
+    public void AddFocus(bool focused)
+    {
+        if (_initialized)
+        {
+            SetCurrentContext();
+            ImGui.AddFocusEvent(ImGui.GetIO(), focused);
+        }
+    }
+
+    /// <inheritdoc />
     public void SetLayoutPersistence(bool enabled)
     {
         _saveLayoutOnShutdown = enabled;
@@ -200,7 +215,8 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
         }
 
         SetCurrentContext();
-        ImGuiImplOpenGL3.Shutdown();
+        _renderer.Shutdown();
+        _platform.Dispose();
         _clipboard.Detach();
         if (_saveLayoutOnShutdown && !string.IsNullOrWhiteSpace(_layoutPath))
         {
@@ -243,7 +259,6 @@ public sealed class HexaImGuiBackend : IGuiImGuiBackend
     private void SetCurrentContext()
     {
         ImGui.SetCurrentContext(_context);
-        ImGuiImplOpenGL3.SetCurrentContext(_context);
     }
 
     private void TryAutoSaveLayout()

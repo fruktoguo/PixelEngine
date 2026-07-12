@@ -5,7 +5,7 @@ namespace PixelEngine.Rendering;
 /// <summary>
 /// UI layer 前后的 OpenGL 状态快照，避免多个 UI 后端互相泄漏状态。
 /// </summary>
-internal readonly struct UiGlStateSnapshot
+public readonly struct UiGlStateSnapshot
 {
     private readonly int _framebuffer;
     private readonly int _program;
@@ -15,6 +15,7 @@ internal readonly struct UiGlStateSnapshot
     private readonly int _activeTexture;
     private readonly int _texture2D;
     private readonly int _texture0;
+    private readonly int _sampler0;
     private readonly int _blendSrcRgb;
     private readonly int _blendDstRgb;
     private readonly int _blendSrcAlpha;
@@ -28,6 +29,7 @@ internal readonly struct UiGlStateSnapshot
     private readonly int _unpackSkipRows;
     private readonly bool _blend;
     private readonly bool _depth;
+    private readonly bool _stencil;
     private readonly bool _cull;
     private readonly bool _scissor;
     private readonly int _viewportX;
@@ -48,6 +50,7 @@ internal readonly struct UiGlStateSnapshot
         int activeTexture,
         int texture2D,
         int texture0,
+        int sampler0,
         int blendSrcRgb,
         int blendDstRgb,
         int blendSrcAlpha,
@@ -61,6 +64,7 @@ internal readonly struct UiGlStateSnapshot
         int unpackSkipRows,
         bool blend,
         bool depth,
+        bool stencil,
         bool cull,
         bool scissor,
         ReadOnlySpan<int> viewport,
@@ -74,6 +78,7 @@ internal readonly struct UiGlStateSnapshot
         _activeTexture = activeTexture;
         _texture2D = texture2D;
         _texture0 = texture0;
+        _sampler0 = sampler0;
         _blendSrcRgb = blendSrcRgb;
         _blendDstRgb = blendDstRgb;
         _blendSrcAlpha = blendSrcAlpha;
@@ -87,6 +92,7 @@ internal readonly struct UiGlStateSnapshot
         _unpackSkipRows = unpackSkipRows;
         _blend = blend;
         _depth = depth;
+        _stencil = stencil;
         _cull = cull;
         _scissor = scissor;
         _viewportX = viewport[0];
@@ -99,6 +105,11 @@ internal readonly struct UiGlStateSnapshot
         _scissorHeight = scissorBox[3];
     }
 
+    /// <summary>
+    /// 捕获 UI renderer 会触及的当前 GL 状态；实现只使用 stack memory，不产生托管分配。
+    /// </summary>
+    /// <param name="gl">当前 OpenGL 入口。</param>
+    /// <returns>可恢复的状态快照。</returns>
     public static UiGlStateSnapshot Capture(GL gl)
     {
         Span<int> viewport = stackalloc int[4];
@@ -114,6 +125,7 @@ internal readonly struct UiGlStateSnapshot
         gl.GetInteger(GLEnum.TextureBinding2D, out int texture2D);
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.GetInteger(GLEnum.TextureBinding2D, out int texture0);
+        gl.GetInteger(GLEnum.SamplerBinding, out int sampler0);
         gl.ActiveTexture((TextureUnit)activeTexture);
         gl.GetInteger(GLEnum.BlendSrcRgb, out int blendSrcRgb);
         gl.GetInteger(GLEnum.BlendDstRgb, out int blendDstRgb);
@@ -135,6 +147,7 @@ internal readonly struct UiGlStateSnapshot
             activeTexture,
             texture2D,
             texture0,
+            sampler0,
             blendSrcRgb,
             blendDstRgb,
             blendSrcAlpha,
@@ -148,12 +161,17 @@ internal readonly struct UiGlStateSnapshot
             unpackSkipRows,
             gl.IsEnabled(EnableCap.Blend),
             gl.IsEnabled(EnableCap.DepthTest),
+            gl.IsEnabled(EnableCap.StencilTest),
             gl.IsEnabled(EnableCap.CullFace),
             gl.IsEnabled(EnableCap.ScissorTest),
             viewport,
             scissorBox);
     }
 
+    /// <summary>
+    /// 将捕获时的 framebuffer、program、buffer、texture、blend、viewport 与 pixel-store 状态恢复。
+    /// </summary>
+    /// <param name="gl">当前 OpenGL 入口。</param>
     public void Restore(GL gl)
     {
         gl.BindFramebuffer(FramebufferTarget.Framebuffer, (uint)_framebuffer);
@@ -161,6 +179,7 @@ internal readonly struct UiGlStateSnapshot
         gl.Scissor(_scissorX, _scissorY, (uint)_scissorWidth, (uint)_scissorHeight);
         Set(gl, EnableCap.Blend, _blend);
         Set(gl, EnableCap.DepthTest, _depth);
+        Set(gl, EnableCap.StencilTest, _stencil);
         Set(gl, EnableCap.CullFace, _cull);
         Set(gl, EnableCap.ScissorTest, _scissor);
         gl.BlendFuncSeparate(
@@ -180,6 +199,7 @@ internal readonly struct UiGlStateSnapshot
         gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, (uint)_elementArrayBuffer);
         gl.ActiveTexture(TextureUnit.Texture0);
         gl.BindTexture(TextureTarget.Texture2D, (uint)_texture0);
+        gl.BindSampler(0, (uint)_sampler0);
         gl.ActiveTexture((TextureUnit)_activeTexture);
         gl.BindTexture(TextureTarget.Texture2D, (uint)_texture2D);
     }

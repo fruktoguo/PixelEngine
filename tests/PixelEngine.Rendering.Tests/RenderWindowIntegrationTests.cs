@@ -43,6 +43,102 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// Windows capture-compatible presenter 所需的 WGL_NV_DX_interop2 入口必须由 desktop GL driver 暴露。
+    /// </summary>
+    [NativeSmokeFact]
+    public void WindowsDesktopContextExposesDxInteropEntryPointsWhenExplicitlyEnabled()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine WGL DX interop smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
+        });
+
+        string[] entryPoints =
+        [
+            "wglDXOpenDeviceNV",
+            "wglDXCloseDeviceNV",
+            "wglDXRegisterObjectNV",
+            "wglDXUnregisterObjectNV",
+            "wglDXLockObjectsNV",
+            "wglDXUnlockObjectsNV",
+        ];
+        foreach (string entryPoint in entryPoints)
+        {
+            Assert.True(window.TryGetProcAddress(entryPoint, out IntPtr address) && address != IntPtr.Zero, entryPoint);
+        }
+    }
+
+    /// <summary>
+    /// Windows capture-compatible 后端必须真实创建共享 presentation FBO，完成 DXGI present，
+    /// 并在窗口 resize 后重新注册 swap-chain backbuffer。
+    /// </summary>
+    [NativeSmokeFact]
+    public void WindowsDxgiInteropPresenterRendersPresentsAndResizesWhenExplicitlyEnabled()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        List<string> diagnostics = [];
+        using RenderWindow window = RenderWindow.Create(
+            new RenderWindowOptions
+            {
+                Title = "PixelEngine DXGI GL presenter smoke",
+                Width = 64,
+                Height = 64,
+                VSync = false,
+                BackendPreference = RenderBackendPreference.CaptureCompatible,
+            },
+            diagnostics.Add);
+
+        Assert.True(
+            window.Backend == RenderBackend.DesktopGl33DxgiInterop,
+            string.Join(Environment.NewLine, diagnostics));
+        Assert.NotEqual(0u, window.PresentationFramebuffer);
+        window.DoEvents();
+        window.BindPresentationFramebuffer();
+        Assert.Equal(
+            GLEnum.FramebufferComplete,
+            window.Gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer));
+        window.Gl.Viewport(0, 0, (uint)window.Width, (uint)window.Height);
+        window.Gl.ClearColor(0.12f, 0.35f, 0.78f, 1f);
+        window.Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        window.SwapBuffers();
+
+        window.Resize(96, 80);
+        for (int i = 0; i < 16; i++)
+        {
+            window.DoEvents();
+            if (window.Width == 96 && window.Height == 80)
+            {
+                break;
+            }
+        }
+
+        window.BindPresentationFramebuffer();
+        Assert.Equal(
+            GLEnum.FramebufferComplete,
+            window.Gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer));
+        window.Gl.Viewport(0, 0, (uint)window.Width, (uint)window.Height);
+        window.Gl.ClearColor(0.75f, 0.22f, 0.16f, 1f);
+        window.Gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+        window.SwapBuffers();
+
+        Assert.DoesNotContain(
+            diagnostics,
+            static diagnostic => diagnostic.Contains("DesktopGl33DxgiInterop 创建失败", StringComparison.Ordinal));
+    }
+
+    /// <summary>
     /// 释放窗口后 IsClosing 应为 true。
     /// </summary>
     [NativeSmokeFact]
