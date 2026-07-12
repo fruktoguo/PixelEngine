@@ -560,6 +560,19 @@
       "notes": "全工作区 Project Browser、Recent 搜索/收藏/移除/缺失状态、真实 New/Open 页面、路径校验和主次 CTA 已由 Unity Hub 同机参照、真实输入、持久化 JSON 与 framebuffer 验证；DPI/resize/dock、IME/drag-drop、WGC 白屏和完整 Build And Run 差异仍保留，EDITOR-003 继续进行中。"
     },
     {
+      "entryId": "editor-003-unity-parity-cycle06-20260712",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "83c55fe05420ae290e32cbf287563296c4ab904e",
+      "runSessionId": "local-20260712-editor003-unity-parity-cycle06",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; per-monitor DPI aware at 144 DPI; Unity 6.5 6000.5.3f1 and PixelEngine WGC live references",
+      "command": "Unity/old WGL/x64 ANGLE/new DXGI same-HWND Windows Graphics Capture probes; Computer Use Hub to Demo workbench route; PIXELENGINE_RENDERING_GL_SMOKE=1 and PIXELENGINE_D3D_DEBUG=1 presenter native smoke; RmlUi desktop GL native smoke; solution Release build/test; task catalog validation",
+      "reportPath": "docs/evidence-2026-07-12-editor-003-unity-parity-cycle-06.md",
+      "sha256": "f9727287f956b911e93b99ce2b304b58506b1ab4542e2c2da2d32c72666a23d0",
+      "notes": "同 HWND desktop GL to D3D11/DXGI GPU presenter 已让 Hub 与完整工作台由 WGC 直接捕获；managed ImGui renderer、焦点/系统光标/IME 平台桥和 RmlUi 调用方 FBO 恢复已验证。跨屏 DPI、dock/undock、真实中文 IME、外部文件 drag/drop 与完整 Build And Run 路线仍保留，EDITOR-003 继续进行中。"
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",

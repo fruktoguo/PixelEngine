@@ -65,7 +65,7 @@
   - 优先级：P1。
   - 验收：resize/DPI 切换无一帧旧坐标；面板空白区阻断；图像透明区透传；交互区捕获；IME caret/candidate 锚点位于实际控件。
 
-- [~] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。2026-07-12 已在 Windows 真实运行 Unity 6.5 `6000.5.3f1`、Unity Hub 3.19.4 与当前 Editor，建立默认布局、Hierarchy→Inspector、Play Mode、Project/Console、Project Browser 和窗口捕获的差异基线，并完成全局 chrome、Scene 工具/dock、Hierarchy/Inspector、Project/Console、Project Browser 五轮收敛；Hierarchy 的 Scene Visibility/Picking 已与 GameObject active 正确分离，Project/Console 的宽窄信息层级以及 Project Browser 的 Recent/New/Open/收藏路径均已由真实输入与 framebuffer 验证。WGC、DPI/resize/dock/undock、IME/drag-drop 与完整路线仍未清零，任务继续保持进行中。
+- [~] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。2026-07-12 已在 Windows 真实运行 Unity 6.5 `6000.5.3f1`、Unity Hub 3.19.4 与当前 Editor，建立默认布局、Hierarchy→Inspector、Play Mode、Project/Console、Project Browser 和窗口捕获的差异基线，并完成全局 chrome、Scene 工具/dock、Hierarchy/Inspector、Project/Console、Project Browser、Windows 捕获/平台输入六轮收敛；Hierarchy 的 Scene Visibility/Picking 已与 GameObject active 正确分离，Project/Console 的宽窄信息层级、Project Browser 的 Recent/New/Open/收藏路径，以及同 HWND desktop GL→D3D11/DXGI 的 WGC 客户区呈现均已由真实输入与捕获验证。当前进程已确认 per-monitor DPI aware、150% DPI 与 resize 重建，焦点/系统光标/IME 平台桥已有自动化；200%/跨屏 DPI、dock/undock、真实中文 IME、外部文件 drag/drop 与完整路线仍未清零，任务继续保持进行中。
   - 优先级：P1。
   - 验收：Hierarchy/Inspector/Scene View/gizmo/Undo/Redo/Console/Prefab/Settings/外部脚本编辑/Build And Run 可理解、可恢复；720p 和高 DPI 无标签截断或工具区溢出。对 PixelEngine 已支持的编辑器表面，以 Windows Unity 6.5 `6000.5.3f1` 默认工作台为交互与视觉参照：菜单/顶栏/底部状态栏、Play/Pause/Step 状态、面板停靠与切换、选择高亮、Hierarchy→Inspector 联动、Scene/Game 模式切换、Project/Console 密度、Project Picker、resize/DPI/键盘鼠标焦点以及系统录屏捕获均须达到相同心智模型和等价反馈；不得用未接线按钮或不支持的 Unity 子系统占位冒充对标。
   - 完成证据：必须同时包含可重跑自动化、PixelEngine framebuffer 证据、真实窗口输入路线和与同机 Unity 参照图的逐项差异表；仅 source-contract 测试、静态截图或“观感接近”均不能关闭本任务。每轮若仍发现可复现差异，保持 `[~]` 并继续修复。
@@ -73,6 +73,10 @@
   - 已完成证据：实现 commit `8d8598fc`；Editor 84/84、UI 106/106、Hosting 非发行工具回归 344/344、solution Release build 0 warning/0 error；150% Preferences 与默认核心工作台真实窗口 framebuffer probe 见 `docs/evidence-2026-07-10-editor-preferences-ui-scale.md`。该材料不替代人工点击和完整路线。
   - Unity 对标循环 01：实现 commit `5f916a1e` 已完成 Unity 6.5 同机参照、扁平紧凑主题、中央 Play 组、右侧 Layout、底部状态栏与真实 Component 菜单；Editor 105/105、UI 110 passed / 10 native 条件 skipped、Hosting 非发行工具回归 538 passed / 4 skipped、solution Release build 0 warning / 0 error，1280×720 framebuffer SHA256 与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-01.md`。任务保持 `[~]`。
   - Unity 对标循环 02：实现 commit `dfd83868` 已完成 Scene 图标工具栏、operation/local-global/grid 真实状态、Inspector 默认焦点、核心页签无常驻关闭按钮和 Window 菜单双向显隐；Editor 105/105、UI 110 passed / 10 native 条件 skipped、Hosting 非发行工具回归 539 passed / 4 skipped、solution Release build 0 warning / 0 error，1280×720 framebuffer SHA256 与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-02.md`。任务保持 `[~]`。
+  - Unity 对标循环 03：实现 commits `36b14c6f`、`3de287d8` 已完成 Hierarchy 搜索/图标、真实 Scene Visibility/Picking 与 Inspector active/name/2D Transform/Behaviour/Add Component，并纠正 visibility 与 runtime active 语义；证据与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-03.md`。任务保持 `[~]`。
+  - Unity 对标循环 04：实现 commit `9e06b434` 已完成 Project 单行 chrome/双栏导航/紧凑列表与 Console 宽窄响应式工具栏、severity 计数、日志详情分区；真实窗口、framebuffer、自动化与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-04.md`。任务保持 `[~]`。
+  - Unity 对标循环 05：实现 commit `8964b088` 已完成全工作区 Project Browser、Recent 搜索/收藏/移除/缺失状态与真实 New/Open 页面；Unity Hub 同机参照、真实输入、持久化 JSON、framebuffer 与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-05.md`。任务保持 `[~]`。
+  - Unity 对标循环 06：实现 commit `83c55fe0`、RmlUi native commit `1b69207f` 已完成同 HWND desktop GL→D3D11/DXGI GPU 呈现、managed ImGui renderer、焦点/系统光标/IME 平台桥与调用方 FBO 恢复；solution 1,770 passed / 39 显式环境 smoke skipped、native GL 10/10、D3D debug presenter 1/1、Release build 0 warning / 0 error，Unity/旧 WGL/ANGLE/新 DXGI WGC 对照、resize SHA256 与剩余差异见 `docs/evidence-2026-07-12-editor-003-unity-parity-cycle-06.md`。任务保持 `[~]`。
 
 ## Web-first 透明 UI
 
