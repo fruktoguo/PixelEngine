@@ -540,6 +540,7 @@ public sealed class EditorAssetBrowserDualRootTests
         AssetBrowserItem audio = Find("Content/audio/lava_bubble_loop.wav");
         AssetBrowserItem uiManifest = Find("Content/ui/ui-manifest.json");
         AssetBrowserItem uiScreen = Find("Content/ui/screens/main-menu.xhtml");
+        AssetBrowserItem telemetryScreen = Find("Content/ui/screens/telemetry.xhtml");
         AssetBrowserItem font = Find("Content/ui/fonts/NotoSansSC-VF.ttf");
         AssetBrowserItem materialMap = Find("Content/maps/ai-cavern-material-map.png");
         AssetBrowserItem mainScene = Find("Content/scenes/lava-mine.scene");
@@ -558,11 +559,12 @@ public sealed class EditorAssetBrowserDualRootTests
         Assert.Contains("音频 Cue 映射：13", cues.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("运行时音效", audio.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("预加载", uiManifest.Descriptor?.Purpose, StringComparison.Ordinal);
-        Assert.Contains("7 个 Screen", uiManifest.PreviewSummary, StringComparison.Ordinal);
-        Assert.Contains("7 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("8 个 Screen", uiManifest.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("8 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("Web-first", uiScreen.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("id=main-menu", uiScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("demo.webfirst.main-menu/v1", uiScreen.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("id=telemetry", telemetryScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Equal("字体", font.Descriptor?.TypeLabel);
         Assert.Contains("初始世界材质图", materialMap.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("相机跟随", cameraProbe.Descriptor?.Purpose, StringComparison.Ordinal);
