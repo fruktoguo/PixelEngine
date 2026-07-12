@@ -325,6 +325,7 @@ public sealed class EditorAppTests
         Assert.Contains(EditorDockSpace.AssetBrowserWindowTitle, titles);
         Assert.Contains(EditorDockSpace.InspectorWindowTitle, titles);
         Assert.Contains(EditorDockSpace.PerformanceHudWindowTitle, titles);
+        Assert.DoesNotContain(EditorDockSpace.MaterialBrushWindowTitle, titles);
         Assert.Equal("Scene", EditorDockSpace.ViewportWindowTitle);
         Assert.Equal("Game View", EditorDockSpace.GameViewWindowTitle);
         Assert.Equal("Hierarchy", EditorDockSpace.SceneHierarchyWindowTitle);

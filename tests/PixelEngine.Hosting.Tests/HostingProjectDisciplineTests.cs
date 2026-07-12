@@ -1260,7 +1260,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("if (MaterialBrushActive && _preparedMode == EditorMode.Edit)", source, StringComparison.Ordinal);
         Assert.Contains("TryPick", source, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", source, StringComparison.Ordinal);
-        Assert.Contains("ImGuizmo.Manipulate", source, StringComparison.Ordinal);
+        Assert.Contains("DrawGizmo", source, StringComparison.Ordinal);
+        Assert.Contains("ResolveGizmoHandle", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyGizmoDrag", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmo.SetImGuiContext(_context)", editorBackend, StringComparison.Ordinal);
         Assert.Contains("ImGuizmoOperation.Translate", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmoOperation.RotateZ", source, StringComparison.Ordinal);

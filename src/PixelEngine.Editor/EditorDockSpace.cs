@@ -16,7 +16,6 @@ public sealed class EditorDockSpace
         AssetBrowserWindowTitle,
         InspectorWindowTitle,
         WorldInspectorWindowTitle,
-        MaterialBrushWindowTitle,
         MaterialReactionEditorWindowTitle,
         DebugOverlayWindowTitle,
         SimulationControlWindowTitle,
@@ -215,7 +214,6 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(InspectorWindowTitle, inspectorNode);
         ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, inspectorNode);
         ImGuiP.DockBuilderDockWindow(WorldInspectorWindowTitle, inspectorNode);
-        ImGuiP.DockBuilderDockWindow(MaterialBrushWindowTitle, projectNode);
         ImGuiP.DockBuilderDockWindow(MaterialReactionEditorWindowTitle, projectNode);
         ImGuiP.DockBuilderDockWindow(DebugOverlayWindowTitle, projectNode);
         ImGuiP.DockBuilderDockWindow(SimulationControlWindowTitle, projectNode);

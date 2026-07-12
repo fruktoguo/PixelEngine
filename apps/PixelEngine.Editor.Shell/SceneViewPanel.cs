@@ -34,6 +34,8 @@ internal sealed class SceneViewPanel(
     private const uint GizmoHighlightColor = 0xFF_FF_FF_FF;
     private const float GizmoAxisLength = 48f;
     private const float GizmoRotationRadius = 38f;
+    private const float ToolOverlayInset = 8f;
+    private static readonly Vector2 ToolOverlayDesiredSize = new(300f, 390f);
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
@@ -43,7 +45,10 @@ internal sealed class SceneViewPanel(
     private Vector2 _canvasMin;
     private Vector2 _canvasSize;
     private bool _canvasHovered;
+    private bool _toolOverlayHovered;
     private bool _cameraAutoFit = true;
+    private SceneToolOverlayDock _toolOverlayDock = SceneToolOverlayDock.Right;
+    private Vector2 _toolOverlayFloatingOffset = new(ToolOverlayInset, ToolOverlayInset);
     private int _previewVersion = -1;
     private int _previewSceneViewVersion = -1;
     private long _previewAuthoringWorldVersion = -1;
@@ -112,6 +117,11 @@ internal sealed class SceneViewPanel(
     internal void PrepareFrame(int? selectedStableId, EditorMode mode)
     {
         _preparedMode = mode;
+        if (_brushPanel is { Visible: false, IsActive: true })
+        {
+            _brushPanel.SetActive(false);
+        }
+
         if (mode != EditorMode.Edit && MaterialBrushActive)
         {
             _ = SetMaterialBrushActive(false);
@@ -146,6 +156,7 @@ internal sealed class SceneViewPanel(
 
         DrawToolbar(context.Selection);
         DrawAuthoringCanvas();
+        DrawSceneToolOverlay();
         InputFocused = _canvasHovered && (ImGui.IsWindowHovered() || ImGui.IsWindowFocused());
         HandleCameraInput();
         // gizmo 必须先更新本帧 hit-test / active 状态，Scene selection 才能正确让出左键。
@@ -510,6 +521,11 @@ internal sealed class SceneViewPanel(
             _ = CommitGizmoTransform();
         }
 
+        if (active)
+        {
+            _brushPanel.Visible = true;
+        }
+
         _brushPanel.SetActive(active);
         return _brushPanel.IsActive == active;
     }
@@ -709,6 +725,182 @@ internal sealed class SceneViewPanel(
         }
     }
 
+    private void DrawSceneToolOverlay()
+    {
+        _toolOverlayHovered = false;
+        if (_brushPanel is not { Visible: true } brushPanel || _canvasSize.X <= 0f || _canvasSize.Y <= 0f)
+        {
+            return;
+        }
+
+        SceneToolOverlayLayout layout = ResolveToolOverlayLayout(
+            _canvasMin,
+            _canvasSize,
+            ToolOverlayDesiredSize,
+            _toolOverlayDock,
+            _toolOverlayFloatingOffset,
+            ToolOverlayInset);
+        Vector2 resumeCursor = ImGui.GetCursorScreenPos();
+        ImGui.SetCursorScreenPos(layout.Position);
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.115f, 0.135f, 0.97f));
+        bool drawContents = ImGui.BeginChild(
+            "##scene-tool-overlay",
+            layout.Size,
+            ImGuiChildFlags.Borders,
+            ImGuiWindowFlags.NoSavedSettings);
+        _toolOverlayHovered = ImGui.IsMouseHoveringRect(
+            layout.Position,
+            layout.Position + layout.Size,
+            clip: true);
+        if (drawContents)
+        {
+            DrawSceneToolOverlayHeader(layout, brushPanel);
+            ImGui.Separator();
+            brushPanel.DrawContents();
+        }
+
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
+        ImGui.SetCursorScreenPos(resumeCursor);
+    }
+
+    private void DrawSceneToolOverlayHeader(SceneToolOverlayLayout layout, MaterialBrushPalettePanel brushPanel)
+    {
+        float buttonWidth = ImGui.GetFrameHeight();
+        float dragWidth = MathF.Max(48f, ImGui.GetContentRegionAvail().X - (buttonWidth * 4f) - 12f);
+        Vector2 dragMin = ImGui.GetCursorScreenPos();
+        _ = ImGui.InvisibleButton("##scene-tool-overlay-drag", new Vector2(dragWidth, buttonWidth));
+        Vector2 dragMax = dragMin + new Vector2(dragWidth, buttonWidth);
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.AddText(dragMin + new Vector2(6f, 3f), ToolbarIconColor, "Brush Tool");
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("Drag to float inside Scene View; release near an edge to dock");
+        }
+
+        if (ImGui.IsItemActivated())
+        {
+            _toolOverlayDock = SceneToolOverlayDock.Floating;
+            _toolOverlayFloatingOffset = layout.Position - _canvasMin;
+        }
+
+        if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
+        {
+            _toolOverlayFloatingOffset += ImGui.GetIO().MouseDelta;
+        }
+
+        if (ImGui.IsItemDeactivated())
+        {
+            SceneToolOverlayLayout floated = ResolveToolOverlayLayout(
+                _canvasMin,
+                _canvasSize,
+                ToolOverlayDesiredSize,
+                SceneToolOverlayDock.Floating,
+                _toolOverlayFloatingOffset,
+                ToolOverlayInset);
+            _toolOverlayDock = ResolveToolOverlayDock(
+                floated.Position,
+                floated.Size,
+                _canvasMin,
+                _canvasSize,
+                snapDistance: 24f,
+                ToolOverlayInset);
+            _toolOverlayFloatingOffset = floated.Position - _canvasMin;
+        }
+
+        ImGui.SameLine(0f, 4f);
+        if (ImGui.SmallButton("L##scene-tool-dock-left"))
+        {
+            _toolOverlayDock = SceneToolOverlayDock.Left;
+        }
+
+        DrawOverlayButtonTooltip("Dock left");
+        ImGui.SameLine(0f, 2f);
+        if (ImGui.SmallButton("F##scene-tool-float"))
+        {
+            _toolOverlayDock = SceneToolOverlayDock.Floating;
+            _toolOverlayFloatingOffset = layout.Position - _canvasMin;
+        }
+
+        DrawOverlayButtonTooltip("Float inside Scene View");
+        ImGui.SameLine(0f, 2f);
+        if (ImGui.SmallButton("R##scene-tool-dock-right"))
+        {
+            _toolOverlayDock = SceneToolOverlayDock.Right;
+        }
+
+        DrawOverlayButtonTooltip("Dock right");
+        ImGui.SameLine(0f, 2f);
+        if (ImGui.SmallButton("x##scene-tool-close"))
+        {
+            brushPanel.SetActive(false);
+            brushPanel.Visible = false;
+        }
+
+        DrawOverlayButtonTooltip("Close Brush Tool");
+        if (_toolOverlayDock != SceneToolOverlayDock.Floating)
+        {
+            uint accent = _toolOverlayDock == SceneToolOverlayDock.Left ? GizmoXAxisColor : GizmoYAxisColor;
+            drawList.AddLine(
+                new Vector2(dragMin.X, dragMax.Y),
+                new Vector2(dragMax.X, dragMax.Y),
+                accent,
+                2f);
+        }
+    }
+
+    private static void DrawOverlayButtonTooltip(string text)
+    {
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(text);
+        }
+    }
+
+    internal static SceneToolOverlayLayout ResolveToolOverlayLayout(
+        Vector2 canvasMin,
+        Vector2 canvasSize,
+        Vector2 desiredSize,
+        SceneToolOverlayDock dock,
+        Vector2 floatingOffset,
+        float inset = ToolOverlayInset)
+    {
+        float availableWidth = MathF.Max(1f, canvasSize.X - (inset * 2f));
+        float availableHeight = MathF.Max(1f, canvasSize.Y - (inset * 2f));
+        Vector2 size = new(
+            MathF.Min(MathF.Max(1f, desiredSize.X), availableWidth),
+            MathF.Min(MathF.Max(1f, desiredSize.Y), availableHeight));
+        Vector2 min = canvasMin + new Vector2(inset, inset);
+        Vector2 max = canvasMin + canvasSize - size - new Vector2(inset, inset);
+        Vector2 position = dock switch
+        {
+            SceneToolOverlayDock.Left => min,
+            SceneToolOverlayDock.Right => new Vector2(max.X, min.Y),
+            SceneToolOverlayDock.Floating => canvasMin + floatingOffset,
+            _ => throw new ArgumentOutOfRangeException(nameof(dock), dock, "未知 Scene tool overlay 停靠方式。"),
+        };
+        position = Vector2.Clamp(position, Vector2.Min(min, max), Vector2.Max(min, max));
+        return new SceneToolOverlayLayout(position, size);
+    }
+
+    internal static SceneToolOverlayDock ResolveToolOverlayDock(
+        Vector2 position,
+        Vector2 size,
+        Vector2 canvasMin,
+        Vector2 canvasSize,
+        float snapDistance,
+        float inset = ToolOverlayInset)
+    {
+        float left = canvasMin.X + inset;
+        float right = canvasMin.X + canvasSize.X - inset;
+        float distance = MathF.Max(0f, snapDistance);
+        return MathF.Abs(position.X - left) <= distance
+            ? SceneToolOverlayDock.Left
+            : MathF.Abs(position.X + size.X - right) <= distance
+                ? SceneToolOverlayDock.Right
+                : SceneToolOverlayDock.Floating;
+    }
+
     private void DrawWorldPreview(ImDrawListPtr drawList, SceneAuthoringPreview preview)
     {
         Vector2 min = WorldToScreen(new Vector2(preview.Bounds.X, preview.Bounds.Y));
@@ -868,7 +1060,7 @@ internal sealed class SceneViewPanel(
 
     private void HandleCameraInput()
     {
-        if (!_canvasHovered)
+        if (!_canvasHovered || _toolOverlayHovered)
         {
             return;
         }
@@ -890,7 +1082,7 @@ internal sealed class SceneViewPanel(
     private void HandleSceneMouse(EditorSelection selection)
     {
         bool hasSelection = selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
-        if (!_canvasHovered || (!MaterialBrushActive && hasSelection && IsGizmoCapturingMouse()))
+        if (!_canvasHovered || _toolOverlayHovered || (!MaterialBrushActive && hasSelection && IsGizmoCapturingMouse()))
         {
             return;
         }
@@ -966,7 +1158,8 @@ internal sealed class SceneViewPanel(
     {
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
         PrepareFrame(stableId, _preparedMode);
-        if (MaterialBrushActive ||
+        if ((_toolOverlayHovered && _activeGizmoHandle == SceneGizmoHandle.None) ||
+            MaterialBrushActive ||
             !stableId.HasValue ||
             !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject) ||
             !_scene.IsSceneVisible(stableId.Value) ||
@@ -1382,6 +1575,17 @@ internal readonly record struct SceneGameObjectMarkerGeometry(
     Vector2 AxisX,
     Vector2 AxisY,
     float Radius);
+
+internal enum SceneToolOverlayDock
+{
+    Floating,
+    Left,
+    Right,
+}
+
+internal readonly record struct SceneToolOverlayLayout(
+    Vector2 Position,
+    Vector2 Size);
 
 internal enum SceneToolbarIcon
 {

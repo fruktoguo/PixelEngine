@@ -298,6 +298,21 @@ public sealed class EditorWorldToolsTests
         Assert.Equal(expected, edit.Painted);
     }
 
+    /// <summary>
+    /// 验证画刷参数可切换为 Scene View 内嵌承载，同时仍保留 Window 菜单显隐状态。
+    /// </summary>
+    [Fact]
+    public void MaterialBrushPalettePanelCanBeHostedInsideSceneView()
+    {
+        MaterialBrushPalettePanel panel = new(CreateMaterials(), new RecordingEditApi());
+
+        panel.HostInSceneView();
+        panel.Visible = false;
+
+        Assert.True(panel.IsSceneHosted);
+        Assert.False(panel.Visible);
+    }
+
     private static MaterialTable CreateMaterials()
     {
         return new MaterialTable(

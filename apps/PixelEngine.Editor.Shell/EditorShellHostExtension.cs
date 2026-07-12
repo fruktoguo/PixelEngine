@@ -427,6 +427,7 @@ internal sealed class EditorShellHostExtension :
             engine.Context.TryGetService(out ISimulationEditApi editApi))
         {
             brushPanel = new MaterialBrushPalettePanel(materials, editApi);
+            brushPanel.HostInSceneView();
         }
 
         SceneWorldTexture? sceneWorldTexture =

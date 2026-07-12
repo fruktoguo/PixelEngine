@@ -174,6 +174,8 @@ public sealed class SceneAuthoringPreviewTests
         });
         RecordingEditApi edit = new();
         MaterialBrushPalettePanel brush = new(CreateBrushMaterials(), edit);
+        brush.HostInSceneView();
+        brush.Visible = false;
         RecordingWorldTexture worldTexture = new();
         SceneViewPanel panel = new(scene, new EditorUndoStack(), brush, worldTexture);
         EditorSelection selection = new();
@@ -191,6 +193,7 @@ public sealed class SceneAuthoringPreviewTests
         scene.Select(1);
         selection.SelectGameObject(1);
         Assert.True(panel.SetMaterialBrushActive(true));
+        Assert.True(brush.Visible);
         panel.HandleScenePointer(selection, new Vector2(400f, 225f), clicked: true, dragging: false);
 
         Assert.True(panel.MaterialBrushActive);
@@ -207,6 +210,70 @@ public sealed class SceneAuthoringPreviewTests
         panel.PrepareFrame(selectedStableId: 1, EditorUiMode.Play);
         Assert.False(panel.MaterialBrushActive);
         Assert.False(panel.SetMaterialBrushActive(true));
+    }
+
+    /// <summary>
+    /// 验证 Scene 内工具浮层在左右停靠、浮动和窄视口下始终留在画布范围内。
+    /// </summary>
+    [Fact]
+    public void SceneToolOverlayLayoutDocksAndClampsInsideCanvas()
+    {
+        Vector2 canvasMin = new(100f, 50f);
+        Vector2 canvasSize = new(800f, 450f);
+        Vector2 desiredSize = new(300f, 390f);
+
+        SceneToolOverlayLayout left = SceneViewPanel.ResolveToolOverlayLayout(
+            canvasMin,
+            canvasSize,
+            desiredSize,
+            SceneToolOverlayDock.Left,
+            Vector2.Zero);
+        SceneToolOverlayLayout right = SceneViewPanel.ResolveToolOverlayLayout(
+            canvasMin,
+            canvasSize,
+            desiredSize,
+            SceneToolOverlayDock.Right,
+            Vector2.Zero);
+        SceneToolOverlayLayout floated = SceneViewPanel.ResolveToolOverlayLayout(
+            canvasMin,
+            canvasSize,
+            desiredSize,
+            SceneToolOverlayDock.Floating,
+            new Vector2(999f, 999f));
+        SceneToolOverlayLayout narrow = SceneViewPanel.ResolveToolOverlayLayout(
+            canvasMin,
+            new Vector2(180f, 120f),
+            desiredSize,
+            SceneToolOverlayDock.Right,
+            Vector2.Zero);
+
+        Assert.Equal(new Vector2(108f, 58f), left.Position);
+        Assert.Equal(new Vector2(592f, 58f), right.Position);
+        Assert.Equal(new Vector2(592f, 102f), floated.Position);
+        Assert.Equal(new Vector2(164f, 104f), narrow.Size);
+        Assert.Equal(new Vector2(108f, 58f), narrow.Position);
+    }
+
+    /// <summary>
+    /// 验证浮层仅在接近 Scene 左右边缘时吸附，画布中央保持浮动。
+    /// </summary>
+    [Theory]
+    [InlineData(110f, 300f, 1)]
+    [InlineData(590f, 300f, 2)]
+    [InlineData(300f, 300f, 0)]
+    public void SceneToolOverlayDockingOnlySnapsNearCanvasEdges(
+        float positionX,
+        float width,
+        int expected)
+    {
+        SceneToolOverlayDock actual = SceneViewPanel.ResolveToolOverlayDock(
+            new Vector2(positionX, 80f),
+            new Vector2(width, 200f),
+            new Vector2(100f, 50f),
+            new Vector2(800f, 450f),
+            snapDistance: 24f);
+
+        Assert.Equal((SceneToolOverlayDock)expected, actual);
     }
 
     /// <summary>

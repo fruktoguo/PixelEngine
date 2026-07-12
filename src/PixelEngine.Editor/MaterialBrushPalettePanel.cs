@@ -43,6 +43,11 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     public bool Visible { get; set; } = true;
 
     /// <summary>
+    /// 当前参数 UI 是否由 Scene View overlay 承载，而不是作为独立 Editor 窗口绘制。
+    /// </summary>
+    public bool IsSceneHosted { get; private set; }
+
+    /// <summary>
     /// 当前是否显式激活 Scene View 世界画刷。
     /// </summary>
     public bool IsActive { get; private set; }
@@ -87,6 +92,14 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     }
 
     /// <summary>
+    /// 把本面板切换为 Scene View 内嵌承载；Window 菜单仍通过 <see cref="Visible"/> 控制 overlay 显隐。
+    /// </summary>
+    public void HostInSceneView()
+    {
+        IsSceneHosted = true;
+    }
+
+    /// <summary>
     /// 在指定世界坐标应用当前画刷。
     /// </summary>
     public int ApplyAt(int worldX, int worldY)
@@ -124,6 +137,12 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
+        _ = context;
+        if (IsSceneHosted)
+        {
+            return;
+        }
+
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
         {
@@ -133,6 +152,15 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         }
 
         Visible = visible;
+        DrawContents();
+        ImGui.End();
+    }
+
+    /// <summary>
+    /// 绘制不含顶层窗口 chrome 的画刷参数内容，供 Scene View overlay 复用。
+    /// </summary>
+    public void DrawContents()
+    {
         bool active = IsActive;
         if (ImGui.Checkbox("启用 Scene 画刷", ref active))
         {
@@ -166,8 +194,6 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         {
             ImGui.TextDisabled(Status);
         }
-
-        ImGui.End();
     }
 
     private static MaterialPaletteEntry[] BuildEntries(MaterialTable materials)
