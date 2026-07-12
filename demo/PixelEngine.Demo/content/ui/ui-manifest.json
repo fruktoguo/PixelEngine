@@ -5,6 +5,7 @@
     { "id": "inventory", "path": "screens/inventory.xhtml", "preload": true },
     { "id": "dialog", "path": "screens/dialog.xhtml", "preload": true },
     { "id": "hud", "path": "screens/hud.xhtml", "preload": true },
+    { "id": "telemetry", "path": "screens/telemetry.xhtml", "preload": true },
     { "id": "pause", "path": "screens/pause.xhtml", "preload": true },
     { "id": "result", "path": "screens/result.xhtml", "preload": true }
   ]

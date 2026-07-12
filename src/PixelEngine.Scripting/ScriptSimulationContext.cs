@@ -117,7 +117,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     private IRuntimeControlApi? RuntimeBackend { get; }
 
-    private IGameUiService GameUiBackend { get; }
+    private IGameUiService GameUiBackend { get; set; }
 
     private IConfigApi? ConfigBackend { get; }
 
@@ -191,6 +191,17 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 
     /// <inheritdoc />
     public IGameUiService GameUi => GameUiBackend;
+
+    /// <summary>
+    /// 在窗口运行时晚于脚本运行时装配时，接入实际的 Game UI 服务。
+    /// 仅供 Hosting 初始化边界调用；不会替换脚本场景或其他 facade。
+    /// </summary>
+    /// <param name="gameUi">已完成初始化的 Game UI 服务。</param>
+    public void AttachGameUiService(IGameUiService gameUi)
+    {
+        ThrowIfDisposed();
+        GameUiBackend = gameUi ?? throw new ArgumentNullException(nameof(gameUi));
+    }
 
     /// <inheritdoc />
     public IConfigApi Config => ConfigBackend ?? throw Unsupported(nameof(Config));

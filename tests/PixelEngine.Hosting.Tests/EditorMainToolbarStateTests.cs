@@ -50,6 +50,27 @@ public sealed class EditorMainToolbarStateTests
         Assert.DoesNotContain("Play", state.StatusText, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Step 从 ImGui draw callback 延迟到 frame 返回后才消费；重复点击合并，
+    /// 且工程切换后不会把旧 session 的请求误发给新 session。
+    /// </summary>
+    [Fact]
+    public void DeferredStepRequestCoalescesAndStaysBoundToItsSession()
+    {
+        EditorDeferredFrameActions actions = new();
+        object firstSession = new();
+        object secondSession = new();
+
+        actions.RequestStepOnce(firstSession);
+        actions.RequestStepOnce(firstSession);
+        Assert.True(actions.TryConsumeStepOnce(firstSession));
+        Assert.False(actions.TryConsumeStepOnce(firstSession));
+
+        actions.RequestStepOnce(firstSession);
+        Assert.False(actions.TryConsumeStepOnce(secondSession));
+        Assert.False(actions.TryConsumeStepOnce(firstSession));
+    }
+
     private static EditorMainToolbarState Create(bool isPlaying, bool isPaused)
     {
         return new EditorMainToolbarState(

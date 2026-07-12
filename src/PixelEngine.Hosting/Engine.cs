@@ -826,6 +826,17 @@ public sealed class Engine : IDisposable
         GameUiServiceBridge service = new(host, Context.Options.ContentRoot, stringPool: strings);
         Context.RegisterService(service);
         Context.RegisterService<IGameUiService>(service);
+        // Editor 会先接入脚本运行时以便 GuiRenderBridge 同帧绘制 OnGui，再创建窗口 Game UI。
+        // 把晚到的真实服务回填进既有脚本上下文，避免 Behaviour 永久抓住 NoopGameUiService。
+        if (Context.TryGetService(out ScriptSimulationContext scriptContext))
+        {
+            scriptContext.AttachGameUiService(service);
+            if (Context.TryGetService(out ScriptEventBus scriptEvents))
+            {
+                service.AttachScriptEventBus(scriptEvents);
+            }
+        }
+
         GameUiPhaseDriver driver = new(host, eventSink: service, modelPusher: service);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);

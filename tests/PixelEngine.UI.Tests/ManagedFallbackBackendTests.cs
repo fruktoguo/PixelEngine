@@ -39,6 +39,9 @@ public sealed class ManagedFallbackBackendTests
         Assert.Equal(1, gui.DrawCount);
         Assert.Contains("Hello", gui.Context.Texts);
         Assert.Contains("Start", gui.Context.Buttons);
+        Assert.True(gui.Context.LastWindowFlags.HasFlag(GuiDrawWindowFlags.NoTitleBar));
+        Assert.True(gui.Context.LastWindowFlags.HasFlag(GuiDrawWindowFlags.NoSavedSettings));
+        Assert.True(gui.Context.LastWindowFlags.HasFlag(GuiDrawWindowFlags.NoScrollbar));
         Assert.Equal(1, count);
         Assert.Equal(new UiActionId(UiStableId.Hash("start_game")), events[0].Action);
     }

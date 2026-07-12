@@ -28,7 +28,7 @@ namespace PixelEngine.Demo.Tests;
 public sealed class DemoUiContentTests
 {
     /// <summary>
-    /// 验证 Demo UI manifest 声明七类可玩屏幕，且真实可见中文文本落在共享 CJK 字形范围内。
+    /// 验证 Demo UI manifest 声明八类可玩屏幕，且真实可见中文文本落在共享 CJK 字形范围内。
     /// </summary>
     [Fact]
     public void DemoUiManifestDeclaresSevenPlayableScreensAndCjkTextIsCovered()
@@ -38,12 +38,13 @@ public sealed class DemoUiContentTests
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(uiRoot);
 
         // Assert：验证预期结果
-        Assert.Equal(7, manifest.ScreenCount);
+        Assert.Equal(8, manifest.ScreenCount);
         AssertScreen(manifest, "main-menu");
         AssertScreen(manifest, "settings");
         AssertScreen(manifest, "inventory");
         AssertScreen(manifest, "dialog");
         AssertScreen(manifest, "hud");
+        AssertScreen(manifest, "telemetry");
         AssertScreen(manifest, "pause");
         AssertScreen(manifest, "result");
 
@@ -56,7 +57,7 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证 Demo 七类 Web-first 屏幕显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
+    /// 验证 Demo 八类 Web-first 屏幕显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
     /// </summary>
     [Fact]
     public void DemoUiScreensDeclareHeadlessManagedFallbackContracts()
@@ -90,9 +91,15 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
-            "demo.webfirst.hud/v1",
+            "demo.webfirst.hud/v2",
             GameUiDemoController.HudModelPathNames.ToArray(),
-            ["pause_game"]);
+            ["pause_game", "toggle_telemetry"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.TelemetryScreen,
+            "demo.webfirst.telemetry/v1",
+            GameUiDemoController.TelemetryModelPathNames.ToArray(),
+            ["toggle_telemetry"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.PauseScreen,
@@ -123,17 +130,27 @@ public sealed class DemoUiContentTests
         UI.UiScreenHandle hud = host.ShowScreen(
             manifest.GetRequiredScreen(GameUiDemoController.HudScreen).ScreenId,
             manifest.ResolveDocumentSource(GameUiDemoController.HudScreen));
+        UI.UiScreenHandle telemetry = host.ShowScreen(
+            manifest.GetRequiredScreen(GameUiDemoController.TelemetryScreen).ScreenId,
+            manifest.ResolveDocumentSource(GameUiDemoController.TelemetryScreen));
         UI.UiScreenHandle result = host.PushModal(
             manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).ScreenId,
             manifest.ResolveDocumentSource(GameUiDemoController.ResultScreen));
 
         string[] hudPaths = GameUiDemoController.HudModelPathNames.ToArray();
+        string[] telemetryPaths = GameUiDemoController.TelemetryModelPathNames.ToArray();
         string[] resultPaths = GameUiDemoController.ResultModelPathNames.ToArray();
         AssertManagedModelPaths(host, hud, hudPaths);
+        AssertManagedModelPaths(host, telemetry, telemetryPaths);
         AssertManagedModelPaths(host, result, resultPaths);
         foreach (string path in hudPaths)
         {
             AssertManagedDoubleValueRoundTrips(host, hud, path, 0.42);
+        }
+
+        foreach (string path in telemetryPaths)
+        {
+            AssertManagedDoubleValueRoundTrips(host, telemetry, path, 0.63);
         }
 
         foreach (string path in resultPaths)
@@ -236,7 +253,7 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证七类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
+    /// 验证八类 Demo UI 屏幕可由 ManagedFallback 同时显示、叠放并产生按钮/复选框事件。
     /// </summary>
     [Fact]
     public void DemoUiScreensRenderAndInteractThroughManagedFallback()
@@ -250,6 +267,7 @@ public sealed class DemoUiContentTests
 
         UI.UiScreenHandle main = host.ShowScreen(manifest.GetRequiredScreen("main-menu").ScreenId, manifest.ResolveDocumentSource("main-menu"));
         UI.UiScreenHandle hud = host.ShowScreen(manifest.GetRequiredScreen("hud").ScreenId, manifest.ResolveDocumentSource("hud"));
+        UI.UiScreenHandle telemetry = host.ShowScreen(manifest.GetRequiredScreen("telemetry").ScreenId, manifest.ResolveDocumentSource("telemetry"));
         UI.UiScreenHandle settings = host.PushModal(manifest.GetRequiredScreen("settings").ScreenId, manifest.ResolveDocumentSource("settings"));
         UI.UiScreenHandle inventory = host.PushModal(manifest.GetRequiredScreen("inventory").ScreenId, manifest.ResolveDocumentSource("inventory"));
         UI.UiScreenHandle dialog = host.PushModal(manifest.GetRequiredScreen("dialog").ScreenId, manifest.ResolveDocumentSource("dialog"));
@@ -257,6 +275,7 @@ public sealed class DemoUiContentTests
         UI.UiScreenHandle result = host.PushModal(manifest.GetRequiredScreen("result").ScreenId, manifest.ResolveDocumentSource("result"));
         _ = main;
         _ = hud;
+        _ = telemetry;
         _ = settings;
         _ = inventory;
         _ = dialog;
@@ -275,6 +294,7 @@ public sealed class DemoUiContentTests
         Assert.Contains("背包", gui.Context.Texts);
         Assert.Contains("矿工通讯", gui.Context.Texts);
         Assert.Contains("HUD", gui.Context.Texts);
+        Assert.Contains("运行诊断", gui.Context.Texts);
         Assert.Contains("暂停", gui.Context.Texts);
         Assert.Contains("结算", gui.Context.Texts);
         Assert.Contains("开始游戏", gui.Context.Buttons);
@@ -286,7 +306,7 @@ public sealed class DemoUiContentTests
         Assert.Contains(events[..eventCount], e => e.Action == new UI.UiActionId(UiStableId.Hash("toggle_vsync")));
         Assert.True(host.Documents.HasModalTop);
         Assert.True(host.PopModal());
-        Assert.Equal(6, host.Documents.StackCount);
+        Assert.Equal(7, host.Documents.StackCount);
     }
 
     /// <summary>
@@ -417,8 +437,11 @@ public sealed class DemoUiContentTests
         ScriptUiScreenHandle dialog = controller.ModalScreen;
         ui.Raise(GameUiDemoController.Action("close_dialog"));
         ui.Raise(GameUiDemoController.Action("start_game"));
+        ui.Raise(GameUiDemoController.Action("toggle_telemetry"));
 
-        Assert.Equal([GameUiDemoController.MainMenuScreen, GameUiDemoController.HudScreen], ui.ShownScreens);
+        Assert.Equal(
+            [GameUiDemoController.MainMenuScreen, GameUiDemoController.HudScreen, GameUiDemoController.TelemetryScreen],
+            ui.ShownScreens);
         Assert.Equal([GameUiDemoController.SettingsScreen, GameUiDemoController.InventoryScreen, GameUiDemoController.DialogScreen], ui.PushedScreens);
         Assert.NotEqual(default, settings);
         Assert.NotEqual(default, inventory);
@@ -450,6 +473,111 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.lights");
         AssertHudPathWritten(ui, "hud.bodies");
         AssertHudPathWritten(ui, "hud.fx");
+    }
+
+    /// <summary>
+    /// 验证 Play→Stop 会对称移除菜单、HUD、遥测和模态屏，第二次 Play 使用全新句柄且事件只处理一次。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerCanStopAndStartAgainWithoutLeakingScreens()
+    {
+        GameUiDemoController controller = new();
+        FakeGameUiService ui = new();
+
+        controller.StartForService(ui);
+        ScriptUiScreenHandle firstMain = controller.MainScreen;
+        ui.Raise(GameUiDemoController.Action("start_game"));
+        ScriptUiScreenHandle firstHud = controller.HudScreenHandle;
+        ui.Raise(GameUiDemoController.Action("toggle_telemetry"));
+        ScriptUiScreenHandle firstTelemetry = controller.TelemetryScreenHandle;
+        ui.Raise(GameUiDemoController.Action("open_settings"));
+        ScriptUiScreenHandle firstModal = controller.ModalScreen;
+
+        controller.StopForService();
+
+        Assert.Equal(default, controller.MainScreen);
+        Assert.Equal(default, controller.HudScreenHandle);
+        Assert.Equal(default, controller.TelemetryScreenHandle);
+        Assert.Equal(default, controller.ModalScreen);
+        Assert.Equal(default, controller.LastAction);
+        Assert.Contains(firstMain, ui.HiddenScreens);
+        Assert.Contains(firstHud, ui.HiddenScreens);
+        Assert.Contains(firstTelemetry, ui.HiddenScreens);
+        Assert.Contains(firstModal, ui.HiddenScreens);
+
+        ui.Raise(GameUiDemoController.Action("start_game"));
+        Assert.Equal(default, controller.MainScreen);
+
+        controller.StartForService(ui);
+        ScriptUiScreenHandle secondMain = controller.MainScreen;
+        Assert.NotEqual(firstMain, secondMain);
+        ui.Raise(GameUiDemoController.Action("start_game"));
+        ScriptUiScreenHandle secondHud = controller.HudScreenHandle;
+        Assert.NotEqual(firstHud, secondHud);
+        Assert.Equal(2, ui.ShownScreens.Count(screen => screen == GameUiDemoController.MainMenuScreen));
+        Assert.Equal(2, ui.ShownScreens.Count(screen => screen == GameUiDemoController.HudScreen));
+
+        controller.StopForService();
+        Assert.Contains(secondMain, ui.HiddenScreens);
+        Assert.Contains(secondHud, ui.HiddenScreens);
+    }
+
+    /// <summary>
+    /// 验证 Editor 临时 Play 恢复脚本快照后，完整脚本生命周期仍会再次派发 OnStart 并重建游戏 UI。
+    /// </summary>
+    [Fact]
+    public void EditorTemporaryPlayCanStartGameUiOnEverySession()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+                                 /*lang=json,strict*/
+                                 """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _);
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            GameUiDemoController controller = entity.AddComponent<GameUiDemoController>();
+            using EngineWorldSnapshotStore snapshots = new(engine);
+            EngineEditorPlaySessionService play = new(engine, snapshots);
+
+            EditorPlaySessionResult firstEnter = play.EnterPlayTemporary();
+            engine.RunHeadlessTicks(1);
+            ScriptUiScreenHandle firstMain = controller.MainScreen;
+            ScriptUiScreenHandle firstHud = controller.HudScreenHandle;
+            EditorPlaySessionResult firstExit = play.ExitPlay();
+
+            Assert.True(firstEnter.Succeeded, firstEnter.Message);
+            Assert.True(firstExit.Succeeded, firstExit.Message);
+            Assert.NotEqual(default, firstMain);
+            Assert.NotEqual(default, firstHud);
+            Assert.False(controller.Faulted, controller.LastException?.ToString());
+            Assert.True(controller.Enabled);
+            Assert.Equal(default, controller.MainScreen);
+            Assert.Equal(default, controller.HudScreenHandle);
+
+            EditorPlaySessionResult secondEnter = play.EnterPlayTemporary();
+            engine.RunHeadlessTicks(1);
+
+            Assert.True(secondEnter.Succeeded, secondEnter.Message);
+            Assert.False(controller.Faulted, controller.LastException?.ToString());
+            Assert.True(controller.Enabled);
+            Assert.NotEqual(default, controller.MainScreen);
+            Assert.NotEqual(default, controller.HudScreenHandle);
+            Assert.NotEqual(firstMain, controller.MainScreen);
+            Assert.NotEqual(firstHud, controller.HudScreenHandle);
+            Assert.Equal(2, ui.ShownScreens.Count(screenId => screenId == GameUiDemoController.MainMenuScreen));
+            Assert.Equal(2, ui.ShownScreens.Count(screenId => screenId == GameUiDemoController.HudScreen));
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
     }
 
     /// <summary>

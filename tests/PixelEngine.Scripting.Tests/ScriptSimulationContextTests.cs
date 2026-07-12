@@ -39,6 +39,23 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证窗口运行时晚于脚本上下文创建时，可把真实 Game UI 服务接回同一个上下文。
+    /// </summary>
+    [Fact]
+    public void GameUiServiceCanBeAttachedAfterScriptContextInitialization()
+    {
+        using Fixture fixture = Fixture.Create();
+        RecordingGameUiService gameUi = new();
+
+        fixture.Context.AttachGameUiService(gameUi);
+        UiScreenHandle screen = fixture.Context.GameUi.ShowScreen("hud");
+
+        Assert.Same(gameUi, fixture.Context.GameUi);
+        Assert.Equal(new UiScreenHandle(41), screen);
+        Assert.Equal("hud", gameUi.LastShownScreen);
+    }
+
+    /// <summary>
     /// 验证 UI 事件处理器中的世界写入只进入延迟命令队列，在 cell 安全窗口 flush 前不改网格。
     /// </summary>
     [Fact]
@@ -823,6 +840,69 @@ public sealed class ScriptSimulationContextTests
             ScriptEvents.Dispose();
             Physics?.Dispose();
             Jobs?.Dispose();
+        }
+    }
+
+    private sealed class RecordingGameUiService : IGameUiService
+    {
+        public event Action<UiEvent>? UiEventRaised
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
+        public string LastShownScreen { get; private set; } = string.Empty;
+
+        public UiScreenHandle ShowScreen(string screenId)
+        {
+            LastShownScreen = screenId;
+            return new UiScreenHandle(41);
+        }
+
+        public void HideScreen(UiScreenHandle screen)
+        {
+            _ = screen;
+        }
+
+        public UiScreenHandle PushModal(string screenId)
+        {
+            _ = screenId;
+            return new UiScreenHandle(42);
+        }
+
+        public void BindModel(UiScreenHandle screen, UiModelName modelName, IUiModel model)
+        {
+            _ = screen;
+            _ = modelName;
+            _ = model;
+        }
+
+        public UiStringHandle InternString(string value)
+        {
+            _ = value;
+            return default;
+        }
+
+        public void SetValue(UiScreenHandle screen, UiPathId path, in UiValue value)
+        {
+            _ = screen;
+            _ = path;
+            _ = value;
+        }
+
+        public bool TryGetValue(UiScreenHandle screen, UiPathId path, out UiValue value)
+        {
+            _ = screen;
+            _ = path;
+            value = default;
+            return false;
+        }
+
+        public void Invoke(UiScreenHandle screen, UiActionId action, in UiValue payload)
+        {
+            _ = screen;
+            _ = action;
+            _ = payload;
         }
     }
 

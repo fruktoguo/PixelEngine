@@ -207,8 +207,16 @@ internal sealed class EditorProjectSession : IDisposable
     public Hosting.EditorPlaySessionResult ExitEditorPlay()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        Hosting.EditorPlaySessionSnapshot beforeExit = _playSession.Capture();
         Hosting.EditorPlaySessionResult result = _playSession.ExitPlay();
-        RefreshEditProjectionIfNeeded();
+        // 临时 Play 的字段快照只负责运行时可持久字段与 world 回滚；脚本可能还持有私有
+        // session 状态、动态实体与 ISystem（例如 LevelDirector 的实体构建门闩）。退出后必须
+        // 从 authoring SceneModel 重建完整 projection，才能保证下一次 Play 使用全新 Behaviour
+        // 与 system 集合，而不是带着上一次会话的私有门闩进入空运行态。
+        bool rebuildTemporaryProjection = result.Succeeded &&
+            beforeExit.Source == Hosting.EditorPlaySource.TemporarySnapshot &&
+            beforeExit.TemporarySnapshotActive;
+        RefreshEditProjectionIfNeeded(force: rebuildTemporaryProjection);
         _editorHost.InvalidateAuthoringWorld();
         return result;
     }

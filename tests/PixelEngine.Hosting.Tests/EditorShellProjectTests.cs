@@ -201,9 +201,10 @@ public sealed class EditorShellProjectTests
 
         // Assert：验证预期结果
         Assert.True(session.Engine.Context.TryGetService(out ScriptHotReloadController _));
-        Assert.True(session.Engine.Context.TryGetService(out IScriptContext _));
+        Assert.True(session.Engine.Context.TryGetService(out IScriptContext scriptContext));
         Assert.True(session.Engine.Context.TryGetService(out GameUiHost _));
-        Assert.True(session.Engine.Context.TryGetService(out IGameUiService _));
+        Assert.True(session.Engine.Context.TryGetService(out IGameUiService gameUi));
+        Assert.Same(gameUi, scriptContext.GameUi);
         Assert.True(session.Engine.Context.TryGetService(out GameUiBackendSelection selection));
         Assert.Equal(UiBackendKind.ManagedFallback, selection.ActiveBackend);
         Assert.Contains(app.ConsoleStore.Snapshot(), entry =>

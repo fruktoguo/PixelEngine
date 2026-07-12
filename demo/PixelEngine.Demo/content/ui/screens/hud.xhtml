@@ -1,39 +1,27 @@
-<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v1" style="left: 14px; top: 14px; width: 360px; height: 536px">
+<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v2" style="left: 14px; top: 14px; width: 316px; height: 250px">
   <head>
     <style>
       body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(4, 6, 9, 168); }
       progress { width: 248px; height: 14px; margin-top: 3px; }
       p { margin: 3px 0px; }
+      button { width: 116px; height: 28px; background-color: #315f8d; color: #ffffff; }
+      #hud_pause { position: absolute; left: 12px; top: 210px; }
+      #hud_telemetry { position: absolute; left: 134px; top: 210px; }
     </style>
   </head>
   <body>
     <p id="hud_title">目标：左起点到右出口，拆路障，避熔岩坑</p>
     <p id="hud_route">出口进度表示到右侧出口的距离</p>
     <progress id="hud_health" path="hud.health" value="1.0" text="生命" />
-    <progress id="hud_weapon" path="hud.weapon" value="0.0" text="武器槽位" />
     <progress id="hud_ammo" path="hud.ammo" value="0.0" text="弹药" />
     <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="冷却" />
     <progress id="hud_heat" path="hud.heat" value="0.0" text="热量" />
     <progress id="hud_reload" path="hud.reload" value="0.0" text="换弹" />
-    <progress id="hud_overheated" path="hud.overheated" value="0.0" text="过热锁定" />
-    <progress id="hud_material_slot" path="hud.material_slot" value="0.0" text="材质槽位" />
-    <progress id="hud_brush_radius" path="hud.brush_radius" value="0.0" text="笔刷半径" />
-    <progress id="hud_explosions" path="hud.explosions" value="0.0" text="爆破次数" />
-    <progress id="hud_shots" path="hud.shots" value="0.0" text="射击次数" />
-    <progress id="hud_collapse_islands" path="hud.collapse_islands" value="0.0" text="坍塌转刚体" />
-    <progress id="hud_collapse_scan" path="hud.collapse_scan" value="0.0" text="坍塌扫描" />
     <progress id="hud_crystals" path="hud.crystals" value="0.0" text="出口进度" />
     <progress id="hud_time" path="hud.time" value="1.0" text="路线余量" />
     <progress id="hud_hazard" path="hud.hazard" value="0.0" text="熔岩接触危险" />
     <progress id="hud_score" path="hud.score" value="0.0" text="分数" />
-    <progress id="hud_fps" path="hud.fps" value="0.0" text="Render FPS" />
-    <progress id="hud_frame_p99" path="hud.frame_p99" value="0.0" text="p99 帧耗时" />
-    <progress id="hud_frame_low1" path="hud.frame_low1" value="0.0" text="1% low" />
-    <progress id="hud_jitter" path="hud.jitter" value="0.0" text="jitter" />
-    <progress id="hud_particles" path="hud.particles" value="0.0" text="粒子" />
-    <progress id="hud_lights" path="hud.lights" value="0.0" text="光源" />
-    <progress id="hud_bodies" path="hud.bodies" value="0.0" text="刚体" />
-    <progress id="hud_fx" path="hud.fx" value="0.0" text="FX burst" />
     <button id="hud_pause" data-event-click="pause_game">暂停</button>
+    <button id="hud_telemetry" data-event-click="toggle_telemetry">诊断</button>
   </body>
 </rml>

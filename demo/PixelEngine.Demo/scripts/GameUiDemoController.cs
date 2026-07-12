@@ -13,17 +13,26 @@ public sealed class GameUiDemoController : Behaviour
     internal const string InventoryScreen = "inventory";
     internal const string DialogScreen = "dialog";
     internal const string HudScreen = "hud";
+    internal const string TelemetryScreen = "telemetry";
     internal const string PauseScreen = "pause";
     internal const string ResultScreen = "result";
 
     private static readonly string[] HudModelPaths =
     [
         "hud.health",
-        "hud.weapon",
         "hud.ammo",
         "hud.cooldown",
         "hud.heat",
         "hud.reload",
+        "hud.crystals",
+        "hud.time",
+        "hud.hazard",
+        "hud.score",
+    ];
+
+    private static readonly string[] TelemetryModelPaths =
+    [
+        "hud.weapon",
         "hud.overheated",
         "hud.material_slot",
         "hud.brush_radius",
@@ -31,10 +40,6 @@ public sealed class GameUiDemoController : Behaviour
         "hud.shots",
         "hud.collapse_islands",
         "hud.collapse_scan",
-        "hud.crystals",
-        "hud.time",
-        "hud.hazard",
-        "hud.score",
         "hud.fps",
         "hud.frame_p99",
         "hud.frame_low1",
@@ -56,6 +61,8 @@ public sealed class GameUiDemoController : Behaviour
 
     internal static ReadOnlySpan<string> HudModelPathNames => HudModelPaths;
 
+    internal static ReadOnlySpan<string> TelemetryModelPathNames => TelemetryModelPaths;
+
     internal static ReadOnlySpan<string> ResultModelPathNames => ResultModelPaths;
 
     private static readonly UiActionId StartGameAction = Action("start_game");
@@ -65,6 +72,7 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiActionId BackMainAction = Action("back_main");
     private static readonly UiActionId CloseDialogAction = Action("close_dialog");
     private static readonly UiActionId PauseGameAction = Action("pause_game");
+    private static readonly UiActionId ToggleTelemetryAction = Action("toggle_telemetry");
     private static readonly UiActionId ResumeGameAction = Action("resume_game");
     private static readonly UiActionId RestartGameAction = Action("restart_game");
     private static readonly UiActionId QuitGameAction = Action("quit_game");
@@ -136,6 +144,11 @@ public sealed class GameUiDemoController : Behaviour
     public UiScreenHandle HudScreenHandle { get; private set; }
 
     /// <summary>
+    /// 当前可选遥测面板句柄；默认不显示。
+    /// </summary>
+    public UiScreenHandle TelemetryScreenHandle { get; private set; }
+
+    /// <summary>
     /// 当前模态屏幕句柄；无模态时为 default。
     /// </summary>
     public UiScreenHandle ModalScreen { get; private set; }
@@ -167,30 +180,72 @@ public sealed class GameUiDemoController : Behaviour
     internal void StartForService(IGameUiService ui, IRuntimeControlApi? runtime)
     {
         ArgumentNullException.ThrowIfNull(ui);
-        _runtime = runtime;
         if (_subscribed)
         {
-            return;
+            if (ReferenceEquals(_ui, ui))
+            {
+                _runtime = runtime;
+                return;
+            }
+
+            StopForService();
         }
 
         _ui = ui;
+        _runtime = runtime;
         _ui.UiEventRaised += HandleUiEvent;
         _subscribed = true;
-        // 启动时显示主菜单与常驻 HUD 屏幕，并写入默认值
+        // gameplay HUD 从 Play 首帧持续发布；主菜单布局在另一侧，避免遮住 HUD 与主要世界视野。
         MainScreen = _ui.ShowScreen(MainMenuScreen);
-        HudScreenHandle = _ui.ShowScreen(HudScreen);
-        PublishHudDefaults();
+        ShowHud();
         RefreshSettingsStateFromRuntime();
     }
 
     /// <inheritdoc />
     protected override void OnDestroy()
     {
-        if (_subscribed && _ui is not null)
+        StopForService();
+    }
+
+    /// <summary>
+    /// 对称结束一次 UI play session，移除本控制器创建的全部 screen 并清空运行时引用。
+    /// </summary>
+    internal void StopForService()
+    {
+        IGameUiService? ui = _ui;
+        if (_subscribed && ui is not null)
         {
-            _ui.UiEventRaised -= HandleUiEvent;
-            _subscribed = false;
+            ui.UiEventRaised -= HandleUiEvent;
         }
+
+        _subscribed = false;
+        HideScreenIfVisible(ui, ModalScreen);
+        HideScreenIfVisible(ui, TelemetryScreenHandle);
+        HideScreenIfVisible(ui, HudScreenHandle);
+        HideScreenIfVisible(ui, MainScreen);
+        ModalScreen = default;
+        TelemetryScreenHandle = default;
+        HudScreenHandle = default;
+        MainScreen = default;
+        _ui = null;
+        _runtime = null;
+        _health = null;
+        _player = null;
+        _weapons = null;
+        _brush = null;
+        _explosive = null;
+        _projectile = null;
+        _mission = null;
+        _hazard = null;
+        _goal = null;
+        _goalProgressSource = null;
+        _goalRouteStartCenterX = 0f;
+        _pausedByUi = false;
+        _resultVisible = false;
+        _modalScreenId = string.Empty;
+        _lastMissionState = MissionState.Playing;
+        _lastGoalReached = false;
+        LastAction = default;
     }
 
     /// <summary>
@@ -203,6 +258,13 @@ public sealed class GameUiDemoController : Behaviour
         if (uiEvent.Action == StartGameAction)
         {
             HideMainMenu();
+            ShowHud();
+            return;
+        }
+
+        if (uiEvent.Action == ToggleTelemetryAction)
+        {
+            ToggleTelemetry();
             return;
         }
 
@@ -274,30 +336,30 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         SetHudValue(HudHealthPath, 1.0);
-        SetHudValue(HudWeaponPath, 0.0);
         SetHudValue(HudAmmoPath, 0.0);
         SetHudValue(HudCooldownPath, 1.0);
         SetHudValue(HudHeatPath, 0.0);
         SetHudValue(HudReloadPath, 0.0);
-        SetHudValue(HudOverheatedPath, 0.0);
-        SetHudValue(HudMaterialSlotPath, 0.0);
-        SetHudValue(HudBrushRadiusPath, 0.0);
-        SetHudValue(HudExplosionsPath, 0.0);
-        SetHudValue(HudShotsPath, 0.0);
-        SetHudValue(HudCollapseIslandsPath, 0.0);
-        SetHudValue(HudCollapseScanPath, 0.0);
         SetHudValue(HudCrystalsPath, 0.0);
         SetHudValue(HudTimePath, 1.0);
         SetHudValue(HudHazardPath, 0.0);
         SetHudValue(HudScorePath, 0.0);
-        SetHudValue(HudFpsPath, 0.0);
-        SetHudValue(HudFrameP99Path, 0.0);
-        SetHudValue(HudFrameLow1Path, 0.0);
-        SetHudValue(HudJitterPath, 0.0);
-        SetHudValue(HudParticlesPath, 0.0);
-        SetHudValue(HudLightsPath, 0.0);
-        SetHudValue(HudBodiesPath, 0.0);
-        SetHudValue(HudFxPath, 0.0);
+        SetTelemetryValue(HudWeaponPath, 0.0);
+        SetTelemetryValue(HudOverheatedPath, 0.0);
+        SetTelemetryValue(HudMaterialSlotPath, 0.0);
+        SetTelemetryValue(HudBrushRadiusPath, 0.0);
+        SetTelemetryValue(HudExplosionsPath, 0.0);
+        SetTelemetryValue(HudShotsPath, 0.0);
+        SetTelemetryValue(HudCollapseIslandsPath, 0.0);
+        SetTelemetryValue(HudCollapseScanPath, 0.0);
+        SetTelemetryValue(HudFpsPath, 0.0);
+        SetTelemetryValue(HudFrameP99Path, 0.0);
+        SetTelemetryValue(HudFrameLow1Path, 0.0);
+        SetTelemetryValue(HudJitterPath, 0.0);
+        SetTelemetryValue(HudParticlesPath, 0.0);
+        SetTelemetryValue(HudLightsPath, 0.0);
+        SetTelemetryValue(HudBodiesPath, 0.0);
+        SetTelemetryValue(HudFxPath, 0.0);
     }
 
     private void PublishHudState()
@@ -440,52 +502,52 @@ public sealed class GameUiDemoController : Behaviour
     {
         if (_weapons?.Catalog is not { Weapons.Length: > 0 } catalog)
         {
-            SetHudValue(HudWeaponPath, 0.0);
+            SetTelemetryValue(HudWeaponPath, 0.0);
             SetHudValue(HudAmmoPath, 0.0);
             SetHudValue(HudCooldownPath, 1.0);
             SetHudValue(HudHeatPath, 0.0);
             SetHudValue(HudReloadPath, 0.0);
-            SetHudValue(HudOverheatedPath, 0.0);
+            SetTelemetryValue(HudOverheatedPath, 0.0);
             return;
         }
 
         int selected = Math.Clamp(_weapons.SelectedIndex, 0, catalog.Weapons.Length - 1);
         WeaponDefinition weapon = catalog.Weapons[selected];
-        SetHudValue(HudWeaponPath, catalog.Weapons.Length <= 1 ? 0.0 : Ratio(selected, catalog.Weapons.Length - 1));
+        SetTelemetryValue(HudWeaponPath, catalog.Weapons.Length <= 1 ? 0.0 : Ratio(selected, catalog.Weapons.Length - 1));
         SetHudValue(HudAmmoPath, weapon.AmmoMax <= 0 ? 0.0 : Ratio(_weapons.CurrentAmmo, weapon.AmmoMax));
         SetHudValue(HudCooldownPath, weapon.CooldownSeconds <= 0f ? 1.0 : 1.0 - Ratio(_weapons.CooldownRemaining, weapon.CooldownSeconds));
         SetHudValue(HudHeatPath, Ratio(_weapons.Heat, 100f));
         SetHudValue(HudReloadPath, _weapons.IsReloading && weapon.ReloadSeconds > 0f ? Ratio(_weapons.ReloadRemaining, weapon.ReloadSeconds) : 0.0);
-        SetHudValue(HudOverheatedPath, _weapons.IsOverheated ? 1.0 : 0.0);
+        SetTelemetryValue(HudOverheatedPath, _weapons.IsOverheated ? 1.0 : 0.0);
     }
 
     private void PublishTools()
     {
         if (_brush is null)
         {
-            SetHudValue(HudMaterialSlotPath, 0.0);
-            SetHudValue(HudBrushRadiusPath, 0.0);
+            SetTelemetryValue(HudMaterialSlotPath, 0.0);
+            SetTelemetryValue(HudBrushRadiusPath, 0.0);
         }
         else
         {
             int slotCount = Math.Max(1, _brush.MaterialSlotCount);
-            SetHudValue(HudMaterialSlotPath, slotCount <= 1 ? 0.0 : Ratio(_brush.SelectedIndex, slotCount - 1));
-            SetHudValue(HudBrushRadiusPath, Ratio(_brush.Radius, Math.Max(1, _brush.MaxRadius)));
+            SetTelemetryValue(HudMaterialSlotPath, slotCount <= 1 ? 0.0 : Ratio(_brush.SelectedIndex, slotCount - 1));
+            SetTelemetryValue(HudBrushRadiusPath, Ratio(_brush.Radius, Math.Max(1, _brush.MaxRadius)));
         }
 
-        SetHudValue(HudExplosionsPath, _explosive is null ? 0.0 : Ratio(_explosive.ExplosionCount, 10.0));
-        SetHudValue(HudShotsPath, Ratio(_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0, 10.0));
+        SetTelemetryValue(HudExplosionsPath, _explosive is null ? 0.0 : Ratio(_explosive.ExplosionCount, 10.0));
+        SetTelemetryValue(HudShotsPath, Ratio(_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0, 10.0));
         if (_projectile is null)
         {
-            SetHudValue(HudCollapseIslandsPath, 0.0);
-            SetHudValue(HudCollapseScanPath, 0.0);
+            SetTelemetryValue(HudCollapseIslandsPath, 0.0);
+            SetTelemetryValue(HudCollapseScanPath, 0.0);
             return;
         }
 
         int scanRadius = Math.Clamp(_projectile.CollapseScanRadius, 4, 320);
         double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
-        SetHudValue(HudCollapseIslandsPath, Ratio(_projectile.CollapsedFloatingIslands, 10.0));
-        SetHudValue(HudCollapseScanPath, Ratio(_projectile.LastCollapseSolidCandidates, scanCapacity));
+        SetTelemetryValue(HudCollapseIslandsPath, Ratio(_projectile.CollapsedFloatingIslands, 10.0));
+        SetTelemetryValue(HudCollapseScanPath, Ratio(_projectile.LastCollapseSolidCandidates, scanCapacity));
     }
 
     private void PublishMission()
@@ -553,14 +615,14 @@ public sealed class GameUiDemoController : Behaviour
     private void PublishDiagnostics()
     {
         EngineDiagnosticsSnapshot diagnostics = Context.Diagnostics.Capture();
-        SetHudValue(HudFpsPath, Ratio(diagnostics.FramesPerSecond, 120.0));
-        SetHudValue(HudFrameP99Path, Ratio(diagnostics.FrameP99Milliseconds, 50.0));
-        SetHudValue(HudFrameLow1Path, Ratio(diagnostics.FrameLow1PercentFps, 120.0));
-        SetHudValue(HudJitterPath, Ratio(diagnostics.FrameJitterMilliseconds, 20.0));
-        SetHudValue(HudParticlesPath, Ratio(diagnostics.FreeParticles, 1000.0));
-        SetHudValue(HudLightsPath, Ratio(diagnostics.PointLights, 64.0));
-        SetHudValue(HudBodiesPath, Ratio(diagnostics.RigidBodies, 128.0));
-        SetHudValue(HudFxPath, Ratio(TransientParticleBurst.ActiveCount(Context.Scene), 16.0));
+        SetTelemetryValue(HudFpsPath, Ratio(diagnostics.FramesPerSecond, 120.0));
+        SetTelemetryValue(HudFrameP99Path, Ratio(diagnostics.FrameP99Milliseconds, 50.0));
+        SetTelemetryValue(HudFrameLow1Path, Ratio(diagnostics.FrameLow1PercentFps, 120.0));
+        SetTelemetryValue(HudJitterPath, Ratio(diagnostics.FrameJitterMilliseconds, 20.0));
+        SetTelemetryValue(HudParticlesPath, Ratio(diagnostics.FreeParticles, 1000.0));
+        SetTelemetryValue(HudLightsPath, Ratio(diagnostics.PointLights, 64.0));
+        SetTelemetryValue(HudBodiesPath, Ratio(diagnostics.RigidBodies, 128.0));
+        SetTelemetryValue(HudFxPath, Ratio(TransientParticleBurst.ActiveCount(Context.Scene), 16.0));
     }
 
     // 任务胜负时暂停模拟并弹出结算模态，持续刷新结果绑定
@@ -625,6 +687,14 @@ public sealed class GameUiDemoController : Behaviour
         SetScreenValue(HudScreenHandle, path, new UiValue(Clamp01(value)));
     }
 
+    private void SetTelemetryValue(UiPathId path, double value)
+    {
+        // 诊断屏默认隐藏；仍将值送入常驻 HUD handle 以保持脚本模型的连续发布契约，
+        // 真实 HUD 文档没有这些 path，因此后端只缓存/忽略而不会绘制诊断控件。
+        UiScreenHandle target = TelemetryScreenHandle.Value != 0 ? TelemetryScreenHandle : HudScreenHandle;
+        SetScreenValue(target, path, new UiValue(Clamp01(value)));
+    }
+
     private void SetScreenValue(UiScreenHandle screen, UiPathId path, in UiValue value)
     {
         if (_ui is null || screen.Value == 0)
@@ -663,6 +733,43 @@ public sealed class GameUiDemoController : Behaviour
 
         _ui.HideScreen(MainScreen);
         MainScreen = default;
+    }
+
+    private void ShowHud()
+    {
+        if (_ui is null || HudScreenHandle.Value != 0)
+        {
+            return;
+        }
+
+        HudScreenHandle = _ui.ShowScreen(HudScreen);
+        PublishHudDefaults();
+    }
+
+    private void ToggleTelemetry()
+    {
+        if (_ui is null || HudScreenHandle.Value == 0)
+        {
+            return;
+        }
+
+        if (TelemetryScreenHandle.Value != 0)
+        {
+            _ui.HideScreen(TelemetryScreenHandle);
+            TelemetryScreenHandle = default;
+            return;
+        }
+
+        TelemetryScreenHandle = _ui.ShowScreen(TelemetryScreen);
+        PublishHudDefaults();
+    }
+
+    private static void HideScreenIfVisible(IGameUiService? ui, UiScreenHandle screen)
+    {
+        if (ui is not null && screen.Value != 0)
+        {
+            ui.HideScreen(screen);
+        }
     }
 
     private void OpenPauseMenu()

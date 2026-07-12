@@ -1,0 +1,30 @@
+<rml title="运行诊断" data-screen="telemetry" data-contract="demo.webfirst.telemetry/v1" style="left: 430px; top: 14px; width: 276px; height: 360px">
+  <head>
+    <style>
+      body { font-family: "Noto Sans SC"; color: #dfe8f2; background-color: rgba(8, 12, 18, 196); }
+      progress { width: 228px; height: 13px; margin-top: 2px; }
+      p { margin: 3px 0px; }
+      button { width: 112px; height: 26px; margin-top: 6px; background-color: #315f8d; color: #ffffff; }
+    </style>
+  </head>
+  <body>
+    <p id="telemetry_title">运行诊断（按需显示）</p>
+    <progress id="hud_weapon" path="hud.weapon" value="0.0" text="武器槽位" />
+    <progress id="hud_overheated" path="hud.overheated" value="0.0" text="过热锁定" />
+    <progress id="hud_material_slot" path="hud.material_slot" value="0.0" text="材质槽位" />
+    <progress id="hud_brush_radius" path="hud.brush_radius" value="0.0" text="笔刷半径" />
+    <progress id="hud_explosions" path="hud.explosions" value="0.0" text="爆破次数" />
+    <progress id="hud_shots" path="hud.shots" value="0.0" text="射击次数" />
+    <progress id="hud_collapse_islands" path="hud.collapse_islands" value="0.0" text="坍塌转刚体" />
+    <progress id="hud_collapse_scan" path="hud.collapse_scan" value="0.0" text="坍塌扫描" />
+    <progress id="hud_fps" path="hud.fps" value="0.0" text="Render FPS" />
+    <progress id="hud_frame_p99" path="hud.frame_p99" value="0.0" text="p99 帧耗时" />
+    <progress id="hud_frame_low1" path="hud.frame_low1" value="0.0" text="1% low" />
+    <progress id="hud_jitter" path="hud.jitter" value="0.0" text="jitter" />
+    <progress id="hud_particles" path="hud.particles" value="0.0" text="粒子" />
+    <progress id="hud_lights" path="hud.lights" value="0.0" text="光源" />
+    <progress id="hud_bodies" path="hud.bodies" value="0.0" text="刚体" />
+    <progress id="hud_fx" path="hud.fx" value="0.0" text="FX burst" />
+    <button id="telemetry_close" data-event-click="toggle_telemetry">关闭诊断</button>
+  </body>
+</rml>

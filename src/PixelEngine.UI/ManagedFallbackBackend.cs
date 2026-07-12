@@ -504,7 +504,11 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 
     private void DrawDocument(IGuiDrawContext gui, UiScreenStackEntry screen, ManagedUiDocument document)
     {
-        GuiDrawWindowFlags flags = GuiDrawWindowFlags.NoSavedSettings;
+        // Game UI 是 runtime viewport 的无 chrome overlay，不得退化成可移动的 Editor/ImGui 工具窗口。
+        GuiDrawWindowFlags flags =
+            GuiDrawWindowFlags.NoTitleBar |
+            GuiDrawWindowFlags.NoSavedSettings |
+            GuiDrawWindowFlags.NoScrollbar;
         if (document.RootBox.HasPositionAndSize)
         {
             gui.SetNextWindow(
@@ -516,7 +520,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             flags |= GuiDrawWindowFlags.NoResize | GuiDrawWindowFlags.NoMove;
         }
 
-        if (screen.Modal)
+        if (screen.Modal && !document.RootBox.HasPositionAndSize)
         {
             flags |= GuiDrawWindowFlags.AlwaysAutoResize;
         }

@@ -20,6 +20,7 @@ internal sealed class EditorShellApp
     private readonly EditorShellOptions _options;
     private readonly EditorUserDataPaths _userDataPaths;
     private readonly EditorTransitionCoordinator _transitions;
+    private readonly EditorDeferredFrameActions _deferredFrameActions = new();
     private EditorProject? _pendingProject;
     private bool _pendingSceneOverrideFromWorkspace;
     private string? _commandLineSceneOverride;
@@ -287,6 +288,7 @@ internal sealed class EditorShellApp
             else
             {
                 CurrentSession.RunOneTick(deltaSeconds);
+                ApplyDeferredFrameActions();
                 if (_options.ScriptedGameViewProbe)
                 {
                     RunScriptedGameViewProbeActions(executed, scriptedGameView);
@@ -1351,21 +1353,118 @@ internal sealed class EditorShellApp
                 state.PlayerMoved = endX > state.StartX + 0.5f;
                 state.RenderOverlayCommands = CaptureRenderOverlayCommandCount(engine);
                 state.RemainedInPlay = engine.Mode == EngineExecutionMode.Play;
-                state.Completed = state.PlayerMoved &&
+                state.FirstPlayVerified = state.PlayerMoved &&
                     state.EndVisualCommands > 0 &&
                     state.RenderOverlayCommands > 0 &&
                     state.RemainedInPlay;
-                state.Diagnostic = state.Completed
-                    ? "Game View 玩家可见性与移动探针完成。"
-                    : $"探针未满足验收：moved={state.PlayerMoved}, visual={state.EndVisualCommands}, overlays={state.RenderOverlayCommands}, play={state.RemainedInPlay}。";
-                state.Finished = true;
             }
             else
             {
                 state.Diagnostic = "Play 场景中未找到 PlayerController/PlayerVisual。";
                 state.Finished = true;
             }
+
+            return;
         }
+
+        if (state.FirstPlayVerified && !state.FirstPlayExited && executedTicks >= 60)
+        {
+            Hosting.EditorPlaySessionResult exit = CurrentSession.ExitEditorPlay();
+            state.FirstPlayExited = exit.Succeeded && engine.Mode == EngineExecutionMode.Edit;
+            state.ExitUiStackDepth = CaptureGameUiStackDepth(engine);
+            if (!state.FirstPlayExited)
+            {
+                state.Diagnostic = $"首次 Play 退出失败：{exit.Message}";
+                state.Finished = true;
+            }
+
+            return;
+        }
+
+        if (state.FirstPlayExited && !state.SecondPlayEntered && executedTicks >= 64)
+        {
+            Hosting.EditorPlaySessionResult enter = CurrentSession.EnterPlayTemporary();
+            state.SecondPlayEntered = enter.Succeeded && engine.Mode == EngineExecutionMode.Play;
+            if (!state.SecondPlayEntered)
+            {
+                state.Diagnostic = $"第二次 Play 进入失败：{enter.Message}";
+                state.Finished = true;
+            }
+
+            return;
+        }
+
+        if (state.SecondPlayEntered && executedTicks >= 74)
+        {
+            state.SecondUiStackDepth = CaptureGameUiStackDepth(engine);
+            state.SecondControllerFound = TryCaptureGameUiControllerProbe(
+                engine,
+                out state.SecondControllerEnabled,
+                out state.SecondControllerFaulted,
+                out state.SecondControllerException);
+            bool secondVisualReady = TryCapturePlayerProbe(engine, out _, out int secondVisualCommands) &&
+                secondVisualCommands > 0;
+            state.SecondVisualCommands = secondVisualCommands;
+            state.SecondPlayUiRestored = state.SecondUiStackDepth >= 2 &&
+                state.SecondControllerFound &&
+                state.SecondControllerEnabled &&
+                !state.SecondControllerFaulted;
+            state.Completed = state.FirstPlayVerified &&
+                state.FirstPlayExited &&
+                state.ExitUiStackDepth == 0 &&
+                state.SecondPlayEntered &&
+                state.SecondPlayUiRestored &&
+                secondVisualReady &&
+                engine.Mode == EngineExecutionMode.Play;
+            state.Diagnostic = state.Completed
+                ? "Game View 玩家移动与 Play→Stop→Play UI 生命周期探针完成。"
+                : $"探针未满足验收：first={state.FirstPlayVerified}, exit={state.FirstPlayExited}, exit_stack={state.ExitUiStackDepth}, second={state.SecondPlayEntered}, second_stack={state.SecondUiStackDepth}, controller={state.SecondControllerFound}/{state.SecondControllerEnabled}/{state.SecondControllerFaulted}, second_visual={state.SecondVisualCommands}, exception={state.SecondControllerException}。";
+            state.Finished = true;
+        }
+    }
+
+    private static int CaptureGameUiStackDepth(Engine engine)
+    {
+        return engine.Context.TryGetService(out PixelEngine.UI.GameUiHost host)
+            ? host.Documents.StackCount
+            : -1;
+    }
+
+    private static bool TryCaptureGameUiControllerProbe(
+        Engine engine,
+        out bool enabled,
+        out bool faulted,
+        out string exception)
+    {
+        enabled = false;
+        faulted = false;
+        exception = string.Empty;
+        PixelEngine.Scripting.Scene? scriptScene = engine.CurrentScene?.ScriptScene;
+        if (scriptScene is null)
+        {
+            return false;
+        }
+
+        ScriptEntityInspection[] entities = scriptScene.CaptureInspectionSnapshot();
+        for (int i = 0; i < entities.Length; i++)
+        {
+            ScriptComponentInspection[] components = entities[i].Components;
+            for (int j = 0; j < components.Length; j++)
+            {
+                ScriptComponentInspection component = components[j];
+                if (!component.TypeName.EndsWith(".GameUiDemoController", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                enabled = component.Enabled;
+                faulted = component.Faulted;
+                exception = component.Behaviour.LastException?.ToString() ?? string.Empty;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryCapturePlayerProbe(Engine engine, out float centerX, out int visualCommands)
@@ -1430,6 +1529,16 @@ internal sealed class EditorShellApp
             $"visual_commands={state.EndVisualCommands}, " +
             $"render_overlay_commands={state.RenderOverlayCommands}, " +
             $"remained_in_play={state.RemainedInPlay}, " +
+            $"first_play_verified={state.FirstPlayVerified}, " +
+            $"first_play_exited={state.FirstPlayExited}, " +
+            $"exit_ui_stack_depth={state.ExitUiStackDepth}, " +
+            $"second_play_entered={state.SecondPlayEntered}, " +
+            $"second_ui_stack_depth={state.SecondUiStackDepth}, " +
+            $"second_controller_found={state.SecondControllerFound}, " +
+            $"second_controller_enabled={state.SecondControllerEnabled}, " +
+            $"second_controller_faulted={state.SecondControllerFaulted}, " +
+            $"second_visual_commands={state.SecondVisualCommands}, " +
+            $"second_play_ui_restored={state.SecondPlayUiRestored}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
@@ -1601,7 +1710,22 @@ internal sealed class EditorShellApp
 
     public void StepOnce()
     {
-        CurrentSession?.StepOnce();
+        if (CurrentSession is { } session)
+        {
+            // 顶部工具栏在 Engine 正在执行的 ImGui draw callback 内触发；此处若同步再进
+            // Engine.StepOnce，会嵌套第二个 ImGui frame 并破坏 native UI 栈。延迟到当前 tick
+            // 完整返回后执行，语义仍是一次单步，同时消除 render/UI reentrancy。
+            _deferredFrameActions.RequestStepOnce(session);
+        }
+    }
+
+    private void ApplyDeferredFrameActions()
+    {
+        EditorProjectSession? session = CurrentSession;
+        if (_deferredFrameActions.TryConsumeStepOnce(session))
+        {
+            session!.StepOnce();
+        }
     }
 
     public void CreateGameObject()
@@ -2258,6 +2382,28 @@ internal sealed class EditorShellApp
 }
 
 /// <summary>
+/// 将 UI draw callback 中发出的会重入 Engine frame 的命令延迟到当前 frame 返回后执行。
+/// 同一帧的重复 Step 请求合并为一次，并绑定到发出请求时的 session，避免工程切换后误作用于新 session。
+/// </summary>
+internal sealed class EditorDeferredFrameActions
+{
+    private object? _stepOnceOwner;
+
+    public void RequestStepOnce(object owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        _stepOnceOwner = owner;
+    }
+
+    public bool TryConsumeStepOnce(object? currentOwner)
+    {
+        object? requestedOwner = _stepOnceOwner;
+        _stepOnceOwner = null;
+        return requestedOwner is not null && ReferenceEquals(requestedOwner, currentOwner);
+    }
+}
+
+/// <summary>
 /// 脚本化验收探针：ScriptedPlayerRunProbeResult。
 /// </summary>
 internal sealed record ScriptedPlayerRunProbeResult(
@@ -2404,6 +2550,20 @@ internal sealed class ScriptedGameViewProbeState
 
     public bool RemainedInPlay;
 
+    public bool FirstPlayVerified;
+
+    public bool FirstPlayExited;
+
+    public bool SecondPlayEntered;
+
+    public bool SecondPlayUiRestored;
+
+    public bool SecondControllerFound;
+
+    public bool SecondControllerEnabled;
+
+    public bool SecondControllerFaulted;
+
     public bool Completed;
 
     public bool Finished;
@@ -2417,6 +2577,14 @@ internal sealed class ScriptedGameViewProbeState
     public int EndVisualCommands;
 
     public int RenderOverlayCommands;
+
+    public int ExitUiStackDepth;
+
+    public int SecondUiStackDepth;
+
+    public int SecondVisualCommands;
+
+    public string SecondControllerException = string.Empty;
 
     public string Diagnostic = string.Empty;
 }
