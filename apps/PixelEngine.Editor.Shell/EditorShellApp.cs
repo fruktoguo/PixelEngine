@@ -555,7 +555,9 @@ internal sealed class EditorShellApp
 
         try
         {
+            EditorSceneModel scene = CurrentSession.SceneModel;
             state.StartScene = CurrentSession.CurrentSceneRelativePath;
+            state.InitialCount = scene.Count;
             string[] panelTitles =
             [
                 EditorDockSpace.SceneHierarchyWindowTitle,
@@ -580,14 +582,28 @@ internal sealed class EditorShellApp
 
             ResetLayout();
             CreateGameObject();
-            state.CreatedObject = CurrentSession.SceneModel.SelectedStableId.HasValue;
+            int? createdId = scene.SelectedStableId;
+            state.CreatedObject = createdId.HasValue &&
+                scene.TryGet(createdId.Value, out _) &&
+                scene.Count == state.InitialCount + 1;
+            int countAfterCreate = scene.Count;
             DuplicateSelectedGameObject();
-            state.DuplicatedObject = CurrentSession.SceneModel.Count >= 2;
+            int? duplicateId = scene.SelectedStableId;
+            state.DuplicatedObject = createdId.HasValue &&
+                duplicateId.HasValue &&
+                duplicateId.Value != createdId.Value &&
+                scene.TryGet(duplicateId.Value, out _) &&
+                scene.Count == countAfterCreate + 1;
             RenameSelectedGameObject();
-            state.RenamedObject = CurrentSession.SceneModel.SelectedStableId is { } renamedId &&
-                CurrentSession.SceneModel.Get(renamedId).Name.EndsWith(" Renamed", StringComparison.Ordinal);
+            state.RenamedObject = scene.SelectedStableId is { } renamedId &&
+                scene.Get(renamedId).Name.EndsWith(" Renamed", StringComparison.Ordinal);
+            int countBeforeDelete = scene.Count;
+            int? deletedId = scene.SelectedStableId;
             DeleteSelectedGameObject();
-            state.DeletedObject = CurrentSession.SceneModel.Count == 1;
+            state.DeletedObject = deletedId.HasValue &&
+                !scene.TryGet(deletedId.Value, out _) &&
+                scene.Count == countBeforeDelete - 1;
+            state.FinalCount = scene.Count;
             string newScene = CurrentSession.NewSceneAuto();
             state.NewSceneCreated = File.Exists(CurrentSession.Project.ResolveSceneFullPath(newScene));
             CurrentSession.OpenScene(state.StartScene);
@@ -596,7 +612,9 @@ internal sealed class EditorShellApp
             state.PanelCount = CurrentSession.PanelCount;
             state.ResetRequested = true;
             state.Completed = true;
-            state.Diagnostic = "菜单与布局探针完成。";
+            state.Diagnostic = state.Succeeded
+                ? "菜单与布局探针完成。"
+                : $"探针未满足验收：panels={state.RequiredPanelsShown}, reset={state.ResetRequested}, create={state.CreatedObject}, duplicate={state.DuplicatedObject}, rename={state.RenamedObject}, delete={state.DeletedObject}, new_scene={state.NewSceneCreated}, reopen={state.OpenedOriginalScene}。";
         }
         catch (Exception ex) when (!OperatingSystem.IsBrowser())
         {
@@ -1260,6 +1278,7 @@ internal sealed class EditorShellApp
             "editor_menu_layout_probe " +
             "schema=pixelengine.editor-menu-layout-probe/v1, " +
             $"completed={state.Completed}, " +
+            $"succeeded={state.Succeeded}, " +
             $"required_panels_shown={state.RequiredPanelsShown}, " +
             $"reset_requested={state.ResetRequested}, " +
             $"created_object={state.CreatedObject}, " +
@@ -1269,6 +1288,8 @@ internal sealed class EditorShellApp
             $"new_scene_created={state.NewSceneCreated}, " +
             $"opened_original_scene={state.OpenedOriginalScene}, " +
             $"panel_count={state.PanelCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"initial_count={state.InitialCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"final_count={state.FinalCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"start_scene={SanitizeSummaryValue(state.StartScene)}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
@@ -2485,6 +2506,16 @@ internal sealed class ScriptedBuildSettingsProbeState
 /// </summary>
 internal sealed class ScriptedMenuLayoutProbeState
 {
+    public bool Succeeded => Completed &&
+        RequiredPanelsShown &&
+        ResetRequested &&
+        CreatedObject &&
+        DuplicatedObject &&
+        RenamedObject &&
+        DeletedObject &&
+        NewSceneCreated &&
+        OpenedOriginalScene;
+
     public bool Completed;
     public bool RequiredPanelsShown;
     public bool ResetRequested;
@@ -2495,6 +2526,8 @@ internal sealed class ScriptedMenuLayoutProbeState
     public bool NewSceneCreated;
     public bool OpenedOriginalScene;
     public int PanelCount;
+    public int InitialCount;
+    public int FinalCount;
     public string StartScene = string.Empty;
     public string Diagnostic = string.Empty;
 }
