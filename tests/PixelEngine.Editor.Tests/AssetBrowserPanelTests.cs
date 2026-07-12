@@ -84,6 +84,19 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证默认右下窄停靠区自动使用单栏导航，足够宽时才恢复 folder tree 双栏。
+    /// </summary>
+    [Theory]
+    [InlineData(238f, false)]
+    [InlineData(419f, false)]
+    [InlineData(420f, true)]
+    [InlineData(720f, true)]
+    public void ProjectBrowserUsesResponsiveColumnMode(float width, bool expectedFolderTree)
+    {
+        Assert.Equal(expectedFolderTree, AssetBrowserPanel.ShouldShowFolderTree(width));
+    }
+
+    /// <summary>
     /// 验证详细预览只在选择或文件签名变化时读取，普通帧复用缓存而不重复 I/O。
     /// </summary>
     [Fact]

@@ -825,7 +825,8 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("DrawPanelMenuItem", menu, StringComparison.Ordinal);
         Assert.Contains("app.TryGetPanelVisibility(panelTitle, out visible)", menu, StringComparison.Ordinal);
-        Assert.Contains("app.TrySetPanelVisibility(panelTitle, !visible)", menu, StringComparison.Ordinal);
+        Assert.Contains("app.ShowPanel(panelTitle)", menu, StringComparison.Ordinal);
+        Assert.DoesNotContain("app.TrySetPanelVisibility(panelTitle, !visible)", menu, StringComparison.Ordinal);
         Assert.Contains("DrawToolbar(app)", menu, StringComparison.Ordinal);
         Assert.Contains("EditorMainToolbarState", menu, StringComparison.Ordinal);
         Assert.Contains("CaptureToolbarState", menu, StringComparison.Ordinal);

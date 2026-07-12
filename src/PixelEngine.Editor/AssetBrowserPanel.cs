@@ -1113,49 +1113,34 @@ public sealed class AssetBrowserPanel(
             float layoutHeight = MathF.Max(
                 ImGui.GetFrameHeight(),
                 ImGui.GetContentRegionAvail().Y - ImGui.GetFrameHeight() - ImGui.GetStyle().ItemSpacing.Y - 1f);
-            if (ImGui.BeginTable(
-                "project_window_layout",
-                2,
-                ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV))
+            float layoutWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+            if (ShouldShowFolderTree(layoutWidth))
             {
-                ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 124f);
-                ImGui.TableSetupColumn("Contents", ImGuiTableColumnFlags.WidthStretch);
-                ImGui.TableNextRow();
-                _ = ImGui.TableNextColumn();
-                _ = ImGui.BeginChild("project_folder_tree", new Vector2(0f, layoutHeight));
-                DrawFolderTree(context.Selection);
-                ImGui.EndChild();
-
-                _ = ImGui.TableNextColumn();
-                float contentStartY = ImGui.GetCursorPosY();
-                DrawBreadcrumbs(context.Selection);
-                ImGui.Separator();
-                float availableContentHeight = MathF.Max(
-                    ImGui.GetFrameHeight(),
-                    layoutHeight - (ImGui.GetCursorPosY() - contentStartY));
-                AssetBrowserItem? selectedPreviewItem = FindSelectedAsset(context.Selection);
-                ProjectAssetPreviewLayout previewLayout = ResolveAssetPreviewLayout(
-                    availableContentHeight,
-                    _previewPaneHeight,
-                    selectedPreviewItem.HasValue);
-                _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, previewLayout.ContentHeight));
-                DrawFolderContents(context.Selection);
-                ImGui.EndChild();
-
-                if (selectedPreviewItem is { } previewItem && previewLayout.ShowPreview)
+                if (ImGui.BeginTable(
+                    "project_window_layout",
+                    2,
+                    ImGuiTableFlags.Resizable |
+                    ImGuiTableFlags.BordersInnerV |
+                    ImGuiTableFlags.NoSavedSettings))
                 {
-                    DrawPreviewSplitter();
-                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.11f, 0.12f, 1f));
-                    _ = ImGui.BeginChild(
-                        "project_asset_preview",
-                        new Vector2(0f, previewLayout.PreviewHeight),
-                        ImGuiChildFlags.Borders);
-                    DrawAssetPreviewPane(in previewItem);
+                    ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 124f);
+                    ImGui.TableSetupColumn("Contents", ImGuiTableColumnFlags.WidthStretch);
+                    ImGui.TableNextRow();
+                    _ = ImGui.TableNextColumn();
+                    _ = ImGui.BeginChild("project_folder_tree", new Vector2(0f, layoutHeight));
+                    DrawFolderTree(context.Selection);
                     ImGui.EndChild();
-                    ImGui.PopStyleColor();
-                }
 
-                ImGui.EndTable();
+                    _ = ImGui.TableNextColumn();
+                    DrawAssetContentsAndPreview(context.Selection, layoutHeight);
+                    ImGui.EndTable();
+                }
+            }
+            else
+            {
+                // 默认右下角窄停靠区采用 Unity Project 的单栏心智模型；folder item 与 breadcrumb
+                // 仍能完成完整导航，同时把有限宽度留给资产名、缩略图和底部类型化预览。
+                DrawAssetContentsAndPreview(context.Selection, layoutHeight);
             }
 
             DrawPendingActionEditors();
@@ -1166,6 +1151,39 @@ public sealed class AssetBrowserPanel(
         {
             _thumbnailLeases.EndFrame();
         }
+    }
+
+    private void DrawAssetContentsAndPreview(EditorSelection selection, float layoutHeight)
+    {
+        float contentStartY = ImGui.GetCursorPosY();
+        DrawBreadcrumbs(selection);
+        ImGui.Separator();
+        float availableContentHeight = MathF.Max(
+            ImGui.GetFrameHeight(),
+            layoutHeight - (ImGui.GetCursorPosY() - contentStartY));
+        AssetBrowserItem? selectedPreviewItem = FindSelectedAsset(selection);
+        ProjectAssetPreviewLayout previewLayout = ResolveAssetPreviewLayout(
+            availableContentHeight,
+            _previewPaneHeight,
+            selectedPreviewItem.HasValue);
+        _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, previewLayout.ContentHeight));
+        DrawFolderContents(selection);
+        ImGui.EndChild();
+
+        if (selectedPreviewItem is not { } previewItem || !previewLayout.ShowPreview)
+        {
+            return;
+        }
+
+        DrawPreviewSplitter();
+        ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.11f, 0.12f, 1f));
+        _ = ImGui.BeginChild(
+            "project_asset_preview",
+            new Vector2(0f, previewLayout.PreviewHeight),
+            ImGuiChildFlags.Borders);
+        DrawAssetPreviewPane(in previewItem);
+        ImGui.EndChild();
+        ImGui.PopStyleColor();
     }
 
     private void DrawToolbar(EditorSelection selection)
@@ -2028,6 +2046,11 @@ public sealed class AssetBrowserPanel(
             maximumPreviewHeight);
         float contentHeight = MathF.Max(1f, height - PreviewSplitterHeight - previewHeight);
         return new ProjectAssetPreviewLayout(contentHeight, previewHeight, ShowPreview: true);
+    }
+
+    internal static bool ShouldShowFolderTree(float availableWidth)
+    {
+        return availableWidth >= 420f;
     }
 
     private AssetBrowserDetailedPreview ResolveDetailedPreview(in AssetBrowserItem item)

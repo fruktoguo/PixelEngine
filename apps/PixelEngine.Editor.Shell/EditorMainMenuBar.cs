@@ -598,7 +598,9 @@ internal sealed class EditorMainMenuBar
         bool enabled = app.HasOpenProject && app.TryGetPanelVisibility(panelTitle, out visible);
         if (ImGui.MenuItem(label, string.Empty, selected: visible, enabled: enabled))
         {
-            _ = app.TrySetPanelVisibility(panelTitle, !visible);
+            // Unity-like Window 菜单是“打开并聚焦”入口；已停靠但被其他 tab 覆盖时，
+            // 再次选择必须把目标 tab 拉到前台，关闭仍由面板自身的关闭按钮负责。
+            _ = app.ShowPanel(panelTitle);
         }
     }
 
