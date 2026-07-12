@@ -169,6 +169,19 @@ internal sealed class EditorShellApp
             LayoutPath,
             windowState.Width,
             windowState.Height);
+        void HandleNativeWindowClosing()
+        {
+            if (EditorNativeCloseGuard.ShouldExit(
+                true,
+                CurrentSession?.SceneModel.IsDirty == true,
+                () => _ = shellWindow.Window.TryCancelCloseRequest(),
+                RequestExit))
+            {
+                _exitRequested = true;
+            }
+        }
+
+        shellWindow.Window.Closing += HandleNativeWindowClosing;
         if (_options.ScriptedPreferencesProbe)
         {
             ShowPreferences(EditorPreferencesCategory.Appearance);
@@ -220,8 +233,17 @@ internal sealed class EditorShellApp
         ScriptedGameViewProbeState scriptedGameView = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
-        while (!shellWindow.Window.IsClosing && !_exitRequested)
+        while (!_exitRequested)
         {
+            if (EditorNativeCloseGuard.ShouldExit(
+                shellWindow.Window.IsClosing,
+                CurrentSession?.SceneModel.IsDirty == true,
+                () => _ = shellWindow.Window.TryCancelCloseRequest(),
+                RequestExit))
+            {
+                break;
+            }
+
             double now = stopwatch.Elapsed.TotalSeconds;
             float deltaSeconds = (float)Math.Max(0.0, now - previousSeconds);
             previousSeconds = now;
@@ -402,6 +424,8 @@ internal sealed class EditorShellApp
                 break;
             }
         }
+
+        shellWindow.Window.Closing -= HandleNativeWindowClosing;
 
         CaptureFrameIfRequested(shellWindow);
         if (requestedTicks > 0 || _options.ScriptedProbe)

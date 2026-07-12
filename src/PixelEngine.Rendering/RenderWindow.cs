@@ -99,6 +99,26 @@ public sealed class RenderWindow : IDisposable
     }
 
     /// <summary>
+    /// 平台窗口即将关闭。宿主可在回调内调用 <see cref="TryCancelCloseRequest" /> 延迟关闭并显示确认 UI。
+    /// </summary>
+    public event Action Closing
+    {
+        add
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _window.Closing += value;
+        }
+
+        remove
+        {
+            if (!_disposed)
+            {
+                _window.Closing -= value;
+            }
+        }
+    }
+
+    /// <summary>
     /// 当前窗口的 presentation framebuffer；普通窗口为 0，DXGI interop 路径为共享 backbuffer FBO。
     /// </summary>
     public uint PresentationFramebuffer => _dxgiPresenter?.Framebuffer ?? 0;
@@ -286,6 +306,22 @@ public sealed class RenderWindow : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         _window.Close();
+    }
+
+    /// <summary>
+    /// 尝试撤销平台已经发出的关闭请求，供带未保存修改确认的宿主继续绘制确认窗口。
+    /// </summary>
+    /// <returns>存在关闭请求且已经撤销时返回 true。</returns>
+    public bool TryCancelCloseRequest()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!_window.IsClosing)
+        {
+            return false;
+        }
+
+        _window.IsClosing = false;
+        return true;
     }
 
     /// <inheritdoc />
