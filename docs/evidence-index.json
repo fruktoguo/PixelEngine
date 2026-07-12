@@ -612,6 +612,19 @@
       "notes": "Explicit authoring-world provider, runtime-authoring cell parity, independent Scene BGRA8 cell texture, Brush and snapshot invalidation, transform-aware empty-object marker and pre-Scripting audio initialization are verified. Real Editor showed the 640x360 terrain, painted a visible 13-cell hole, switched W/E/R, survived Play and retained the hole after Stop; different-DPI hardware, Explorer cross-window pointer drag and final Unity matrix remain, so EDITOR-003 stays active."
     },
     {
+      "entryId": "editor-003-unity-parity-cycle10-20260713",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "unity_parity_cycle_complete_task_still_active",
+      "commit": "924edafe4ea70b80a343ef5f662fe3ad54c234d4",
+      "runSessionId": "local-20260713-editor003-unity-parity-cycle10",
+      "runIdentityStatus": "captured",
+      "hardware": "Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; PixelEngine real Scene gizmo, Inspector drag, Project preview/audio, Play reentry, dirty close and framebuffer probes",
+      "command": "Computer Use real Transform label drag, Player Scene gizmo, Project texture/audio/script preview and playback, Reset Layout, Play-Stop-Play and native dirty close; scripted hierarchy/gameview/menu/default-workbench/preferences/project-reopen probes; 13 test projects through tools/run-tests.ps1; solution Release build; task catalog and evidence index validation",
+      "reportPath": "docs/evidence-2026-07-13-editor-003-unity-parity-cycle-10.md",
+      "sha256": "cf83652dc153b469e5b5ab6af9a23f3a0dbaf39ffc85562e11fd4a1de0ddc77a",
+      "notes": "Scene clipping, W/E/R gizmos, Inspector drag and header hit regions, Play reentry and Game UI viewport confinement, Scene-owned Brush overlay, typed Project preview, panel focus, narrow Project layout and native dirty close are verified. Probe false-green, build child-pipe deadlock and telemetry preview drift were also fixed; different-DPI hardware, Explorer cross-window pointer drag and independent reviewer remain, so EDITOR-003 stays active."
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
