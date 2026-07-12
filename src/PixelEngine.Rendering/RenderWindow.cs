@@ -79,6 +79,26 @@ public sealed class RenderWindow : IDisposable
     }
 
     /// <summary>
+    /// 用户从操作系统拖入窗口的文件或目录路径。事件只转发平台回调，不在窗口层执行磁盘 I/O。
+    /// </summary>
+    public event Action<string[]> FilesDropped
+    {
+        add
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _window.FileDrop += value;
+        }
+
+        remove
+        {
+            if (!_disposed)
+            {
+                _window.FileDrop -= value;
+            }
+        }
+    }
+
+    /// <summary>
     /// 当前窗口的 presentation framebuffer；普通窗口为 0，DXGI interop 路径为共享 backbuffer FBO。
     /// </summary>
     public uint PresentationFramebuffer => _dxgiPresenter?.Framebuffer ?? 0;

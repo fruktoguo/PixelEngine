@@ -181,7 +181,123 @@ public sealed class EditorProjectAssetModelTests
             Assert.False(wrongKind.Succeeded);
             Assert.Contains("已存在", duplicate.Diagnostic, StringComparison.Ordinal);
             Assert.Contains("不存在", missing.Diagnostic, StringComparison.Ordinal);
-            Assert.Contains("暂不支持", wrongKind.Diagnostic, StringComparison.Ordinal);
+            Assert.Contains("类型 Texture 与请求类型 Json 不一致", wrongKind.Diagnostic, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+            DeleteDirectory(importsRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证生产 Project 双根可导入全部现有文件资产类型，Script 进入 ScriptSource，且拒绝把工程内文件再次外部导入。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserImportsAllFileKindsIntoCorrectRootsAndRejectsSelfDrop()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        string importsRoot = Path.Combine(Path.GetTempPath(), "pixelengine-import-all-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "External Drop Project");
+            _ = Directory.CreateDirectory(importsRoot);
+            Dictionary<AssetBrowserItemKind, string> sourcePaths = new()
+            {
+                [AssetBrowserItemKind.Scene] = Write("mine.scene", "scene"),
+                [AssetBrowserItemKind.Prefab] = Write("crate.prefab", "prefab"),
+                [AssetBrowserItemKind.Script] = Write("Player.cs", "public sealed class Player {}"),
+                [AssetBrowserItemKind.UiScreen] = Write("hud.xhtml", "<rml></rml>"),
+                [AssetBrowserItemKind.Json] = Write("settings.json", "{}"),
+                [AssetBrowserItemKind.Other] = Write("notes.bin", "notes"),
+            };
+            using EditorAssetBrowserDataSource source = new(project);
+
+            AssetBrowserImportResult scene = source.ImportAsset(new AssetBrowserImportRequest(sourcePaths[AssetBrowserItemKind.Scene], "Content/scenes/mine.scene", AssetBrowserItemKind.Scene));
+            AssetBrowserImportResult prefab = source.ImportAsset(new AssetBrowserImportRequest(sourcePaths[AssetBrowserItemKind.Prefab], "Content/prefabs/crate.prefab", AssetBrowserItemKind.Prefab));
+            AssetBrowserImportResult script = source.ImportAsset(new AssetBrowserImportRequest(sourcePaths[AssetBrowserItemKind.Script], "ScriptSource/Gameplay/Player.cs", AssetBrowserItemKind.Script));
+            AssetBrowserImportResult ui = source.ImportAsset(new AssetBrowserImportRequest(sourcePaths[AssetBrowserItemKind.UiScreen], "Content/ui/screens/hud.xhtml", AssetBrowserItemKind.UiScreen));
+            AssetBrowserImportResult json = source.ImportAsset(new AssetBrowserImportRequest(sourcePaths[AssetBrowserItemKind.Json], "Content/data/settings.json", AssetBrowserItemKind.Json));
+            AssetBrowserImportResult other = source.ImportAsset(new AssetBrowserImportRequest(sourcePaths[AssetBrowserItemKind.Other], "Content/data/notes.bin", AssetBrowserItemKind.Other));
+            AssetBrowserImportResult selfDrop = source.ImportAsset(new AssetBrowserImportRequest(
+                Path.Combine(project.ContentRootPath, "scenes", "mine.scene"),
+                "Content/scenes/mine-copy.scene",
+                AssetBrowserItemKind.Scene));
+
+            Assert.All([scene, prefab, script, ui, json, other], result => Assert.True(result.Succeeded, result.Diagnostic));
+            Assert.False(selfDrop.Succeeded);
+            Assert.Contains("已属于当前 Project", selfDrop.Diagnostic, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(project.ContentRootPath, "scenes", "mine.scene")));
+            Assert.True(File.Exists(Path.Combine(project.ContentRootPath, "prefabs", "crate.prefab")));
+            Assert.True(File.Exists(Path.Combine(project.ScriptSourcePath, "Gameplay", "Player.cs")));
+            Assert.True(File.Exists(Path.Combine(project.ContentRootPath, "ui", "screens", "hud.xhtml")));
+            Assert.True(File.Exists(Path.Combine(project.ContentRootPath, "data", "settings.json")));
+            Assert.True(File.Exists(Path.Combine(project.ContentRootPath, "data", "notes.bin")));
+            IReadOnlyList<AssetBrowserItem> assets = source.ListAssets();
+            Assert.Contains(assets, asset => asset.Path == "Content/scenes/mine.scene" && asset.Kind == AssetBrowserItemKind.Scene);
+            Assert.Contains(assets, asset => asset.Path == "Content/prefabs/crate.prefab" && asset.Kind == AssetBrowserItemKind.Prefab);
+            Assert.Contains(assets, asset => asset.Path == "ScriptSource/Gameplay/Player.cs" && asset.Kind == AssetBrowserItemKind.Script);
+            Assert.Contains(assets, asset => asset.Path == "Content/ui/screens/hud.xhtml" && asset.Kind == AssetBrowserItemKind.UiScreen);
+            Assert.Contains(assets, asset => asset.Path == "Content/data/settings.json" && asset.Kind == AssetBrowserItemKind.Json);
+            Assert.Contains(assets, asset => asset.Path == "Content/data/notes.bin" && asset.Kind == AssetBrowserItemKind.Other);
+
+            string Write(string fileName, string contents)
+            {
+                string path = Path.Combine(importsRoot, fileName);
+                File.WriteAllText(path, contents);
+                return path;
+            }
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+            DeleteDirectory(importsRoot);
+        }
+    }
+
+    /// <summary>
+    /// 验证 UI Screen 外部导入在 screen id 冲突时回滚文件、资产 manifest 与 UI manifest，禁止留下半写状态。
+    /// </summary>
+    [Fact]
+    public void ProjectBrowserUiImportRollsBackAllFilesWhenScreenIdConflicts()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        string importsRoot = Path.Combine(Path.GetTempPath(), "pixelengine-import-ui-rollback-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "UI Import Rollback Project");
+            string firstSourceDirectory = Path.Combine(importsRoot, "first");
+            string secondSourceDirectory = Path.Combine(importsRoot, "second");
+            _ = Directory.CreateDirectory(firstSourceDirectory);
+            _ = Directory.CreateDirectory(secondSourceDirectory);
+            string firstSource = Path.Combine(firstSourceDirectory, "hud.xhtml");
+            string secondSource = Path.Combine(secondSourceDirectory, "hud.xhtml");
+            File.WriteAllText(firstSource, "<rml data-screen=\"hud\"></rml>");
+            File.WriteAllText(secondSource, "<rml data-screen=\"hud-copy\"></rml>");
+            using EditorAssetBrowserDataSource source = new(project);
+
+            AssetBrowserImportResult first = source.ImportAsset(new AssetBrowserImportRequest(
+                firstSource,
+                "Content/ui/screens/hud.xhtml",
+                AssetBrowserItemKind.UiScreen));
+            string assetManifestPath = Path.Combine(project.ProjectRoot, EditorAssetManifestStore.ManifestRelativePath);
+            string uiManifestPath = Path.Combine(project.ContentRootPath, "ui", "ui-manifest.json");
+            byte[] assetManifestBefore = File.ReadAllBytes(assetManifestPath);
+            byte[] uiManifestBefore = File.ReadAllBytes(uiManifestPath);
+
+            AssetBrowserImportResult conflicting = source.ImportAsset(new AssetBrowserImportRequest(
+                secondSource,
+                "Content/ui/screens/menu/hud.xhtml",
+                AssetBrowserItemKind.UiScreen));
+
+            Assert.True(first.Succeeded, first.Diagnostic);
+            Assert.False(conflicting.Succeeded);
+            Assert.Contains("同名 screen id", conflicting.Diagnostic, StringComparison.Ordinal);
+            Assert.False(File.Exists(Path.Combine(project.ContentRootPath, "ui", "screens", "menu", "hud.xhtml")));
+            Assert.Equal(assetManifestBefore, File.ReadAllBytes(assetManifestPath));
+            Assert.Equal(uiManifestBefore, File.ReadAllBytes(uiManifestPath));
+            Assert.True(File.Exists(secondSource));
+            _ = Assert.Single(source.ListAssets(), asset => asset.Path == "Content/ui/screens/hud.xhtml");
         }
         finally
         {

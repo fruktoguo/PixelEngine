@@ -142,6 +142,8 @@ internal sealed class EditorAssetManifestStore
         public RefreshIdentitySignature Signature => new(AssetType, SizeBytes, LastModifiedUtc);
     }
 
+    private readonly record struct FileRollbackSnapshot(string FullPath, byte[]? Contents);
+
     private readonly Action<EngineSceneDocument, string> _saveReferenceDocument;
 
     public EditorAssetManifestStore(EditorProject project)
@@ -845,27 +847,39 @@ internal sealed class EditorAssetManifestStore
             throw new InvalidOperationException($"资产已存在：{normalized}");
         }
 
-        string? directory = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            _ = Directory.CreateDirectory(directory);
-        }
-
-        WriteDefaultAsset(fullPath, normalized, assetType, textContents);
+        FileRollbackSnapshot assetManifestSnapshot = CaptureFileSnapshot(ManifestPath);
+        FileRollbackSnapshot? uiManifestSnapshot = assetType == EditorAssetType.UiScreen
+            ? CaptureFileSnapshot(GetUiManifestPath())
+            : null;
         try
         {
+            string? directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                _ = Directory.CreateDirectory(directory);
+            }
+
+            WriteDefaultAsset(fullPath, normalized, assetType, textContents);
+            EditorAssetRecord asset = EnsureAsset(normalized);
             if (assetType == EditorAssetType.UiScreen)
             {
                 UpsertUiScreenManifestEntry(normalized);
             }
 
-            return EnsureAsset(normalized);
+            return asset;
         }
-        catch
+        catch (Exception operationException)
         {
-            if (File.Exists(fullPath))
+            Exception? rollbackException = TryRollBackCreatedAsset(
+                fullPath,
+                assetManifestSnapshot,
+                uiManifestSnapshot);
+            if (rollbackException is not null)
             {
-                File.Delete(fullPath);
+                throw new AggregateException(
+                    "资产创建失败，且 manifest 回滚未完整完成。",
+                    operationException,
+                    rollbackException);
             }
 
             throw;
@@ -881,14 +895,9 @@ internal sealed class EditorAssetManifestStore
             throw new FileNotFoundException("导入源文件不存在。", sourcePath);
         }
 
-        if (assetType is not (EditorAssetType.Texture or EditorAssetType.Audio))
-        {
-            throw new InvalidOperationException($"Project Window 只支持导入 Texture / Audio 二进制资产，收到：{assetType}。");
-        }
-
         string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
         EditorAssetType classified = Classify(normalized);
-        if (classified != assetType)
+        if (assetType != EditorAssetType.Other && classified != assetType)
         {
             throw new InvalidOperationException($"导入目标 {normalized} 的类型 {classified} 与请求类型 {assetType} 不一致。");
         }
@@ -904,22 +913,39 @@ internal sealed class EditorAssetManifestStore
             throw new InvalidOperationException($"目标资产已存在：{normalized}");
         }
 
-        string? targetDirectory = Path.GetDirectoryName(targetPath);
-        if (!string.IsNullOrEmpty(targetDirectory))
-        {
-            _ = Directory.CreateDirectory(targetDirectory);
-        }
-
-        File.Copy(sourcePath, targetPath, overwrite: false);
+        FileRollbackSnapshot assetManifestSnapshot = CaptureFileSnapshot(ManifestPath);
+        FileRollbackSnapshot? uiManifestSnapshot = assetType == EditorAssetType.UiScreen
+            ? CaptureFileSnapshot(GetUiManifestPath())
+            : null;
         try
         {
-            return EnsureAsset(normalized);
-        }
-        catch
-        {
-            if (File.Exists(targetPath))
+            string? targetDirectory = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrEmpty(targetDirectory))
             {
-                File.Delete(targetPath);
+                _ = Directory.CreateDirectory(targetDirectory);
+            }
+
+            File.Copy(sourcePath, targetPath, overwrite: false);
+            EditorAssetRecord asset = EnsureAsset(normalized);
+            if (assetType == EditorAssetType.UiScreen)
+            {
+                UpsertUiScreenManifestEntry(normalized);
+            }
+
+            return asset;
+        }
+        catch (Exception operationException)
+        {
+            Exception? rollbackException = TryRollBackCreatedAsset(
+                targetPath,
+                assetManifestSnapshot,
+                uiManifestSnapshot);
+            if (rollbackException is not null)
+            {
+                throw new AggregateException(
+                    "资产导入失败，且 manifest 回滚未完整完成。",
+                    operationException,
+                    rollbackException);
             }
 
             throw;
@@ -1478,8 +1504,8 @@ internal sealed class EditorAssetManifestStore
             return;
         }
 
-        string uiRoot = Path.Combine(ContentRoot, "ui");
-        string manifestPath = Path.Combine(uiRoot, "ui-manifest.json");
+        string manifestPath = GetUiManifestPath();
+        string uiRoot = Path.GetDirectoryName(manifestPath)!;
         _ = Directory.CreateDirectory(uiRoot);
         EditorUiManifestDocument document = LoadUiManifestDocument(manifestPath);
         EditorUiManifestScreenDocument[] screens = NormalizeUiScreens(document.Screens);
@@ -1519,6 +1545,78 @@ internal sealed class EditorAssetManifestStore
             Screens = [.. updated.OrderBy(static item => item.Id, StringComparer.OrdinalIgnoreCase)],
             Images = document.Images,
         });
+    }
+
+    private string GetUiManifestPath()
+    {
+        return Path.Combine(ContentRoot, "ui", "ui-manifest.json");
+    }
+
+    private static FileRollbackSnapshot CaptureFileSnapshot(string fullPath)
+    {
+        return new FileRollbackSnapshot(
+            fullPath,
+            File.Exists(fullPath) ? File.ReadAllBytes(fullPath) : null);
+    }
+
+    private static Exception? TryRollBackCreatedAsset(
+        string assetFullPath,
+        FileRollbackSnapshot assetManifestSnapshot,
+        FileRollbackSnapshot? uiManifestSnapshot)
+    {
+        List<Exception>? failures = null;
+        TryRollBack(
+            () =>
+            {
+                if (File.Exists(assetFullPath))
+                {
+                    File.Delete(assetFullPath);
+                }
+            },
+            ref failures);
+        TryRollBack(() => RestoreFileSnapshot(assetManifestSnapshot), ref failures);
+        if (uiManifestSnapshot is FileRollbackSnapshot snapshot)
+        {
+            TryRollBack(() => RestoreFileSnapshot(snapshot), ref failures);
+        }
+
+        return failures is null
+            ? null
+            : new AggregateException("回滚资产文件或 manifest 时发生错误。", failures);
+    }
+
+    private static void TryRollBack(Action rollback, ref List<Exception>? failures)
+    {
+        try
+        {
+            rollback();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            failures ??= [];
+            failures.Add(exception);
+        }
+    }
+
+    private static void RestoreFileSnapshot(FileRollbackSnapshot snapshot)
+    {
+        if (snapshot.Contents is null)
+        {
+            if (File.Exists(snapshot.FullPath))
+            {
+                File.Delete(snapshot.FullPath);
+            }
+
+            return;
+        }
+
+        string? directory = Path.GetDirectoryName(snapshot.FullPath);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            _ = Directory.CreateDirectory(directory);
+        }
+
+        File.WriteAllBytes(snapshot.FullPath, snapshot.Contents);
     }
 
     private static EditorUiManifestDocument LoadUiManifestDocument(string manifestPath)

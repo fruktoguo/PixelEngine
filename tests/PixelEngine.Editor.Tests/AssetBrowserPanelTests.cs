@@ -1550,6 +1550,146 @@ public sealed class AssetBrowserPanelTests
         Assert.StartsWith("Content/", panel.ImportDestinationPath, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证外部导入分类覆盖 PixelEngine 现有资产类型，未知文件仍作为 Other 保留。
+    /// </summary>
+    [Fact]
+    public void ExternalImportClassifierMapsKnownTypesAndPreservesUnknownFiles()
+    {
+        Assert.Equal(AssetBrowserItemKind.Material, AssetBrowserExternalImportClassifier.Classify("materials.json"));
+        Assert.Equal(AssetBrowserItemKind.Texture, AssetBrowserExternalImportClassifier.Classify("Sand.PNG"));
+        Assert.Equal(AssetBrowserItemKind.Audio, AssetBrowserExternalImportClassifier.Classify("hit.ogg"));
+        Assert.Equal(AssetBrowserItemKind.Scene, AssetBrowserExternalImportClassifier.Classify("mine.scene"));
+        Assert.Equal(AssetBrowserItemKind.Prefab, AssetBrowserExternalImportClassifier.Classify("crate.prefab"));
+        Assert.Equal(AssetBrowserItemKind.Script, AssetBrowserExternalImportClassifier.Classify("Player.cs"));
+        Assert.Equal(AssetBrowserItemKind.UiScreen, AssetBrowserExternalImportClassifier.Classify("hud.xhtml"));
+        Assert.Equal(AssetBrowserItemKind.Json, AssetBrowserExternalImportClassifier.Classify("settings.json"));
+        Assert.Equal(AssetBrowserItemKind.Other, AssetBrowserExternalImportClassifier.Classify("notes.bin"));
+    }
+
+    /// <summary>
+    /// 验证目录 drop 保留层级、按稳定类型分流 Content/ScriptSource，并把 UI Screen 收敛到 runtime 目录。
+    /// </summary>
+    [Fact]
+    public void ExternalDirectoryDropPreservesHierarchyAndRoutesAssetRoots()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-project-drop-" + Guid.NewGuid().ToString("N"));
+        string bundle = Path.Combine(temp, "Bundle");
+        try
+        {
+            _ = Directory.CreateDirectory(Path.Combine(bundle, "audio"));
+            File.WriteAllBytes(Path.Combine(bundle, "sand.png"), [1]);
+            File.WriteAllBytes(Path.Combine(bundle, "audio", "hit.wav"), [2]);
+            File.WriteAllText(Path.Combine(bundle, "Player.cs"), "public sealed class Player {}\n");
+            File.WriteAllText(Path.Combine(bundle, "hud.xhtml"), "<rml></rml>\n");
+            File.WriteAllText(Path.Combine(bundle, "settings.json"), "{}\n");
+            File.WriteAllBytes(Path.Combine(bundle, "notes.bin"), [3]);
+
+            RecordingAssetSource source = new([]);
+            source.ReplaceFolders(
+            [
+                new AssetBrowserFolderItem("Content", 0),
+                new AssetBrowserFolderItem("Content/Imported", 0),
+                new AssetBrowserFolderItem("ScriptSource", 0),
+            ]);
+            List<AssetBrowserImportRequest> requests = [];
+            AssetBrowserImportResult ImportAsset(AssetBrowserImportRequest request)
+            {
+                requests.Add(request);
+                source.ReplaceAssets(
+                [
+                    .. source.ListAssets(),
+                    new AssetBrowserItem(
+                        request.Path,
+                        request.Kind,
+                        1,
+                        DateTimeOffset.UnixEpoch,
+                        null,
+                        "asset_" + requests.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                ]);
+                return new AssetBrowserImportResult(true, $"imported {request.Path}", "asset", request.Path);
+            }
+
+            AssetBrowserPanel panel = new(source, importAsset: ImportAsset);
+            AssetBrowserExternalImportResult result = panel.ImportExternalPaths([bundle], "Content/Imported");
+
+            Assert.True(result.Succeeded, result.Diagnostic);
+            Assert.Equal(6, result.DiscoveredFileCount);
+            Assert.Equal(6, result.ImportedFileCount);
+            Assert.Equal(0, result.RejectedFileCount);
+            Assert.Contains(requests, request => request.Path == "Content/Imported/Bundle/sand.png" && request.Kind == AssetBrowserItemKind.Texture);
+            Assert.Contains(requests, request => request.Path == "Content/Imported/Bundle/audio/hit.wav" && request.Kind == AssetBrowserItemKind.Audio);
+            Assert.Contains(requests, request => request.Path == "ScriptSource/Bundle/Player.cs" && request.Kind == AssetBrowserItemKind.Script);
+            Assert.Contains(requests, request => request.Path == "Content/ui/screens/Bundle/hud.xhtml" && request.Kind == AssetBrowserItemKind.UiScreen);
+            Assert.Contains(requests, request => request.Path == "Content/Imported/Bundle/settings.json" && request.Kind == AssetBrowserItemKind.Json);
+            Assert.Contains(requests, request => request.Path == "Content/Imported/Bundle/notes.bin" && request.Kind == AssetBrowserItemKind.Other);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证多源同名文件使用确定性递增路径，缺失源作为部分失败进入汇总而不回滚成功文件。
+    /// </summary>
+    [Fact]
+    public void ExternalFileDropUsesUniqueNamesAndReportsPartialFailure()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-project-drop-conflict-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            string firstDirectory = Path.Combine(temp, "First");
+            string secondDirectory = Path.Combine(temp, "Second");
+            _ = Directory.CreateDirectory(firstDirectory);
+            _ = Directory.CreateDirectory(secondDirectory);
+            string first = Path.Combine(firstDirectory, "same.png");
+            string second = Path.Combine(secondDirectory, "same.png");
+            File.WriteAllBytes(first, [1]);
+            File.WriteAllBytes(second, [2]);
+
+            RecordingAssetSource source = new([]);
+            source.ReplaceFolders([new AssetBrowserFolderItem("Content", 0)]);
+            List<AssetBrowserImportRequest> requests = [];
+            AssetBrowserImportResult ImportAsset(AssetBrowserImportRequest request)
+            {
+                requests.Add(request);
+                source.ReplaceAssets(
+                [
+                    .. source.ListAssets(),
+                    new AssetBrowserItem(request.Path, request.Kind, 1, DateTimeOffset.UnixEpoch, null, "asset_" + requests.Count),
+                ]);
+                return new AssetBrowserImportResult(true, $"imported {request.Path}", "asset", request.Path);
+            }
+
+            AssetBrowserPanel panel = new(source, importAsset: ImportAsset);
+            AssetBrowserExternalImportResult result = panel.ImportExternalPaths(
+                [first, Path.Combine(temp, "missing.png"), second],
+                "Content");
+
+            Assert.False(result.Succeeded);
+            Assert.Equal(2, result.DiscoveredFileCount);
+            Assert.Equal(2, result.ImportedFileCount);
+            Assert.Equal(1, result.RejectedFileCount);
+            Assert.Collection(
+                requests,
+                request => Assert.Equal("Content/same.png", request.Path),
+                request => Assert.Equal("Content/same1.png", request.Path));
+            Assert.Contains("拖入源不存在", result.Diagnostic, StringComparison.Ordinal);
+            Assert.Equal(result.Diagnostic, panel.Status);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
     private sealed class RecordingThumbnailProvider : ITextureThumbnailProvider
     {
         public bool TryGetThumbnail(string assetPath, out AssetThumbnail thumbnail)

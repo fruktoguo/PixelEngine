@@ -35,6 +35,7 @@ internal sealed class EditorShellHostExtension :
     private GameViewPanel? _gameViewPanel;
     private GameObjectInspectorPanel? _gameObjectInspectorPanel;
     private EditorConsolePanel? _consolePanel;
+    private AssetBrowserPanel? _assetBrowserPanel;
     private RuntimeSceneHierarchyDataSource? _runtimeHierarchy;
     private EditorAssetBrowserDataSource? _assetBrowserDataSource;
     private EditorTextureThumbnailProvider? _textureThumbnailProvider;
@@ -85,6 +86,7 @@ internal sealed class EditorShellHostExtension :
     public void ResetLayout()
     {
         _editor.ResetDockLayout();
+        _gameObjectInspectorPanel?.RequestFocus();
     }
 
     public void PrepareFrame()
@@ -216,13 +218,23 @@ internal sealed class EditorShellHostExtension :
         // 注册层级/Inspector/资产浏览器/构建设置等 ImGui 面板
         RegisterPanels(engine, pipeline);
         EditorWindowInputConnector input = new(window, _editor.Input);
+        EditorExternalAssetDropConnector externalAssetDrop = new(
+            window,
+            _assetBrowserPanel ?? throw new InvalidOperationException("Project Window 尚未注册，无法绑定系统 file-drop。"),
+            _app.ConsoleStore);
         Bridge = EditorRenderBridge.AttachIfEnabled(
             pipeline,
             _editor,
             engine.Context.Counters,
             engine.Context.Profiler,
             () => BuildRuntimeDiagnostics(engine));
-        return new CompositeDisposable(input, Bridge, _assetBrowserDataSource, _textureThumbnailProvider, _editor);
+        return new CompositeDisposable(
+            input,
+            Bridge,
+            _assetBrowserDataSource,
+            _textureThumbnailProvider,
+            _editor,
+            externalAssetDrop);
     }
 
     public bool TryGetInputCapture(out EditorHostInputCapture capture)
@@ -398,7 +410,7 @@ internal sealed class EditorShellHostExtension :
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
-        _editor.AddPanel(new AssetBrowserPanel(
+        _assetBrowserPanel = new AssetBrowserPanel(
             assetBrowserDataSource,
             instantiatePrefab: _app.InstantiatePrefab,
             openScriptAsset: _app.OpenScriptAsset,
@@ -411,7 +423,8 @@ internal sealed class EditorShellHostExtension :
             importAsset: assetBrowserDataSource.ImportAsset,
             pickImportSource: static (initialPath, _) => NativeFolderPicker.TryPickFile(initialPath, out string selectedPath, out string diagnostic)
                 ? new AssetBrowserImportSourcePickResult(true, selectedPath, string.Empty)
-                : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic)));
+                : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic));
+        _editor.AddPanel(_assetBrowserPanel);
         AddHiddenPanel(new UiManifestPanel(new EditorAssetManifestStore(_project)));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)

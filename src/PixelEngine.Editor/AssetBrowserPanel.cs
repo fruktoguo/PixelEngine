@@ -1,6 +1,7 @@
 using Hexa.NET.ImGui;
 using System.Globalization;
 using System.Numerics;
+using System.Text;
 
 namespace PixelEngine.Editor;
 
@@ -81,6 +82,7 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserCreateHandler? _createAsset = createAsset;
     private readonly AssetBrowserImportHandler? _importAsset = importAsset;
     private readonly AssetBrowserImportSourcePickHandler? _pickImportSource = pickImportSource;
+    private readonly List<ExternalDropTarget> _externalDropTargets = new(64);
     private static readonly string[] KindFilterLabels = ["All", "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UI Screen", "Json", "Other"];
     private static readonly string[] SortModeLabels = ["Name", "Type / Name", "Last Modified", "Size"];
     private static readonly AssetBrowserItemKind[] CreateKinds =
@@ -131,6 +133,7 @@ public sealed class AssetBrowserPanel(
             field = value;
             if (!value)
             {
+                _externalDropTargets.Clear();
                 _thumbnailLeases.ReleaseAll();
             }
         }
@@ -226,6 +229,125 @@ public sealed class AssetBrowserPanel(
     /// 最近一次面板状态。
     /// </summary>
     public string Status { get; private set; } = "就绪";
+
+    /// <summary>
+    /// 使用上一完整 ImGui 帧记录的 Project window 与文件夹矩形解析系统 file-drop 目标。
+    /// </summary>
+    /// <param name="framebufferPoint">与 ImGui DisplaySize 一致的 framebuffer 坐标。</param>
+    /// <param name="folderPath">命中的 rooted logical folder；空字符串表示 Project 总根。</param>
+    /// <returns>当前点位于可见 Project 区域时返回 true。</returns>
+    public bool TryResolveExternalDropTarget(Vector2 framebufferPoint, out string folderPath)
+    {
+        for (int i = _externalDropTargets.Count - 1; i >= 0; i--)
+        {
+            ExternalDropTarget target = _externalDropTargets[i];
+            if (framebufferPoint.X >= target.Minimum.X &&
+                framebufferPoint.Y >= target.Minimum.Y &&
+                framebufferPoint.X < target.Maximum.X &&
+                framebufferPoint.Y < target.Maximum.Y)
+            {
+                folderPath = target.FolderPath;
+                return true;
+            }
+        }
+
+        folderPath = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// 从操作系统 file-drop 导入文件或目录。目录递归忽略 reparse point、保留层级；Script 与 UI Screen
+    /// 分别归一到 <c>ScriptSource</c> 与 <c>Content/ui/screens</c>，其余类型进入 Content。
+    /// </summary>
+    /// <param name="sourcePaths">平台回调提供的绝对或可解析路径。</param>
+    /// <param name="targetFolderPath">Project 中命中的 rooted logical folder。</param>
+    /// <returns>本次批量导入汇总。</returns>
+    public AssetBrowserExternalImportResult ImportExternalPaths(
+        IReadOnlyList<string> sourcePaths,
+        string targetFolderPath)
+    {
+        ArgumentNullException.ThrowIfNull(sourcePaths);
+        EnsureSnapshotLoaded();
+        List<ExternalImportCandidate> candidates = [];
+        List<string> diagnostics = [];
+        int rejectedCount = 0;
+
+        for (int i = 0; i < sourcePaths.Count; i++)
+        {
+            string? rawPath = sourcePaths[i];
+            if (string.IsNullOrWhiteSpace(rawPath))
+            {
+                rejectedCount++;
+                diagnostics.Add("拖入路径为空。");
+                continue;
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(rawPath);
+            }
+            catch (Exception exception) when (exception is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                rejectedCount++;
+                diagnostics.Add($"无法解析 {rawPath}：{exception.Message}");
+                continue;
+            }
+
+            if (File.Exists(fullPath))
+            {
+                candidates.Add(new ExternalImportCandidate(fullPath, Path.GetFileName(fullPath)));
+                continue;
+            }
+
+            if (!Directory.Exists(fullPath))
+            {
+                rejectedCount++;
+                diagnostics.Add($"拖入源不存在：{fullPath}");
+                continue;
+            }
+
+            CollectExternalDirectoryFiles(fullPath, candidates, diagnostics, ref rejectedCount);
+        }
+
+        int importedCount = 0;
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            ExternalImportCandidate candidate = candidates[i];
+            AssetBrowserItemKind kind = AssetBrowserExternalImportClassifier.Classify(candidate.FullPath);
+            string destinationFolder = ResolveExternalImportFolder(targetFolderPath, kind);
+            string relativeDirectory = Path.GetDirectoryName(candidate.RelativePath)?.Replace('\\', '/') ?? string.Empty;
+            destinationFolder = JoinLogicalPath(destinationFolder, relativeDirectory);
+            string destinationPath = MakePathUnique(
+                JoinLogicalPath(destinationFolder, Path.GetFileName(candidate.RelativePath)),
+                kind);
+            if (TryImportAsset(candidate.FullPath, destinationPath, kind))
+            {
+                importedCount++;
+                continue;
+            }
+
+            rejectedCount++;
+            diagnostics.Add($"{candidate.FullPath}：{Status}");
+        }
+
+        string diagnostic = BuildExternalImportDiagnostic(candidates.Count, importedCount, rejectedCount, diagnostics);
+        Status = diagnostic;
+        return new AssetBrowserExternalImportResult(
+            candidates.Count,
+            importedCount,
+            rejectedCount,
+            diagnostic);
+    }
+
+    /// <summary>
+    /// 把窗口层拒绝原因同步到 Project footer。
+    /// </summary>
+    /// <param name="diagnostic">拒绝原因。</param>
+    public void ReportExternalDropDiagnostic(string diagnostic)
+    {
+        Status = string.IsNullOrWhiteSpace(diagnostic) ? "外部拖入未执行。" : diagnostic;
+    }
 
     /// <summary>
     /// 设置搜索文本并刷新筛选结果。
@@ -804,7 +926,7 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
-    /// 导入外部 Texture / Audio 文件到 content。
+    /// 导入外部文件到 Project；Script 必须进入 ScriptSource，其余已知类型进入 Content。
     /// </summary>
     /// <param name="sourceFullPath">外部源文件完整路径。</param>
     /// <param name="destinationPath">目标 logical path。</param>
@@ -952,6 +1074,7 @@ public sealed class AssetBrowserPanel(
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
+        _externalDropTargets.Clear();
         _thumbnailLeases.BeginFrame();
         try
         {
@@ -962,6 +1085,13 @@ public sealed class AssetBrowserPanel(
                 ImGui.End();
                 return;
             }
+
+            string defaultDropFolder = context.Selection.FolderPath ?? ActiveFolderPath;
+            Vector2 windowMinimum = ImGui.GetWindowPos();
+            RecordExternalDropTarget(
+                defaultDropFolder,
+                windowMinimum,
+                windowMinimum + ImGui.GetWindowSize());
 
             DrawToolbar(context.Selection);
             if (!string.IsNullOrWhiteSpace(_search))
@@ -1274,6 +1404,8 @@ public sealed class AssetBrowserPanel(
             _ = SelectFolder(string.Empty, selection);
         }
 
+        RecordLastItemExternalDropTarget(string.Empty);
+
         for (int i = 0; i < FolderTargets.Count; i++)
         {
             if (IsDirectFolderChild(FolderTargets[i].Path, string.Empty))
@@ -1307,6 +1439,8 @@ public sealed class AssetBrowserPanel(
         {
             _ = SelectFolder(folder.Path, selection);
         }
+
+        RecordLastItemExternalDropTarget(folder.Path);
 
         DrawFolderDropTarget(folder);
         DrawFolderContextMenu(folder);
@@ -1382,6 +1516,8 @@ public sealed class AssetBrowserPanel(
         {
             _ = SelectFolder(folder.Path, selection);
         }
+
+        RecordExternalDropTarget(folder.Path, tileMin, tileMin + tileSize);
 
         DrawTileBackground(tileMin, tileSize, selected, hovered);
         DrawAssetIcon(
@@ -1496,6 +1632,8 @@ public sealed class AssetBrowserPanel(
             _ = SelectFolder(folder.Path, selection);
         }
 
+        RecordLastItemExternalDropTarget(folder.Path);
+
         bool hovered = ImGui.IsItemHovered();
         if (ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left) && hovered)
         {
@@ -1580,6 +1718,8 @@ public sealed class AssetBrowserPanel(
             {
                 _ = SelectFolder(breadcrumb.Path, selection);
             }
+
+            RecordLastItemExternalDropTarget(breadcrumb.Path);
         }
     }
 
@@ -2215,7 +2355,7 @@ public sealed class AssetBrowserPanel(
 
     private static bool IsImportKindSupported(AssetBrowserItemKind kind)
     {
-        return Array.IndexOf(ImportKinds, kind) >= 0;
+        return Enum.IsDefined(kind) && kind != AssetBrowserItemKind.Folder;
     }
 
     private static string GetDefaultCreatePath(AssetBrowserItemKind kind)
@@ -2261,6 +2401,165 @@ public sealed class AssetBrowserPanel(
             : targetsScriptRoot
                 ? isScriptFolder ? normalized : "ScriptSource"
                 : IsSameOrChildFolder(normalized, "Content") ? normalized : "Content";
+    }
+
+    private string ResolveExternalImportFolder(string folderPath, AssetBrowserItemKind kind)
+    {
+        string compatible = ResolveCompatibleCreateFolder(folderPath, kind);
+        return kind != AssetBrowserItemKind.UiScreen ||
+            IsSameOrChildFolder(compatible, "Content/ui/screens")
+            ? compatible
+            : FolderTargets.Any(folder =>
+                string.Equals(folder.Path, "Content", StringComparison.OrdinalIgnoreCase))
+                ? "Content/ui/screens"
+                : "ui/screens";
+    }
+
+    private static void CollectExternalDirectoryFiles(
+        string rootPath,
+        List<ExternalImportCandidate> candidates,
+        List<string> diagnostics,
+        ref int rejectedCount)
+    {
+        int initialCandidateCount = candidates.Count;
+        int initialRejectedCount = rejectedCount;
+        try
+        {
+            if ((File.GetAttributes(rootPath) & FileAttributes.ReparsePoint) != 0)
+            {
+                rejectedCount++;
+                diagnostics.Add($"已忽略 reparse point 目录：{rootPath}");
+                return;
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PathTooLongException)
+        {
+            rejectedCount++;
+            diagnostics.Add($"无法读取目录属性 {rootPath}：{exception.Message}");
+            return;
+        }
+
+        string directoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(rootPath));
+        Stack<string> pendingDirectories = new();
+        pendingDirectories.Push(rootPath);
+        while (pendingDirectories.Count > 0)
+        {
+            string directory = pendingDirectories.Pop();
+            try
+            {
+                string[] files = Directory.GetFiles(directory, "*", SearchOption.TopDirectoryOnly);
+                Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+                for (int fileIndex = 0; fileIndex < files.Length; fileIndex++)
+                {
+                    try
+                    {
+                        if ((File.GetAttributes(files[fileIndex]) & FileAttributes.ReparsePoint) != 0)
+                        {
+                            continue;
+                        }
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PathTooLongException)
+                    {
+                        rejectedCount++;
+                        diagnostics.Add($"无法读取文件属性 {files[fileIndex]}：{exception.Message}");
+                        continue;
+                    }
+
+                    string relativePath = Path.GetRelativePath(rootPath, files[fileIndex]).Replace('\\', '/');
+                    candidates.Add(new ExternalImportCandidate(
+                        files[fileIndex],
+                        JoinLogicalPath(directoryName, relativePath)));
+                }
+
+                string[] children = Directory.GetDirectories(directory, "*", SearchOption.TopDirectoryOnly);
+                Array.Sort(children, StringComparer.OrdinalIgnoreCase);
+                for (int childIndex = children.Length - 1; childIndex >= 0; childIndex--)
+                {
+                    try
+                    {
+                        if ((File.GetAttributes(children[childIndex]) & FileAttributes.ReparsePoint) == 0)
+                        {
+                            pendingDirectories.Push(children[childIndex]);
+                        }
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PathTooLongException)
+                    {
+                        rejectedCount++;
+                        diagnostics.Add($"无法读取目录属性 {children[childIndex]}：{exception.Message}");
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or PathTooLongException)
+            {
+                rejectedCount++;
+                diagnostics.Add($"无法枚举 {directory}：{exception.Message}");
+            }
+        }
+
+        if (candidates.Count == initialCandidateCount && rejectedCount == initialRejectedCount)
+        {
+            rejectedCount++;
+            diagnostics.Add($"拖入目录不含普通文件：{rootPath}");
+        }
+    }
+
+    private static string JoinLogicalPath(string left, string right)
+    {
+        string normalizedLeft = (left ?? string.Empty).Trim().Replace('\\', '/').Trim('/');
+        string normalizedRight = (right ?? string.Empty).Trim().Replace('\\', '/').Trim('/');
+        return normalizedLeft.Length == 0
+            ? normalizedRight
+            : normalizedRight.Length == 0
+                ? normalizedLeft
+                : normalizedLeft + "/" + normalizedRight;
+    }
+
+    private static string BuildExternalImportDiagnostic(
+        int discoveredCount,
+        int importedCount,
+        int rejectedCount,
+        IReadOnlyList<string> diagnostics)
+    {
+        StringBuilder builder = new();
+        _ = builder.Append("外部拖入：发现 ")
+            .Append(discoveredCount.ToString(CultureInfo.InvariantCulture))
+            .Append(" 个文件，已导入 ")
+            .Append(importedCount.ToString(CultureInfo.InvariantCulture))
+            .Append("，拒绝 ")
+            .Append(rejectedCount.ToString(CultureInfo.InvariantCulture))
+            .Append('。');
+        int shown = Math.Min(3, diagnostics.Count);
+        for (int i = 0; i < shown; i++)
+        {
+            _ = builder.Append(' ').Append(diagnostics[i]);
+        }
+
+        if (diagnostics.Count > shown)
+        {
+            _ = builder.Append(" 另有 ")
+                .Append((diagnostics.Count - shown).ToString(CultureInfo.InvariantCulture))
+                .Append(" 条诊断。");
+        }
+
+        return builder.ToString();
+    }
+
+    private void RecordLastItemExternalDropTarget(string folderPath)
+    {
+        RecordExternalDropTarget(folderPath, ImGui.GetItemRectMin(), ImGui.GetItemRectMax());
+    }
+
+    private void RecordExternalDropTarget(string folderPath, Vector2 minimum, Vector2 maximum)
+    {
+        if (maximum.X <= minimum.X || maximum.Y <= minimum.Y)
+        {
+            return;
+        }
+
+        _externalDropTargets.Add(new ExternalDropTarget(
+            minimum,
+            maximum,
+            NormalizeFolderPath(folderPath)));
     }
 
     private static bool IsSameOrChildFolder(string candidate, string root)
@@ -3024,6 +3323,15 @@ public sealed class AssetBrowserPanel(
     {
         return new ImTextureRef(null, (ImTextureID)(ulong)handle);
     }
+
+    private readonly record struct ExternalImportCandidate(
+        string FullPath,
+        string RelativePath);
+
+    private readonly record struct ExternalDropTarget(
+        Vector2 Minimum,
+        Vector2 Maximum,
+        string FolderPath);
 }
 
 /// <summary>

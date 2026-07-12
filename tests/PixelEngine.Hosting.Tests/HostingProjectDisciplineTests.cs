@@ -862,6 +862,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("DockBuilderDockWindow(UiManifestWindowTitle, projectNode)", dockSpace, StringComparison.Ordinal);
         Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
+        Assert.Contains("_gameObjectInspectorPanel?.RequestFocus()", host, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
         Assert.Contains("new UiManifestPanel(new EditorAssetManifestStore(_project))", host, StringComparison.Ordinal);
         Assert.Contains("new BuildSettingsPanel(_project, console: _app.ConsoleStore)", host, StringComparison.Ordinal);
@@ -869,6 +870,7 @@ public sealed class HostingProjectDisciplineTests
         string assetBrowserPanel = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs"));
         string shellAssetBrowserDataSource = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorAssetBrowserDataSource.cs"));
         string shellAssetManifestStore = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorAssetManifestStore.cs"));
+        string externalAssetDropConnector = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorExternalAssetDropConnector.cs"));
         Assert.Contains("AssetBrowserCreateRequest", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserImportRequest", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("AssetBrowserImportSourcePickResult", assetBrowserDataSource, StringComparison.Ordinal);
@@ -878,6 +880,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("TryCreateAsset", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("TryImportAsset", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("TryPickImportSource", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("ImportExternalPaths", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("TryResolveExternalDropTarget", assetBrowserPanel, StringComparison.Ordinal);
+        Assert.Contains("AssetBrowserExternalImportClassifier", assetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("project_window_layout", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("DrawFolderTree", assetBrowserPanel, StringComparison.Ordinal);
         Assert.Contains("DrawBreadcrumbs", assetBrowserPanel, StringComparison.Ordinal);
@@ -917,7 +922,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("store.DeleteFolder(path.RelativePath, activeScene, request.Confirmed)", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("GetStore(path.Root).MoveFolder", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("store.CreateAsset(path.RelativePath, type)", shellAssetBrowserDataSource, StringComparison.Ordinal);
-        Assert.Contains("_assets.ImportAsset(request.SourceFullPath, path.RelativePath, type)", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("store.ImportAsset(request.SourceFullPath, path.RelativePath, type)", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("SourceBelongsToProject", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains("_window.FilesDropped += OnFilesDropped", externalAssetDropConnector, StringComparison.Ordinal);
+        Assert.Contains("_window.FilesDropped -= OnFilesDropped", externalAssetDropConnector, StringComparison.Ordinal);
+        Assert.Contains("TryResolveExternalDropTarget", externalAssetDropConnector, StringComparison.Ordinal);
+        Assert.Contains("ImportExternalPaths", externalAssetDropConnector, StringComparison.Ordinal);
+        Assert.Contains("project-file-drop", externalAssetDropConnector, StringComparison.Ordinal);
         Assert.Contains("store.CreateFolder(path.RelativePath)", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("public string CreateFolder", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("public EditorAssetFolderDeleteResult DeleteFolder", shellAssetManifestStore, StringComparison.Ordinal);

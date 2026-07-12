@@ -1108,14 +1108,31 @@ internal sealed class EditorAssetBrowserDataSource :
             return new AssetBrowserImportResult(false, $"未知资产类型：{request.Kind}。");
         }
 
-        if (!TryParseRequestPath(request.Path, EditorAssetRootKind.Content, out EditorAssetPath path, out string pathDiagnostic))
+        if (request.Kind == AssetBrowserItemKind.Folder)
         {
-            return new AssetBrowserImportResult(false, pathDiagnostic);
+            return new AssetBrowserImportResult(false, "外部文件导入不能使用 Folder 资产类型；目录由 Project drop 递归展开。");
         }
 
-        if (path.Root != EditorAssetRootKind.Content)
+        AssetBrowserItemKind sourceKind;
+        try
         {
-            return new AssetBrowserImportResult(false, "Texture / Audio 只能导入 Content logical root。");
+            sourceKind = AssetBrowserExternalImportClassifier.Classify(request.SourceFullPath);
+        }
+        catch (ArgumentException exception)
+        {
+            return new AssetBrowserImportResult(false, exception.Message);
+        }
+
+        if (sourceKind != request.Kind)
+        {
+            return new AssetBrowserImportResult(
+                false,
+                $"导入源 {request.SourceFullPath} 的类型 {sourceKind} 与请求类型 {request.Kind} 不一致。");
+        }
+
+        if (!TryResolveImportPath(request, out EditorAssetPath path, out string pathDiagnostic))
+        {
+            return new AssetBrowserImportResult(false, pathDiagnostic);
         }
 
         EditorAssetType type = MapKind(request.Kind);
@@ -1126,9 +1143,15 @@ internal sealed class EditorAssetBrowserDataSource :
 
         try
         {
-            EditorAssetRecord asset = _assets.ImportAsset(request.SourceFullPath, path.RelativePath, type);
-            string browserPath = ToBrowserPath(new EditorAssetPath(EditorAssetRootKind.Content, asset.LogicalPath));
-            _ = UpsertSnapshot(EditorAssetRootKind.Content, asset);
+            if (SourceBelongsToProject(request.SourceFullPath))
+            {
+                return new AssetBrowserImportResult(false, "拖入源已属于当前 Project；请使用 Project 内部 drag/drop 移动资产。");
+            }
+
+            EditorAssetManifestStore store = GetStore(path.Root);
+            EditorAssetRecord asset = store.ImportAsset(request.SourceFullPath, path.RelativePath, type);
+            string browserPath = ToBrowserPath(new EditorAssetPath(path.Root, asset.LogicalPath));
+            _ = UpsertSnapshot(path.Root, asset);
             _folderSnapshot = BuildFolderSnapshot();
             return new AssetBrowserImportResult(
                 true,
@@ -1140,6 +1163,40 @@ internal sealed class EditorAssetBrowserDataSource :
         {
             return new AssetBrowserImportResult(false, ex.Message);
         }
+    }
+
+    private bool TryResolveImportPath(
+        AssetBrowserImportRequest request,
+        out EditorAssetPath path,
+        out string diagnostic)
+    {
+        return TryResolveCreatePath(
+            new AssetBrowserCreateRequest(request.Path, request.Kind),
+            out path,
+            out diagnostic);
+    }
+
+    private bool SourceBelongsToProject(string sourceFullPath)
+    {
+        if (_project is null)
+        {
+            return false;
+        }
+
+        string source = Path.GetFullPath(sourceFullPath);
+        return IsSameOrChildPhysicalPath(source, _project.ProjectRoot);
+    }
+
+    private static bool IsSameOrChildPhysicalPath(string candidatePath, string rootPath)
+    {
+        string candidate = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidatePath));
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(rootPath));
+        StringComparison comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+        return string.Equals(candidate, root, comparison) ||
+            candidate.StartsWith(root + Path.DirectorySeparatorChar, comparison) ||
+            candidate.StartsWith(root + Path.AltDirectorySeparatorChar, comparison);
     }
 
     private bool TryResolveCreatePath(
@@ -1825,7 +1882,7 @@ internal sealed class EditorAssetBrowserDataSource :
 
     private static bool IsImportableType(EditorAssetType type)
     {
-        return type is EditorAssetType.Texture or EditorAssetType.Audio;
+        return Enum.IsDefined(type);
     }
 }
 

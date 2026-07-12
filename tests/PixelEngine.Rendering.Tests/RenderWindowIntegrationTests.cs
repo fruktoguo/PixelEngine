@@ -18,6 +18,19 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
     private readonly ITestOutputHelper _output = output;
 
     /// <summary>
+    /// 窗口层必须公开强类型平台 file-drop，并由订阅方显式管理生命周期。
+    /// </summary>
+    [Fact]
+    public void WindowExposesTypedFileDropEvent()
+    {
+        System.Reflection.EventInfo? fileDrop =
+            typeof(RenderWindow).GetEvent(nameof(RenderWindow.FilesDropped));
+
+        Assert.NotNull(fileDrop);
+        Assert.Equal(typeof(Action<string[]>), fileDrop.EventHandlerType);
+    }
+
+    /// <summary>
     /// 在 GL 冒烟环境变量启用时，能够创建窗口并交换缓冲区，且 Desktop GL 版本不低于 3.3。
     /// </summary>
     [NativeSmokeFact]

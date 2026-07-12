@@ -57,6 +57,58 @@ public enum AssetBrowserItemKind
 }
 
 /// <summary>
+/// 外部文件进入 Project Window 时使用的确定性资产类型映射。
+/// </summary>
+public static class AssetBrowserExternalImportClassifier
+{
+    /// <summary>
+    /// 根据源文件名和扩展名推导 PixelEngine 已有资产类型。未知扩展保留为 <see cref="AssetBrowserItemKind.Other" />，
+    /// 与 Unity 将未知文件作为可见资产保留的心智模型一致。
+    /// </summary>
+    /// <param name="path">外部文件路径。</param>
+    /// <returns>推导出的 Project Window 资产类型。</returns>
+    public static AssetBrowserItemKind Classify(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string fileName = System.IO.Path.GetFileName(path);
+        string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+        return string.Equals(fileName, "materials.json", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(fileName, "reactions.json", StringComparison.OrdinalIgnoreCase)
+            ? AssetBrowserItemKind.Material
+            : extension switch
+            {
+                ".png" or ".jpg" or ".jpeg" or ".bmp" or ".tga" or ".webp" => AssetBrowserItemKind.Texture,
+                ".wav" or ".ogg" or ".flac" or ".mp3" => AssetBrowserItemKind.Audio,
+                ".scene" or ".world" => AssetBrowserItemKind.Scene,
+                ".prefab" => AssetBrowserItemKind.Prefab,
+                ".cs" => AssetBrowserItemKind.Script,
+                ".xhtml" or ".html" => AssetBrowserItemKind.UiScreen,
+                ".json" => AssetBrowserItemKind.Json,
+                _ => AssetBrowserItemKind.Other,
+            };
+    }
+}
+
+/// <summary>
+/// 一次系统 file-drop 导入的汇总结果。
+/// </summary>
+/// <param name="DiscoveredFileCount">从文件与目录源中发现的普通文件数。</param>
+/// <param name="ImportedFileCount">成功复制并写入资产数据库的文件数。</param>
+/// <param name="RejectedFileCount">缺失、不可访问或导入失败的文件/源数。</param>
+/// <param name="Diagnostic">可直接展示到 Project footer 与 Console 的汇总诊断。</param>
+public readonly record struct AssetBrowserExternalImportResult(
+    int DiscoveredFileCount,
+    int ImportedFileCount,
+    int RejectedFileCount,
+    string Diagnostic)
+{
+    /// <summary>
+    /// 所有发现的文件均成功导入且至少导入一个文件时为 true。
+    /// </summary>
+    public bool Succeeded => ImportedFileCount > 0 && RejectedFileCount == 0;
+}
+
+/// <summary>
 /// Project Window 资产排序模式。
 /// </summary>
 public enum AssetBrowserSortMode
@@ -355,7 +407,7 @@ public readonly record struct AssetBrowserCreateRequest(
 /// Project Window 资产导入请求。
 /// </summary>
 /// <param name="SourceFullPath">要导入的外部源文件完整路径。</param>
-/// <param name="Path">Content rooted logical path。</param>
+/// <param name="Path">目标 rooted logical path；Script 使用 ScriptSource，其余类型使用 Content。</param>
 /// <param name="Kind">要导入的资产类型。</param>
 public readonly record struct AssetBrowserImportRequest(
     string SourceFullPath,
