@@ -540,10 +540,10 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证中性 Gui 与 Editor 输入连接器在点击前按当前 framebuffer scale 刷新鼠标坐标，避免 DPI/窗口切换后按钮命中使用旧位置。
+    /// 验证中性 Gui 与 Editor 输入连接器按事件顺序保留鼠标坐标，既支持首次点击回退，也不会让快速拖拽的按钮起点读取到未来位置。
     /// </summary>
     [Fact]
-    public void GuiInputConnectorsRefreshPointerPositionBeforeMouseButtons()
+    public void GuiInputConnectorsPreserveOrderedPointerPositionForMouseButtons()
     {
         // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
@@ -555,8 +555,12 @@ public sealed class HostingProjectDisciplineTests
             .Replace("\n", string.Empty, StringComparison.Ordinal);
         Assert.Contains("privatevoidForwardMousePosition(Vector2position)", editorCompact, StringComparison.Ordinal);
         Assert.Contains("_input.MouseMoveFramebuffer(position.X*_window.FramebufferScaleX,position.Y*_window.FramebufferScaleY);", editorCompact, StringComparison.Ordinal);
-        Assert.Contains("privatevoidOnMouseDown(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:true);}", editorCompact, StringComparison.Ordinal);
-        Assert.Contains("privatevoidOnMouseUp(IMousemouse,MouseButtonbutton){ForwardMousePosition(mouse.Position);_input.MouseButton(button,down:false);}", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("privateOrderedPointerPosition_pointerPosition;", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("ForwardMousePosition(_pointerPosition.RecordMove(position));", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position));_input.MouseButton(button,down:true);", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position));_input.MouseButton(button,down:false);", editorCompact, StringComparison.Ordinal);
+        Assert.Contains("_pointerPosition.Reset();", editorCompact, StringComparison.Ordinal);
+        Assert.DoesNotContain("ForwardMousePosition(mouse.Position);", editorCompact, StringComparison.Ordinal);
         Assert.DoesNotContain("_input.MouseMove(position.X,position.Y);", editorCompact, StringComparison.Ordinal);
 
         string guiCompact = guiConnector.Replace(" ", string.Empty, StringComparison.Ordinal)
@@ -568,7 +572,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("route.TryMapPointer(framebufferX,framebufferY,outviewportX,outviewportY)", guiCompact, StringComparison.Ordinal);
         Assert.Contains("_input.MouseMoveFramebuffer(viewportX,viewportY);", guiCompact, StringComparison.Ordinal);
         Assert.Contains("_input.MouseMoveFramebuffer(MouseUnavailable,MouseUnavailable);", guiCompact, StringComparison.Ordinal);
-        Assert.Contains("if(!ForwardMousePosition(mouse.Position)){return;}", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("privateOrderedPointerPosition_pointerPosition;", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("ForwardMousePosition(_pointerPosition.RecordMove(position))", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("if(!ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position))){return;}", guiCompact, StringComparison.Ordinal);
+        Assert.Contains("_pointerPosition.Reset();", guiCompact, StringComparison.Ordinal);
+        Assert.DoesNotContain("ForwardMousePosition(mouse.Position)", guiCompact, StringComparison.Ordinal);
         Assert.Contains("_viewportRouteisnull||_forwardedKeys.Remove(key)", guiCompact, StringComparison.Ordinal);
         Assert.Contains("_viewportRouteisnull||_viewportRoute.AllowsKeyboardInput", guiCompact, StringComparison.Ordinal);
     }
@@ -596,7 +604,14 @@ public sealed class HostingProjectDisciplineTests
             Assert.Contains("_renderer.NewFrame();", source, StringComparison.Ordinal);
             Assert.Contains("_renderer.Render(ImGui.GetDrawData());", source, StringComparison.Ordinal);
             Assert.DoesNotContain("ImGuiImplOpenGL3", source, StringComparison.Ordinal);
-            Assert.Contains("SetCurrentContext();ImGui.AddMouseButtonEvent", compact, StringComparison.Ordinal);
+            Assert.Contains("SetCurrentContext();boolemitButtonEvent=_mouseReleaseScheduler.ShouldEmitButtonEvent", compact, StringComparison.Ordinal);
+            Assert.Contains("outboolreleaseBeforeEvent", compact, StringComparison.Ordinal);
+            Assert.Contains("if(releaseBeforeEvent){ImGui.AddMouseButtonEvent(ImGui.GetIO(),button,false);}", compact, StringComparison.Ordinal);
+            Assert.Contains("ImGuiMouseReleaseScheduler", source, StringComparison.Ordinal);
+            Assert.Contains("_mouseReleaseScheduler.RecordPosition", source, StringComparison.Ordinal);
+            Assert.Contains("_mouseReleaseScheduler.ShouldEmitButtonEvent", source, StringComparison.Ordinal);
+            Assert.Contains("_mouseReleaseScheduler.BeginFrame", source, StringComparison.Ordinal);
+            Assert.Contains("_mouseReleaseScheduler.FlushForFocusLoss", source, StringComparison.Ordinal);
             Assert.Contains("SetCurrentContext();ImGui.AddMouseWheelEvent", compact, StringComparison.Ordinal);
             Assert.Contains("SetCurrentContext();ImGui.AddKeyEvent", compact, StringComparison.Ordinal);
             Assert.Contains("SetCurrentContext();ImGui.Render();", compact, StringComparison.Ordinal);
@@ -614,6 +629,8 @@ public sealed class HostingProjectDisciplineTests
     {
         string root = FindRepositoryRoot();
         string platform = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "ImGuiPlatformBridge.cs"));
+        string imeController = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "WindowsImeContextController.cs"));
+        string imeNative = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Interop", "Win32ImeNative.cs"));
         string renderWindow = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Rendering", "RenderWindow.cs"));
         string guiConnector = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Gui", "GuiWindowInputConnector.cs"));
         string editorConnector = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorWindowInputConnector.cs"));
@@ -622,8 +639,19 @@ public sealed class HostingProjectDisciplineTests
 
         Assert.Contains("ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.HasSetMousePos", platform, StringComparison.Ordinal);
         Assert.Contains("platform.PlatformSetImeDataFn", platform, StringComparison.Ordinal);
-        Assert.Contains("Win32ImeNative.SetCompositionWindow", platform, StringComparison.Ordinal);
-        Assert.Contains("Win32ImeNative.SetCandidateWindow", platform, StringComparison.Ordinal);
+        Assert.Contains("bool wantsTextInput = data->WantTextInput != 0;", platform, StringComparison.Ordinal);
+        Assert.Contains("wantsTextInput,", platform, StringComparison.Ordinal);
+        Assert.Contains("_imeContext.Detach();", platform, StringComparison.Ordinal);
+        Assert.Contains("WindowsImeContextRegistry.Shared", platform, StringComparison.Ordinal);
+        Assert.Contains("Dictionary<IntPtr, WindowState>", imeController, StringComparison.Ordinal);
+        Assert.Contains("FindMostRecentRequester", imeController, StringComparison.Ordinal);
+        Assert.Contains("_native.CancelComposition(context)", imeController, StringComparison.Ordinal);
+        Assert.Contains("_native.CloseCandidate(context)", imeController, StringComparison.Ordinal);
+        Assert.Contains("_native.AssociateContext(Hwnd, IntPtr.Zero)", imeController, StringComparison.Ordinal);
+        Assert.Contains("_native.AssociateContext(Hwnd, _suspendedContext)", imeController, StringComparison.Ordinal);
+        Assert.Contains("Win32ImeNative.SetCompositionWindow", imeController, StringComparison.Ordinal);
+        Assert.Contains("Win32ImeNative.SetCandidateWindow", imeController, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImmSetOpenStatus", imeNative, StringComparison.Ordinal);
         Assert.Contains("io.WantSetMousePos", platform, StringComparison.Ordinal);
         Assert.Contains("public event Action<bool> FocusChanged", renderWindow, StringComparison.Ordinal);
 
@@ -632,6 +660,7 @@ public sealed class HostingProjectDisciplineTests
             Assert.Contains("_platform.Attach();", backend, StringComparison.Ordinal);
             Assert.Contains("_platform.NewFrame();", backend, StringComparison.Ordinal);
             Assert.Contains("_platform.Dispose();", backend, StringComparison.Ordinal);
+            Assert.Contains("_platform.SetWindowFocused(focused);", backend, StringComparison.Ordinal);
             Assert.Contains("ImGui.AddFocusEvent(ImGui.GetIO(), focused);", backend, StringComparison.Ordinal);
         }
 
@@ -761,6 +790,7 @@ public sealed class HostingProjectDisciplineTests
             "New Scene",
             "Open Scene",
             "Build Settings...",
+            "Build And Run",
             "Exit",
             "Delete",
             "Duplicate",
@@ -972,6 +1002,7 @@ public sealed class HostingProjectDisciplineTests
         string shellWindow = File.ReadAllText(Path.Combine(shellRoot, "EditorShellWindow.cs"));
         string host = File.ReadAllText(Path.Combine(shellRoot, "EditorShellHostExtension.cs"));
         string menu = File.ReadAllText(Path.Combine(shellRoot, "EditorMainMenuBar.cs"));
+        string shortcuts = File.ReadAllText(Path.Combine(shellRoot, "EditorShortcutCatalog.cs"));
         string preferencesStore = File.ReadAllText(Path.Combine(shellRoot, "Settings", "EditorPreferencesStore.cs"));
         string preferencesWindow = File.ReadAllText(Path.Combine(shellRoot, "Settings", "EditorPreferencesWindow.cs"));
         string projectSettings = File.ReadAllText(Path.Combine(shellRoot, "Settings", "ProjectSettingsPanel.cs"));
@@ -990,6 +1021,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("AddHiddenPanel(_buildSettingsPanel)", host, StringComparison.Ordinal);
         Assert.Contains("EditorUiScale.Scale(ToolbarHeight, uiScale)", menu, StringComparison.Ordinal);
         Assert.Contains("DispatchShortcuts(app)", menu, StringComparison.Ordinal);
+        Assert.Contains("ImGuiInputFlags.RouteGlobal", shortcuts, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImGuiInputFlags.RouteOverActive", shortcuts, StringComparison.Ordinal);
         Assert.Contains("Appearance", preferencesWindow, StringComparison.Ordinal);
         Assert.Contains("External Tools", preferencesWindow, StringComparison.Ordinal);
         Assert.Contains("EditorShortcutCatalog.All", preferencesWindow, StringComparison.Ordinal);
@@ -1217,9 +1250,14 @@ public sealed class HostingProjectDisciplineTests
         Assert.DoesNotContain("ScriptCameraApi camera", source, StringComparison.Ordinal);
         Assert.Contains("MaterialBrushPalettePanel? brushPanel", source, StringComparison.Ordinal);
         Assert.Contains("brushPanel.ApplyAt", source, StringComparison.Ordinal);
+        Assert.Contains("MaterialBrushActive", source, StringComparison.Ordinal);
+        Assert.Contains("SetMaterialBrushActive", source, StringComparison.Ordinal);
+        Assert.Contains("ImGuiKey.B", source, StringComparison.Ordinal);
+        Assert.Contains("WantTextInput", source, StringComparison.Ordinal);
         Assert.Contains("WantCaptureMouse", source, StringComparison.Ordinal);
         Assert.Contains("IsGizmoCapturingMouse", source, StringComparison.Ordinal);
         Assert.Contains("hasSelection && IsGizmoCapturingMouse()", source, StringComparison.Ordinal);
+        Assert.Contains("if (MaterialBrushActive && _preparedMode == EditorMode.Edit)", source, StringComparison.Ordinal);
         Assert.Contains("TryPick", source, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", source, StringComparison.Ordinal);
         Assert.Contains("ImGuizmo.Manipulate", source, StringComparison.Ordinal);
@@ -1301,6 +1339,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsPanel(_project, console: _app.ConsoleStore)", source, StringComparison.Ordinal);
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
+        Assert.Contains("TryStartBuild", source, StringComparison.Ordinal);
+        Assert.Contains("build_settings_body", source, StringComparison.Ordinal);
+        Assert.Contains("_settings.RunAfterBuild = runAfterBuild;", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("runAfterBuild || _settings.RunAfterBuild", source, StringComparison.Ordinal);
         Assert.Contains("ContentRoot = _project.ContentRootPath", source, StringComparison.Ordinal);
         Assert.Contains("TryStartScriptedBuildProbe", source, StringComparison.Ordinal);
         Assert.Contains("CaptureScriptedBuildProbe", source, StringComparison.Ordinal);

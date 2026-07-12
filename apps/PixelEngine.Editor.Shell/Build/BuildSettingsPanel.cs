@@ -94,6 +94,27 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         };
     }
 
+    /// <summary>
+    /// 使用当前 Build Settings profile 启动一次真实构建命令。
+    /// </summary>
+    /// <param name="runAfterBuild">构建成功后是否立即启动玩家。</param>
+    /// <param name="diagnostic">命令是否可执行及其原因。</param>
+    /// <returns>命令已成功提交时返回 <see langword="true"/>。</returns>
+    public bool TryStartBuild(bool runAfterBuild, out string diagnostic)
+    {
+        DrainEvents();
+        RefreshTasks();
+        if (!CanStartBuild(out diagnostic))
+        {
+            _validationMessage = diagnostic;
+            return false;
+        }
+
+        StartBuild(runAfterBuild);
+        diagnostic = runAfterBuild ? "Build And Run 已启动。" : "Build 已启动。";
+        return true;
+    }
+
     public ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
@@ -167,19 +188,28 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         Visible = visible;
+        // plan/19：可变长度的 scene/log/result 只能滚动 body；Build 动作必须像 Unity 一样
+        // 固定在 footer，保证默认小停靠区和 720p 窗口也能完成构建。
+        float footerHeight = ImGui.GetTextLineHeightWithSpacing() +
+            ImGui.GetFrameHeightWithSpacing() +
+            ImGui.GetStyle().ItemSpacing.Y +
+            2f;
+        float bodyHeight = Math.Max(1f, ImGui.GetContentRegionAvail().Y - footerHeight);
+        _ = ImGui.BeginChild("build_settings_body", new System.Numerics.Vector2(0f, bodyHeight));
         ImGui.BeginDisabled(_view.IsRunning);
         DrawSettings();
         ImGui.SeparatorText("场景");
         DrawScenes();
         ImGui.EndDisabled();
-        ImGui.SeparatorText("操作");
-        DrawActions();
         ImGui.SeparatorText("进度");
         DrawProgress();
         ImGui.SeparatorText("日志");
         DrawLog();
         ImGui.SeparatorText("结果");
         DrawResult();
+        ImGui.EndChild();
+        ImGui.Separator();
+        DrawActions();
         ImGui.End();
     }
 
@@ -228,13 +258,6 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         if (ImGui.Checkbox("完整 content", ref wholeContent))
         {
             _settings.PackageWholeContent = wholeContent;
-            changed = true;
-        }
-
-        bool runAfterBuild = _settings.RunAfterBuild;
-        if (ImGui.Checkbox("Build And Run", ref runAfterBuild))
-        {
-            _settings.RunAfterBuild = runAfterBuild;
             changed = true;
         }
 
@@ -296,28 +319,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
     private void DrawActions()
     {
-        bool valid = _settings.TryNormalize(out _validationMessage);
-        BuildPreflight? preflight = _view.Preflight;
-        bool aotRidSupported = _settings.Channel != BuildProfileChannel.Aot ||
-            string.Equals(_settings.Rid, BuildHostRid.Current, StringComparison.OrdinalIgnoreCase);
-        if (!valid)
-        {
-            ImGui.TextUnformatted(_validationMessage);
-        }
-        else if (!aotRidSupported)
-        {
-            ImGui.TextUnformatted($"NativeAOT 仅支持当前宿主 RID：{BuildHostRid.Current}。");
-        }
-        else if (_preflightTask is { IsCompleted: false })
-        {
-            ImGui.TextUnformatted("正在预检构建工具...");
-        }
-        else
-        {
-            ImGui.TextUnformatted(preflight?.Diagnostic ?? "构建工具尚未完成预检。");
-        }
-
-        bool canBuild = valid && aotRidSupported && preflight?.Ok == true && !_view.IsRunning;
+        bool canBuild = CanStartBuild(out _validationMessage);
+        ImGui.TextUnformatted(_validationMessage);
         ImGui.BeginDisabled(!canBuild);
         if (ImGui.Button("Build"))
         {
@@ -344,6 +347,37 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         {
             StartPreflight();
         }
+    }
+
+    private bool CanStartBuild(out string diagnostic)
+    {
+        if (_view.IsRunning)
+        {
+            diagnostic = "构建正在运行。";
+            return false;
+        }
+
+        if (!_settings.TryNormalize(out diagnostic))
+        {
+            return false;
+        }
+
+        if (_settings.Channel == BuildProfileChannel.Aot &&
+            !string.Equals(_settings.Rid, BuildHostRid.Current, StringComparison.OrdinalIgnoreCase))
+        {
+            diagnostic = $"NativeAOT 仅支持当前宿主 RID：{BuildHostRid.Current}。";
+            return false;
+        }
+
+        if (_preflightTask is { IsCompleted: false })
+        {
+            diagnostic = "正在预检构建工具...";
+            return false;
+        }
+
+        BuildPreflight? preflight = _view.Preflight;
+        diagnostic = preflight?.Diagnostic ?? "构建工具尚未完成预检。";
+        return preflight?.Ok == true;
     }
 
     private void DrawProgress()
@@ -462,7 +496,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             return;
         }
 
-        _settings.RunAfterBuild = runAfterBuild || _settings.RunAfterBuild;
+        // Build 与 Build And Run 是逐次命令；不能把上一次的启动选择粘滞到下一次 Build。
+        _settings.RunAfterBuild = runAfterBuild;
         Save();
         _buildCancellation?.Dispose();
         _buildCancellation = new CancellationTokenSource();

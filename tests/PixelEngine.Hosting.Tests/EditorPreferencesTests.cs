@@ -292,6 +292,8 @@ public sealed class EditorPreferencesTests
         }
 
         Assert.Equal("Ctrl+S", EditorShortcutCatalog.Get(EditorShortcutCommand.SaveScene).DisplayText);
+        Assert.Equal("Ctrl+Shift+B", EditorShortcutCatalog.Get(EditorShortcutCommand.OpenBuildSettings).DisplayText);
+        Assert.Equal("Ctrl+B", EditorShortcutCatalog.Get(EditorShortcutCommand.BuildAndRun).DisplayText);
         Assert.Equal("Ctrl+,", EditorShortcutCatalog.Get(EditorShortcutCommand.OpenPreferences).DisplayText);
     }
 

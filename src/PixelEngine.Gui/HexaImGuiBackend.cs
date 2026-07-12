@@ -14,6 +14,7 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
     private readonly ImGuiPlatformBridge _platform = new(window);
     private readonly GuiFontManager _fontManager = new();
     private readonly GuiClipboardBridge _clipboard = new();
+    private readonly ImGuiMouseReleaseScheduler _mouseReleaseScheduler = new();
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
@@ -114,6 +115,7 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         io.DisplaySize = metrics.DisplaySize;
         io.DisplayFramebufferScale = metrics.DisplayFramebufferScale;
         io.DeltaTime = deltaSeconds;
+        FlushScheduledMouseReleases(io);
         _platform.NewFrame();
         _renderer.NewFrame();
         ImGui.NewFrame();
@@ -136,6 +138,7 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         {
             SetCurrentContext();
             System.Numerics.Vector2 mapped = _frameMetrics.MapMousePosition(x, y);
+            _mouseReleaseScheduler.RecordPosition(mapped);
             ImGui.AddMousePosEvent(ImGui.GetIO(), mapped.X, mapped.Y);
         }
     }
@@ -146,6 +149,7 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         if (_initialized)
         {
             SetCurrentContext();
+            _mouseReleaseScheduler.RecordPosition(new System.Numerics.Vector2(x, y));
             ImGui.AddMousePosEvent(ImGui.GetIO(), x, y);
         }
     }
@@ -156,7 +160,19 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         if (_initialized)
         {
             SetCurrentContext();
-            ImGui.AddMouseButtonEvent(ImGui.GetIO(), button, down);
+            bool emitButtonEvent = _mouseReleaseScheduler.ShouldEmitButtonEvent(
+                button,
+                down,
+                out bool releaseBeforeEvent);
+            if (releaseBeforeEvent)
+            {
+                ImGui.AddMouseButtonEvent(ImGui.GetIO(), button, false);
+            }
+
+            if (emitButtonEvent)
+            {
+                ImGui.AddMouseButtonEvent(ImGui.GetIO(), button, down);
+            }
         }
     }
 
@@ -196,6 +212,12 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         if (_initialized)
         {
             SetCurrentContext();
+            if (!focused)
+            {
+                FlushMouseReleasesForFocusLoss(ImGui.GetIO());
+            }
+
+            _platform.SetWindowFocused(focused);
             ImGui.AddFocusEvent(ImGui.GetIO(), focused);
         }
     }
@@ -246,6 +268,26 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         }
 
         _ = _fontManager.AddCjkFont(io.Fonts, fontPath, fontSize);
+    }
+
+    private void FlushScheduledMouseReleases(ImGuiIOPtr io)
+    {
+        Span<int> buttons = stackalloc int[ImGuiMouseReleaseScheduler.MaximumMouseButtons];
+        int count = _mouseReleaseScheduler.BeginFrame(buttons);
+        for (int i = 0; i < count; i++)
+        {
+            ImGui.AddMouseButtonEvent(io, buttons[i], false);
+        }
+    }
+
+    private void FlushMouseReleasesForFocusLoss(ImGuiIOPtr io)
+    {
+        Span<int> buttons = stackalloc int[ImGuiMouseReleaseScheduler.MaximumMouseButtons];
+        int count = _mouseReleaseScheduler.FlushForFocusLoss(buttons);
+        for (int i = 0; i < count; i++)
+        {
+            ImGui.AddMouseButtonEvent(io, buttons[i], false);
+        }
     }
 
     private void ThrowIfNotInitialized()

@@ -1,3 +1,4 @@
+using Hexa.NET.ImGui;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Scripting;
 
@@ -58,6 +59,8 @@ public sealed class EditorApp : IDisposable
     /// </summary>
     public int PanelCount => _panels.Count;
 
+    internal string? PendingPanelFocusTitle { get; private set; }
+
     /// <summary>
     /// Editor 是否已初始化且启用。
     /// </summary>
@@ -91,7 +94,15 @@ public sealed class EditorApp : IDisposable
     /// <returns>找到并打开面板时为 true。</returns>
     public bool TryShowPanel(string title)
     {
-        return TrySetPanelVisibility(title, visible: true);
+        if (!TrySetPanelVisibility(title, visible: true))
+        {
+            return false;
+        }
+
+        // Unity-like Window/File 命令既显示窗口也激活对应 dock tab；请求延迟到该面板
+        // 下一次 Begin 之前消费，避免在菜单绘制期间把焦点给当前菜单宿主。
+        PendingPanelFocusTitle = title;
+        return true;
     }
 
     /// <summary>
@@ -132,6 +143,11 @@ public sealed class EditorApp : IDisposable
             if (string.Equals(panel.Title, title, StringComparison.Ordinal))
             {
                 panel.Visible = visible;
+                if (!visible && string.Equals(PendingPanelFocusTitle, title, StringComparison.Ordinal))
+                {
+                    PendingPanelFocusTitle = null;
+                }
+
                 return true;
             }
         }
@@ -327,6 +343,12 @@ public sealed class EditorApp : IDisposable
             bool isChrome = panel is IEditorChromePanel;
             if (panel.Visible && isChrome == chromeOnly)
             {
+                if (string.Equals(PendingPanelFocusTitle, panel.Title, StringComparison.Ordinal))
+                {
+                    ImGui.SetNextWindowFocus();
+                    PendingPanelFocusTitle = null;
+                }
+
                 panel.Draw(in context);
             }
         }

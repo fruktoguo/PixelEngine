@@ -129,6 +129,18 @@ internal sealed class EditorShellHostExtension :
         return _buildSettingsPanel.TryStartScriptedBuildProbe(outputDirectory, runAfterBuild, out diagnostic);
     }
 
+    public bool TryStartBuild(bool runAfterBuild, out string diagnostic)
+    {
+        if (_buildSettingsPanel is null)
+        {
+            diagnostic = "Build Settings 面板尚未注册。";
+            return false;
+        }
+
+        _ = _editor.TryShowPanel(BuildSettingsPanel.PanelTitle);
+        return _buildSettingsPanel.TryStartBuild(runAfterBuild, out diagnostic);
+    }
+
     public ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
     {
         return _buildSettingsPanel?.CaptureScriptedBuildProbe() ?? new ScriptedBuildProbeSnapshot();

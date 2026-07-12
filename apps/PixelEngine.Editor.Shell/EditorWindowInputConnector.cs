@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using PixelEngine.Gui;
 using Silk.NET.Input;
 using System.Numerics;
 
@@ -11,6 +12,7 @@ internal sealed class EditorWindowInputConnector : IDisposable
 {
     private readonly RenderWindow _window;
     private readonly ImGuiInputBridge _input;
+    private OrderedPointerPosition _pointerPosition;
     private bool _disposed;
 
     public EditorWindowInputConnector(RenderWindow window, ImGuiInputBridge input)
@@ -82,6 +84,11 @@ internal sealed class EditorWindowInputConnector : IDisposable
 
     private void OnFocusChanged(bool focused)
     {
+        if (!focused)
+        {
+            _pointerPosition.Reset();
+        }
+
         _input.Focus(focused);
     }
 
@@ -101,18 +108,18 @@ internal sealed class EditorWindowInputConnector : IDisposable
     private void OnMouseMove(IMouse mouse, Vector2 position)
     {
         _ = mouse;
-        ForwardMousePosition(position);
+        ForwardMousePosition(_pointerPosition.RecordMove(position));
     }
 
     private void OnMouseDown(IMouse mouse, MouseButton button)
     {
-        ForwardMousePosition(mouse.Position);
+        ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position));
         _input.MouseButton(button, down: true);
     }
 
     private void OnMouseUp(IMouse mouse, MouseButton button)
     {
-        ForwardMousePosition(mouse.Position);
+        ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position));
         _input.MouseButton(button, down: false);
     }
 

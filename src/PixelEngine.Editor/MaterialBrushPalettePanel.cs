@@ -19,12 +19,16 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     /// </summary>
     /// <param name="materials">材质表。</param>
     /// <param name="editApi">Simulation 编辑 API。</param>
-    public MaterialBrushPalettePanel(MaterialTable materials, ISimulationEditApi editApi)
+    /// <param name="inspectApi">可选的驻留状态检视 API；省略时从 edit API 自动解析。</param>
+    public MaterialBrushPalettePanel(
+        MaterialTable materials,
+        ISimulationEditApi editApi,
+        ISimulationInspectApi? inspectApi = null)
     {
         ArgumentNullException.ThrowIfNull(materials);
         _entries = BuildEntries(materials);
         _names = Array.ConvertAll(_entries, static entry => $"{entry.Id}: {entry.Name}");
-        _applicator = new MaterialBrushApplicator(editApi);
+        _applicator = new MaterialBrushApplicator(editApi, inspectApi: inspectApi);
         Settings = new MaterialBrushSettings();
         if (_entries.Length != 0)
         {
@@ -39,6 +43,26 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     public bool Visible { get; set; } = true;
 
     /// <summary>
+    /// 当前是否显式激活 Scene View 世界画刷。
+    /// </summary>
+    public bool IsActive { get; private set; }
+
+    /// <summary>
+    /// 最近一次应用中因 chunk 未驻留而跳过的 cell 数。
+    /// </summary>
+    public int LastSkippedNonResidentCells { get; private set; }
+
+    /// <summary>
+    /// 最近一次应用中因超出 authoring 世界边界而跳过的 cell 数。
+    /// </summary>
+    public int LastSkippedOutOfBoundsCells { get; private set; }
+
+    /// <summary>
+    /// 最近一次工具状态或应用结果说明。
+    /// </summary>
+    public string Status { get; private set; } = "Scene 画刷未启用。";
+
+    /// <summary>
     /// 当前画刷设置。
     /// </summary>
     public MaterialBrushSettings Settings { get; }
@@ -49,11 +73,52 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     public ReadOnlySpan<MaterialPaletteEntry> Entries => _entries;
 
     /// <summary>
+    /// 显式切换 Scene View 世界画刷；激活时同步显示参数面板。
+    /// </summary>
+    public void SetActive(bool active)
+    {
+        IsActive = active;
+        if (active)
+        {
+            Visible = true;
+        }
+
+        Status = active ? "Scene 画刷已启用；左键绘制，W/E/R 返回对象工具。" : "Scene 画刷未启用。";
+    }
+
+    /// <summary>
     /// 在指定世界坐标应用当前画刷。
     /// </summary>
     public int ApplyAt(int worldX, int worldY)
     {
-        return _applicator.ApplyAt(worldX, worldY, Settings);
+        return ApplyAt(worldX, worldY, MaterialBrushBounds.Unbounded);
+    }
+
+    /// <summary>
+    /// 在指定世界坐标与 authoring 边界内应用当前画刷。
+    /// </summary>
+    public int ApplyAt(int worldX, int worldY, MaterialBrushBounds bounds)
+    {
+        if (!IsActive)
+        {
+            LastSkippedNonResidentCells = 0;
+            LastSkippedOutOfBoundsCells = 0;
+            return 0;
+        }
+
+        int writes = _applicator.ApplyAt(
+            worldX,
+            worldY,
+            Settings,
+            bounds,
+            out int skippedNonResidentCells,
+            out int skippedOutOfBoundsCells);
+        LastSkippedNonResidentCells = skippedNonResidentCells;
+        LastSkippedOutOfBoundsCells = skippedOutOfBoundsCells;
+        Status = skippedNonResidentCells == 0 && skippedOutOfBoundsCells == 0
+            ? $"已应用 {writes} 个 cell。"
+            : $"已应用 {writes} 个 cell；跳过 {skippedNonResidentCells} 个未驻留、{skippedOutOfBoundsCells} 个越界 cell。";
+        return writes;
     }
 
     /// <inheritdoc />
@@ -68,6 +133,15 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         }
 
         Visible = visible;
+        bool active = IsActive;
+        if (ImGui.Checkbox("启用 Scene 画刷", ref active))
+        {
+            SetActive(active);
+        }
+
+        ImGui.SameLine();
+        ImGui.TextDisabled(IsActive ? "B · 左键/拖动绘制" : "选择 Brush 或按 B 后绘制");
+        ImGui.Separator();
         DrawToolSelector();
         DrawShapeSelector();
         int radius = Settings.Radius;
@@ -84,6 +158,15 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
 
         DrawMaterialSelector();
         DrawTemperatureControls();
+        if (LastSkippedNonResidentCells != 0 || LastSkippedOutOfBoundsCells != 0)
+        {
+            ImGui.TextColored(new Vector4(0.95f, 0.70f, 0.25f, 1f), Status);
+        }
+        else
+        {
+            ImGui.TextDisabled(Status);
+        }
+
         ImGui.End();
     }
 

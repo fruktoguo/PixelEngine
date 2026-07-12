@@ -276,6 +276,46 @@ public sealed class EditorConsoleStoreTests
         Assert.Contains(entries, entry => entry.Source == "build-result" && entry.Severity == EditorConsoleSeverity.Warning && entry.Text == "result warning");
     }
 
+    /// <summary>
+    /// 验证 Build And Run 只影响当前一次请求，下一次普通 Build 不会继承启动语义。
+    /// </summary>
+    [Fact]
+    public void BuildSettingsCommandsKeepRunAfterBuildScopedToEachInvocation()
+    {
+        // Arrange：准备可立即完成的预检和失败构建，避免测试真正启动玩家进程。
+        using TempDir temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "BuildCommandProject"), "Build Command Project");
+        ImmediateBuildService service = new()
+        {
+            Preflight = new BuildPreflight { Ok = true, Diagnostic = "preflight ok" },
+            Result = new BuildResult { Ok = false, Error = "expected test result", ExitCode = 5 },
+        };
+        BuildSettingsPanel panel = new(project, service);
+        _ = panel.ApplyScriptedBuildSettingsProbe(Path.Combine(temp.Path, "out"));
+
+        // Act：先执行 Build And Run，再执行普通 Build。
+        Assert.True(panel.TryStartBuild(runAfterBuild: true, out string runDiagnostic), runDiagnostic);
+        Assert.True(SpinWait.SpinUntil(
+            () =>
+            {
+                _ = panel.CaptureScriptedBuildProbe();
+                return service.Requests.Count == 1;
+            },
+            TimeSpan.FromSeconds(2)));
+        Assert.True(panel.TryStartBuild(runAfterBuild: false, out string buildDiagnostic), buildDiagnostic);
+        Assert.True(SpinWait.SpinUntil(
+            () =>
+            {
+                _ = panel.CaptureScriptedBuildProbe();
+                return service.Requests.Count == 2;
+            },
+            TimeSpan.FromSeconds(2)));
+
+        // Assert：两次请求各自携带精确命令语义。
+        Assert.True(service.Requests[0].RunAfterBuild);
+        Assert.False(service.Requests[1].RunAfterBuild);
+    }
+
     private sealed class ImmediateBuildService : IPlayerBuildService
     {
         public BuildPreflight Preflight { get; init; } = new() { Ok = true, Diagnostic = "ok" };
@@ -283,6 +323,8 @@ public sealed class EditorConsoleStoreTests
         public BuildProgressEvent[] Events { get; init; } = [];
 
         public BuildResult Result { get; init; } = new() { Ok = true, ExitCode = 0 };
+
+        public List<BuildRequest> Requests { get; } = [];
 
         public Task<BuildPreflight> PreflightAsync(CancellationToken cancellationToken = default)
         {
@@ -292,8 +334,8 @@ public sealed class EditorConsoleStoreTests
 
         public Task<BuildResult> RunAsync(BuildRequest request, IProgress<BuildProgressEvent> progress, CancellationToken cancellationToken)
         {
-            _ = request;
             _ = cancellationToken;
+            Requests.Add(request);
             for (int i = 0; i < Events.Length; i++)
             {
                 progress.Report(Events[i]);

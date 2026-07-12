@@ -2,6 +2,7 @@ using Hexa.NET.ImGuizmo;
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using System.Numerics;
 using System.Reflection;
 using Xunit;
@@ -15,6 +16,34 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class SceneAuthoringPreviewTests
 {
+    /// <summary>
+    /// 验证 Scene 的 W/E/R/B 只接受无 modifier 裸键，不与构建等全局命令重叠。
+    /// </summary>
+    [Theory]
+    [InlineData(false, false, false, false, false, true)]
+    [InlineData(true, false, false, false, false, false)]
+    [InlineData(false, true, false, false, false, false)]
+    [InlineData(false, false, true, false, false, false)]
+    [InlineData(false, false, false, true, false, false)]
+    [InlineData(false, false, false, false, true, false)]
+    public void SceneToolShortcutsRequireUnmodifiedNonTextInput(
+        bool wantTextInput,
+        bool keyCtrl,
+        bool keyShift,
+        bool keyAlt,
+        bool keySuper,
+        bool expected)
+    {
+        Assert.Equal(
+            expected,
+            SceneToolShortcutPolicy.IsAllowed(
+                wantTextInput,
+                keyCtrl,
+                keyShift,
+                keyAlt,
+                keySuper));
+    }
+
     /// <summary>
     /// 验证 Scene toolbar 的 active tool、grid 与 local/global 都映射到真实 authoring 状态。
     /// </summary>
@@ -35,6 +64,60 @@ public sealed class SceneAuthoringPreviewTests
         Assert.Equal(ImGuizmoMode.World, panel.GizmoMode);
         Assert.False(panel.ShowGrid);
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => panel.SetOperation(ImGuizmoOperation.Bounds));
+    }
+
+    /// <summary>
+    /// 验证世界画刷默认关闭，并与对象工具、selection 与 Play mode 形成单一互斥工具状态。
+    /// </summary>
+    [Fact]
+    public void SceneMaterialBrushIsExplicitMutuallyExclusiveAndEditOnly()
+    {
+        EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "brush-routing",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "Selected",
+                    Transform = new EngineSceneTransformDocument { X = 10f, Y = 10f },
+                },
+            ],
+        });
+        RecordingEditApi edit = new();
+        MaterialBrushPalettePanel brush = new(CreateBrushMaterials(), edit);
+        SceneViewPanel panel = new(scene, new EditorUndoStack(), brush);
+        EditorSelection selection = new();
+        scene.Select(1);
+        selection.SelectGameObject(1);
+        _ = panel.PrepareCanvas(new Vector2(800f, 450f));
+
+        panel.HandleScenePointer(selection, new Vector2(799f, 449f), clicked: true, dragging: false);
+
+        Assert.False(panel.MaterialBrushActive);
+        Assert.Empty(edit.Painted);
+        Assert.Null(selection.GameObjectStableId);
+
+        scene.Select(1);
+        selection.SelectGameObject(1);
+        Assert.True(panel.SetMaterialBrushActive(true));
+        panel.HandleScenePointer(selection, new Vector2(400f, 225f), clicked: true, dragging: false);
+
+        Assert.True(panel.MaterialBrushActive);
+        Assert.NotEmpty(edit.Painted);
+        Assert.Equal(1, selection.GameObjectStableId);
+        Assert.False(panel.BeginGizmoTransform(1));
+
+        panel.SetOperation(ImGuizmoOperation.RotateZ);
+        Assert.False(panel.MaterialBrushActive);
+        Assert.Equal(ImGuizmoOperation.RotateZ, panel.Operation);
+
+        Assert.True(panel.SetMaterialBrushActive(true));
+        panel.PrepareFrame(selectedStableId: 1, EditorUiMode.Play);
+        Assert.False(panel.MaterialBrushActive);
+        Assert.False(panel.SetMaterialBrushActive(true));
     }
 
     /// <summary>
@@ -674,5 +757,54 @@ public sealed class SceneAuthoringPreviewTests
         }
 
         throw new DirectoryNotFoundException("未找到 PixelEngine 仓库根目录。");
+    }
+
+    private static MaterialTable CreateBrushMaterials()
+    {
+        return new MaterialTable(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1f, TextureId = -1 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1f, TextureId = -1 },
+        ]);
+    }
+
+    private sealed class RecordingEditApi : ISimulationEditApi
+    {
+        public List<(int X, int Y, ushort Material)> Painted { get; } = [];
+
+        public void PaintCell(int worldX, int worldY, ushort material)
+        {
+            Painted.Add((worldX, worldY, material));
+        }
+
+        public int PaintRect(int minX, int minY, int maxX, int maxY, ushort material)
+        {
+            for (int y = minY; y <= maxY; y++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    Painted.Add((x, y, material));
+                }
+            }
+
+            return (maxX - minX + 1) * (maxY - minY + 1);
+        }
+
+        public void ClearCell(int worldX, int worldY)
+        {
+        }
+
+        public int ClearRect(int minX, int minY, int maxX, int maxY)
+        {
+            return (maxX - minX + 1) * (maxY - minY + 1);
+        }
+
+        public void AddTemperature(int worldX, int worldY, float deltaCelsius)
+        {
+        }
+
+        public void SetTemperature(int worldX, int worldY, float targetCelsius)
+        {
+        }
     }
 }

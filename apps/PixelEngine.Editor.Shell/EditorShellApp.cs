@@ -1701,6 +1701,17 @@ internal sealed class EditorShellApp
         _ = CurrentSession?.ShowBuildSettings();
     }
 
+    public bool TryStartBuild(bool runAfterBuild, out string diagnostic)
+    {
+        if (CurrentSession is null)
+        {
+            diagnostic = "当前没有打开的工程。";
+            return false;
+        }
+
+        return CurrentSession.TryStartBuild(runAfterBuild, out diagnostic);
+    }
+
     public void ShowPreferences(EditorPreferencesCategory category = EditorPreferencesCategory.Appearance)
     {
         PreferencesWindow.Show(category);

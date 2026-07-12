@@ -15,6 +15,7 @@ public sealed unsafe class ImGuiPlatformBridge : IDisposable
 {
     private readonly RenderWindow _window;
     private readonly PlatformSetImeDataFn _setImeData;
+    private readonly WindowsImeContextController _imeContext = new(WindowsImeContextRegistry.Shared);
     private ImGuiMouseCursor _lastMouseCursor = ImGuiMouseCursor.Count;
     private bool _lastCursorHidden;
     private bool _attached;
@@ -47,10 +48,11 @@ public sealed unsafe class ImGuiPlatformBridge : IDisposable
             io.BackendFlags |= ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.HasSetMousePos;
         }
 
-        if (OperatingSystem.IsWindows() && _window.TryGetWin32WindowHandle(out _))
+        if (OperatingSystem.IsWindows() && _window.TryGetWin32WindowHandle(out IntPtr hwnd))
         {
             ImGuiPlatformIOPtr platform = ImGui.GetPlatformIO();
             platform.PlatformSetImeDataFn = (void*)Marshal.GetFunctionPointerForDelegate(_setImeData);
+            _imeContext.Attach(hwnd);
         }
 
         _attached = true;
@@ -99,6 +101,16 @@ public sealed unsafe class ImGuiPlatformBridge : IDisposable
     }
 
     /// <summary>
+    /// 同步宿主窗口焦点；失焦时立即取消并暂挂当前 IME context，重新聚焦后仅在文本项仍请求输入时恢复。
+    /// </summary>
+    /// <param name="focused">窗口当前是否拥有键盘焦点。</param>
+    public void SetWindowFocused(bool focused)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _imeContext.SetFocused(focused);
+    }
+
+    /// <summary>
     /// 从当前 ImGui context 移除平台回调，并恢复标准系统光标。
     /// </summary>
     public void Detach()
@@ -112,6 +124,7 @@ public sealed unsafe class ImGuiPlatformBridge : IDisposable
         io.BackendFlags &= ~(ImGuiBackendFlags.HasMouseCursors | ImGuiBackendFlags.HasSetMousePos);
         if (OperatingSystem.IsWindows())
         {
+            _imeContext.Detach();
             ImGuiPlatformIOPtr platform = ImGui.GetPlatformIO();
             platform.PlatformSetImeDataFn = null;
         }
@@ -228,32 +241,26 @@ public sealed unsafe class ImGuiPlatformBridge : IDisposable
     {
         _ = context;
         _ = viewport;
-        if (data is null || data->WantVisible == 0 || !OperatingSystem.IsWindows())
+        if (data is null || !OperatingSystem.IsWindows())
         {
             return;
         }
 
-        if (!_window.TryGetWin32WindowHandle(out IntPtr hwnd) ||
-            !TryCreateImeForms(data->InputPos, data->InputLineHeight, out Win32CompositionForm composition, out Win32CandidateForm candidate))
-        {
-            return;
-        }
-
-        IntPtr imeContext = Win32ImeNative.GetContext(hwnd);
-        if (imeContext == IntPtr.Zero)
-        {
-            return;
-        }
-
-        try
-        {
-            _ = Win32ImeNative.SetCompositionWindow(imeContext, in composition);
-            _ = Win32ImeNative.SetCandidateWindow(imeContext, in candidate);
-        }
-        finally
-        {
-            _ = Win32ImeNative.ReleaseContext(hwnd, imeContext);
-        }
+        bool visible = data->WantVisible != 0;
+        bool wantsTextInput = data->WantTextInput != 0;
+        Win32CompositionForm composition = default;
+        Win32CandidateForm candidate = default;
+        bool hasForms = visible && TryCreateImeForms(
+            data->InputPos,
+            data->InputLineHeight,
+            out composition,
+            out candidate);
+        _imeContext.UpdateRequest(
+            wantsTextInput,
+            visible,
+            hasForms,
+            in composition,
+            in candidate);
     }
 
     private static bool IsFinite(Vector2 value)
@@ -275,4 +282,5 @@ public sealed unsafe class ImGuiPlatformBridge : IDisposable
         long result = (long)value + delta;
         return (int)Math.Clamp(result, int.MinValue, int.MaxValue);
     }
+
 }

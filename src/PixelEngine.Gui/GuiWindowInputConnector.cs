@@ -15,6 +15,7 @@ public sealed class GuiWindowInputConnector : IDisposable
     private readonly GuiInputBridge _input;
     private readonly IGuiViewportInputRoute? _viewportRoute;
     private readonly HashSet<Key> _forwardedKeys = new(64);
+    private OrderedPointerPosition _pointerPosition;
     private int _forwardedMouseButtons;
     private bool _disposed;
 
@@ -121,6 +122,7 @@ public sealed class GuiWindowInputConnector : IDisposable
     {
         if (!focused)
         {
+            _pointerPosition.Reset();
             ReleaseRoutedInput();
         }
 
@@ -149,13 +151,13 @@ public sealed class GuiWindowInputConnector : IDisposable
     private void OnMouseMove(IMouse mouse, Vector2 position)
     {
         _ = mouse;
-        _ = ForwardMousePosition(position);
+        _ = ForwardMousePosition(_pointerPosition.RecordMove(position));
     }
 
     private void OnMouseDown(IMouse mouse, MouseButton button)
     {
         SynchronizeKeyboardRoute();
-        if (!ForwardMousePosition(mouse.Position))
+        if (!ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position)))
         {
             return;
         }
@@ -169,7 +171,7 @@ public sealed class GuiWindowInputConnector : IDisposable
 
     private void OnMouseUp(IMouse mouse, MouseButton button)
     {
-        _ = ForwardMousePosition(mouse.Position);
+        _ = ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position));
         int mask = MouseButtonMask(button);
         if (_viewportRoute is null || (_forwardedMouseButtons & mask) != 0)
         {
@@ -187,7 +189,7 @@ public sealed class GuiWindowInputConnector : IDisposable
         }
 
         SynchronizeKeyboardRoute();
-        if (ForwardMousePosition(mouse.Position))
+        if (ForwardMousePosition(_pointerPosition.ResolveButtonPosition(mouse.Position)))
         {
             _input.MouseWheel(wheel.X, wheel.Y);
         }

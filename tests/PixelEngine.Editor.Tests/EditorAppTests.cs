@@ -154,7 +154,7 @@ public sealed class EditorAppTests
     /// 验证 EditorApp 可按标题读写已注册面板的可见性，未知标题不会伪造成功。
     /// </summary>
     [Fact]
-    public void TryShowPanelSetsRegisteredPanelVisible()
+    public void TryShowPanelSetsRegisteredPanelVisibleAndRequestsDockTabFocus()
     {
         using EditorApp app = new(new RecordingBackend(), new EditorAppOptions());
         RecordingPanel panel = new() { Visible = false };
@@ -162,12 +162,14 @@ public sealed class EditorAppTests
 
         Assert.True(app.TryShowPanel(panel.Title));
         Assert.True(panel.Visible);
+        Assert.Equal(panel.Title, app.PendingPanelFocusTitle);
         Assert.False(app.TryShowPanel("missing"));
 
         Assert.True(app.TryGetPanelVisibility(panel.Title, out bool visible));
         Assert.True(visible);
         Assert.True(app.TrySetPanelVisibility(panel.Title, visible: false));
         Assert.False(panel.Visible);
+        Assert.Null(app.PendingPanelFocusTitle);
         Assert.False(app.TryGetPanelVisibility("missing", out visible));
         Assert.False(visible);
         Assert.False(app.TrySetPanelVisibility("missing", visible: true));

@@ -378,9 +378,22 @@ internal sealed class EditorMainMenuBar
             app.ShowPlayerSettings();
         }
 
-        if (ImGui.MenuItem("Build Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            "Build Settings...",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.OpenBuildSettings).DisplayText,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             app.ShowBuildSettings();
+        }
+
+        if (ImGui.MenuItem(
+            "Build And Run",
+            EditorShortcutCatalog.Get(EditorShortcutCommand.BuildAndRun).DisplayText,
+            selected: false,
+            enabled: app.HasOpenProject))
+        {
+            _ = app.TryStartBuild(runAfterBuild: true, out _);
         }
         ImGui.Separator();
         if (ImGui.MenuItem("Close Project", string.Empty, selected: false, enabled: app.HasOpenProject))
@@ -694,6 +707,15 @@ internal sealed class EditorMainMenuBar
         {
             EditorMainToolbarState state = CaptureToolbarState(app);
             TogglePlayMode(app, state);
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.OpenBuildSettings))
+        {
+            app.ShowBuildSettings();
+        }
+        else if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.BuildAndRun))
+        {
+            _ = app.TryStartBuild(runAfterBuild: true, out _);
         }
     }
 }

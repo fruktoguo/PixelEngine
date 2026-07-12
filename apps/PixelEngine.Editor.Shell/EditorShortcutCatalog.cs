@@ -10,6 +10,8 @@ internal enum EditorShortcutCommand
     Redo,
     Duplicate,
     TogglePlayMode,
+    OpenBuildSettings,
+    BuildAndRun,
     OpenPreferences,
 }
 
@@ -32,6 +34,8 @@ internal static class EditorShortcutCatalog
         Create(EditorShortcutCommand.Redo, "Redo", "Ctrl+Y", ImGuiKey.ModCtrl | ImGuiKey.Y),
         Create(EditorShortcutCommand.Duplicate, "Duplicate", "Ctrl+D", ImGuiKey.ModCtrl | ImGuiKey.D),
         Create(EditorShortcutCommand.TogglePlayMode, "Play / Stop", "Ctrl+P", ImGuiKey.ModCtrl | ImGuiKey.P),
+        Create(EditorShortcutCommand.OpenBuildSettings, "Build Settings", "Ctrl+Shift+B", ImGuiKey.ModCtrl | ImGuiKey.ModShift | ImGuiKey.B),
+        Create(EditorShortcutCommand.BuildAndRun, "Build And Run", "Ctrl+B", ImGuiKey.ModCtrl | ImGuiKey.B),
         Create(EditorShortcutCommand.OpenPreferences, "Preferences", "Ctrl+,", ImGuiKey.ModCtrl | ImGuiKey.Comma),
     ];
 
@@ -52,7 +56,9 @@ internal static class EditorShortcutCatalog
 
     public static bool IsPressed(EditorShortcutCommand command)
     {
-        return ImGui.Shortcut(Get(command).KeyChord);
+        // plan 19：Editor 命令属于全局工作台路由；不使用 RouteOverActive，
+        // 让 InputText 继续拥有文本级 Ctrl+Z/Ctrl+Y/Ctrl+D 等按键语义。
+        return ImGui.Shortcut(Get(command).KeyChord, ImGuiInputFlags.RouteGlobal);
     }
 
     private static EditorShortcutDefinition Create(

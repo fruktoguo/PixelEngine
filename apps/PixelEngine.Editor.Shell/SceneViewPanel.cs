@@ -79,6 +79,8 @@ internal sealed class SceneViewPanel(
 
     internal bool ShowGrid { get; private set; } = true;
 
+    internal bool MaterialBrushActive => _brushPanel?.IsActive == true;
+
     /// <summary>
     /// 推进与面板绘制无关的 gizmo 连续编辑生命周期。
     /// </summary>
@@ -89,6 +91,11 @@ internal sealed class SceneViewPanel(
     internal void PrepareFrame(int? selectedStableId, EditorMode mode)
     {
         _preparedMode = mode;
+        if (mode != EditorMode.Edit && MaterialBrushActive)
+        {
+            _ = SetMaterialBrushActive(false);
+        }
+
         if (!_gizmoTransactionStableId.HasValue)
         {
             return;
@@ -202,7 +209,7 @@ internal sealed class SceneViewPanel(
 
     internal bool BeginGizmoTransform(int stableId)
     {
-        if (_preparedMode != EditorMode.Edit)
+        if (_preparedMode != EditorMode.Edit || MaterialBrushActive)
         {
             _ = CommitGizmoTransform();
             return false;
@@ -315,7 +322,7 @@ internal sealed class SceneViewPanel(
     {
         if (SceneToolbarButton(
             SceneToolbarIcon.Move,
-            Operation == ImGuizmoOperation.Translate,
+            !MaterialBrushActive && Operation == ImGuizmoOperation.Translate,
             enabled: true,
             "Move (W)"))
         {
@@ -325,7 +332,7 @@ internal sealed class SceneViewPanel(
         ImGui.SameLine(0f, 2f);
         if (SceneToolbarButton(
             SceneToolbarIcon.Rotate,
-            Operation == ImGuizmoOperation.RotateZ,
+            !MaterialBrushActive && Operation == ImGuizmoOperation.RotateZ,
             enabled: true,
             "Rotate (E)"))
         {
@@ -335,11 +342,21 @@ internal sealed class SceneViewPanel(
         ImGui.SameLine(0f, 2f);
         if (SceneToolbarButton(
             SceneToolbarIcon.Scale,
-            Operation == ImGuizmoOperation.Scale,
+            !MaterialBrushActive && Operation == ImGuizmoOperation.Scale,
             enabled: true,
             "Scale (R)"))
         {
             SetOperation(ImGuizmoOperation.Scale);
+        }
+
+        ImGui.SameLine(0f, 2f);
+        if (SceneToolbarButton(
+            SceneToolbarIcon.Brush,
+            MaterialBrushActive,
+            _brushPanel is not null && _preparedMode == EditorMode.Edit,
+            "Material Brush (B)"))
+        {
+            _ = SetMaterialBrushActive(true);
         }
 
         ImGui.SameLine(0f, 8f);
@@ -380,19 +397,33 @@ internal sealed class SceneViewPanel(
         SceneAuthoringPreview preview = EnsurePreview();
         ImGui.SameLine();
         ImGui.TextUnformatted($"{preview.StatusLabel} · {preview.SceneName}");
-        if (ImGui.IsKeyPressed(ImGuiKey.W))
+        ImGuiIOPtr io = ImGui.GetIO();
+        if (SceneToolShortcutPolicy.IsAllowed(
+            io.WantTextInput,
+            io.KeyCtrl,
+            io.KeyShift,
+            io.KeyAlt,
+            io.KeySuper))
         {
-            SetOperation(ImGuizmoOperation.Translate);
-        }
+            if (ImGui.IsKeyPressed(ImGuiKey.W))
+            {
+                SetOperation(ImGuizmoOperation.Translate);
+            }
 
-        if (ImGui.IsKeyPressed(ImGuiKey.E))
-        {
-            SetOperation(ImGuizmoOperation.RotateZ);
-        }
+            if (ImGui.IsKeyPressed(ImGuiKey.E))
+            {
+                SetOperation(ImGuizmoOperation.RotateZ);
+            }
 
-        if (ImGui.IsKeyPressed(ImGuiKey.R))
-        {
-            SetOperation(ImGuizmoOperation.Scale);
+            if (ImGui.IsKeyPressed(ImGuiKey.R))
+            {
+                SetOperation(ImGuizmoOperation.Scale);
+            }
+
+            if (ImGui.IsKeyPressed(ImGuiKey.B))
+            {
+                _ = SetMaterialBrushActive(true);
+            }
         }
     }
 
@@ -405,7 +436,30 @@ internal sealed class SceneViewPanel(
             throw new ArgumentOutOfRangeException(nameof(operation), operation, "Scene View 仅支持 Move、Rotate Z 与 Scale gizmo。");
         }
 
+        _ = SetMaterialBrushActive(false);
         Operation = operation;
+    }
+
+    internal bool SetMaterialBrushActive(bool active)
+    {
+        if (_brushPanel is null)
+        {
+            return false;
+        }
+
+        if (active && _preparedMode != EditorMode.Edit)
+        {
+            _brushPanel.SetActive(false);
+            return false;
+        }
+
+        if (active && _gizmoTransactionStableId.HasValue)
+        {
+            _ = CommitGizmoTransform();
+        }
+
+        _brushPanel.SetActive(active);
+        return _brushPanel.IsActive == active;
     }
 
     internal void ToggleGrid()
@@ -511,6 +565,23 @@ internal sealed class SceneViewPanel(
                     0f,
                     ImDrawFlags.None,
                     thickness);
+                break;
+            case SceneToolbarIcon.Brush:
+                drawList.AddLine(
+                    center + new Vector2(-unit * 4.2f, unit * 4.2f),
+                    center + new Vector2(unit * 2.2f, -unit * 2.2f),
+                    color,
+                    thickness * 1.4f);
+                drawList.AddTriangleFilled(
+                    center + new Vector2(unit * 1.2f, -unit * 3.2f),
+                    center + new Vector2(unit * 4.8f, -unit * 4.8f),
+                    center + new Vector2(unit * 3.2f, -unit * 1.2f),
+                    color);
+                drawList.AddTriangleFilled(
+                    center + new Vector2(-unit * 4.8f, unit * 4.8f),
+                    center + new Vector2(-unit * 1.7f, unit * 4.1f),
+                    center + new Vector2(-unit * 4.1f, unit * 1.7f),
+                    color);
                 break;
             case SceneToolbarIcon.FrameAll:
                 drawList.AddRect(
@@ -723,14 +794,54 @@ internal sealed class SceneViewPanel(
     private void HandleSceneMouse(EditorSelection selection)
     {
         bool hasSelection = selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
-        if (!_canvasHovered || (hasSelection && IsGizmoCapturingMouse()))
+        if (!_canvasHovered || (!MaterialBrushActive && hasSelection && IsGizmoCapturingMouse()))
         {
             return;
         }
 
         Vector2 mouse = ImGui.GetIO().MousePos;
         bool clicked = ImGui.IsMouseClicked(ImGuiMouseButton.Left);
-        if (clicked && TryPick(mouse - _canvasMin, out int stableId))
+        bool dragging = ImGui.IsMouseDragging(ImGuiMouseButton.Left);
+        HandleScenePointer(selection, mouse - _canvasMin, clicked, dragging);
+    }
+
+    internal void HandleScenePointer(
+        EditorSelection selection,
+        Vector2 panelPoint,
+        bool clicked,
+        bool dragging)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        if (!clicked && !dragging)
+        {
+            return;
+        }
+
+        // plan 19：对象工具与世界画刷互斥。画刷激活时左键只编辑世界，
+        // 不允许同一次输入再拾取或清空 GameObject selection。
+        if (MaterialBrushActive && _preparedMode == EditorMode.Edit)
+        {
+            Vector2 world = _camera.CanvasToWorld(panelPoint);
+            MaterialBrushPalettePanel brushPanel = _brushPanel!;
+            SceneAuthoringBounds previewBounds = EnsurePreview().Bounds;
+            MaterialBrushBounds brushBounds = new(
+                (int)MathF.Ceiling(previewBounds.X),
+                (int)MathF.Ceiling(previewBounds.Y),
+                (int)MathF.Ceiling(previewBounds.Right) - 1,
+                (int)MathF.Ceiling(previewBounds.Bottom) - 1);
+            _ = brushPanel.ApplyAt(
+                (int)MathF.Round(world.X),
+                (int)MathF.Round(world.Y),
+                brushBounds);
+            return;
+        }
+
+        if (!clicked)
+        {
+            return;
+        }
+
+        if (TryPick(panelPoint, out int stableId))
         {
             _scene.Select(stableId);
             selection.SelectGameObject(stableId);
@@ -741,12 +852,6 @@ internal sealed class SceneViewPanel(
         {
             _scene.Select(null);
             selection.Clear();
-        }
-
-        if (_brushPanel is not null && (clicked || ImGui.IsMouseDragging(ImGuiMouseButton.Left)))
-        {
-            Vector2 world = _camera.CanvasToWorld(mouse - _canvasMin);
-            _ = _brushPanel.ApplyAt((int)MathF.Round(world.X), (int)MathF.Round(world.Y));
         }
     }
 
@@ -759,7 +864,8 @@ internal sealed class SceneViewPanel(
     {
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
         PrepareFrame(stableId, _preparedMode);
-        if (!stableId.HasValue ||
+        if (MaterialBrushActive ||
+            !stableId.HasValue ||
             !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject) ||
             !_scene.IsSceneVisible(stableId.Value) ||
             !_scene.IsScenePickable(stableId.Value))
@@ -886,6 +992,7 @@ internal enum SceneToolbarIcon
     Move,
     Rotate,
     Scale,
+    Brush,
     FrameAll,
     FrameSelected,
     Grid,

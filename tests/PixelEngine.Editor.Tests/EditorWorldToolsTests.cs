@@ -83,6 +83,69 @@ public sealed class EditorWorldToolsTests
     }
 
     /// <summary>
+    /// 验证圆形画刷跨出驻留 chunk 时只跳过不可编辑 cell，不把输入错误升级为 Editor 崩溃。
+    /// </summary>
+    [Fact]
+    public void BrushApplicatorSkipsWhollyNonResidentFootprintWithoutThrowing()
+    {
+        TestChunkSource chunks = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk chunk);
+        MaterialTable materials = CreateMaterials();
+        SimulationKernel kernel = new(chunks, new MaterialPropsTable(materials.Hot));
+        SimulationEditApi edit = new(kernel, materials);
+        MaterialBrushApplicator applicator = new(edit, inspectApi: edit);
+        MaterialBrushSettings settings = new()
+        {
+            Tool = EditorBrushTool.Paint,
+            Shape = EditorBrushShape.Circle,
+            Radius = 1,
+            MaterialId = 1,
+        };
+
+        int writes = applicator.ApplyAt(130, 10, settings, out int skipped);
+
+        Assert.Equal(0, writes);
+        Assert.Equal(5, skipped);
+        Assert.All(chunk.MaterialBuffer, static material => Assert.Equal(0, material));
+    }
+
+    /// <summary>
+    /// 验证满概率方形画刷跨 chunk 时仍按驻留子矩形走批量路径，并精确报告跳过区域。
+    /// </summary>
+    [Fact]
+    public void BrushApplicatorSplitsBulkRectAtResidentChunkBoundary()
+    {
+        TestChunkSource chunks = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk chunk);
+        MaterialTable materials = CreateMaterials();
+        SimulationKernel kernel = new(chunks, new MaterialPropsTable(materials.Hot));
+        SimulationEditApi edit = new(kernel, materials);
+        MaterialBrushApplicator applicator = new(edit, inspectApi: edit);
+        MaterialBrushSettings settings = new()
+        {
+            Tool = EditorBrushTool.Paint,
+            Shape = EditorBrushShape.Square,
+            Radius = 1,
+            MaterialId = 1,
+        };
+
+        int writes = applicator.ApplyAt(
+            63,
+            10,
+            settings,
+            new MaterialBrushBounds(0, 0, 63, 63),
+            out int skippedNonResident,
+            out int skippedOutOfBounds);
+
+        Assert.Equal(6, writes);
+        Assert.Equal(0, skippedNonResident);
+        Assert.Equal(3, skippedOutOfBounds);
+        for (int y = 9; y <= 11; y++)
+        {
+            Assert.Equal(1, chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(62, y)]);
+            Assert.Equal(1, chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(63, y)]);
+        }
+    }
+
+    /// <summary>
     /// 验证温度目标模式通过编辑 API 写入目标温度。
     /// </summary>
     [Fact]
@@ -221,9 +284,15 @@ public sealed class EditorWorldToolsTests
 
         panel.Settings.Shape = EditorBrushShape.Point;
         panel.Settings.MaterialId = 1;
+        Assert.False(panel.IsActive);
+        Assert.Equal(0, panel.ApplyAt(8, 9));
+        Assert.Empty(edit.Painted);
+
+        panel.SetActive(true);
         int writes = panel.ApplyAt(8, 9);
 
         Assert.Equal(2, panel.Entries.Length);
+        Assert.True(panel.IsActive);
         Assert.Equal(1, writes);
         List<(int X, int Y, ushort Material)> expected = [(8, 9, 1)];
         Assert.Equal(expected, edit.Painted);

@@ -7,6 +7,10 @@ namespace PixelEngine.Interop;
 /// </summary>
 public static partial class Win32ImeNative
 {
+    private const int NotifyCloseCandidate = 0x0011;
+    private const int NotifyCompositionString = 0x0015;
+    private const int CancelCompositionString = 0x0004;
+
     /// <summary>CFS_RECT：提供 rcArea 作为 composition 相关矩形。</summary>
     public const int CompositionFormStyleRect = 0x0001;
 
@@ -41,6 +45,37 @@ public static partial class Win32ImeNative
     public static bool ReleaseContext(IntPtr hwnd, IntPtr context)
     {
         return ImmReleaseContext(hwnd, context);
+    }
+
+    /// <summary>
+    /// 为窗口关联指定输入法上下文；传入空 context 会临时解除关联。
+    /// </summary>
+    /// <param name="hwnd">Win32 HWND。</param>
+    /// <param name="context">要关联的输入法上下文；空值表示解除关联。</param>
+    /// <returns>调用前关联的输入法上下文。</returns>
+    public static IntPtr AssociateContext(IntPtr hwnd, IntPtr context)
+    {
+        return ImmAssociateContext(hwnd, context);
+    }
+
+    /// <summary>
+    /// 取消尚未提交的 composition string，不把预编辑文字提交给目标控件。
+    /// </summary>
+    /// <param name="context">输入法上下文。</param>
+    /// <returns>输入法接受通知时为 true。</returns>
+    public static bool CancelComposition(IntPtr context)
+    {
+        return ImmNotifyIme(context, NotifyCompositionString, CancelCompositionString, 0);
+    }
+
+    /// <summary>
+    /// 请求关闭默认 candidate list。
+    /// </summary>
+    /// <param name="context">输入法上下文。</param>
+    /// <returns>输入法接受通知时为 true。</returns>
+    public static bool CloseCandidate(IntPtr context)
+    {
+        return ImmNotifyIme(context, NotifyCloseCandidate, 0, 0);
     }
 
     /// <summary>
@@ -97,6 +132,13 @@ public static partial class Win32ImeNative
     [LibraryImport("imm32.dll", SetLastError = false)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool ImmReleaseContext(IntPtr hwnd, IntPtr context);
+
+    [LibraryImport("imm32.dll", SetLastError = false)]
+    private static partial IntPtr ImmAssociateContext(IntPtr hwnd, IntPtr context);
+
+    [LibraryImport("imm32.dll", EntryPoint = "ImmNotifyIME", SetLastError = false)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool ImmNotifyIme(IntPtr context, int action, int index, int value);
 
     [LibraryImport("imm32.dll", EntryPoint = "ImmGetCompositionStringW", SetLastError = false)]
     private static partial int ImmGetCompositionStringW(

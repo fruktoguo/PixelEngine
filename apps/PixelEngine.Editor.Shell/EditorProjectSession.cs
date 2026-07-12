@@ -363,6 +363,12 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.TryShowPanel(BuildSettingsPanel.PanelTitle);
     }
 
+    public bool TryStartBuild(bool runAfterBuild, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryStartBuild(runAfterBuild, out diagnostic);
+    }
+
     public bool ShowPanel(string title)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
