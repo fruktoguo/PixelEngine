@@ -20,7 +20,10 @@ internal readonly record struct SceneAuthoringMarker(
     int? StableId,
     string Name,
     Vector2 Position,
-    SceneAuthoringMarkerKind Kind);
+    SceneAuthoringMarkerKind Kind,
+    float RotationRadians,
+    float ScaleX,
+    float ScaleY);
 
 internal enum SceneAuthoringMarkerKind
 {
@@ -36,13 +39,14 @@ internal sealed record SceneAuthoringPreview(
     string SceneName,
     SceneAuthoringBounds Bounds,
     SceneAuthoringMarker[] Markers,
-    bool HasProceduralWorld,
+    bool HasAuthoritativeWorld,
+    int? WorldOwnerStableId,
     bool IsTestScene,
     bool IsExplicitEmptyScene,
     string StatusLabel);
 
 /// <summary>
-/// 把声明式 Scene 与 LevelDirector 字段投影为受控 procedural preview。
+/// 把声明式 Scene 与显式 authoring world provider 快照投影为受控预览。
 /// </summary>
 internal static class SceneAuthoringPreviewBuilder
 {
@@ -51,15 +55,19 @@ internal static class SceneAuthoringPreviewBuilder
 
     public static SceneAuthoringPreview Build(EditorSceneModel scene)
     {
+        return Build(scene, default);
+    }
+
+    public static SceneAuthoringPreview Build(
+        EditorSceneModel scene,
+        AuthoringWorldPreviewSnapshot authoringWorld)
+    {
         ArgumentNullException.ThrowIfNull(scene);
         List<SceneAuthoringMarker> markers = [];
         float minX = float.PositiveInfinity;
         float minY = float.PositiveInfinity;
         float maxX = float.NegativeInfinity;
         float maxY = float.NegativeInfinity;
-        float width = DefaultWidth;
-        float height = DefaultHeight;
-        bool hasProceduralWorld = false;
         bool hasPlayerSpawnObject = false;
         bool hasGoalObject = false;
         Vector2? legacyPlayerSpawn = null;
@@ -81,7 +89,10 @@ internal static class SceneAuthoringPreviewBuilder
                 gameObject.StableId,
                 gameObject.Name,
                 position,
-                markerKind));
+                markerKind,
+                transform.RotationRadians,
+                transform.ScaleX,
+                transform.ScaleY));
             hasPlayerSpawnObject |= markerKind == SceneAuthoringMarkerKind.PlayerSpawn;
             hasGoalObject |= markerKind == SceneAuthoringMarkerKind.Goal;
             minX = MathF.Min(minX, position.X);
@@ -92,21 +103,29 @@ internal static class SceneAuthoringPreviewBuilder
             for (int i = 0; i < gameObject.Components.Count; i++)
             {
                 EditorComponentModel component = gameObject.Components[i];
-                if (!component.TypeName.EndsWith(".LevelDirector", StringComparison.Ordinal) &&
-                    !string.Equals(component.TypeName, "LevelDirector", StringComparison.Ordinal))
+                if (!authoringWorld.HasWorld ||
+                    authoringWorld.WorldOwnerStableId != gameObject.StableId)
                 {
                     continue;
                 }
 
-                width = ReadFiniteFloat(component, "LevelWidth", DefaultWidth, 32f, 65536f);
-                height = ReadFiniteFloat(component, "LevelHeight", DefaultHeight, 32f, 65536f);
-                float spawnX = ReadFiniteFloat(component, "PlayerSpawnX", width * 0.1f, -width, width * 2f);
-                float spawnY = ReadFiniteFloat(component, "PlayerSpawnY", height * 0.7f, -height, height * 2f);
-                float goalX = ReadFiniteFloat(component, "GoalX", width * 0.9f, -width, width * 2f);
-                float goalY = ReadFiniteFloat(component, "GoalY", height * 0.6f, -height, height * 2f);
-                legacyPlayerSpawn = new Vector2(spawnX, spawnY);
-                legacyGoal = new Vector2(goalX, goalY);
-                hasProceduralWorld = true;
+                float minLegacyX = -authoringWorld.Bounds.Width;
+                float maxLegacyX = authoringWorld.Bounds.Width * 2f;
+                float minLegacyY = -authoringWorld.Bounds.Height;
+                float maxLegacyY = authoringWorld.Bounds.Height * 2f;
+                if (!legacyPlayerSpawn.HasValue &&
+                    TryReadFiniteFloat(component, "PlayerSpawnX", minLegacyX, maxLegacyX, out float spawnX) &&
+                    TryReadFiniteFloat(component, "PlayerSpawnY", minLegacyY, maxLegacyY, out float spawnY))
+                {
+                    legacyPlayerSpawn = new Vector2(spawnX, spawnY);
+                }
+
+                if (!legacyGoal.HasValue &&
+                    TryReadFiniteFloat(component, "GoalX", minLegacyX, maxLegacyX, out float goalX) &&
+                    TryReadFiniteFloat(component, "GoalY", minLegacyY, maxLegacyY, out float goalY))
+                {
+                    legacyGoal = new Vector2(goalX, goalY);
+                }
             }
         }
 
@@ -118,7 +137,10 @@ internal static class SceneAuthoringPreviewBuilder
                 null,
                 EditorLocalization.Get("scene.playerSpawn", "Player Spawn"),
                 legacyPlayerSpawn.Value,
-                SceneAuthoringMarkerKind.PlayerSpawn));
+                SceneAuthoringMarkerKind.PlayerSpawn,
+                0f,
+                1f,
+                1f));
         }
 
         if (!hasGoalObject && legacyGoal.HasValue)
@@ -127,13 +149,16 @@ internal static class SceneAuthoringPreviewBuilder
                 null,
                 EditorLocalization.Get("scene.goal", "Goal"),
                 legacyGoal.Value,
-                SceneAuthoringMarkerKind.Goal));
+                SceneAuthoringMarkerKind.Goal,
+                0f,
+                1f,
+                1f));
         }
 
         bool explicitEmpty = scene.Count == 0;
         bool testScene = IsTestScene(scene.Name);
-        SceneAuthoringBounds bounds = hasProceduralWorld
-            ? new SceneAuthoringBounds(0f, 0f, width, height)
+        SceneAuthoringBounds bounds = authoringWorld.HasWorld
+            ? authoringWorld.Bounds
             : BuildObjectBounds(minX, minY, maxX, maxY);
         string status = explicitEmpty
             ? testScene ? "测试场景 · 显式空场景" : "显式空场景"
@@ -142,7 +167,8 @@ internal static class SceneAuthoringPreviewBuilder
             scene.Name,
             bounds,
             [.. markers],
-            hasProceduralWorld,
+            authoringWorld.HasWorld,
+            authoringWorld.HasWorld ? authoringWorld.WorldOwnerStableId : null,
             testScene,
             explicitEmpty,
             status);
@@ -161,18 +187,23 @@ internal static class SceneAuthoringPreviewBuilder
         return new SceneAuthoringBounds(minX - margin, minY - margin, width, height);
     }
 
-    private static float ReadFiniteFloat(
+    private static bool TryReadFiniteFloat(
         EditorComponentModel component,
         string fieldName,
-        float fallback,
         float min,
-        float max)
+        float max,
+        out float value)
     {
-        return component.SerializedFields.TryGetValue(fieldName, out string? text) &&
-            float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out float value) &&
-            float.IsFinite(value)
-                ? Math.Clamp(value, min, max)
-                : fallback;
+        if (component.SerializedFields.TryGetValue(fieldName, out string? text) &&
+            float.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value) &&
+            float.IsFinite(value))
+        {
+            value = Math.Clamp(value, min, max);
+            return true;
+        }
+
+        value = 0f;
+        return false;
     }
 
     private static bool IsTestScene(string sceneName)

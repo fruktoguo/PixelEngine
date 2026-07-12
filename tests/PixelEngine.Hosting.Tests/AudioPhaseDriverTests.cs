@@ -16,6 +16,34 @@ namespace PixelEngine.Hosting.Tests;
 public sealed class AudioPhaseDriverTests
 {
     /// <summary>
+    /// 验证无 audio 目录的 Editor 工程在挂载 Scripting 前注入显式无声后端。
+    /// </summary>
+    [Fact]
+    public void EditorProjectWithoutAudioDirectoryInjectsNullScriptBackend()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-editor-no-audio-{Guid.NewGuid():N}");
+        _ = Directory.CreateDirectory(contentRoot);
+        try
+        {
+            using Engine engine = new EngineBuilder()
+                .UseHeadless()
+                .WithContentRoot(contentRoot)
+                .Build();
+
+            PixelEngine.Editor.Shell.EditorProjectSession.AttachProjectAudio(engine);
+
+            Scripting.IAudioApi audio = engine.Context.GetService<Scripting.IAudioApi>();
+            Assert.Same(Scripting.NullAudioApi.Instance, audio);
+            Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.AudioService));
+            audio.PlayAt("player.hurt", 12f, 24f);
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Hosting 能从 content/audio 预加载 WAV，并把脚本音频 API 接到真实 AudioSystem。
     /// </summary>
     [Fact]

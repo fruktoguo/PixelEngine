@@ -88,7 +88,8 @@ public sealed class SceneAuthoringPreviewTests
         });
         RecordingEditApi edit = new();
         MaterialBrushPalettePanel brush = new(CreateBrushMaterials(), edit);
-        SceneViewPanel panel = new(scene, new EditorUndoStack(), brush);
+        RecordingWorldTexture worldTexture = new();
+        SceneViewPanel panel = new(scene, new EditorUndoStack(), brush, worldTexture);
         EditorSelection selection = new();
         scene.Select(1);
         selection.SelectGameObject(1);
@@ -98,6 +99,7 @@ public sealed class SceneAuthoringPreviewTests
 
         Assert.False(panel.MaterialBrushActive);
         Assert.Empty(edit.Painted);
+        Assert.Equal(0, worldTexture.InvalidationCount);
         Assert.Null(selection.GameObjectStableId);
 
         scene.Select(1);
@@ -107,6 +109,7 @@ public sealed class SceneAuthoringPreviewTests
 
         Assert.True(panel.MaterialBrushActive);
         Assert.NotEmpty(edit.Painted);
+        Assert.Equal(1, worldTexture.InvalidationCount);
         Assert.Equal(1, selection.GameObjectStableId);
         Assert.False(panel.BeginGizmoTransform(1));
 
@@ -124,7 +127,7 @@ public sealed class SceneAuthoringPreviewTests
     /// 验证 lava-mine 的 LevelDirector 字段会生成非空世界边界与关键 marker。
     /// </summary>
     [Fact]
-    public void LevelDirectorBuildsControlledProceduralPreview()
+    public void ExplicitProviderSnapshotBuildsAuthoritativeWorldPreview()
     {
         EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
         {
@@ -157,15 +160,59 @@ public sealed class SceneAuthoringPreviewTests
             ],
         });
 
-        SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(scene);
+        AuthoringWorldPreviewSnapshot world = new(
+            Version: 1,
+            HasWorld: true,
+            new SceneAuthoringBounds(0f, 0f, 640f, 360f),
+            WorldOwnerStableId: 7);
+        SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(scene, world);
 
-        Assert.True(preview.HasProceduralWorld);
+        Assert.True(preview.HasAuthoritativeWorld);
         Assert.False(preview.IsTestScene);
         Assert.False(preview.IsExplicitEmptyScene);
         Assert.Equal(new SceneAuthoringBounds(0f, 0f, 640f, 360f), preview.Bounds);
         Assert.Contains(preview.Markers, marker => marker is { StableId: 7, Name: "LevelDirector", Kind: SceneAuthoringMarkerKind.GameObject });
         Assert.Contains(preview.Markers, marker => marker is { Name: "Player Spawn", Position: { X: 48f, Y: 244f }, Kind: SceneAuthoringMarkerKind.PlayerSpawn });
         Assert.Contains(preview.Markers, marker => marker is { Name: "Goal", Position: { X: 570f, Y: 208f }, Kind: SceneAuthoringMarkerKind.Goal });
+    }
+
+    /// <summary>
+    /// 验证组件类名本身不能让项目隐式进入 authoring world 预览。
+    /// </summary>
+    [Fact]
+    public void LevelDirectorNameWithoutProviderSnapshotDoesNotOptIn()
+    {
+        EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "name-is-not-contract",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 7,
+                    Name = "LevelDirector",
+                    Behaviours =
+                    [
+                        new EngineSceneBehaviourDocument
+                        {
+                            TypeName = "PixelEngine.Demo.LevelDirector",
+                            SerializedFields = new Dictionary<string, string>
+                            {
+                                ["LevelWidth"] = "640",
+                                ["LevelHeight"] = "360",
+                            },
+                        },
+                    ],
+                },
+            ],
+        });
+
+        SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(scene);
+
+        Assert.False(preview.HasAuthoritativeWorld);
+        Assert.Null(preview.WorldOwnerStableId);
+        Assert.DoesNotContain(preview.Markers, marker => !marker.StableId.HasValue);
     }
 
     /// <summary>
@@ -613,7 +660,7 @@ public sealed class SceneAuthoringPreviewTests
 
         Assert.True(preview.IsTestScene);
         Assert.True(preview.IsExplicitEmptyScene);
-        Assert.False(preview.HasProceduralWorld);
+        Assert.False(preview.HasAuthoritativeWorld);
         Assert.Equal("测试场景 · 显式空场景", preview.StatusLabel);
         Assert.True(preview.Bounds.Width > 0f);
         Assert.True(preview.Bounds.Height > 0f);
@@ -708,13 +755,45 @@ public sealed class SceneAuthoringPreviewTests
                 },
             ],
         });
-        SceneViewPanel panel = new(scene, new EditorUndoStack());
+        AuthoringWorldPreviewSnapshot world = new(
+            Version: 1,
+            HasWorld: true,
+            new SceneAuthoringBounds(0f, 0f, 640f, 360f),
+            WorldOwnerStableId: 1);
+        SceneViewPanel panel = new(
+            scene,
+            new EditorUndoStack(),
+            authoringWorldSnapshot: () => world);
 
         Assert.False(panel.PrepareCanvas(new Vector2(1f, 1f)));
         Assert.True(panel.PrepareCanvas(new Vector2(800f, 450f)));
         Assert.InRange(panel.CameraSnapshot.CellsPerPixel, 0.8f, 1.1f);
         Assert.Equal(320f, panel.CameraSnapshot.CenterX);
         Assert.Equal(180f, panel.CameraSnapshot.CenterY);
+    }
+
+    /// <summary>
+    /// 验证空 GameObject marker 的可视几何真实编码 world rotation 与非均匀 scale。
+    /// </summary>
+    [Fact]
+    public void EmptyGameObjectMarkerGeometryReflectsRotationAndScale()
+    {
+        SceneAuthoringMarker marker = new(
+            StableId: 9,
+            Name: "Empty",
+            Position: Vector2.Zero,
+            SceneAuthoringMarkerKind.GameObject,
+            RotationRadians: MathF.PI / 2f,
+            ScaleX: 2f,
+            ScaleY: 0.5f);
+
+        SceneGameObjectMarkerGeometry geometry = SceneViewPanel.BuildGameObjectMarkerGeometry(marker);
+
+        Assert.Equal(0f, geometry.AxisX.X, 3);
+        Assert.Equal(14f, geometry.AxisX.Y, 3);
+        Assert.Equal(-3.5f, geometry.AxisY.X, 3);
+        Assert.Equal(0f, geometry.AxisY.Y, 3);
+        Assert.Equal(14f, geometry.Radius, 3);
     }
 
     /// <summary>
@@ -804,6 +883,25 @@ public sealed class SceneAuthoringPreviewTests
         }
 
         public void SetTemperature(int worldX, int worldY, float targetCelsius)
+        {
+        }
+    }
+
+    private sealed class RecordingWorldTexture : IAuthoringWorldTexture
+    {
+        public int InvalidationCount { get; private set; }
+
+        public SceneWorldTextureSnapshot GetTexture(SceneAuthoringBounds requestedBounds)
+        {
+            throw new InvalidOperationException("此测试不执行 ImGui 绘制。");
+        }
+
+        public void Invalidate()
+        {
+            InvalidationCount++;
+        }
+
+        public void Dispose()
         {
         }
     }

@@ -10,13 +10,12 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class SceneViewPanel(
     EditorSceneModel scene,
     EditorUndoStack undo,
-    MaterialBrushPalettePanel? brushPanel = null) : IEditorPanel
+    MaterialBrushPalettePanel? brushPanel = null,
+    IAuthoringWorldTexture? worldTexture = null,
+    Func<AuthoringWorldPreviewSnapshot>? authoringWorldSnapshot = null) : IEditorPanel, IDisposable
 {
     private const uint CanvasColor = 0xFF_18_1A_1F;
     private const uint WorldColor = 0xFF_25_2A_34;
-    private const uint CaveColor = 0xFF_31_35_3D;
-    private const uint GroundColor = 0xFF_49_4B_43;
-    private const uint LavaColor = 0xFF_31_62_E8;
     private const uint GridMinorColor = 0x24_FF_FF_FF;
     private const uint GridMajorColor = 0x48_FF_FF_FF;
     private const uint BoundaryColor = 0xFF_8B_A4_B8;
@@ -32,12 +31,15 @@ internal sealed class SceneViewPanel(
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
+    private readonly IAuthoringWorldTexture? _worldTexture = worldTexture;
+    private readonly Func<AuthoringWorldPreviewSnapshot>? _authoringWorldSnapshot = authoringWorldSnapshot;
     private readonly SceneAuthoringCamera _camera = new();
     private Vector2 _canvasMin;
     private Vector2 _canvasSize;
     private bool _canvasHovered;
     private int _previewVersion = -1;
     private int _previewSceneViewVersion = -1;
+    private long _previewAuthoringWorldVersion = -1;
     private string _previewSceneName = string.Empty;
     private string _framedSceneName = string.Empty;
     private SceneAuthoringPreview _preview = SceneAuthoringPreviewBuilder.Build(EditorSceneModel.Empty());
@@ -46,6 +48,7 @@ internal sealed class SceneViewPanel(
     private EditorSceneTransform? _gizmoBefore;
     private bool _gizmoChanged;
     private EditorMode _preparedMode = EditorMode.Edit;
+    private bool _disposed;
 
     public string Title => EditorDockSpace.ViewportWindowTitle;
 
@@ -80,6 +83,11 @@ internal sealed class SceneViewPanel(
     internal bool ShowGrid { get; private set; } = true;
 
     internal bool MaterialBrushActive => _brushPanel?.IsActive == true;
+
+    internal void InvalidateWorldTexture()
+    {
+        _worldTexture?.Invalidate();
+    }
 
     /// <summary>
     /// 推进与面板绘制无关的 gizmo 连续编辑生命周期。
@@ -202,6 +210,17 @@ internal sealed class SceneViewPanel(
                 bestDistanceSquared = distanceSquared;
                 stableId = marker.StableId.Value;
             }
+        }
+
+        SceneAuthoringPreview preview = EnsurePreview();
+        if (stableId == 0 &&
+            preview.WorldOwnerStableId is { } ownerStableId &&
+            _scene.IsScenePickable(ownerStableId) &&
+            world.X >= preview.Bounds.X && world.X <= preview.Bounds.Right &&
+            world.Y >= preview.Bounds.Y && world.Y <= preview.Bounds.Bottom)
+        {
+            stableId = ownerStableId;
+            return true;
         }
 
         return stableId != 0;
@@ -645,18 +664,26 @@ internal sealed class SceneViewPanel(
         Vector2 min = WorldToScreen(new Vector2(preview.Bounds.X, preview.Bounds.Y));
         Vector2 max = WorldToScreen(new Vector2(preview.Bounds.Right, preview.Bounds.Bottom));
         drawList.AddRectFilled(min, max, WorldColor);
-        if (!preview.HasProceduralWorld)
+        if (!preview.HasAuthoritativeWorld || _worldTexture is null)
         {
             return;
         }
 
-        float width = preview.Bounds.Width;
-        float height = preview.Bounds.Height;
-        DrawWorldRect(drawList, new SceneAuthoringBounds(width * 0.08f, height * 0.18f, width * 0.84f, height * 0.64f), CaveColor);
-        DrawWorldRect(drawList, new SceneAuthoringBounds(0f, height * 0.82f, width, height * 0.18f), GroundColor);
-        DrawWorldRect(drawList, new SceneAuthoringBounds(width * 0.14f, height * 0.91f, width * 0.72f, height * 0.09f), LavaColor);
-        DrawWorldRect(drawList, new SceneAuthoringBounds(width * 0.20f, height * 0.62f, width * 0.20f, height * 0.035f), GroundColor);
-        DrawWorldRect(drawList, new SceneAuthoringBounds(width * 0.58f, height * 0.54f, width * 0.22f, height * 0.035f), GroundColor);
+        SceneWorldTextureSnapshot snapshot = _worldTexture.GetTexture(preview.Bounds);
+        Vector2 imageMin = WorldToScreen(new Vector2(snapshot.Bounds.X, snapshot.Bounds.Y));
+        Vector2 imageMax = WorldToScreen(new Vector2(snapshot.Bounds.Right, snapshot.Bounds.Bottom));
+        drawList.PushClipRect(_canvasMin, _canvasMin + _canvasSize, true);
+        // SceneWorldTexture 是 CPU buffer 直接上传的原始纹理（无 FBO pass），数据 row 0 = 世界顶部 = 纹理 V=0，
+        // 因此直通 UV (0,0)-(1,1) 即为正确朝向。运行时 ViewportPanel 采样的 CurrentViewportTexture 经过 GPU FBO
+        // pass 会额外翻转一次 V，才需要 (0,1)-(1,0)；此处若照抄那份翻转会导致 Scene View 上下颠倒。
+        drawList.AddImage(
+            ViewportPanel.CreateTextureRef(snapshot.Texture.Handle),
+            imageMin,
+            imageMax,
+            new Vector2(0f, 0f),
+            new Vector2(1f, 1f),
+            0xFFFFFFFF);
+        drawList.PopClipRect();
     }
 
     private void DrawGrid(ImDrawListPtr drawList)
@@ -736,7 +763,7 @@ internal sealed class SceneViewPanel(
             }
             else
             {
-                drawList.AddCircleFilled(screen, selected ? 8f : markerRadius, color);
+                DrawGameObjectMarker(drawList, marker, screen, color, selected);
             }
 
             Vector2 textSize = ImGui.CalcTextSize(marker.Name);
@@ -755,8 +782,8 @@ internal sealed class SceneViewPanel(
     private void DrawCanvasLabel(ImDrawListPtr drawList, SceneAuthoringPreview preview)
     {
         uint color = preview.IsTestScene ? TestColor : BoundaryColor;
-        string worldKind = preview.HasProceduralWorld
-            ? "LevelDirector procedural preview"
+        string worldKind = preview.HasAuthoritativeWorld
+            ? "authoritative cell world"
             : preview.IsExplicitEmptyScene ? "explicit empty scene" : "object bounds";
         drawList.AddText(
             _canvasMin + new Vector2(10f, 10f),
@@ -764,12 +791,31 @@ internal sealed class SceneViewPanel(
             $"{preview.StatusLabel} · {worldKind} · {preview.Bounds.Width:0}×{preview.Bounds.Height:0} cells");
     }
 
-    private void DrawWorldRect(ImDrawListPtr drawList, SceneAuthoringBounds bounds, uint color)
+    private static void DrawGameObjectMarker(
+        ImDrawListPtr drawList,
+        SceneAuthoringMarker marker,
+        Vector2 center,
+        uint color,
+        bool selected)
     {
-        drawList.AddRectFilled(
-            WorldToScreen(new Vector2(bounds.X, bounds.Y)),
-            WorldToScreen(new Vector2(bounds.Right, bounds.Bottom)),
-            color);
+        SceneGameObjectMarkerGeometry geometry = BuildGameObjectMarkerGeometry(marker);
+        float thickness = selected ? 2.5f : 1.5f;
+        drawList.AddLine(center - geometry.AxisX, center + geometry.AxisX, color, thickness);
+        drawList.AddLine(center - geometry.AxisY, center + geometry.AxisY, color, thickness);
+        drawList.AddCircleFilled(center, selected ? 4.5f : 3.5f, color);
+        drawList.AddCircle(center, geometry.Radius, color, 24, selected ? 1.5f : 1f);
+    }
+
+    internal static SceneGameObjectMarkerGeometry BuildGameObjectMarkerGeometry(SceneAuthoringMarker marker)
+    {
+        float rotation = float.IsFinite(marker.RotationRadians) ? marker.RotationRadians : 0f;
+        float scaleX = Math.Clamp(MathF.Abs(marker.ScaleX), 0.25f, 4f) * 7f;
+        float scaleY = Math.Clamp(MathF.Abs(marker.ScaleY), 0.25f, 4f) * 7f;
+        float cosine = MathF.Cos(rotation);
+        float sine = MathF.Sin(rotation);
+        Vector2 axisX = new(cosine * scaleX, sine * scaleX);
+        Vector2 axisY = new(-sine * scaleY, cosine * scaleY);
+        return new SceneGameObjectMarkerGeometry(axisX, axisY, MathF.Max(scaleX, scaleY));
     }
 
     private void HandleCameraInput()
@@ -829,10 +875,15 @@ internal sealed class SceneViewPanel(
                 (int)MathF.Ceiling(previewBounds.Y),
                 (int)MathF.Ceiling(previewBounds.Right) - 1,
                 (int)MathF.Ceiling(previewBounds.Bottom) - 1);
-            _ = brushPanel.ApplyAt(
+            int writes = brushPanel.ApplyAt(
                 (int)MathF.Round(world.X),
                 (int)MathF.Round(world.Y),
                 brushBounds);
+            if (writes > 0)
+            {
+                InvalidateWorldTexture();
+            }
+
             return;
         }
 
@@ -919,16 +970,19 @@ internal sealed class SceneViewPanel(
 
     private SceneAuthoringPreview EnsurePreview()
     {
+        AuthoringWorldPreviewSnapshot authoringWorld = _authoringWorldSnapshot?.Invoke() ?? default;
         if (_previewVersion == _scene.Version &&
             _previewSceneViewVersion == _scene.SceneViewVersion &&
+            _previewAuthoringWorldVersion == authoringWorld.Version &&
             string.Equals(_previewSceneName, _scene.Name, StringComparison.Ordinal))
         {
             return _preview;
         }
 
-        _preview = SceneAuthoringPreviewBuilder.Build(_scene);
+        _preview = SceneAuthoringPreviewBuilder.Build(_scene, authoringWorld);
         _previewVersion = _scene.Version;
         _previewSceneViewVersion = _scene.SceneViewVersion;
+        _previewAuthoringWorldVersion = authoringWorld.Version;
         _previewSceneName = _scene.Name;
         return _preview;
     }
@@ -985,7 +1039,23 @@ internal sealed class SceneViewPanel(
             MathF.Abs(left.ScaleX - right.ScaleX) <= Epsilon &&
             MathF.Abs(left.ScaleY - right.ScaleY) <= Epsilon;
     }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _worldTexture?.Dispose();
+        _disposed = true;
+    }
 }
+
+internal readonly record struct SceneGameObjectMarkerGeometry(
+    Vector2 AxisX,
+    Vector2 AxisY,
+    float Radius);
 
 internal enum SceneToolbarIcon
 {

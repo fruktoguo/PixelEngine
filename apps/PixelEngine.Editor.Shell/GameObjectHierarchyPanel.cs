@@ -11,13 +11,15 @@ internal sealed class GameObjectHierarchyPanel(
     EditorUndoStack undo,
     EditorPrefabAssetStore prefabs,
     Func<SceneHierarchySnapshot>? runtimeSnapshot = null,
-    Func<EditorMode>? modeProvider = null) : IEditorPanel
+    Func<EditorMode>? modeProvider = null,
+    Func<AuthoringWorldPreviewSnapshot>? authoringWorldSnapshot = null) : IEditorPanel
 {
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly EditorPrefabAssetStore _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
     private readonly Func<SceneHierarchySnapshot>? _runtimeSnapshot = runtimeSnapshot;
     private readonly Func<EditorMode>? _modeProvider = modeProvider;
+    private readonly Func<AuthoringWorldPreviewSnapshot>? _authoringWorldSnapshot = authoringWorldSnapshot;
     private int _renameTarget;
     private int? _draggingStableId;
     private string _renameBuffer = string.Empty;
@@ -87,7 +89,9 @@ internal sealed class GameObjectHierarchyPanel(
 
     private void DrawGeneratedMarkers()
     {
-        SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(_scene);
+        SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(
+            _scene,
+            _authoringWorldSnapshot?.Invoke() ?? default);
         int generatedCount = 0;
         for (int i = 0; i < preview.Markers.Length; i++)
         {

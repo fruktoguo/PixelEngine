@@ -16,6 +16,45 @@ namespace PixelEngine.Demo.Tests;
 public sealed class LavaMineSceneTests
 {
     /// <summary>
+    /// 验证显式 authoring provider 与真实 OnStart 运行时路径逐 cell 使用同一份确定性关卡铺设逻辑。
+    /// </summary>
+    [Fact]
+    public async Task AuthoringProviderMatchesRuntimeInitialWorldCellForCell()
+    {
+        using Engine runtimeEngine = await CreateLavaMineWorldEngineAsync();
+        runtimeEngine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
+        ScriptRuntime runtimeScripts = new();
+        ScriptSimulationContext runtimeContext = runtimeEngine.AttachScriptingFromServices(runtimeScripts);
+        runtimeScripts.BeginFrame();
+        _ = runtimeContext.FlushCellCommands();
+        runtimeScripts.EndFrame();
+        ScriptScene authoringScene = new();
+        Entity authoringEntity = authoringScene.CreateEntity();
+        LevelDirector authoringDirector = authoringEntity.AddComponent<LevelDirector>();
+        AuthoringWorldPreviewDescriptor descriptor = authoringDirector.DescribeAuthoringWorld().Validate();
+        RecordingAuthoringWorld authoring = new(descriptor.WidthCells, descriptor.HeightCells);
+        AuthoringWorldPreviewContext context = new(
+            runtimeEngine.Context.GetService<IMaterialQuery>(),
+            authoring,
+            descriptor.WidthCells,
+            descriptor.HeightCells);
+
+        authoringDirector.PopulateAuthoringWorld(in context);
+        CellGrid runtime = runtimeEngine.Context.GetService<CellGrid>();
+        for (int y = 0; y < descriptor.HeightCells; y++)
+        {
+            for (int x = 0; x < descriptor.WidthCells; x++)
+            {
+                ushort runtimeMaterial = runtime.GetMaterial(x, y);
+                ushort authoringMaterial = authoring.GetMaterial(x, y).Value;
+                Assert.True(
+                    runtimeMaterial == authoringMaterial,
+                    $"运行时/authoring world 在 ({x},{y}) 不等价：runtime={runtimeMaterial}, authoring={authoringMaterial}。");
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证默认横向关卡会通过脚本公开刚体 API 把可拆障碍注册为动态刚体。
     /// </summary>
     [Fact]
@@ -456,6 +495,14 @@ public sealed class LavaMineSceneTests
 
     private static async Task<Engine> CreateLavaMineEngineAsync()
     {
+        Engine engine = await CreateLavaMineWorldEngineAsync();
+        engine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
+        _ = engine.AttachScriptingFromServices();
+        return engine;
+    }
+
+    private static async Task<Engine> CreateLavaMineWorldEngineAsync()
+    {
         string root = FindRepositoryRoot();
         DemoStartupOptions options = new()
         {
@@ -473,8 +520,6 @@ public sealed class LavaMineSceneTests
         _ = engine.AttachResidentSimulationWorld(worldWidthCells: 640, worldHeightCells: 360);
         _ = engine.AttachPhysics();
         _ = await engine.AttachAudioFromContentAsync(new NullAudioBackend());
-        engine.RegisterScriptAssembly(typeof(DemoProgram).Assembly);
-        _ = engine.AttachScriptingFromServices();
         return engine;
     }
 
@@ -758,6 +803,64 @@ public sealed class LavaMineSceneTests
         public string Describe()
         {
             return $"goal={GoalReached}, frames={Frames}, player=({PlayerX:F2},{PlayerY:F2}), goal=({GoalX:F2},{GoalY:F2}), primary={PrimaryFireCount}, destroyed={MaxDestroyedBodies}, created={MaxCreatedBodies}, scriptExceptions={ScriptExceptionCount}";
+        }
+    }
+
+    private sealed class RecordingAuthoringWorld(int width, int height) : IAuthoringWorldEditApi
+    {
+        private readonly int _width = width;
+        private readonly int _height = height;
+        private readonly ushort[] _materials = new ushort[checked(width * height)];
+
+        public MaterialId GetMaterial(int x, int y)
+        {
+            ValidateCoordinate(x, y);
+            return new MaterialId(_materials[(y * _width) + x]);
+        }
+
+        public void PaintCell(int worldX, int worldY, MaterialId material)
+        {
+            ValidateCoordinate(worldX, worldY);
+            _materials[(worldY * _width) + worldX] = material.Value;
+        }
+
+        public int PaintRect(int minX, int minY, int maxX, int maxY, MaterialId material)
+        {
+            ValidateRect(minX, minY, maxX, maxY);
+            for (int y = minY; y <= maxY; y++)
+            {
+                Array.Fill(_materials, material.Value, (y * _width) + minX, maxX - minX + 1);
+            }
+
+            return checked((maxX - minX + 1) * (maxY - minY + 1));
+        }
+
+        public void ClearCell(int worldX, int worldY)
+        {
+            PaintCell(worldX, worldY, new MaterialId(0));
+        }
+
+        public int ClearRect(int minX, int minY, int maxX, int maxY)
+        {
+            return PaintRect(minX, minY, maxX, maxY, new MaterialId(0));
+        }
+
+        private void ValidateRect(int minX, int minY, int maxX, int maxY)
+        {
+            ValidateCoordinate(minX, minY);
+            ValidateCoordinate(maxX, maxY);
+            if (minX > maxX || minY > maxY)
+            {
+                throw new ArgumentException("authoring world 矩形边界顺序无效。");
+            }
+        }
+
+        private void ValidateCoordinate(int x, int y)
+        {
+            if ((uint)x >= (uint)_width || (uint)y >= (uint)_height)
+            {
+                throw new ArgumentOutOfRangeException(nameof(x), $"坐标 ({x},{y}) 超出 {_width}x{_height} authoring world。");
+            }
         }
     }
 

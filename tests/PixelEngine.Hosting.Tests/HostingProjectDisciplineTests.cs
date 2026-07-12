@@ -1131,7 +1131,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("EditorSceneRuntimeProjection", source, StringComparison.Ordinal);
         Assert.Contains("StableIdToEntityId", source, StringComparison.Ordinal);
         Assert.Contains("EngineSceneDocument", source, StringComparison.Ordinal);
-        Assert.Contains("ConfigureAuthoring(sceneModel, undoStack, prefabs)", source, StringComparison.Ordinal);
+        Assert.Contains("ConfigureAuthoring(sceneModel, undoStack, prefabs, authoringWorld)", source, StringComparison.Ordinal);
         Assert.Contains("new GameObjectHierarchyPanel(", source, StringComparison.Ordinal);
         Assert.Contains("runtimeHierarchy.Capture", source, StringComparison.Ordinal);
         Assert.Contains("GameObjectInspectorPanel(", source, StringComparison.Ordinal);

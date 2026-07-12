@@ -5,7 +5,7 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// Demo 程序化关卡导演，负责铺设初始像素关卡并装配关卡脚本实体。
 /// </summary>
-public sealed class LevelDirector : Behaviour
+public sealed class LevelDirector : Behaviour, IAuthoringWorldPreviewProvider
 {
     private MaterialId _empty;
     private MaterialId _stone;
@@ -99,17 +99,59 @@ public sealed class LevelDirector : Behaviour
     public string BlockedReason { get; private set; } = string.Empty;
 
     /// <inheritdoc />
+    public AuthoringWorldPreviewDescriptor DescribeAuthoringWorld()
+    {
+        ResolveAuthoringAnchors();
+        int width = Math.Max(128, LevelWidth);
+        int height = Math.Max(128, LevelHeight);
+        return new AuthoringWorldPreviewDescriptor(width, height, ComputeAuthoringContentHash(width, height));
+    }
+
+    /// <inheritdoc />
+    public void PopulateAuthoringWorld(in AuthoringWorldPreviewContext context)
+    {
+        AuthoringWorldPreviewDescriptor descriptor = DescribeAuthoringWorld().Validate();
+        if (context.WidthCells != descriptor.WidthCells || context.HeightCells != descriptor.HeightCells)
+        {
+            throw new InvalidOperationException("LevelDirector authoring world 描述与铺设上下文尺寸不一致。");
+        }
+
+        ResolveMaterials(context.Materials);
+        if (!_materialsResolved)
+        {
+            throw new InvalidOperationException(BlockedReason);
+        }
+
+        AuthoringWorldWriter writer = new(
+            context.Edit,
+            descriptor.WidthCells,
+            descriptor.HeightCells);
+        PopulateWorld(ref writer, descriptor.WidthCells, descriptor.HeightCells);
+        _worldBuilt = true;
+    }
+
+    /// <inheritdoc />
+    public void AdoptAuthoringWorld()
+    {
+        _worldBuilt = true;
+    }
+
+    /// <inheritdoc />
     protected override void OnStart()
     {
         // 启动阶段：解析材质 → 铺设像素世界 → 排队刚体结构 → 注册实体构建系统
         ResolveAuthoringAnchors();
-        ResolveMaterials();
+        ResolveMaterials(Context.Materials);
         if (!_materialsResolved)
         {
             return;
         }
 
-        BuildWorld();
+        if (!_worldBuilt)
+        {
+            BuildWorld();
+        }
+
         QueueRigidStructures();
         RegisterEntityBuildSystem();
     }
@@ -124,7 +166,7 @@ public sealed class LevelDirector : Behaviour
             ResolveAuthoringAnchors();
         }
 
-        ResolveMaterials();
+        ResolveMaterials(Context.Materials);
         if (!_materialsResolved)
         {
             return;
@@ -155,14 +197,19 @@ public sealed class LevelDirector : Behaviour
     {
         // 新版场景把关键点建模为真实 GameObject；旧 v1/probe 场景仍回退到序列化坐标字段。
         // 所有场景实体已在 Behaviour.OnStart 前完成装配，所以这里可安全读取兄弟实体 Transform。
-        if (Context.Scene.TryGetFirstComponent(out PlayerSpawnPoint? spawnPoint) &&
+        if (Entity is null)
+        {
+            return;
+        }
+
+        if (Entity.Scene.TryGetFirstComponent(out PlayerSpawnPoint? spawnPoint) &&
             spawnPoint.Entity.TryGetComponent(out Transform spawnTransform))
         {
             PlayerSpawnX = spawnTransform.X;
             PlayerSpawnY = spawnTransform.Y;
         }
 
-        if (Context.Scene.TryGetFirstComponent(out GoalPoint? goalPoint) &&
+        if (Entity.Scene.TryGetFirstComponent(out GoalPoint? goalPoint) &&
             goalPoint.Entity.TryGetComponent(out Transform goalTransform))
         {
             GoalX = goalTransform.X;
@@ -170,23 +217,24 @@ public sealed class LevelDirector : Behaviour
         }
     }
 
-    private void ResolveMaterials()
+    private void ResolveMaterials(IMaterialQuery materials)
     {
         if (_materialsResolved)
         {
             return;
         }
 
-        _empty = Context.Materials.Resolve("empty");
-        _stone = Context.Materials.Resolve("stone");
-        _dirt = Context.Materials.Resolve("dirt");
-        _sand = Context.Materials.Resolve("sand");
-        _wood = Context.Materials.Resolve("wood");
-        _water = Context.Materials.Resolve("water");
-        _oil = Context.Materials.Resolve("oil");
-        _lava = Context.Materials.Resolve("lava");
-        _acid = Context.Materials.Resolve("acid");
-        _metal = Context.Materials.Resolve("metal");
+        ArgumentNullException.ThrowIfNull(materials);
+        _empty = materials.Resolve("empty");
+        _stone = materials.Resolve("stone");
+        _dirt = materials.Resolve("dirt");
+        _sand = materials.Resolve("sand");
+        _wood = materials.Resolve("wood");
+        _water = materials.Resolve("water");
+        _oil = materials.Resolve("oil");
+        _lava = materials.Resolve("lava");
+        _acid = materials.Resolve("acid");
+        _metal = materials.Resolve("metal");
         _materialsResolved = _empty.IsValid &&
             _stone.IsValid &&
             _dirt.IsValid &&
@@ -205,13 +253,20 @@ public sealed class LevelDirector : Behaviour
     {
         int width = Math.Max(128, LevelWidth);
         int height = Math.Max(128, LevelHeight);
-        ClearPlayableArea(width, height);
-        BuildBounds(width, height);
-        BuildTerrain(width, height);
-        BuildHazards(height);
-        BuildSpawnHazardProbeArea();
-        BuildGoalMarker();
+        RuntimeWorldWriter writer = new(Context.Cells, width, height);
+        PopulateWorld(ref writer, width, height);
         _worldBuilt = true;
+    }
+
+    private void PopulateWorld<TWriter>(ref TWriter writer, int width, int height)
+        where TWriter : struct, IWorldWriter
+    {
+        ClearPlayableArea(ref writer, width, height);
+        BuildBounds(ref writer, width, height);
+        BuildTerrain(ref writer, width, height);
+        BuildHazards(ref writer, height);
+        BuildSpawnHazardProbeArea(ref writer);
+        BuildGoalMarker(ref writer);
     }
 
     // 装配玩家实体树：移动/生命/相机/工具链/HUD/UI 控制器
@@ -341,56 +396,53 @@ public sealed class LevelDirector : Behaviour
         emitter.IntervalSeconds = intervalSeconds;
     }
 
-    private void ClearPlayableArea(int width, int height)
+    private void ClearPlayableArea<TWriter>(ref TWriter writer, int width, int height)
+        where TWriter : struct, IWorldWriter
     {
-        for (int y = 0; y < height; y++)
-        {
-            for (int x = 0; x < width; x++)
-            {
-                Context.Cells.SetCell(x, y, _empty);
-            }
-        }
+        FillRect(ref writer, 0, 0, width, height, _empty);
     }
 
-    private void BuildBounds(int width, int height)
+    private void BuildBounds<TWriter>(ref TWriter writer, int width, int height)
+        where TWriter : struct, IWorldWriter
     {
-        FillRect(0, 0, width, 8, _stone);
-        FillRect(0, height - 12, width, 12, _stone);
-        FillRect(0, 0, 10, height, _stone);
-        FillRect(width - 10, 0, 10, height, _stone);
+        FillRect(ref writer, 0, 0, width, 8, _stone);
+        FillRect(ref writer, 0, height - 12, width, 12, _stone);
+        FillRect(ref writer, 0, 0, 10, height, _stone);
+        FillRect(ref writer, width - 10, 0, 10, height, _stone);
     }
 
-    private void BuildTerrain(int width, int height)
+    private void BuildTerrain<TWriter>(ref TWriter writer, int width, int height)
+        where TWriter : struct, IWorldWriter
     {
         int floorY = height - 72;
         // 横向闯关主路径：左到右的地面、熔岩坑、跳台与必须拆除的路障。
-        FillRect(10, floorY, width - 20, height - floorY - 12, _dirt);
-        FillRect(10, floorY + 18, width - 20, 16, _stone);
-        FillRect(28, floorY - 14, 110, 14, _stone);
+        FillRect(ref writer, 10, floorY, width - 20, height - floorY - 12, _dirt);
+        FillRect(ref writer, 10, floorY + 18, width - 20, 16, _stone);
+        FillRect(ref writer, 28, floorY - 14, 110, 14, _stone);
 
-        FillRect(138, floorY - 20, 18, 20, _wood);
-        FillRect(252, floorY - 34, 22, 34, _stone);
-        FillRect(396, floorY - 32, 22, 32, _metal);
-        FillRect(514, floorY - 26, 22, 26, _wood);
+        FillRect(ref writer, 138, floorY - 20, 18, 20, _wood);
+        FillRect(ref writer, 252, floorY - 34, 22, 34, _stone);
+        FillRect(ref writer, 396, floorY - 32, 22, 32, _metal);
+        FillRect(ref writer, 514, floorY - 26, 22, 26, _wood);
 
-        FillRect(168, floorY - 42, 82, 10, _wood);
-        FillRect(276, floorY - 74, 92, 10, _metal);
-        FillRect(410, floorY - 52, 70, 10, _wood);
-        FillRect(448, floorY - 36, 92, 10, _wood);
-        FillRect(532, floorY - 66, 80, 12, _stone);
+        FillRect(ref writer, 168, floorY - 42, 82, 10, _wood);
+        FillRect(ref writer, 276, floorY - 74, 92, 10, _metal);
+        FillRect(ref writer, 410, floorY - 52, 70, 10, _wood);
+        FillRect(ref writer, 448, floorY - 36, 92, 10, _wood);
+        FillRect(ref writer, 532, floorY - 66, 80, 12, _stone);
 
-        FillRect(98, floorY - 86, 64, 8, _metal);
-        FillRect(224, floorY - 122, 58, 8, _wood);
-        FillRect(372, floorY - 118, 72, 8, _metal);
+        FillRect(ref writer, 98, floorY - 86, 64, 8, _metal);
+        FillRect(ref writer, 224, floorY - 122, 58, 8, _wood);
+        FillRect(ref writer, 372, floorY - 118, 72, 8, _metal);
 
-        FillRect(188, floorY - 96, 34, 14, _wood);
-        FillRect(318, floorY - 32, 42, 12, _stone);
-        FillRect(456, floorY - 98, 44, 14, _metal);
-        FillRect(138, 108, 12, 96, _stone);
-        FillRect(488, floorY - 84, 42, 12, _wood);
+        FillRect(ref writer, 188, floorY - 96, 34, 14, _wood);
+        FillRect(ref writer, 318, floorY - 32, 42, 12, _stone);
+        FillRect(ref writer, 456, floorY - 98, 44, 14, _metal);
+        FillRect(ref writer, 138, 108, 12, 96, _stone);
+        FillRect(ref writer, 488, floorY - 84, 42, 12, _wood);
 
-        FillSlope(32, floorY - 1, 88, 24, _sand);
-        FillSlope(386, floorY - 1, 74, 22, _sand);
+        FillSlope(ref writer, 32, floorY - 1, 88, 24, _sand);
+        FillSlope(ref writer, 386, floorY - 1, 74, 22, _sand);
     }
 
     // 把木/金属跳台等区域提升为可破坏刚体，供射击与爆破验证
@@ -430,19 +482,29 @@ public sealed class LevelDirector : Behaviour
         _rigidStructures.Add(Context.Bodies.CreateFromRegion(x, y, width, height));
     }
 
-    private void BuildHazards(int height)
+    private void BuildHazards<TWriter>(ref TWriter writer, int height)
+        where TWriter : struct, IWorldWriter
     {
         int floorY = height - 72;
-        FillRect(178, floorY - 2, 58, 24, _lava);
-        FillRect(312, floorY - 2, 54, 26, _lava);
-        FillRect(452, floorY - 2, 54, 24, _lava);
-        FillRect(554, floorY - 2, 28, 20, _lava);
-        FillRect(172, floorY + 21, 70, 5, _stone);
-        FillRect(306, floorY + 23, 66, 5, _stone);
-        FillRect(446, floorY + 21, 66, 5, _stone);
+        FillRect(ref writer, 178, floorY - 2, 58, 24, _lava);
+        FillRect(ref writer, 312, floorY - 2, 54, 26, _lava);
+        FillRect(ref writer, 452, floorY - 2, 54, 24, _lava);
+        FillRect(ref writer, 554, floorY - 2, 28, 20, _lava);
+        FillRect(ref writer, 172, floorY + 21, 70, 5, _stone);
+        FillRect(ref writer, 306, floorY + 23, 66, 5, _stone);
+        FillRect(ref writer, 446, floorY + 21, 66, 5, _stone);
     }
 
     private void BuildSpawnHazardProbeArea()
+    {
+        int width = Math.Max(128, LevelWidth);
+        int height = Math.Max(128, LevelHeight);
+        RuntimeWorldWriter writer = new(Context.Cells, width, height);
+        BuildSpawnHazardProbeArea(ref writer);
+    }
+
+    private void BuildSpawnHazardProbeArea<TWriter>(ref TWriter writer)
+        where TWriter : struct, IWorldWriter
     {
         if (!BuildSpawnHazardProbe)
         {
@@ -451,43 +513,148 @@ public sealed class LevelDirector : Behaviour
 
         int x = (int)MathF.Floor(PlayerSpawnX);
         int y = (int)MathF.Floor(PlayerSpawnY);
-        FillRect(x, y, 8, 14, _lava);
+        FillRect(ref writer, x, y, 8, 14, _lava);
     }
 
-    private void BuildGoalMarker()
+    private void BuildGoalMarker<TWriter>(ref TWriter writer)
+        where TWriter : struct, IWorldWriter
     {
         int x = (int)MathF.Round(GoalX);
         int y = (int)MathF.Round(GoalY);
-        FillRect(x - 4, y, 4, 54, _wood);
-        FillRect(x, y, 34, 5, _sand);
-        FillRect(x, y + 49, 34, 5, _sand);
-        FillRect(x + 29, y, 5, 54, _sand);
+        FillRect(ref writer, x - 4, y, 4, 54, _wood);
+        FillRect(ref writer, x, y, 34, 5, _sand);
+        FillRect(ref writer, x, y + 49, 34, 5, _sand);
+        FillRect(ref writer, x + 29, y, 5, 54, _sand);
     }
 
-    private void FillRect(int x, int y, int width, int height, MaterialId material)
+    private static void FillRect<TWriter>(
+        ref TWriter writer,
+        int x,
+        int y,
+        int width,
+        int height,
+        MaterialId material)
+        where TWriter : struct, IWorldWriter
     {
         if (width <= 0 || height <= 0)
         {
             return;
         }
 
-        for (int cy = y; cy < y + height; cy++)
-        {
-            for (int cx = x; cx < x + width; cx++)
-            {
-                Context.Cells.SetCell(cx, cy, material);
-            }
-        }
+        writer.FillRect(x, y, width, height, material);
     }
 
-    private void FillSlope(int x, int baseY, int width, int height, MaterialId material)
+    private static void FillSlope<TWriter>(
+        ref TWriter writer,
+        int x,
+        int baseY,
+        int width,
+        int height,
+        MaterialId material)
+        where TWriter : struct, IWorldWriter
     {
         for (int cx = 0; cx < width; cx++)
         {
             int columnHeight = Math.Max(1, (int)MathF.Round((1f - (cx / (float)Math.Max(1, width - 1))) * height));
             for (int cy = 0; cy < columnHeight; cy++)
             {
-                Context.Cells.SetCell(x + cx, baseY - cy, material);
+                writer.SetCell(x + cx, baseY - cy, material);
+            }
+        }
+    }
+
+    private ulong ComputeAuthoringContentHash(int width, int height)
+    {
+        const ulong offset = 14695981039346656037UL;
+        ulong hash = offset;
+        hash = MixHash(hash, (uint)width);
+        hash = MixHash(hash, (uint)height);
+        hash = MixHash(hash, BitConverter.SingleToUInt32Bits(PlayerSpawnX));
+        hash = MixHash(hash, BitConverter.SingleToUInt32Bits(PlayerSpawnY));
+        hash = MixHash(hash, BitConverter.SingleToUInt32Bits(GoalX));
+        hash = MixHash(hash, BitConverter.SingleToUInt32Bits(GoalY));
+        hash = MixHash(hash, BuildSpawnHazardProbe ? 1u : 0u);
+        return hash;
+    }
+
+    private static ulong MixHash(ulong hash, uint value)
+    {
+        const ulong prime = 1099511628211UL;
+        for (int shift = 0; shift < 32; shift += 8)
+        {
+            hash ^= (byte)(value >> shift);
+            hash *= prime;
+        }
+
+        return hash;
+    }
+
+    private interface IWorldWriter
+    {
+        void SetCell(int x, int y, MaterialId material);
+
+        void FillRect(int x, int y, int width, int height, MaterialId material);
+    }
+
+    private readonly struct RuntimeWorldWriter(
+        IWorldCellAccess cells,
+        int width,
+        int height) : IWorldWriter
+    {
+        private readonly IWorldCellAccess _cells = cells ?? throw new ArgumentNullException(nameof(cells));
+        private readonly int _width = width > 0 ? width : throw new ArgumentOutOfRangeException(nameof(width));
+        private readonly int _height = height > 0 ? height : throw new ArgumentOutOfRangeException(nameof(height));
+
+        public void SetCell(int x, int y, MaterialId material)
+        {
+            if ((uint)x < (uint)_width && (uint)y < (uint)_height)
+            {
+                _cells.SetCell(x, y, material);
+            }
+        }
+
+        public void FillRect(int x, int y, int width, int height, MaterialId material)
+        {
+            int minX = Math.Max(0, x);
+            int minY = Math.Max(0, y);
+            int maxX = (int)Math.Min(_width, (long)x + width);
+            int maxY = (int)Math.Min(_height, (long)y + height);
+            for (int cy = minY; cy < maxY; cy++)
+            {
+                for (int cx = minX; cx < maxX; cx++)
+                {
+                    _cells.SetCell(cx, cy, material);
+                }
+            }
+        }
+    }
+
+    private readonly struct AuthoringWorldWriter(
+        IAuthoringWorldEditApi edit,
+        int width,
+        int height) : IWorldWriter
+    {
+        private readonly IAuthoringWorldEditApi _edit = edit ?? throw new ArgumentNullException(nameof(edit));
+        private readonly int _width = width > 0 ? width : throw new ArgumentOutOfRangeException(nameof(width));
+        private readonly int _height = height > 0 ? height : throw new ArgumentOutOfRangeException(nameof(height));
+
+        public void SetCell(int x, int y, MaterialId material)
+        {
+            if ((uint)x < (uint)_width && (uint)y < (uint)_height)
+            {
+                _edit.PaintCell(x, y, material);
+            }
+        }
+
+        public void FillRect(int x, int y, int width, int height, MaterialId material)
+        {
+            int minX = Math.Max(0, x);
+            int minY = Math.Max(0, y);
+            int maxX = (int)Math.Min(_width, (long)x + width);
+            int maxY = (int)Math.Min(_height, (long)y + height);
+            if (minX < maxX && minY < maxY)
+            {
+                _ = _edit.PaintRect(minX, minY, maxX - 1, maxY - 1, material);
             }
         }
     }

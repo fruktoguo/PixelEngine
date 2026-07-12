@@ -19,6 +19,7 @@ internal sealed class EditorProjectSession : IDisposable
     private readonly EngineWorldSnapshotStore _snapshotStore;
     private readonly EngineEditorPlaySessionService _playSession;
     private readonly EngineSimulationControlService _simulationControl;
+    private readonly AuthoringWorldPreviewRuntime _authoringWorld;
     private readonly EditorScriptAssetOpenService _scriptAssetOpenService;
     private readonly EditorCodeWorkspaceOpenService _codeWorkspaceOpenService;
     private int _runtimeProjectionVersion;
@@ -31,6 +32,7 @@ internal sealed class EditorProjectSession : IDisposable
         EditorSceneModel sceneModel,
         EditorUndoStack undoStack,
         EditorSceneRuntimeProjection runtimeProjection,
+        AuthoringWorldPreviewRuntime authoringWorld,
         EditorPrefabAssetStore prefabs,
         EditorScriptAssetOpenService scriptAssetOpenService,
         EditorCodeWorkspaceOpenService codeWorkspaceOpenService,
@@ -42,6 +44,7 @@ internal sealed class EditorProjectSession : IDisposable
         SceneModel = sceneModel;
         UndoStack = undoStack;
         RuntimeProjection = runtimeProjection;
+        _authoringWorld = authoringWorld ?? throw new ArgumentNullException(nameof(authoringWorld));
         Prefabs = prefabs;
         _scriptAssetOpenService = scriptAssetOpenService ?? throw new ArgumentNullException(nameof(scriptAssetOpenService));
         _codeWorkspaceOpenService = codeWorkspaceOpenService ?? throw new ArgumentNullException(nameof(codeWorkspaceOpenService));
@@ -91,6 +94,7 @@ internal sealed class EditorProjectSession : IDisposable
         try
         {
             AttachContentAndWorld(engine);
+            AttachProjectAudio(engine);
             _ = engine.AttachPhysics();
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = new();
@@ -105,7 +109,12 @@ internal sealed class EditorProjectSession : IDisposable
             engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
             RegisterInitialProjectScriptAssembly(project, engine, app.ConsoleStore);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
-            editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs);
+            AuthoringWorldPreviewRuntime authoringWorld = new(
+                engine.Context.GetService<IChunkSource>(),
+                engine.Context.GetService<IMaterialQuery>(),
+                engine.Context.GetService<ISimulationEditApi>());
+            _ = authoringWorld.Refresh(projection.Scene, projection.StableIdToEntityId);
+            editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs, authoringWorld);
             _ = engine.AttachScriptingFromServices(
                 hotReload: new ScriptHotReloadRuntimeOptions($"{project.Name}.EditorScripts", project.ScriptSourcePath));
             engine.EnterEditMode();
@@ -115,7 +124,7 @@ internal sealed class EditorProjectSession : IDisposable
                 app.ConsoleStore.AddUiBackendSelection(uiBackendSelection);
             }
 
-            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
+            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, authoringWorld, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
         }
         catch
         {
@@ -200,6 +209,7 @@ internal sealed class EditorProjectSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         Hosting.EditorPlaySessionResult result = _playSession.ExitPlay();
         RefreshEditProjectionIfNeeded();
+        _editorHost.InvalidateAuthoringWorld();
         return result;
     }
 
@@ -568,6 +578,19 @@ internal sealed class EditorProjectSession : IDisposable
         }
     }
 
+    internal static void AttachProjectAudio(Engine engine)
+    {
+        ArgumentNullException.ThrowIfNull(engine);
+        string audioRoot = Path.Combine(engine.Context.Options.ContentRoot, "audio");
+        if (Directory.Exists(audioRoot))
+        {
+            _ = engine.AttachAudioFromContentAsync().AsTask().GetAwaiter().GetResult();
+            return;
+        }
+
+        engine.Context.RegisterService<IAudioApi>(EngineServiceRole.AudioService, NullAudioApi.Instance);
+    }
+
     internal static EditorSceneModel LoadSceneModel(EditorProject project, string sceneRelativePath)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -647,6 +670,14 @@ internal sealed class EditorProjectSession : IDisposable
 
         Prefabs.RefreshPrefabInstances(SceneModel);
         RuntimeProjection = ProjectAuthoringScene(Engine, SceneModel);
+        AuthoringWorldRefreshResult refresh = _authoringWorld.Refresh(
+            RuntimeProjection.Scene,
+            RuntimeProjection.StableIdToEntityId);
+        if (refresh is AuthoringWorldRefreshResult.Rebuilt or AuthoringWorldRefreshResult.Cleared)
+        {
+            _editorHost.InvalidateAuthoringWorld();
+        }
+
         _runtimeProjectionVersion = SceneModel.Version;
     }
 

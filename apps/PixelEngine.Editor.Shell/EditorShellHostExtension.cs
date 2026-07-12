@@ -28,6 +28,7 @@ internal sealed class EditorShellHostExtension :
     private EditorSceneModel? _sceneModel;
     private EditorUndoStack? _undoStack;
     private EditorPrefabAssetStore? _prefabs;
+    private AuthoringWorldPreviewRuntime? _authoringWorld;
     private ProjectSettingsPanel? _projectSettingsPanel;
     private PlayerSettingsPanel? _playerSettingsPanel;
     private BuildSettingsPanel? _buildSettingsPanel;
@@ -97,6 +98,7 @@ internal sealed class EditorShellHostExtension :
             // Runtime Inspector 即使被用户关闭，也必须在退出 Play 时结束临时编辑事务，
             // 不能把恢复/清理职责绑定到面板是否继续 Draw。
             _runtimeHierarchy?.RestoreTemporaryEdits();
+            _sceneViewPanel?.InvalidateWorldTexture();
         }
 
         _lastPreparedMode = mode;
@@ -115,6 +117,11 @@ internal sealed class EditorShellHostExtension :
             _gameViewPanel.Visible = true;
             _gameViewPanel.RequestFocus();
         }
+    }
+
+    public void InvalidateAuthoringWorld()
+    {
+        _sceneViewPanel?.InvalidateWorldTexture();
     }
 
     public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
@@ -205,7 +212,11 @@ internal sealed class EditorShellHostExtension :
     /// <summary>
     /// 绑定场景模型、撤销栈与 Prefab 存储，供后续面板注册使用。
     /// </summary>
-    public void ConfigureAuthoring(EditorSceneModel sceneModel, EditorUndoStack undoStack, EditorPrefabAssetStore prefabs)
+    public void ConfigureAuthoring(
+        EditorSceneModel sceneModel,
+        EditorUndoStack undoStack,
+        EditorPrefabAssetStore prefabs,
+        AuthoringWorldPreviewRuntime authoringWorld)
     {
         if (_panelsRegistered)
         {
@@ -215,6 +226,7 @@ internal sealed class EditorShellHostExtension :
         _sceneModel = sceneModel ?? throw new ArgumentNullException(nameof(sceneModel));
         _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
         _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
+        _authoringWorld = authoringWorld ?? throw new ArgumentNullException(nameof(authoringWorld));
     }
 
     /// <summary>
@@ -228,7 +240,7 @@ internal sealed class EditorShellHostExtension :
         engine.Context.RegisterService<IEditorInputCaptureSource>(this);
         _textureThumbnailProvider ??= new EditorTextureThumbnailProvider(_project.ContentRootPath, window);
         // 注册层级/Inspector/资产浏览器/构建设置等 ImGui 面板
-        RegisterPanels(engine, pipeline);
+        RegisterPanels(engine, window, pipeline);
         EditorWindowInputConnector input = new(window, _editor.Input);
         EditorExternalAssetDropConnector externalAssetDrop = new(
             window,
@@ -246,6 +258,7 @@ internal sealed class EditorShellHostExtension :
             _assetBrowserDataSource,
             _textureThumbnailProvider,
             _editor,
+            _sceneViewPanel,
             externalAssetDrop);
     }
 
@@ -346,7 +359,7 @@ internal sealed class EditorShellHostExtension :
                 : EditorMode.Edit;
     }
 
-    private void RegisterPanels(Engine engine, RenderPipeline pipeline)
+    private void RegisterPanels(Engine engine, RenderWindow window, RenderPipeline pipeline)
     {
         if (_panelsRegistered)
         {
@@ -387,7 +400,8 @@ internal sealed class EditorShellHostExtension :
                 _undoStack,
                 _prefabs,
                 runtimeHierarchy.Capture,
-                CapturePlayMode));
+                CapturePlayMode,
+                () => _authoringWorld?.Snapshot ?? default));
             _gameObjectInspectorPanel = new GameObjectInspectorPanel(
                 _sceneModel,
                 _undoStack,
@@ -415,10 +429,23 @@ internal sealed class EditorShellHostExtension :
             brushPanel = new MaterialBrushPalettePanel(materials, editApi);
         }
 
+        SceneWorldTexture? sceneWorldTexture =
+            engine.Context.TryGetService(out IChunkSource sceneChunks) &&
+            engine.Context.TryGetService(out MaterialTable sceneMaterials) &&
+            engine.Context.TryGetService(out TemperatureField sceneTemperature)
+                ? new SceneWorldTexture(
+                    window.Gl,
+                    sceneChunks,
+                    sceneMaterials,
+                    sceneTemperature,
+                    engine.Context.Jobs)
+                : null;
         _sceneViewPanel = new SceneViewPanel(
             _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
-            brushPanel);
+            brushPanel,
+            sceneWorldTexture,
+            () => _authoringWorld?.Snapshot ?? default);
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
