@@ -19,6 +19,61 @@
 - [x] **内容与字体管线**：`content/ui`、`ui-manifest.json`、screens/images/fonts、`FontEngine` 与 CJK fallback 是玩家 UI 内容的统一资产入口。
 - [x] **非职责边界**：本文件不实现 CA/sim、plan/08 世界渲染管线本体、Editor ImGui 面板层、Demo 具体 UI 文案与玩法逻辑、发行脚本内部逻辑；这些由对应 leaf plan 承担。
 
+## 1.1 UI-004：场景级 Web Canvas、CanvasScaler 与多 Canvas 公共契约
+
+本节是新增能力的权威详细设计；canonical 状态位于 `plan/tasks/50-product-editor-ui-demo.md` 的 `UI-004`。既有 `GameUiHost + UiViewport` 只是单一物理视口底座，不能继续把“后端输出像素”“Canvas 逻辑布局尺寸”“编辑器显示矩形”折叠为同一个宽高。
+
+### 1.1.1 场景 authoring 与兼容边界
+
+- Editor 为 GameObject 提供 `Canvas (Web)` 与 `Canvas Scaler` 两个内建组件。`Canvas (Web)` 保存 UI manifest/screen 入口、enabled、sorting order 与 scene-level primary 标记；effective `UiCanvasId` 由 owning GameObject 的 StableId 确定性派生，不另存一份会与 Prefab 身份漂移的 id。`Canvas Scaler` 保存完整缩放设置。它们是引擎内建 scene component，不冒充用户 Behaviour，也不要求 Demo 访问 Editor/internal 类型。
+- Prefab asset 不允许持久化 `primary=true`；scene instance 可用 override 指定 primary。Duplicate/paste/prefab instantiate/nested prefab 展开必须先为实例 GameObject 分配新 StableId，effective CanvasId 随之 remap；复制当前 primary 时新副本自动清除 primary 并进入同一 Undo。若损坏文档出现重复 StableId 或多个 enabled explicit primary，loader/validator 阻止 Save/Play 并要求修复，绝不静默随机选一个。
+- Canvas 缺少 Scaler 时使用 `UiCanvasScalerSettings.Default` 并在 Inspector 提供 Add Scaler；孤立 Scaler 保留序列化但 inactive 并显示诊断，不物化 runtime Canvas。primary 解析顺序固定为 enabled explicit primary → legacy implicit primary → enabled Canvas 中按 sorting order/StableId 的第一项；disabled primary 被跳过并诊断。存在显式 Canvas 但全部 disabled 时 `PrimaryCanvas=default`，旧无 Canvas 参数 API 返回 no-op/失败诊断，不能暗中复活 implicit Canvas。
+- 产品范围是屏幕空间 Web Canvas。HTML DOM/CSS 树继续是控件层级与布局真相源；不创建 RectTransform 子 GameObject，也不显示未接线的 World Space / Screen Space Camera 选项。
+- `.scene` schema 升到 v3 后可序列化多个 Canvas；loader 必须保留 v1/v2 读取。没有显式 Canvas 的旧场景由 Hosting 建立一个不落盘的 implicit primary Canvas，承接旧 `ui-manifest.json` 与全局 `GameUiHost` 行为；Editor 为它提供只读 Scene preview/Inspector 说明与显式 Convert To Web Canvas，转换前不改写旧资产。
+- 多 Canvas 先按 `sortingOrder`、再按 scene stable id 确定性合成；输入使用 `GamePresentationInputMapping` 明确分开 `IsInsidePresentation + PresentationPoint` 与 `IsInsideWorldContent + WorldPoint`。UI 在完整 presentation 内从最上层 Canvas 反向命中；未 capture 时，只有 `IsInsideWorldContent` 才能进入 gameplay，透明 Canvas 的 presentation 边缘不得漏给玩法。某 Canvas 的 modal 只约束自身屏栈，不能无条件吞掉更高排序 Canvas 或 Editor overlay。
+- Scene View 选择 Canvas 时绘制参考分辨率边框与实际 HTML/CSS authoring preview。preview 使用独立 document/host 状态与同一 GL context、同一字体/图片/resource loader；允许资产热刷新和选择，但不得派发 gameplay action、脚本 UI event 或修改运行时 model/world。
+
+### 1.1.2 CanvasScaler 的完整模式
+
+`PixelEngine.UI` 新增带中文 XML 文档的公开值类型与纯函数：`UiScaleMode`、`UiScreenMatchMode`、`UiPhysicalUnit`、`UiCanvasScalerSettings`、`UiDisplayMetrics`、`UiCanvasMetrics`、`UiCanvasScaleResolver`。Resolver 不依赖 Editor 或具体后端，并拒绝零/负/NaN/Infinity 的分辨率、DPI、scale factor 与 reference pixels-per-unit。
+
+| UI Scale Mode | 必须实现的解析规则 | Inspector 字段 |
+|---|---|---|
+| Constant Pixel Size | `scale = ScaleFactor`；Canvas 逻辑尺寸为 presentation pixels / scale | Scale Factor、Reference Pixels Per Unit |
+| Scale With Screen Size | 令 `rw = presentationWidth / referenceWidth`、`rh = presentationHeight / referenceHeight`；Match Width Or Height 使用 `2 ^ lerp(log2(rw), log2(rh), Match)`，Expand 使用 `min(rw, rh)`，Shrink 使用 `max(rw, rh)` | Reference Resolution、Screen Match Mode、Match(0–1)、Reference Pixels Per Unit |
+| Constant Physical Size | `effectiveDpi = ActualPhysicalDpi ?? FallbackScreenDpi`；令每英寸单位数 `u` 为 Inches=1、Centimeters=2.54、Millimeters=25.4、Points=72、Picas=6，则 `scale = effectiveDpi / u`，`resolvedReferencePixelsPerUnit = ReferencePixelsPerUnit * u / DefaultSpriteDpi` | Physical Unit、Fallback Screen DPI、Default Sprite DPI、Reference Pixels Per Unit |
+
+Unity-compatible 默认值固定为 Constant Pixel Size、Scale Factor=1、Reference Resolution=800×600、Match Width=0、Physical Unit=Points、Fallback Screen DPI=96、Default Sprite DPI=96、Reference Pixels Per Unit=100；项目模板可显式覆盖，但 loader 不凭设备猜测或改写入盘值。
+
+`UiDisplayMetrics` 必须把可空/未知的 physical DPI 与 OS framebuffer/logical DPI scale 分开；Rendering-owned `IDisplayMetricsSource` 按当前窗口 monitor 产生 monitor id、framebuffer scale、`ActualPhysicalDpi?` 与 metrics revision。Windows 优先读取有效的 raw monitor DPI（X/Y 归一为有限正 scalar），API 不可用/值非法时返回 null 并让 resolver 使用入盘 fallback；禁止用 `96 * DpiScale` 伪造物理 DPI。跨屏、`WM_DPICHANGED` 或 monitor 变化在帧边界发布新 revision。`UiCanvasMetrics` 同时携带 presentation/render pixels、Canvas logical size、scale factor、reference pixels-per-unit 以及双向坐标变换，成为 layout、raster、hit-test、IME 和 Scene preview 的单一权威。
+
+### 1.1.3 后端与多 Canvas runtime
+
+- `IGameUiBackend` 的 layout viewport 改由 `UiCanvasMetrics` 驱动：RmlUi context/CSS viewport 使用 Canvas logical size，native/offscreen surface 使用 presentation render pixels；ManagedFallback 必须消费同一 metrics，不能继续按物理 target 宽高直接布局。
+- Hosting 维护固定容量的 Canvas registry，每个已物化 Canvas 拥有独立 document stack/model binding/metrics，后端资源可共享但状态不得串 Canvas。创建/销毁/resize 只发生在 scene 或 metrics 变化时；稳态 update/composite/input 不产生托管堆分配。
+- 中性脚本契约新增 `UiCanvasId`、`UiCanvasHandle`、primary Canvas 查询和带 Canvas 参数的 `ShowScreen`/`PushModal` 等 overload；现有无 Canvas 参数方法永久转发到 primary Canvas。`UiEvent` 携带来源 Canvas，同时保留旧构造/调用兼容。禁用 UI 时多 Canvas API 仍由 no-op 服务安全处理。
+- `ManagedFallbackBackend`、RmlUi desktop GL、RmlUi ANGLE/GLES 与未来 Ultralight 必须通过同一 Canvas metrics/registry conformance tests；可选 native 仍是 dynamic-only、可整体禁用并回退 ManagedFallback，不进入 Box2D 静态 dual-build 链。
+
+### 1.1.4 三层分辨率与合成表面
+
+渲染/Hosting 必须明确区分以下三个尺寸，并在类型与诊断中使用不同名称：
+
+1. `InternalWorldViewport`：现有 `EngineOptions.InternalWidth/Height` 继续是固定的像素世界/camera/render 尺寸，例如 640×360；UI-004 的 Game View preset 不改变 camera aspect、可见世界范围或内部像素数，更不能把它膨胀到 1080p。
+2. `GamePresentationSurface`：Player Settings 或 Game View preset 决定的最终游戏画布。固定 internal world 按保持宽高比的 Fit 规则居中写入该 surface；4:3/portrait 会产生明确 letterbox，而不是暗改 camera/world aspect。gameplay overlay 随 world content rect，Web Canvas 覆盖完整 presentation surface。
+3. `GameViewDisplayRect`：presentation texture 在 Editor 面板中的 Fit/百分比缩放/裁剪/平移矩形，只负责观察和坐标映射。
+Player Settings 的 `PlayerWindowMode { Windowed, MaximizedWindow, BorderlessFullscreen }` 只控制独立 Player 的 OS 窗口/framebuffer；Width/Height 仍定义 presentation 尺寸及 Windowed 初始客户区，Maximized/Borderless 再把 presentation Fit 到实际 framebuffer。该值必须经 settings store、build request/result、打包后 startup、audit 与 `RenderWindowOptions` 在首帧前生效；Game View panel Maximize/Maximize On Play 只是 Editor workspace 状态，两者不能互相改写，也不暴露未实现的 Exclusive Fullscreen。
+
+
+`RenderPipeline.CurrentViewportTexture` 在兼容命名下改为发布完整 presentation surface（world + gameplay overlay + 全部 game Canvas），而不是内部世界纹理；独立 Player 再把 presentation surface 呈现到 OS framebuffer。`GamePresentationInputMapping` 沿 `window framebuffer ↔ GameViewDisplayRect ↔ presentation` 产生独立的 Canvas logical 与 world content 坐标，pointer、scroll、UI hit-test、gameplay 和 IME 只能消费与自身区域匹配的结果。
+
+`GamePresentationDescriptor` 与产出的 `RenderViewportTexture` 都携带单调递增 revision（descriptor 同时引用 display-metrics revision）。Game View toolbar/resize/DPI/monitor 事件只写 pending descriptor；Hosting 在下一帧 render 前统一 commit/resize，renderer 发布带同 revision 的 texture 后，Editor 才原子切换 snapshot/present target/input/IME mapping。允许确定性的一帧延迟，但任何帧都不得用新几何命中旧纹理或反之。
+
+### 1.1.5 Edit / Play / Paused 生命周期
+
+- Edit：runtime `GameUiHost` 即使已装配也必须由显式 composition policy 返回 false，不得合成到 Game View；Scene View 只显示无副作用的 authoring preview。
+- Play 与 Paused：物化场景内所有 enabled Canvas，更新/输入/合成使用 runtime host；Paused 仍保持 UI 可见并按现有暂停策略处理 UI 交互。
+- Stop/切场景/退出：按反向排序卸载 document、清空 capture/composition/model binding 与 Canvas handle；再次 Play 必须从 authoring scene 重新物化，不能复用上次 Play 的屏栈、focus 或后端脏状态。
+
 ## 2. 状态总览 checklist
 
 - [x] `PixelEngine.UI` 骨架、`IGameUiBackend`、`UiValue`/`UiEvent`、`GameUiHost`、`UiDocumentManager`、`IGameUiService` Hosting bridge、Scripting no-op 服务无事件保留/静默失败契约与禁用零开销已落地。

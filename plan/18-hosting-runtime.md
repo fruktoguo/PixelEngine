@@ -17,6 +17,20 @@
 - [x] **Showcase Demo Game 公开入口**：Demo 通过 Hosting 公开 API 启动、读取 `content/startup.json`、选择 `.scene` / save directory / procedural generator，并消费脚本、输入、音频、UI、物理和世界服务。
 - [x] **非职责边界**：Hosting 不实现 CA、Physics、Rendering、Audio、Editor ImGui 面板层、Unity-like Editor 产品 UX、Web-first UI 后端本体或 Demo 玩法内容；这些由对应 leaf plan 承担。
 
+## 1.1 UI-004：`.scene` v3、Canvas 物化与 presentation 装配边界
+
+Hosting 是场景级 Web Canvas 与三层分辨率的中性装配所有者；不能让 EditorShell 直接构造 `GameUiHost` 内部状态，也不能把 Canvas 伪装成用户脚本 Behaviour。
+
+- `.scene` schema v3 在 GameObject 上增加可判别的 `WebCanvas` 与 `CanvasScaler` 内建组件 DTO。`WebCanvas` 保存 manifest/screen 资产引用、enabled、sorting order 与 scene-level primary；effective `UiCanvasId` 由 owning GameObject StableId 派生，不重复入盘。`CanvasScaler` 保存 plan/20 §1.1.2 的完整 settings。Prefab asset 禁止 `primary=true`；duplicate/paste/prefab instantiate/nested prefab 先 remap instance GameObject StableId，复制 scene primary 时清除副本 primary。重复 StableId 或多个 enabled explicit primary 是阻止 Save/Play 的 schema error；writer 稳定排序并保证 v3 save→load 等价。
+- v1/v2 或 v3 中完全没有 Canvas 的场景保持旧语义：loader 生成不写回文档的 implicit primary Canvas，指向工程既有 UI manifest。存在显式 Canvas 后不再额外生成 implicit Canvas；primary 顺序固定为 enabled explicit → legacy implicit → enabled Canvas 中 sorting order/StableId 第一项。disabled primary 被跳过并诊断；全部 explicit Canvas disabled 时 primary 为空，旧 API no-op/返回失败，不复活 implicit Canvas。
+- authoring→runtime 物化把 enabled Canvas 转成固定容量 Canvas registry/handle；缺少 Scaler 的 Canvas 使用 `UiCanvasScalerSettings.Default`，孤立 Scaler 只保留诊断且不物化 Canvas。Canvas/Scaler 不进入 `Scripting.Scene` 的按组件类型热桶，不执行 Behaviour 生命周期。切场景、Stop 和 Engine dispose 逆序释放各 Canvas 的 document、model、backend surface 与输入状态。
+- Hosting/Rendering 公开带中文 XML 的 `GamePresentationDescriptor`（presentation size/source、effective world content rect、`UiDisplayMetrics`、display-metrics revision 与单调 presentation revision）、`GamePresentationInputMapping`（presentation/UI 与 world/gameplay 两阶段区域/坐标）、`IDisplayMetricsSource`、`IGamePresentationOverride`（Editor pending preset）和 `IGameUiCompositionPolicy`。pending descriptor 只在 render 前帧边界 commit；texture/snapshot/input/IME 仅在 revision 一致时共同切换，允许一帧延迟但禁止新旧几何混用。职责不得重新折叠回 `EngineOptions.InternalWidth/Height` 或 `IUiPresentTargetProvider`。
+- Player 启动默认从 `PlayerSettingsDto` 得到 presentation/window 尺寸与 `PlayerWindowMode { Windowed, MaximizedWindow, BorderlessFullscreen }`；旧 settings 缺字段时迁移为 Windowed。Width/Height 继续作为 presentation 尺寸与普通窗口初始尺寸；Maximized/Borderless 只改变 OS window/framebuffer，presentation 仍保持配置值并 Fit 呈现。WindowMode 必须贯穿 Player Settings UI/store、build request/result、packaged startup、audit 与 `RenderWindowOptions`，在首帧前应用；不得暴露未实现的 Exclusive Fullscreen。EditorShell preset 仍是 session-local override，不修改 Player Settings、scene 或 build profile。
+- Rendering 保持 `EngineOptions.InternalWidth/Height` 对应的固定 world/camera surface（默认 640×360），不因 4:3/portrait/1080p preset 改 camera aspect、可见世界范围或内部像素数；该 surface 居中 Fit 到 presentation，4:3/portrait 的 letterbox 属于明确产品边界。gameplay overlay 只写 world content rect，runtime Canvas 写完整 presentation；`CurrentViewportTexture` 发布最终 presentation surface，独立 Player 再把它 Fit/呈现到 OS framebuffer。
+- Edit 时 composition policy 必须显式拒绝 runtime Canvas surface；不能把 provider 缺失解释成“回退整 runtime viewport”。Play/Paused 允许合成；Stop 后 policy、registry、screen stack、focus/capture/composition 全部回到干净 Edit 基线，Play→Stop→Play 的 Canvas handle 与 backend 状态不得泄漏。
+
+自动化必须覆盖 v1/v2 implicit compatibility、v3 多 Canvas roundtrip、同 Canvas prefab 双实例 StableId remap、duplicate primary 清除、重复 primary 拒绝、无/孤立 Scaler、disabled/all-disabled primary、旧无 Canvas 项目；Player WindowMode 全链迁移/打包/首帧状态与 Editor override 隔离；16:9/4:3/portrait 均保持固定 internal world/camera 尺寸并正确居中 letterbox；pending→committed revision、跨 monitor physical DPI、presentation/UI 与 world/gameplay 两阶段输入；Edit/Play/Paused/Stop policy，以及重复 Play 后 document/handle/input 状态清零。
+
 ## 2. 状态总览 checklist
 
 - [x] M10/M13 Hosting 底座已闭合：`EngineBuilder`、`Engine`、`EngineContext`、12 相位、headless、Play/Edit/Step、GUI 宿主中性化、窗口/GL 所有权解耦与 EditorShell attach 证据已记录。

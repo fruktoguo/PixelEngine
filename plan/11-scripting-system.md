@@ -295,9 +295,13 @@ Web-first 透明游戏 UI（主菜单/设置/背包/对话/HUD/结算）由 plan
 
 **依赖方向（沿用契约-后端范式，绝不反向）**：`IGameUiService`/`UiEvent`/`UiValue` 契约声明在**中性契约层**（与 `IAudioApi`/`ICameraApi` 等门面同策略，由 Scripting 的公开契约层或 Core 承载），RmlUi/Ultralight/ManagedFallback 后端在 `PixelEngine.UI` 实现，Hosting 在装配期把后端实例注入 `IScriptContext.Ui`。**`PixelEngine.Scripting` 绝不 `ProjectReference` `PixelEngine.UI`**（plan/00 §5 依赖方向为 `UI → {Rendering, Core}`，Scripting 不反向依赖 UI）。未启用 HTML UI 时 `Ui` 注入 no-op 空对象（禁用零开销），脚本调用安全静默。
 
-### 3.11 运行时场景物化目标保持扁平（对齐 plan/19 authoring / plan/18 .scene schema v2）
+**UI-004 多 Canvas 扩展**：中性契约层新增带中文 XML 的 blittable `UiCanvasId` / `UiCanvasHandle`，`IGameUiService` 提供 `PrimaryCanvas`、`TryGetCanvas`、固定缓冲 `CopyCanvases(Span<UiCanvasHandle>)`，以及显式接收 Canvas handle 的 `ShowScreen` / `PushModal` overload。脚本只把 id 视为 opaque value；其有效值由 Hosting 从 owning GameObject StableId 派生，并随 duplicate/paste/prefab 实例身份 remap。现有不带 Canvas 参数的 API 永久转发到 primary Canvas，保持既有 Demo/用户脚本源码与运行语义；screen handle 在所有 Canvas 间全局唯一，后续 `BindModel`/`SetValue`/`Invoke` 仍可只接 screen handle。存在显式 Canvas 但全部 disabled 时 `PrimaryCanvas=default`，旧 API 安全 no-op/返回失败，不生成隐式运行时 Canvas。
 
-plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **authoring 模型**，plan/18 Hosting 的 `EngineSceneDocument`/`EngineSceneDocumentLoader` 随之升 `.scene` schema 到 `FormatVersion=2`（增 `ParentId` 与 Transform 块、`ConvertValue` 增 `Vector2`/Transform TRS 绑定、保 v1→v2 兼容，往返等价测试归 plan/14）。**这些结构性层级与 schema 演进全部落在 plan/18/19，本运行时脚本层不承接**：`Scripting.Scene`/`Entity`/`Behaviour`/`Transform` 作为 authoring→运行时的**物化目标继续保持扁平 DOD，绝不引入父子层级/`ParentId`**（守 §3.2 的「按组件类型分桶紧凑数组」热路径不被层级污染）。plan/11 在此只保证两件事：`Scripting.Transform` 字段（`X`/`Y`/`RotationRadians`/`ScaleX`/`ScaleY`）与文档 Transform 块**逐字段对齐**，供 Hosting 把 authoring 层级的世界 TRS **烘焙**为扁平实体 Transform；组件字段绑定支持 `Vector2`（供 `ConvertValue`/`InspectField` 对位置类字段做类型转换），字段值仍以字符串规范化经 `SerializedFields` 往返（材质引用走稳定 Name，守 #8）。
+`UiEvent` 增加来源 `UiCanvasHandle Canvas`，同时保留旧四参数构造并把其来源解释为 primary/unknown compatibility handle；事件和 handle 继续保持 blittable、无字符串/对象引用。Canvas 的 scaler settings、scene DTO、backend/DOM/document 类型不进入 `PixelEngine.Scripting`，脚本程序集仍不引用 `PixelEngine.UI`；禁用 UI 时 `NoopGameUiService` 对查询返回空、对全部 Canvas overload 安全静默。
+
+### 3.11 运行时场景物化目标保持扁平（对齐 plan/19 authoring / plan/18 .scene schema v3）
+
+plan/19 独立编辑器引入 GameObject 层级/父子/Transform TRS 的 **authoring 模型**，plan/18 Hosting 先把 `.scene` 升到 `FormatVersion=2`（`ParentId`/Transform/`Vector2`），再由 UI-004 升到 v3 承载 `WebCanvas`/`CanvasScaler` 内建组件并保留 v1/v2 兼容。**这些层级、内建组件与 schema 演进全部落在 plan/18/19，本运行时脚本层不承接**：`Scripting.Scene`/`Entity`/`Behaviour`/`Transform` 作为 authoring→运行时的**物化目标继续保持扁平 DOD，绝不引入父子层级/`ParentId` 或把 Canvas 塞进 Behaviour 组件桶**（守 §3.2 的热路径）。plan/11 只保证三件事：`Scripting.Transform` 与文档 Transform 逐字段对齐；组件字段绑定支持向量类型并以字符串规范化往返；多 Canvas 只通过 §3.10 的中性 handle/service 暴露给脚本，scene DTO 与后端实现不泄漏进脚本程序集。
 
 ---
 

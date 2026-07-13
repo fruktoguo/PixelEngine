@@ -63,12 +63,12 @@ pwsh tools/validate-task-catalog.ps1
 | A | 建立可信控制面 | `PLAN-001`、`EVID-001`、`EVID-003`、`CI-001`、`TEST-001`、`CI-002`、`TEST-002`、`PERF-001` |
 | B | M14 正确性与性能加固 | `ARCH-001`–`ARCH-005`、`PERF-002`–`PERF-007`、`PERF-011`、`DOC-002` |
 | C | 冻结可验收候选版本 | `REL-001` |
-| D | 闭合 M15 产品与目标环境证据 | `PERF-008`–`PERF-010`、`PERF-012`、`EVID-002`、`EDITOR-004`–`EDITOR-010`、`EDITOR-001`–`EDITOR-003`、`UI-001`–`UI-003`、`TEST-003`、`DEMO-001`–`DEMO-005`、`DOC-001`、`CI-003`、`REL-004`、`REL-005` |
+| D | 闭合 M15 产品与目标环境证据 | `PERF-008`–`PERF-010`、`PERF-012`、`EVID-002`、`EDITOR-004`–`EDITOR-010`、`EDITOR-001`–`EDITOR-003`、`UI-001`–`UI-004`、`TEST-003`、`DEMO-001`–`DEMO-005`、`DOC-001`、`CI-003`、`REL-004`、`REL-005` |
 | E | 确定性打包与正式发行 | `REL-002`、`REL-003` |
 
 M14 的 required implementation/automation 基线由 `BASE-013`–`BASE-015` 记录，阶段 B 负责修正审计发现后再冻结候选版本。真实窗口 reviewer、目标硬件、native leak、远端矩阵和 tag Release 均属于 M15，不能反向阻塞 M14 的能力口径。
 
-阶段间按 A→B→C→D→E 推进；阶段内只有依赖满足的任务才 ready，可安全并行。`source-coverage.json.requiredExecutionStages` 机器校验 52 个必做任务无遗漏、无重复；可选 `OPT-*` 不阻塞 Windows-first 1.0。
+阶段间按 A→B→C→D→E 推进；阶段内只有依赖满足的任务才 ready，可安全并行。`source-coverage.json.requiredExecutionStages` 机器校验 53 个必做任务无遗漏、无重复；可选 `OPT-*` 不阻塞 Windows-first 1.0。
 
 ## 6. 完成定义
 

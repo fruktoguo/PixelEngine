@@ -87,7 +87,7 @@
       "expected": { "done": 94, "open": 0, "active": 0, "blocked": 0 },
       "checkboxSha256": "aa4cbd6dc9685b2abb739aa5f0c61a48ba79f1db66417f683a7c8e7edd77f237",
       "completedCapabilityIds": ["BASE-011"],
-      "followUpTaskIds": ["ARCH-004", "DEMO-005", "EDITOR-010"]
+      "followUpTaskIds": ["ARCH-004", "DEMO-005", "EDITOR-010", "UI-004"]
     },
     {
       "path": "plan/12-editor-tooling-ui.md",
@@ -136,21 +136,21 @@
       "expected": { "done": 40, "open": 0, "active": 0, "blocked": 9 },
       "checkboxSha256": "95a389f529bcc7a0f80be10c937d68a1458aec8b1d1395c37aa009e29030ff3c",
       "completedCapabilityIds": ["BASE-010"],
-      "followUpTaskIds": ["ARCH-003", "EDITOR-002", "EDITOR-003", "EVID-002", "PERF-008"]
+      "followUpTaskIds": ["ARCH-003", "EDITOR-002", "EDITOR-003", "EVID-002", "PERF-008", "UI-004"]
     },
     {
       "path": "plan/19-standalone-editor-app.md",
       "expected": { "done": 77, "open": 3, "active": 0, "blocked": 9 },
       "checkboxSha256": "d720faa86838f1c13e068e8ec6b6ba26e790a0a92759c6da16c3e79b8918ccc8",
       "completedCapabilityIds": ["BASE-013"],
-      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "UI-002", "DEMO-005", "DOC-001", "DOC-002", "REL-001"]
+      "followUpTaskIds": ["EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "UI-002", "UI-004", "DEMO-005", "DOC-001", "DOC-002", "REL-001"]
     },
     {
       "path": "plan/20-interactive-html-ui.md",
       "expected": { "done": 66, "open": 3, "active": 0, "blocked": 16 },
       "checkboxSha256": "65837beb150722b447107c39705dc73b8e05a9cec34aacf200bbe8a8cf0b37fb",
       "completedCapabilityIds": ["BASE-014", "SCOPE-003", "SCOPE-004"],
-      "followUpTaskIds": ["UI-001", "UI-002", "UI-003", "PERF-010", "REL-005", "OPT-002", "OPT-003"]
+      "followUpTaskIds": ["UI-001", "UI-002", "UI-003", "UI-004", "PERF-010", "REL-005", "OPT-002", "OPT-003"]
     }
   ],
   "catalogOnlyTaskIds": ["EVID-001", "PLAN-001"],
@@ -173,7 +173,7 @@
     {
       "id": "D",
       "name": "M15 产品与目标环境证据",
-      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "TEST-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
+      "taskIds": ["PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "UI-004", "TEST-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
     },
     {
       "id": "E",
