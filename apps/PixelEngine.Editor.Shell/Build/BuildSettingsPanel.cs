@@ -27,6 +27,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private Task<BuildPreflight>? _preflightTask;
     private Task<BuildResult>? _buildTask;
     private string _validationMessage = string.Empty;
+    private string _persistentSettingsDiagnostic = string.Empty;
     private bool _autoScroll = true;
 
     public BuildSettingsPanel(EditorProject project, IPlayerBuildService? buildService = null, IEditorConsoleSink? console = null)
@@ -36,7 +37,13 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _store = new BuildSettingsStore(project);
         _buildService = buildService ?? new PlayerBuildService();
         _console = console;
-        _settings = _store.Load();
+        _settings = _store.LoadRecoverable(out _persistentSettingsDiagnostic);
+        RequiresRepair = !string.IsNullOrWhiteSpace(_persistentSettingsDiagnostic);
+        if (RequiresRepair)
+        {
+            _console?.AddProjectError("build-settings", _persistentSettingsDiagnostic);
+        }
+
         Validate();
         StartPreflight();
     }
@@ -44,6 +51,17 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     public string Title => PanelTitle;
 
     public bool Visible { get; set; } = true;
+
+    internal bool RequiresRepair { get; private set; }
+
+    internal string SettingsDiagnostic => _persistentSettingsDiagnostic;
+
+    internal bool TryRepairSettings(out string diagnostic)
+    {
+        bool saved = Save();
+        diagnostic = _validationMessage;
+        return saved;
+    }
 
     public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
     {
@@ -73,8 +91,12 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             return false;
         }
 
-        Save();
-        StartBuild(runAfterBuild);
+        if (!StartBuild(runAfterBuild))
+        {
+            diagnostic = _validationMessage;
+            return false;
+        }
+
         diagnostic = "构建探针已启动。";
         return true;
     }
@@ -110,7 +132,12 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             return false;
         }
 
-        StartBuild(runAfterBuild);
+        if (!StartBuild(runAfterBuild))
+        {
+            diagnostic = _validationMessage;
+            return false;
+        }
+
         diagnostic = runAfterBuild ? "Build And Run 已启动。" : "Build 已启动。";
         return true;
     }
@@ -142,13 +169,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             _settings.Scenes[i].Included = true;
         }
 
-        if (!_settings.TryNormalize(out string error))
-        {
-            throw new InvalidOperationException(error);
-        }
-
-        Save();
-        return CaptureScriptedBuildSettingsProbe();
+        _ = _settings.Normalize();
+        return Save()
+            ? CaptureScriptedBuildSettingsProbe()
+            : throw new InvalidOperationException(_validationMessage);
     }
 
     public ScriptedBuildSettingsProbeSnapshot CaptureScriptedBuildSettingsProbe()
@@ -197,6 +221,16 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         float bodyHeight = Math.Max(1f, ImGui.GetContentRegionAvail().Y - footerHeight);
         _ = ImGui.BeginChild("build_settings_body", new System.Numerics.Vector2(0f, bodyHeight));
         ImGui.BeginDisabled(_view.IsRunning);
+        if (RequiresRepair)
+        {
+            ImGui.SeparatorText("设置恢复");
+            ImGui.TextWrapped(_persistentSettingsDiagnostic);
+            if (ImGui.Button("保存当前回退设置并修复"))
+            {
+                _ = TryRepairSettings(out _);
+            }
+        }
+
         DrawSettings();
         ImGui.SeparatorText("场景");
         DrawScenes();
@@ -263,7 +297,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         if (changed)
         {
-            Save();
+            _ = Save();
         }
     }
 
@@ -313,7 +347,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         if (changed)
         {
-            Save();
+            _ = Save();
         }
     }
 
@@ -324,13 +358,13 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         ImGui.BeginDisabled(!canBuild);
         if (ImGui.Button("Build"))
         {
-            StartBuild(runAfterBuild: false);
+            _ = StartBuild(runAfterBuild: false);
         }
 
         ImGui.SameLine();
         if (ImGui.Button("Build And Run"))
         {
-            StartBuild(runAfterBuild: true);
+            _ = StartBuild(runAfterBuild: true);
         }
 
         ImGui.EndDisabled();
@@ -489,25 +523,36 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     }
 
     // 校验并持久化 profile，异步调用 PlayerBuildService 启动子进程构建
-    private void StartBuild(bool runAfterBuild)
+    private bool StartBuild(bool runAfterBuild)
     {
         if (_view.IsRunning || !_settings.TryNormalize(out _validationMessage))
         {
-            return;
+            return false;
         }
 
         // Build 与 Build And Run 是逐次命令；不能把上一次的启动选择粘滞到下一次 Build。
         _settings.RunAfterBuild = runAfterBuild;
-        Save();
+        if (!Save())
+        {
+            return false;
+        }
+
         _buildCancellation?.Dispose();
         _buildCancellation = new CancellationTokenSource();
         IProgress<BuildProgressEvent> progress = new Progress<BuildProgressEvent>(_pendingEvents.Enqueue);
+        PlayerSettingsDto playerSettings = new PlayerSettingsStore(_project).LoadRecoverable(
+            out string playerSettingsDiagnostic);
+        if (!string.IsNullOrWhiteSpace(playerSettingsDiagnostic))
+        {
+            _console?.AddProjectError("player-settings", playerSettingsDiagnostic);
+        }
+
         BuildRequest request = PlayerSettingsEditorAdapter.ApplyToBuildRequest(
             _settings.ToRequest() with
             {
                 ContentRoot = _project.ContentRootPath,
             },
-            new PlayerSettingsStore(_project).Load());
+            playerSettings);
         _buildTask = _buildService.RunAsync(request, progress, _buildCancellation.Token);
         _view = _view with
         {
@@ -517,6 +562,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             StartedAt = DateTimeOffset.UtcNow,
             Result = null,
         };
+        return true;
     }
 
     public void CancelScriptedBuildProbe()
@@ -657,15 +703,42 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
     }
 
-    private void Save()
+    private bool Save()
     {
         Validate();
-        _store.Save(_settings);
+        if (!_settings.TryNormalize(out _validationMessage))
+        {
+            return false;
+        }
+
+        try
+        {
+            _store.Save(_settings);
+            _persistentSettingsDiagnostic = string.Empty;
+            RequiresRepair = false;
+            _validationMessage = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            string diagnostic = $"保存 Build Settings 失败：{exception.Message}";
+            bool shouldReport = !string.Equals(_persistentSettingsDiagnostic, diagnostic, StringComparison.Ordinal);
+            _persistentSettingsDiagnostic = diagnostic;
+            RequiresRepair = true;
+            _validationMessage = diagnostic;
+            if (shouldReport)
+            {
+                _console?.AddProjectError("build-settings", diagnostic);
+            }
+
+            return false;
+        }
     }
 
     private void Validate()
     {
-        _ = _settings.TryNormalize(out _validationMessage);
+        bool valid = _settings.TryNormalize(out string diagnostic);
+        _validationMessage = valid ? _persistentSettingsDiagnostic : diagnostic;
     }
 
     private string BuildLogText()

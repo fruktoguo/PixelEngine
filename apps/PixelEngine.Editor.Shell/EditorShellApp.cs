@@ -2286,7 +2286,13 @@ internal sealed class EditorShellApp
         CurrentProject = null;
         try
         {
-            ProjectSettingsDto legacySettings = EngineProjectSettingsStore.LoadProjectSettings(project.ProjectRoot);
+            ProjectSettingsDto legacySettings = new ProjectSettingsStore(project).LoadRecoverable(
+                out string projectSettingsDiagnostic);
+            if (!string.IsNullOrWhiteSpace(projectSettingsDiagnostic))
+            {
+                ConsoleStore.AddProjectError("project-settings", projectSettingsDiagnostic);
+            }
+
             if (!Preferences.TryMigrateLegacy(legacySettings.EditorPreferences, out string migrationDiagnostic))
             {
                 ConsoleStore.AddProjectError("preferences", migrationDiagnostic);

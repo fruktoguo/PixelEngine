@@ -82,7 +82,12 @@ internal sealed class EditorProjectSession : IDisposable
         ArgumentNullException.ThrowIfNull(app);
         EditorShellHostExtension editorHost = new(project, app, window);
         string sceneRelativePath = project.ResolveSceneRelativePath(app.SceneOverridePath);
-        PlayerSettingsDto playerSettings = new PlayerSettingsStore(project).Load();
+        PlayerSettingsDto playerSettings = new PlayerSettingsStore(project).LoadRecoverable(
+            out string playerSettingsDiagnostic);
+        if (!string.IsNullOrWhiteSpace(playerSettingsDiagnostic))
+        {
+            app.ConsoleStore.AddProjectError("player-settings", playerSettingsDiagnostic);
+        }
         // 按 PlayerSettings 构造 Engine，并挂载 Editor 扩展与内容包
         Engine engine = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))

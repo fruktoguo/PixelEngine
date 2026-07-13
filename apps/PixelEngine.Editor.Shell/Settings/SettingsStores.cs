@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Hosting;
 using PixelEngine.UI;
@@ -17,19 +18,74 @@ internal sealed class ProjectSettingsStore(EditorProject project)
     {
         return File.Exists(SettingsPath)
             ? EngineProjectSettingsStore.LoadProjectSettings(_project.ProjectRoot)
-            : (ProjectSettingsDto.CreateDefault(_project.Name) with
-            {
-                ContentRoot = _project.ContentRoot,
-                ScriptSourceDir = _project.ScriptSourceDir,
-                StartScene = _project.ResolveSceneRelativePath(null),
-            });
+            : CreateFallback();
+    }
+
+    public ProjectSettingsDto LoadRecoverable(out string diagnostic)
+    {
+        try
+        {
+            ProjectSettingsDto settings = Load();
+            diagnostic = string.Empty;
+            return settings;
+        }
+        catch (Exception exception) when (IsRecoverableSettingsException(exception))
+        {
+            diagnostic =
+                $"读取 Project Settings 失败，已使用 project.pixelproj 中的有效值：{exception.Message} " +
+                $"请在 File > Project Settings... 中检查并点击 Apply 修复 {SettingsPath}。";
+            return CreateFallback();
+        }
     }
 
     public void Save(ProjectSettingsDto settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        EngineProjectSettingsStore.SaveProjectSettings(_project.ProjectRoot, settings);
-        _project.ApplyProjectSettings(settings);
+        ProjectSettingsDto normalized = settings.Normalize();
+        bool hadSettingsFile = File.Exists(SettingsPath);
+        string? previousSettings = hadSettingsFile ? File.ReadAllText(SettingsPath) : null;
+        EngineProjectSettingsStore.SaveProjectSettings(_project.ProjectRoot, normalized);
+        try
+        {
+            _project.ApplyProjectSettings(normalized);
+        }
+        catch (Exception applyException)
+        {
+            try
+            {
+                if (hadSettingsFile)
+                {
+                    EditorAtomicTextFile.WriteAllText(SettingsPath, previousSettings!);
+                }
+                else
+                {
+                    File.Delete(SettingsPath);
+                }
+            }
+            catch (Exception rollbackException)
+            {
+                throw new InvalidOperationException(
+                    $"同步 project.pixelproj 失败，且无法回滚 {SettingsPath}。",
+                    new AggregateException(applyException, rollbackException));
+            }
+
+            throw;
+        }
+    }
+
+    private ProjectSettingsDto CreateFallback()
+    {
+        return ProjectSettingsDto.CreateDefault(_project.Name) with
+        {
+            ContentRoot = _project.ContentRoot,
+            ScriptSourceDir = _project.ScriptSourceDir,
+            StartScene = _project.ResolveSceneRelativePath(null),
+        };
+    }
+
+    private static bool IsRecoverableSettingsException(Exception exception)
+    {
+        return exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException;
     }
 }
 
@@ -46,16 +102,43 @@ internal sealed class PlayerSettingsStore(EditorProject project)
     {
         return File.Exists(SettingsPath)
             ? EngineProjectSettingsStore.LoadPlayerSettings(_project.ProjectRoot)
-            : (PlayerSettingsDto.CreateDefault(_project.Name) with
-            {
-                StartupScene = _project.ResolveSceneRelativePath(null),
-            });
+            : CreateFallback();
+    }
+
+    public PlayerSettingsDto LoadRecoverable(out string diagnostic)
+    {
+        try
+        {
+            PlayerSettingsDto settings = Load();
+            diagnostic = string.Empty;
+            return settings;
+        }
+        catch (Exception exception) when (IsRecoverableSettingsException(exception))
+        {
+            diagnostic =
+                $"读取 Player Settings 失败，已使用工程默认玩家设置：{exception.Message} " +
+                $"请在 File > Player Settings... 中检查并点击 Apply 修复 {SettingsPath}。";
+            return CreateFallback();
+        }
     }
 
     public void Save(PlayerSettingsDto settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
         EngineProjectSettingsStore.SavePlayerSettings(_project.ProjectRoot, settings);
+    }
+
+    private PlayerSettingsDto CreateFallback()
+    {
+        return PlayerSettingsDto.CreateDefault(_project.Name) with
+        {
+            StartupScene = _project.ResolveSceneRelativePath(null),
+        };
+    }
+
+    private static bool IsRecoverableSettingsException(Exception exception)
+    {
+        return exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException;
     }
 }
 

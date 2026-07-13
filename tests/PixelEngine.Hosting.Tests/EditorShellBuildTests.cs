@@ -631,6 +631,90 @@ public sealed class EditorShellBuildTests
     }
 
     /// <summary>
+    /// 验证三类损坏 settings 不再阻断工程打开，且恢复加载不会静默覆盖原文件；
+    /// 只有用户显式 Apply/修复后才写入可再次严格加载的配置。
+    /// </summary>
+    [Fact]
+    public void EditorShellRecoversCorruptSettingsAndRepairsOnlyOnExplicitApply()
+    {
+        // Arrange：建立有效 project.pixelproj，再分别损坏三类独立 settings。
+        using TempDir temp = new();
+        string projectRoot = Path.Combine(temp.Path, "CorruptSettingsProject");
+        _ = EditorProject.CreateNew(projectRoot, "Recovery Project");
+        const string corruptJson = "{ definitely-not-json";
+        string projectSettingsPath = Path.Combine(projectRoot, EngineProjectSettingsStore.ProjectSettingsFileName);
+        string playerSettingsPath = Path.Combine(projectRoot, EngineProjectSettingsStore.PlayerSettingsFileName);
+        string buildSettingsPath = Path.Combine(projectRoot, EngineProjectSettingsStore.BuildSettingsFileName);
+        File.WriteAllText(projectSettingsPath, corruptJson);
+        File.WriteAllText(playerSettingsPath, corruptJson);
+        File.WriteAllText(buildSettingsPath, corruptJson);
+
+        // Act：重新打开工程并创建设置面板。
+        EditorProject project = EditorProject.Load(projectRoot);
+        ProjectSettingsPanel projectPanel = new(project);
+        PlayerSettingsPanel playerPanel = new(project);
+        BuildSettingsPanel buildPanel = new(project, new ImmediateBuildService());
+
+        // Assert：工程使用 project.pixelproj/default 回退值继续打开，坏文件仍原样保留并明确要求修复。
+        Assert.Equal("Recovery Project", project.Name);
+        Assert.Contains("已使用 project.pixelproj", project.ProjectSettingsDiagnostic, StringComparison.Ordinal);
+        Assert.True(projectPanel.RequiresRepair);
+        Assert.True(projectPanel.HasPendingChanges);
+        Assert.False(projectPanel.HasDraftChanges);
+        Assert.Contains("点击 Apply 修复", projectPanel.ValidationMessage, StringComparison.Ordinal);
+        Assert.True(playerPanel.RequiresRepair);
+        Assert.True(playerPanel.HasPendingChanges);
+        Assert.Contains("点击 Apply 修复", playerPanel.ValidationMessage, StringComparison.Ordinal);
+        Assert.True(buildPanel.RequiresRepair);
+        Assert.Contains("重新保存以修复", buildPanel.SettingsDiagnostic, StringComparison.Ordinal);
+        Assert.Equal(corruptJson, File.ReadAllText(projectSettingsPath));
+        Assert.Equal(corruptJson, File.ReadAllText(playerSettingsPath));
+        Assert.Equal(corruptJson, File.ReadAllText(buildSettingsPath));
+
+        // Act：模拟三个设置窗口上的显式 Apply/修复操作。
+        Assert.True(projectPanel.TryApplyDraft(out string projectDiagnostic), projectDiagnostic);
+        Assert.True(playerPanel.TryApplyDraft(out string playerDiagnostic), playerDiagnostic);
+        Assert.True(buildPanel.TryRepairSettings(out string buildDiagnostic), buildDiagnostic);
+
+        // Assert：恢复标记清空，三份文件均可由严格入口重新加载。
+        Assert.False(projectPanel.RequiresRepair);
+        Assert.False(playerPanel.RequiresRepair);
+        Assert.False(buildPanel.RequiresRepair);
+        Assert.Equal(string.Empty, project.ProjectSettingsDiagnostic);
+        Assert.Equal("Recovery Project", EngineProjectSettingsStore.LoadProjectSettings(projectRoot).Name);
+        Assert.Equal("Recovery Project", EngineProjectSettingsStore.LoadPlayerSettings(projectRoot).WindowTitle);
+        Assert.NotEmpty(EngineProjectSettingsStore.LoadBuildProfile(projectRoot).Scenes);
+    }
+
+    /// <summary>
+    /// 验证 ProjectSettings.json 已提交但 project.pixelproj 同步失败时会回滚前者，
+    /// 避免磁盘两份工程设置进入半成功状态。
+    /// </summary>
+    [Fact]
+    public void ProjectSettingsStoreRollsBackWhenProjectDocumentSynchronizationFails()
+    {
+        // Arrange：先落盘一份有效基线，再把 project.pixelproj 目标替换成同名目录制造第二阶段失败。
+        using TempDir temp = new();
+        string projectRoot = Path.Combine(temp.Path, "ProjectSettingsRollback");
+        EditorProject project = EditorProject.CreateNew(projectRoot, "Rollback Baseline");
+        ProjectSettingsStore store = new(project);
+        ProjectSettingsDto baseline = store.Load();
+        store.Save(baseline);
+        string baselineJson = File.ReadAllText(store.SettingsPath);
+        File.Delete(project.ProjectFilePath);
+        _ = Directory.CreateDirectory(project.ProjectFilePath);
+
+        // Act。
+        Exception? error = Record.Exception(() => store.Save(baseline with { Name = "Must Roll Back" }));
+
+        // Assert：同步失败可见，settings 恢复到精确旧内容，运行中模型也未半更新。
+        Assert.NotNull(error);
+        Assert.True(error is IOException or UnauthorizedAccessException or InvalidOperationException, error.ToString());
+        Assert.Equal(baselineJson, File.ReadAllText(store.SettingsPath));
+        Assert.Equal("Rollback Baseline", project.Name);
+    }
+
+    /// <summary>
     /// 验证 PlayerSettingsDto 同源投影到 build-player 请求与 headless EngineOptions。
     /// </summary>
     [Fact]
@@ -1112,6 +1196,34 @@ public sealed class EditorShellBuildTests
                 ShellPath = shellPath ?? FindPowerShell(),
                 UsesPowerShell = usesPowerShell,
             };
+        }
+    }
+
+    private sealed class ImmediateBuildService : IPlayerBuildService
+    {
+        public Task<BuildPreflight> PreflightAsync(CancellationToken cancellationToken = default)
+        {
+            _ = cancellationToken;
+            return Task.FromResult(new BuildPreflight
+            {
+                Ok = true,
+                Diagnostic = "Ready",
+            });
+        }
+
+        public Task<BuildResult> RunAsync(
+            BuildRequest request,
+            IProgress<BuildProgressEvent> progress,
+            CancellationToken cancellationToken)
+        {
+            _ = request;
+            _ = progress;
+            _ = cancellationToken;
+            return Task.FromResult(new BuildResult
+            {
+                Ok = true,
+                ExitCode = 0,
+            });
         }
     }
 

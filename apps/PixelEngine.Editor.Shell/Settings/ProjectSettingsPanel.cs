@@ -17,6 +17,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     private readonly Func<float> _uiScaleProvider;
     private ProjectSettingsDto _settings;
     private string _contentGlobsText;
+    private string _persistentDiagnostic = string.Empty;
     private bool _draftIsValid = true;
     private float _lastWindowScale = float.NaN;
 
@@ -25,7 +26,8 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         ArgumentNullException.ThrowIfNull(project);
         _store = new ProjectSettingsStore(project);
         _uiScaleProvider = uiScaleProvider ?? (static () => EditorUiScale.Default);
-        _settings = _store.Load();
+        _settings = _store.LoadRecoverable(out _persistentDiagnostic);
+        RequiresRepair = !string.IsNullOrWhiteSpace(_persistentDiagnostic);
         DraftSettings = _settings;
         _contentGlobsText = FormatContentGlobs(DraftSettings);
         RefreshDraftState();
@@ -38,6 +40,10 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     public string ValidationMessage { get; private set; } = string.Empty;
 
     internal bool HasPendingChanges { get; private set; }
+
+    internal bool HasDraftChanges { get; private set; }
+
+    internal bool RequiresRepair { get; private set; }
 
     internal ProjectSettingsDto DraftSettings { get; private set; }
 
@@ -98,6 +104,8 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             diagnostic = $"保存 Project Settings 失败：{exception.Message}";
+            _persistentDiagnostic = diagnostic;
+            RequiresRepair = true;
             ValidationMessage = diagnostic;
             return false;
         }
@@ -105,7 +113,10 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         _settings = normalized;
         DraftSettings = normalized;
         _contentGlobsText = FormatContentGlobs(DraftSettings);
+        _persistentDiagnostic = string.Empty;
+        RequiresRepair = false;
         HasPendingChanges = false;
+        HasDraftChanges = false;
         _draftIsValid = true;
         ValidationMessage = string.Empty;
         diagnostic = string.Empty;
@@ -269,10 +280,15 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         float spacing = ImGui.GetStyle().ItemSpacing.X;
         float startX = ImGui.GetCursorPosX();
         float available = ImGui.GetContentRegionAvail().X;
-        ImGui.TextDisabled(HasPendingChanges ? "有尚未应用的修改" : "设置已应用");
+        string status = RequiresRepair
+            ? "配置文件需要修复"
+            : HasDraftChanges
+                ? "有尚未应用的修改"
+                : "设置已应用";
+        ImGui.TextDisabled(status);
         float actionX = startX + MathF.Max(0f, available - ((buttonWidth * 2f) + spacing));
         ImGui.SameLine(actionX);
-        ImGui.BeginDisabled(!HasPendingChanges);
+        ImGui.BeginDisabled(!HasDraftChanges);
         if (ImGui.Button("Revert", new Vector2(buttonWidth, 0f)))
         {
             RevertDraft();
@@ -316,8 +332,9 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     private void RefreshDraftState()
     {
         _draftIsValid = DraftSettings.TryNormalize(out string diagnostic);
-        ValidationMessage = _draftIsValid ? string.Empty : diagnostic;
-        HasPendingChanges = !AreEquivalent(_settings, DraftSettings);
+        ValidationMessage = _draftIsValid ? _persistentDiagnostic : diagnostic;
+        HasDraftChanges = !AreEquivalent(_settings, DraftSettings);
+        HasPendingChanges = RequiresRepair || HasDraftChanges;
     }
 
     private static bool AreEquivalent(ProjectSettingsDto left, ProjectSettingsDto right)

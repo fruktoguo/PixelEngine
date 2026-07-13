@@ -19,12 +19,14 @@ internal sealed class EditorProject
         string projectRoot,
         string projectFilePath,
         EditorProjectDocument document,
-        EditorProjectSceneEntry[] scenes)
+        EditorProjectSceneEntry[] scenes,
+        string projectSettingsDiagnostic)
     {
         ProjectRoot = projectRoot;
         ProjectFilePath = projectFilePath;
         Document = document;
         Scenes = scenes;
+        ProjectSettingsDiagnostic = projectSettingsDiagnostic;
     }
 
     public string ProjectRoot { get; }
@@ -46,6 +48,11 @@ internal sealed class EditorProject
     public string ScriptSourcePath => Path.GetFullPath(Path.Combine(ProjectRoot, ScriptSourceDir));
 
     public IReadOnlyList<EditorProjectSceneEntry> Scenes { get; private set; }
+
+    /// <summary>
+    /// ProjectSettings.json 损坏时的非致命恢复诊断；工程仍以 project.pixelproj 的有效值打开。
+    /// </summary>
+    public string ProjectSettingsDiagnostic { get; private set; }
 
     public static EditorProject CreateNew(string projectRoot, string name)
     {
@@ -113,7 +120,10 @@ internal sealed class EditorProject
             throw new JsonException("工程文件为空或格式无效。");
         Validate(document, projectFile);
         string projectRoot = Path.GetDirectoryName(projectFile)!;
-        EditorProjectDocument normalized = ApplyStoredProjectSettings(projectRoot, Normalize(document));
+        EditorProjectDocument normalized = ApplyStoredProjectSettings(
+            projectRoot,
+            Normalize(document),
+            out string projectSettingsDiagnostic);
         EditorProjectSceneEntry[] scenes = normalized.Scenes is { Length: > 0 }
             ? normalized.Scenes
             :
@@ -125,7 +135,7 @@ internal sealed class EditorProject
                 },
             ];
 
-        return new EditorProject(projectRoot, projectFile, normalized, scenes);
+        return new EditorProject(projectRoot, projectFile, normalized, scenes, projectSettingsDiagnostic);
     }
 
     public void Save()
@@ -137,6 +147,7 @@ internal sealed class EditorProject
     {
         ArgumentNullException.ThrowIfNull(settings);
         PersistDocument(ApplyProjectSettings(Document, settings));
+        ProjectSettingsDiagnostic = string.Empty;
     }
 
     public EngineProject ToEngineProject(string? sceneOverridePath = null)
@@ -333,12 +344,34 @@ internal sealed class EditorProject
         ];
     }
 
-    private static EditorProjectDocument ApplyStoredProjectSettings(string projectRoot, EditorProjectDocument document)
+    private static EditorProjectDocument ApplyStoredProjectSettings(
+        string projectRoot,
+        EditorProjectDocument document,
+        out string diagnostic)
     {
         string settingsPath = Path.Combine(projectRoot, EngineProjectSettingsStore.ProjectSettingsFileName);
-        return File.Exists(settingsPath)
-            ? ApplyProjectSettings(document, EngineProjectSettingsStore.LoadProjectSettings(projectRoot))
-            : document;
+        if (!File.Exists(settingsPath))
+        {
+            diagnostic = string.Empty;
+            return document;
+        }
+
+        try
+        {
+            EditorProjectDocument result = ApplyProjectSettings(
+                document,
+                EngineProjectSettingsStore.LoadProjectSettings(projectRoot));
+            diagnostic = string.Empty;
+            return result;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException)
+        {
+            diagnostic =
+                $"读取 Project Settings 失败，已使用 project.pixelproj 中的有效值：{exception.Message} " +
+                $"请在 File > Project Settings... 中检查并点击 Apply 修复 {settingsPath}。";
+            return document;
+        }
     }
 
     private static EditorProjectDocument ApplyProjectSettings(EditorProjectDocument document, ProjectSettingsDto settings)

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using PixelEngine.Hosting;
 
 namespace PixelEngine.Editor.Shell.Build;
@@ -16,6 +17,26 @@ internal sealed class BuildSettingsStore(EditorProject project)
         BuildProfileDto settings = EngineProjectSettingsStore.LoadBuildProfileFromFile(SettingsPath, BuildProfileEditorAdapter.CreateDefault(_project));
         settings.RefreshScenes(_project);
         return settings;
+    }
+
+    public BuildProfileDto LoadRecoverable(out string diagnostic)
+    {
+        try
+        {
+            BuildProfileDto settings = Load();
+            diagnostic = string.Empty;
+            return settings;
+        }
+        catch (Exception exception) when (
+            exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException)
+        {
+            BuildProfileDto fallback = BuildProfileEditorAdapter.CreateDefault(_project);
+            fallback.RefreshScenes(_project);
+            diagnostic =
+                $"读取 Build Settings 失败，已使用工程默认构建 profile：{exception.Message} " +
+                $"请在 File > Build Settings... 中检查并重新保存以修复 {SettingsPath}。";
+            return fallback;
+        }
     }
 
     public void Save(BuildProfileDto settings)
