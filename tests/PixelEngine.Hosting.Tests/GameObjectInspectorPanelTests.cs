@@ -79,6 +79,62 @@ public sealed class GameObjectInspectorPanelTests
     }
 
     /// <summary>
+    /// 验证 Vector2/3/4 会按实际分栏所需宽度切换横排与分行布局，
+    /// 而不是在窄 Inspector 中把数值框压成不可编辑的细条。
+    /// </summary>
+    [Fact]
+    public void VectorFieldsAdaptToInspectorWidthAndComponentCount()
+    {
+        Assert.Equal(VectorFieldLayout.StackedAxes, GameObjectInspectorPanel.ResolveVectorFieldLayout(151.5f, 2));
+        Assert.Equal(VectorFieldLayout.InlineAxes, GameObjectInspectorPanel.ResolveVectorFieldLayout(152f, 2));
+        Assert.Equal(VectorFieldLayout.StackedAxes, GameObjectInspectorPanel.ResolveVectorFieldLayout(227.5f, 3));
+        Assert.Equal(VectorFieldLayout.InlineAxes, GameObjectInspectorPanel.ResolveVectorFieldLayout(228f, 3));
+        Assert.Equal(VectorFieldLayout.StackedAxes, GameObjectInspectorPanel.ResolveVectorFieldLayout(303.5f, 4));
+        Assert.Equal(VectorFieldLayout.InlineAxes, GameObjectInspectorPanel.ResolveVectorFieldLayout(304f, 4));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => GameObjectInspectorPanel.ResolveVectorFieldLayout(200f, 1));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => GameObjectInspectorPanel.ResolveVectorFieldLayout(200f, 5));
+    }
+
+    /// <summary>
+    /// 验证整数 Range 的下界向上取整、上界向下取整，且不把无可表示区间写成范围外值。
+    /// </summary>
+    [Fact]
+    public void IntegerFieldRangeUsesDirectionalRounding()
+    {
+        static ScriptFieldDescriptor Field(Type type, double minimum, double maximum)
+        {
+            return new ScriptFieldDescriptor(
+                "Value",
+                type,
+                0,
+                CanWrite: true,
+                IsPublic: true,
+                IsSerializedPrivate: false,
+                ScriptFieldKind.Number,
+                minimum,
+                maximum,
+                AssetKind: null);
+        }
+
+        Assert.True(GameObjectInspectorPanel.TryResolveIntegerFieldRange(
+            typeof(int), Field(typeof(int), 1.9d, 10d), out double positiveMinimum, out double positiveMaximum));
+        Assert.Equal(2d, positiveMinimum);
+        Assert.Equal(10d, positiveMaximum);
+
+        Assert.True(GameObjectInspectorPanel.TryResolveIntegerFieldRange(
+            typeof(long), Field(typeof(long), -2.9d, -1.1d), out double negativeMinimum, out double negativeMaximum));
+        Assert.Equal(-2d, negativeMinimum);
+        Assert.Equal(-2d, negativeMaximum);
+
+        Assert.True(GameObjectInspectorPanel.TryResolveIntegerFieldRange(
+            typeof(uint), Field(typeof(uint), -10d, 5.9d), out double unsignedMinimum, out double unsignedMaximum));
+        Assert.Equal(0d, unsignedMinimum);
+        Assert.Equal(5d, unsignedMaximum);
+        Assert.False(GameObjectInspectorPanel.TryResolveIntegerFieldRange(
+            typeof(int), Field(typeof(int), 1.1d, 1.9d), out _, out _));
+    }
+
+    /// <summary>
     /// 验证 Inspector 能从 Project Window 共享数据源生成资产摘要，并对缺失资产给出诊断。
     /// </summary>
     [Fact]
@@ -460,6 +516,148 @@ public sealed class GameObjectInspectorPanelTests
     }
 
     /// <summary>
+    /// 验证连续拖拽同一个脚本字段只产生一条 Undo，并以激活前的序列化值作为基线。
+    /// </summary>
+    [Fact]
+    public void InspectorComponentFieldDragCommitsAsOneUndo()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("inspector-component-field-transaction");
+        EditorGameObject gameObject = scene.Create("Player");
+        gameObject.PrefabLink = new EditorPrefabLink
+        {
+            AssetId = "prefab-player",
+            AssetPath = "prefabs/player.prefab",
+            SourceStableId = "1",
+        };
+        EditorComponentModel component = new("Game.PlayerController");
+        component.SerializedFields["MoveSpeed"] = "1";
+        gameObject.Components.Add(component);
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "2"));
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "3.5"));
+        panel.CommitPendingComponentFieldEdit();
+
+        Assert.Equal("3.5", component.SerializedFields["MoveSpeed"]);
+        _ = Assert.Single(gameObject.PrefabLink.Overrides);
+        Assert.True(undo.Undo(scene));
+        Assert.Equal("1", component.SerializedFields["MoveSpeed"]);
+        Assert.Empty(gameObject.PrefabLink.Overrides);
+        Assert.False(undo.CanUndo);
+        Assert.True(undo.Redo(scene));
+        Assert.Equal("3.5", component.SerializedFields["MoveSpeed"]);
+        _ = Assert.Single(gameObject.PrefabLink.Overrides);
+    }
+
+    /// <summary>
+    /// 验证 Ctrl+Z 或其它场景命令会先通过 Undo 栈边界收口 active field，
+    /// 且重入提交不会递归触发 flush。
+    /// </summary>
+    [Fact]
+    public void UndoStackFlushesActiveComponentFieldBeforeOperation()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("inspector-component-field-flush");
+        EditorGameObject gameObject = scene.Create("Player");
+        EditorComponentModel component = new("Game.PlayerController");
+        component.SerializedFields["MoveSpeed"] = "1";
+        gameObject.Components.Add(component);
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+        undo.BeforeOperation = panel.CommitPendingEdits;
+
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "4"));
+        Assert.True(undo.Undo(scene));
+
+        Assert.Equal("1", component.SerializedFields["MoveSpeed"]);
+        Assert.False(undo.CanUndo);
+        Assert.True(undo.CanRedo);
+
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "6"));
+        undo.Execute(scene, new SetGameObjectEnabledCommand(gameObject.StableId, enabled: false));
+        Assert.False(gameObject.Enabled);
+        Assert.Equal("6", component.SerializedFields["MoveSpeed"]);
+
+        Assert.True(undo.Undo(scene));
+        Assert.True(gameObject.Enabled);
+        Assert.Equal("6", component.SerializedFields["MoveSpeed"]);
+        Assert.True(undo.Undo(scene));
+        Assert.Equal("1", component.SerializedFields["MoveSpeed"]);
+    }
+
+    /// <summary>
+    /// 验证旧字段的 deactivation 边沿不会误提交同帧刚激活的新字段事务。
+    /// </summary>
+    [Fact]
+    public void ComponentFieldDeactivationOnlyCommitsMatchingTransaction()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("inspector-component-field-deactivation");
+        EditorGameObject gameObject = scene.Create("Player");
+        EditorComponentModel component = new("Game.PlayerController");
+        component.SerializedFields["A"] = "1";
+        component.SerializedFields["B"] = "2";
+        gameObject.Components.Add(component);
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "A", "3"));
+        Assert.False(panel.CommitComponentFieldEditIfMatches(gameObject.StableId, 0, "B"));
+        Assert.False(undo.CanUndo);
+        Assert.True(panel.CommitComponentFieldEditIfMatches(gameObject.StableId, 0, "A"));
+        Assert.True(undo.CanUndo);
+    }
+
+    /// <summary>
+    /// 验证拖拽前不存在的序列化字段在 Undo 时会被移除，而不是残留空字符串。
+    /// </summary>
+    [Fact]
+    public void InspectorComponentFieldUndoRestoresMissingValue()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("inspector-component-field-missing-baseline");
+        EditorGameObject gameObject = scene.Create("Player");
+        EditorComponentModel component = new("Game.PlayerController");
+        gameObject.Components.Add(component);
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "SpawnOffset", "1,2,3"));
+        panel.CommitPendingComponentFieldEdit();
+
+        Assert.Equal("1,2,3", component.SerializedFields["SpawnOffset"]);
+        Assert.True(undo.Undo(scene));
+        Assert.False(component.SerializedFields.ContainsKey("SpawnOffset"));
+    }
+
+    /// <summary>
+    /// 验证场景替换后即使 StableId 与组件索引相同，也不会把旧组件的字段事务应用到新对象。
+    /// </summary>
+    [Fact]
+    public void InspectorDropsPendingComponentFieldWhenSceneReplacesTargetIdentity()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("old-component-scene");
+        EditorGameObject oldObject = scene.Create("Old");
+        EditorComponentModel oldComponent = new("Game.Controller");
+        oldComponent.SerializedFields["Speed"] = "1";
+        oldObject.Components.Add(oldComponent);
+        EditorUndoStack undo = new();
+        GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+        Assert.True(panel.ApplyComponentFieldEdit(oldObject.StableId, 0, "Speed", "5"));
+
+        EditorSceneModel replacement = EditorSceneModel.Empty("new-component-scene");
+        EditorGameObject newObject = replacement.Create("New");
+        EditorComponentModel newComponent = new("Game.Controller");
+        newComponent.SerializedFields["Speed"] = "99";
+        newObject.Components.Add(newComponent);
+        Assert.Equal(oldObject.StableId, newObject.StableId);
+        scene.ReplaceWith(replacement, markDirty: false);
+
+        panel.PrepareFrame(newObject.StableId);
+
+        Assert.False(undo.CanUndo);
+        Assert.Equal("99", scene.Get(newObject.StableId).Components[0].SerializedFields["Speed"]);
+    }
+
+    /// <summary>
     /// 验证 ReplaceWith 后复用相同 StableId 的新对象不会继承旧 Inspector transaction baseline。
     /// </summary>
     [Fact]
@@ -483,6 +681,333 @@ public sealed class GameObjectInspectorPanelTests
 
         Assert.False(undo.CanUndo);
         Assert.Equal(99f, scene.Get(newObject.StableId).Transform.X);
+    }
+
+    /// <summary>
+    /// 验证 destructive transition 的 dirty 判断会先收口 Inspector 名称草稿，
+    /// 避免尚未失焦的 InputText 内容绕过未保存修改提示而丢失。
+    /// </summary>
+    [Fact]
+    public void DirtyCheckFlushesPendingInspectorNameBeforeInspectingSceneState()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("pending-name-dirty-check");
+        EditorGameObject gameObject = scene.Create("Before");
+        scene.MarkSaved();
+        EditorUndoStack undo = new();
+        using GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+
+        Assert.True(panel.ApplyNameEdit(gameObject.StableId, "After"));
+        Assert.Equal("Before", gameObject.Name);
+        Assert.False(scene.IsDirty);
+
+        bool observedCommittedName = false;
+        bool dirty = EditorShellApp.FlushPendingAuthoringEditsAndCheckDirty(
+            panel.CommitPendingEdits,
+            () =>
+            {
+                observedCommittedName = string.Equals(gameObject.Name, "After", StringComparison.Ordinal);
+                return scene.IsDirty;
+            });
+
+        Assert.True(observedCommittedName);
+        Assert.True(dirty);
+        Assert.Equal("After", gameObject.Name);
+        Assert.Equal("Rename GameObject", undo.UndoName);
+    }
+
+    /// <summary>
+    /// 验证真实 Prefab refresh 每帧替换 Transform baseline 后，连续 Inspector 拖拽仍保持最新值；
+    /// 整次手势只提交一条 Undo，且 Undo/Redo 会连同 prefab overrides 一起恢复。
+    /// </summary>
+    [Fact]
+    public void PrefabTransformLiveEditSurvivesRepeatedRefreshAsOneUndo()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        string contentRoot = Path.Combine(projectRoot, "content");
+        try
+        {
+            EditorPrefabAssetStore prefabs = new(contentRoot);
+            EditorSceneModel prefabSource = EditorSceneModel.Empty("prefab-transform-source");
+            EditorGameObject source = prefabSource.Create("Player");
+            source.Transform.X = 2f;
+            prefabs.CreatePrefabFromSubtree(prefabSource, source.StableId, "prefabs/Player.prefab");
+
+            EditorSceneModel scene = EditorSceneModel.Empty("prefab-transform-instance");
+            EditorGameObject instance = prefabs.InstantiatePrefab(scene, "prefabs/Player.prefab", parentId: null);
+            EditorUndoStack undo = new();
+            using GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+
+            EditorSceneTransform first = instance.Transform.Clone();
+            first.X = 12f;
+            Assert.True(panel.ApplyTransformEdit(instance.StableId, first));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal(12f, instance.Transform.X);
+
+            EditorSceneTransform second = instance.Transform.Clone();
+            second.X = 24f;
+            Assert.True(panel.ApplyTransformEdit(instance.StableId, second));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal(24f, instance.Transform.X);
+
+            panel.CommitPendingEdits();
+
+            Assert.Equal("Set Transform", undo.UndoName);
+            Assert.NotNull(instance.PrefabLink);
+            Assert.Contains(
+                instance.PrefabLink.Overrides,
+                item => string.Equals(item.PropertyPath, "Transform.X", StringComparison.Ordinal) &&
+                    string.Equals(item.Value, "24", StringComparison.Ordinal));
+
+            Assert.True(undo.Undo(scene));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal(2f, instance.Transform.X);
+            Assert.Empty(instance.PrefabLink!.Overrides);
+            Assert.False(undo.Undo(scene));
+
+            Assert.True(undo.Redo(scene));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal(24f, instance.Transform.X);
+            Assert.Contains(
+                instance.PrefabLink!.Overrides,
+                item => string.Equals(item.PropertyPath, "Transform.X", StringComparison.Ordinal) &&
+                    string.Equals(item.Value, "24", StringComparison.Ordinal));
+            Assert.False(undo.CanRedo);
+        }
+        finally
+        {
+            if (Directory.Exists(projectRoot))
+            {
+                Directory.Delete(projectRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证真实 Prefab refresh 克隆组件对象后，连续字段编辑仍绑定同一逻辑字段；
+    /// 最新值与 override 不丢失，并只产生一条可完整 Undo/Redo 的命令。
+    /// </summary>
+    [Fact]
+    public void PrefabComponentLiveEditSurvivesComponentClonesAsOneUndo()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        string contentRoot = Path.Combine(projectRoot, "content");
+        try
+        {
+            EditorPrefabAssetStore prefabs = new(contentRoot);
+            EditorSceneModel prefabSource = EditorSceneModel.Empty("prefab-component-source");
+            EditorGameObject source = prefabSource.Create("Player");
+            EditorComponentModel sourceComponent = new("Game.PlayerController");
+            sourceComponent.SerializedFields["MoveSpeed"] = "1";
+            source.Components.Add(sourceComponent);
+            prefabs.CreatePrefabFromSubtree(prefabSource, source.StableId, "prefabs/Player.prefab");
+
+            EditorSceneModel scene = EditorSceneModel.Empty("prefab-component-instance");
+            EditorGameObject instance = prefabs.InstantiatePrefab(scene, "prefabs/Player.prefab", parentId: null);
+            EditorUndoStack undo = new();
+            using GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+            EditorComponentModel originalComponent = instance.Components[0];
+
+            Assert.True(panel.ApplyComponentFieldEdit(instance.StableId, 0, "MoveSpeed", "2"));
+            prefabs.RefreshPrefabInstances(scene);
+            EditorComponentModel firstClone = instance.Components[0];
+            Assert.NotSame(originalComponent, firstClone);
+            Assert.Equal("2", firstClone.SerializedFields["MoveSpeed"]);
+
+            Assert.True(panel.ApplyComponentFieldEdit(instance.StableId, 0, "MoveSpeed", "3.5"));
+            prefabs.RefreshPrefabInstances(scene);
+            EditorComponentModel secondClone = instance.Components[0];
+            Assert.NotSame(firstClone, secondClone);
+            Assert.Equal("3.5", secondClone.SerializedFields["MoveSpeed"]);
+
+            panel.CommitPendingComponentFieldEdit();
+
+            Assert.Equal("Set Component Field", undo.UndoName);
+            Assert.Contains(
+                instance.PrefabLink!.Overrides,
+                item => string.Equals(item.PropertyPath, "Component:Game.PlayerController:MoveSpeed", StringComparison.Ordinal) &&
+                    string.Equals(item.Value, "3.5", StringComparison.Ordinal));
+
+            Assert.True(undo.Undo(scene));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal("1", instance.Components[0].SerializedFields["MoveSpeed"]);
+            Assert.Empty(instance.PrefabLink!.Overrides);
+            Assert.False(undo.Undo(scene));
+
+            Assert.True(undo.Redo(scene));
+            prefabs.RefreshPrefabInstances(scene);
+            Assert.Equal("3.5", instance.Components[0].SerializedFields["MoveSpeed"]);
+            Assert.Contains(
+                instance.PrefabLink!.Overrides,
+                item => string.Equals(item.PropertyPath, "Component:Game.PlayerController:MoveSpeed", StringComparison.Ordinal) &&
+                    string.Equals(item.Value, "3.5", StringComparison.Ordinal));
+            Assert.False(undo.CanRedo);
+        }
+        finally
+        {
+            if (Directory.Exists(projectRoot))
+            {
+                Directory.Delete(projectRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 Transform 与普通非 null 组件字段的连续编辑改回原值时不创建 Undo，
+    /// 并恢复事务开始前的 dirty 状态；内容 Version 只允许继续递增。
+    /// </summary>
+    [Fact]
+    public void RevertedContinuousEditsRestoreStartingDirtyStateWithoutUndo()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("reverted-continuous-edits");
+        EditorGameObject gameObject = scene.Create("Player");
+        gameObject.PrefabLink = new EditorPrefabLink
+        {
+            AssetId = "prefab-player",
+            AssetPath = "prefabs/player.prefab",
+            SourceStableId = "1",
+        };
+        EditorComponentModel component = new("Game.PlayerController");
+        component.SerializedFields["MoveSpeed"] = "1";
+        gameObject.Components.Add(component);
+        EditorUndoStack undo = new();
+        using GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+        scene.MarkSaved();
+
+        int transformStartVersion = scene.Version;
+        EditorSceneTransform original = gameObject.Transform.Clone();
+        EditorSceneTransform changed = original.Clone();
+        changed.X = 18f;
+        Assert.True(panel.ApplyTransformEdit(gameObject.StableId, changed));
+        Assert.True(panel.ApplyTransformEdit(gameObject.StableId, original));
+        panel.CommitPendingEdits();
+
+        Assert.False(scene.IsDirty);
+        Assert.True(scene.Version > transformStartVersion);
+        Assert.False(undo.CanUndo);
+        Assert.Empty(gameObject.PrefabLink!.Overrides);
+
+        int componentStartVersion = scene.Version;
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "2"));
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "1"));
+        panel.CommitPendingComponentFieldEdit();
+
+        Assert.Equal("1", component.SerializedFields["MoveSpeed"]);
+        Assert.False(scene.IsDirty);
+        Assert.True(scene.Version > componentStartVersion);
+        Assert.False(undo.CanUndo);
+        Assert.Empty(gameObject.PrefabLink.Overrides);
+    }
+
+    /// <summary>
+    /// 验证 Prefab 字段未显式序列化时，nullable decimal 清空仍会用空字符串
+    /// override 表达“覆盖脚本非 null 默认值为 null”，并生成一条可 Undo/Redo 命令。
+    /// </summary>
+    [Fact]
+    public void PrefabMissingNullableValueKeepsExplicitNullOverrideAsUndoableChange()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("prefab-explicit-null");
+        EditorGameObject gameObject = scene.Create("Player");
+        gameObject.PrefabLink = new EditorPrefabLink
+        {
+            AssetId = "prefab-player",
+            AssetPath = "prefabs/player.prefab",
+            SourceStableId = "1",
+        };
+        EditorComponentModel component = new("Game.PlayerController");
+        gameObject.Components.Add(component);
+        EditorUndoStack undo = new();
+        using GameObjectInspectorPanel panel = new(scene, undo, new ScriptAssemblyRegistry());
+        scene.MarkSaved();
+
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "Damage", null));
+        panel.CommitPendingComponentFieldEdit();
+
+        Assert.True(scene.IsDirty);
+        Assert.False(component.SerializedFields.ContainsKey("Damage"));
+        Assert.Equal("Set Component Field", undo.UndoName);
+        EditorPrefabOverride explicitNull = Assert.Single(gameObject.PrefabLink!.Overrides);
+        Assert.Equal("Component:Game.PlayerController:Damage", explicitNull.PropertyPath);
+        Assert.Equal(string.Empty, explicitNull.Value);
+
+        Assert.True(undo.Undo(scene));
+        Assert.False(component.SerializedFields.ContainsKey("Damage"));
+        Assert.Empty(gameObject.PrefabLink.Overrides);
+        Assert.False(undo.CanUndo);
+
+        Assert.True(undo.Redo(scene));
+        Assert.False(component.SerializedFields.ContainsKey("Damage"));
+        explicitNull = Assert.Single(gameObject.PrefabLink.Overrides);
+        Assert.Equal("Component:Game.PlayerController:Damage", explicitNull.PropertyPath);
+        Assert.Equal(string.Empty, explicitNull.Value);
+        Assert.False(undo.CanRedo);
+    }
+
+    /// <summary>
+    /// 验证 decimal 文本草稿不会因中间态尚不可解析而在下一帧被当前序列化值覆盖，
+    /// 并验证提交时的 nullable null 与 Range clamp 语义。
+    /// </summary>
+    [Fact]
+    public void DecimalDraftPreservesIntermediateTextAndNormalizesOnCommit()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("decimal-draft");
+        EditorGameObject gameObject = scene.Create("Player");
+        EditorComponentModel component = new("Game.PlayerController");
+        component.SerializedFields["Damage"] = "1";
+        gameObject.Components.Add(component);
+        ScriptFieldDescriptor field = NumberField("Damage", typeof(decimal), minimum: -2.5d, maximum: 3.5d);
+        DecimalFieldTextEditState state = new(
+            gameObject.StableId,
+            componentIndex: 0,
+            field,
+            scene.SceneGeneration,
+            gameObject,
+            component.TypeName,
+            text: "1");
+
+        state.Update("-");
+        Assert.True(state.Matches(scene, gameObject.StableId, 0, field.Name));
+        string nextFrameText = state.Text;
+        state.Update(nextFrameText);
+
+        Assert.True(state.Dirty);
+        Assert.Equal("-", state.Text);
+        Assert.False(GameObjectInspectorPanel.TryNormalizeDecimalFieldValue(field, state.Text, out _));
+        Assert.True(GameObjectInspectorPanel.TryNormalizeDecimalFieldValue(field, "99", out string? high));
+        Assert.Equal("3.5", high);
+        Assert.True(GameObjectInspectorPanel.TryNormalizeDecimalFieldValue(field, "-99", out string? low));
+        Assert.Equal("-2.5", low);
+
+        ScriptFieldDescriptor nullable = NumberField("Damage", typeof(decimal?));
+        Assert.True(GameObjectInspectorPanel.TryNormalizeDecimalFieldValue(nullable, string.Empty, out string? empty));
+        Assert.Null(empty);
+    }
+
+    /// <summary>
+    /// 验证浮点与 decimal 的 Range 必须和字段类型存在交集；完全落在可表示范围之外时
+    /// 不得构造伪范围，也不得让 malformed/non-finite 标量进入拖拽编辑路径。
+    /// </summary>
+    [Fact]
+    public void NumericValidationRejectsDisjointRangesMalformedAndNonFiniteValues()
+    {
+        ScriptFieldDescriptor floatAboveType = NumberField("Value", typeof(float), minimum: double.MaxValue);
+        ScriptFieldDescriptor floatBelowType = NumberField("Value", typeof(float), maximum: double.MinValue);
+        ScriptFieldDescriptor decimalAboveType = NumberField("Value", typeof(decimal), minimum: double.MaxValue);
+        ScriptFieldDescriptor decimalBelowType = NumberField("Value", typeof(decimal), maximum: double.MinValue);
+
+        Assert.False(GameObjectInspectorPanel.TryResolveFloatingFieldRange(typeof(float), floatAboveType, out _, out _));
+        Assert.False(GameObjectInspectorPanel.TryResolveFloatingFieldRange(typeof(float), floatBelowType, out _, out _));
+        Assert.False(GameObjectInspectorPanel.TryResolveDecimalFieldRange(decimalAboveType, out _, out _));
+        Assert.False(GameObjectInspectorPanel.TryResolveDecimalFieldRange(decimalBelowType, out _, out _));
+
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(int), "1.5"));
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(int), "999999999999999999999"));
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(float), "NaN"));
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(float), "Infinity"));
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(double), "-Infinity"));
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(double), "1,2"));
+        Assert.False(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(decimal), "NaN"));
+        Assert.True(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(float), "1.25"));
+        Assert.True(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(decimal), "79228162514264337593543950335"));
     }
 
 
@@ -552,5 +1077,24 @@ public sealed class GameObjectInspectorPanelTests
         string root = Path.Combine(Path.GetTempPath(), "pixelengine-inspector-" + Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(root);
         return root;
+    }
+
+    private static ScriptFieldDescriptor NumberField(
+        string name,
+        Type fieldType,
+        double? minimum = null,
+        double? maximum = null)
+    {
+        return new ScriptFieldDescriptor(
+            name,
+            fieldType,
+            Value: null,
+            CanWrite: true,
+            IsPublic: true,
+            IsSerializedPrivate: false,
+            ScriptFieldKind.Number,
+            minimum,
+            maximum,
+            AssetKind: null);
     }
 }

@@ -56,7 +56,7 @@ internal sealed class EditorShellApp
             migrateToCurrentLayout: true);
         PreferencesWindow = new EditorPreferencesWindow(Preferences, ResetLayout, SetLanguage);
         _transitions = new EditorTransitionCoordinator(
-            () => CurrentSession?.SceneModel.IsDirty == true,
+            IsCurrentSceneDirtyAfterFlushing,
             TrySaveSceneForTransition);
     }
 
@@ -171,9 +171,10 @@ internal sealed class EditorShellApp
             windowState.Height);
         void HandleNativeWindowClosing()
         {
+            bool isDirty = IsCurrentSceneDirtyAfterFlushing();
             if (EditorNativeCloseGuard.ShouldExit(
                 true,
-                CurrentSession?.SceneModel.IsDirty == true,
+                isDirty,
                 () => _ = shellWindow.Window.TryCancelCloseRequest(),
                 RequestExit))
             {
@@ -235,9 +236,11 @@ internal sealed class EditorShellApp
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!_exitRequested)
         {
+            bool nativeCloseRequested = shellWindow.Window.IsClosing;
+            bool isDirty = nativeCloseRequested && IsCurrentSceneDirtyAfterFlushing();
             if (EditorNativeCloseGuard.ShouldExit(
-                shellWindow.Window.IsClosing,
-                CurrentSession?.SceneModel.IsDirty == true,
+                nativeCloseRequested,
+                isDirty,
                 () => _ = shellWindow.Window.TryCancelCloseRequest(),
                 RequestExit))
             {
@@ -2094,6 +2097,25 @@ internal sealed class EditorShellApp
         HandleTransitionResult(_transitions.Request(
             EditorTransitionKind.Exit,
             () => _exitRequested = true));
+    }
+
+    private bool IsCurrentSceneDirtyAfterFlushing()
+    {
+        EditorProjectSession? session = CurrentSession;
+        return session is not null &&
+            FlushPendingAuthoringEditsAndCheckDirty(
+                session.FlushPendingAuthoringEdits,
+                () => session.SceneModel.IsDirty);
+    }
+
+    internal static bool FlushPendingAuthoringEditsAndCheckDirty(
+        Action flushPendingEdits,
+        Func<bool> isDirty)
+    {
+        ArgumentNullException.ThrowIfNull(flushPendingEdits);
+        ArgumentNullException.ThrowIfNull(isDirty);
+        flushPendingEdits();
+        return isDirty();
     }
 
     internal void DrawTransitionPrompt()

@@ -84,15 +84,23 @@ public static class SerializedFieldBinder
             : normalized switch
             {
                 _ when normalized == typeof(string) => value,
+                _ when normalized == typeof(byte) => byte.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(sbyte) => sbyte.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(short) => short.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(ushort) => ushort.Parse(value, CultureInfo.InvariantCulture),
                 _ when normalized == typeof(int) => int.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(uint) => uint.Parse(value, CultureInfo.InvariantCulture),
                 _ when normalized == typeof(long) => long.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(ulong) => ulong.Parse(value, CultureInfo.InvariantCulture),
                 _ when normalized == typeof(float) => float.Parse(value, CultureInfo.InvariantCulture),
                 _ when normalized == typeof(double) => double.Parse(value, CultureInfo.InvariantCulture),
+                _ when normalized == typeof(decimal) => decimal.Parse(value, CultureInfo.InvariantCulture),
                 _ when normalized == typeof(bool) => bool.Parse(value),
-                _ when normalized == typeof(ushort) => ushort.Parse(value, CultureInfo.InvariantCulture),
                 _ when normalized == typeof(MaterialId) => new MaterialId(ushort.Parse(value, CultureInfo.InvariantCulture)),
                 _ when normalized == typeof(ScriptAssetReference) && ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference) => reference,
                 _ when normalized == typeof(Vector2) => ParseVector2(value),
+                _ when normalized == typeof(Vector3) => ParseVector3(value),
+                _ when normalized == typeof(Vector4) => ParseVector4(value),
                 _ when normalized.IsEnum => Enum.Parse(normalized, value, ignoreCase: true),
                 _ => throw new NotSupportedException($"不支持绑定字段类型：{targetType.FullName}。"),
             };
@@ -100,12 +108,23 @@ public static class SerializedFieldBinder
 
     private static Vector2 ParseVector2(string value)
     {
-        string[] parts = value.Split(',', StringSplitOptions.TrimEntries);
-        return parts.Length == 2
-            ? new Vector2(
-                float.Parse(parts[0], CultureInfo.InvariantCulture),
-                float.Parse(parts[1], CultureInfo.InvariantCulture))
-            : throw new FormatException($"Vector2 字段必须使用 \"x,y\" 格式：{value}");
+        return SerializedFieldValueCodec.TryParseVector2(value, out Vector2 parsed)
+            ? parsed
+            : throw new FormatException($"Vector2 字段必须使用有限数值的 \"x,y\" 格式：{value}");
+    }
+
+    private static Vector3 ParseVector3(string value)
+    {
+        return SerializedFieldValueCodec.TryParseVector3(value, out Vector3 parsed)
+            ? parsed
+            : throw new FormatException($"Vector3 字段必须使用有限数值的 \"x,y,z\" 格式：{value}");
+    }
+
+    private static Vector4 ParseVector4(string value)
+    {
+        return SerializedFieldValueCodec.TryParseVector4(value, out Vector4 parsed)
+            ? parsed
+            : throw new FormatException($"Vector4 字段必须使用有限数值的 \"x,y,z,w\" 格式：{value}");
     }
 
     private readonly struct SerializedFieldMember

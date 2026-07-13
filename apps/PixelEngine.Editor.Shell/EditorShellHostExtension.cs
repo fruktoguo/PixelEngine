@@ -111,6 +111,12 @@ internal sealed class EditorShellHostExtension :
         _editor.SetLayoutPersistence(_app.Preferences.Current.SaveLayoutOnExit);
     }
 
+    public void FlushPendingAuthoringEdits()
+    {
+        _gameObjectInspectorPanel?.CommitPendingEdits();
+        _ = _sceneViewPanel?.CommitGizmoTransform();
+    }
+
     public void RequestGameViewFocus()
     {
         if (_gameViewPanel is not null)
@@ -456,6 +462,7 @@ internal sealed class EditorShellHostExtension :
             brushPanel,
             sceneWorldTexture,
             () => _authoringWorld?.Snapshot ?? default);
+        _undoStack.BeforeOperation = FlushPendingAuthoringEdits;
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);

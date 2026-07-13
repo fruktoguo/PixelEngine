@@ -75,6 +75,12 @@ internal sealed class EditorProjectSession : IDisposable
 
     public long EditorBridgeFrameCount => _editorHost.BridgeFrameCount;
 
+    internal void FlushPendingAuthoringEdits()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
+    }
+
     public static EditorProjectSession Open(EditorProject project, RenderWindow window, EditorShellApp app)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -198,6 +204,7 @@ internal sealed class EditorProjectSession : IDisposable
     public Hosting.EditorPlaySessionResult EnterPlayCurrent()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
         RefreshEditProjectionIfNeeded();
         return _playSession.EnterPlayCurrent();
     }
@@ -205,6 +212,7 @@ internal sealed class EditorProjectSession : IDisposable
     public Hosting.EditorPlaySessionResult EnterPlayTemporary()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
         RefreshEditProjectionIfNeeded();
         return _playSession.EnterPlayTemporary();
     }
@@ -508,6 +516,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void SaveScene()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
         Prefabs.RefreshPrefabInstances(SceneModel);
         Engine.SaveSceneDocument(SceneModel.ToDocument(), SceneFilePath);
         SceneModel.MarkSaved();
@@ -524,6 +533,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void SaveSceneAs(string sceneRelativePath, bool makeStartScene)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
         string normalized = Project.ResolveSceneRelativePath(sceneRelativePath);
         Prefabs.RefreshPrefabInstances(SceneModel);
         Engine.SaveSceneDocument(SceneModel.ToDocument(), Project.ResolveSceneFullPath(normalized));
@@ -536,6 +546,7 @@ internal sealed class EditorProjectSession : IDisposable
     public string NewSceneAuto()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
         string relative = AllocateNewScenePath();
         EditorSceneModel empty = EditorSceneModel.Empty(Path.GetFileNameWithoutExtension(relative) ?? "scene");
         string normalized = Project.ResolveSceneRelativePath(relative);
@@ -553,6 +564,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void OpenScene(string sceneRelativePath)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.FlushPendingAuthoringEdits();
         string normalized = Project.ResolveSceneRelativePath(sceneRelativePath);
         EditorSceneModel loaded = LoadSceneModel(Project, normalized);
         SceneModel.ReplaceWith(loaded, markDirty: false);
@@ -568,6 +580,7 @@ internal sealed class EditorProjectSession : IDisposable
             return;
         }
 
+        _editorHost.FlushPendingAuthoringEdits();
         _snapshotStore.Dispose();
         Engine.Dispose();
         _disposed = true;

@@ -422,6 +422,19 @@ internal sealed class EditorSceneModel
         MarkDirty();
     }
 
+    /// <summary>
+    /// 记录完整 Transform 的 prefab override，使连续拖拽在下一帧 baseline 刷新后仍保持可见。
+    /// </summary>
+    public void RecordTransformPrefabOverrides(int stableId, EditorSceneTransform transform)
+    {
+        ArgumentNullException.ThrowIfNull(transform);
+        RecordPrefabOverride(stableId, "Transform.X", transform.X.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(stableId, "Transform.Y", transform.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(stableId, "Transform.RotationRadians", transform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(stableId, "Transform.ScaleX", transform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(stableId, "Transform.ScaleY", transform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     public void ClearPrefabOverrides(int stableId)
     {
         EditorGameObject gameObject = Get(stableId);
@@ -489,6 +502,15 @@ internal sealed class EditorSceneModel
     public void MarkSaved()
     {
         IsDirty = false;
+    }
+
+    /// <summary>
+    /// 连续编辑最终回到事务起点时，恢复事务开始前的 dirty 状态。
+    /// <see cref="Version"/> 保持单调递增，避免已观察到的内容版本倒退。
+    /// </summary>
+    public void RestoreDirtyState(bool isDirty)
+    {
+        IsDirty = isDirty;
     }
 
     public void ReplaceWith(EditorSceneModel source, bool markDirty)

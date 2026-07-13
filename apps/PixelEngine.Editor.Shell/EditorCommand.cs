@@ -19,6 +19,13 @@ internal sealed class EditorUndoStack
 {
     private readonly Stack<IEditorCommand> _undo = new();
     private readonly Stack<IEditorCommand> _redo = new();
+    private bool _preparingOperation;
+
+    /// <summary>
+    /// 在新命令或 Undo/Redo 真正改变场景前收口仍处于 live-preview 状态的连续编辑。
+    /// 回调内部允许向本栈提交收口命令；重入时不会再次触发回调。
+    /// </summary>
+    public Action? BeforeOperation { get; set; }
 
     public bool CanUndo => _undo.Count != 0;
 
@@ -32,6 +39,7 @@ internal sealed class EditorUndoStack
     {
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(command);
+        PrepareOperation();
         command.Execute(scene);
         _undo.Push(command);
         _redo.Clear();
@@ -40,6 +48,7 @@ internal sealed class EditorUndoStack
     public bool Undo(EditorSceneModel scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
+        PrepareOperation();
         if (_undo.Count == 0)
         {
             return false;
@@ -54,6 +63,7 @@ internal sealed class EditorUndoStack
     public bool Redo(EditorSceneModel scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
+        PrepareOperation();
         if (_redo.Count == 0)
         {
             return false;
@@ -69,6 +79,24 @@ internal sealed class EditorUndoStack
     {
         _undo.Clear();
         _redo.Clear();
+    }
+
+    private void PrepareOperation()
+    {
+        if (_preparingOperation || BeforeOperation is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _preparingOperation = true;
+            BeforeOperation();
+        }
+        finally
+        {
+            _preparingOperation = false;
+        }
     }
 }
 
@@ -224,6 +252,7 @@ internal sealed class SetTransformCommand : IEditorCommand
     private EditorPrefabLink? _oldPrefabLink;
     private EditorPrefabLink? _newPrefabLink;
     private bool _captured;
+    private readonly bool _hasExplicitPrefabState;
 
     public SetTransformCommand(int stableId, EditorSceneTransform newTransform)
     {
@@ -242,23 +271,38 @@ internal sealed class SetTransformCommand : IEditorCommand
         _oldTransform = (oldTransform ?? throw new ArgumentNullException(nameof(oldTransform))).Clone();
     }
 
+    public SetTransformCommand(
+        int stableId,
+        EditorSceneTransform oldTransform,
+        EditorPrefabLink? oldPrefabLink,
+        EditorSceneTransform newTransform,
+        EditorPrefabLink? newPrefabLink)
+        : this(stableId, oldTransform, newTransform)
+    {
+        _oldPrefabLink = oldPrefabLink?.Clone();
+        _newPrefabLink = newPrefabLink?.Clone();
+        _hasExplicitPrefabState = true;
+    }
+
     public string Name => "Set Transform";
 
     public void Execute(EditorSceneModel scene)
     {
         EditorGameObject gameObject = scene.Get(_stableId);
-        if (!_captured)
+        if (!_captured && !_hasExplicitPrefabState)
         {
             _oldTransform ??= gameObject.Transform.Clone();
             _oldPrefabLink = gameObject.PrefabLink?.Clone();
         }
 
         scene.SetTransform(_stableId, _newTransform);
-        scene.RecordPrefabOverride(_stableId, "Transform.X", _newTransform.X.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(_stableId, "Transform.Y", _newTransform.Y.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(_stableId, "Transform.RotationRadians", _newTransform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(_stableId, "Transform.ScaleX", _newTransform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        scene.RecordPrefabOverride(_stableId, "Transform.ScaleY", _newTransform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        if (_hasExplicitPrefabState)
+        {
+            scene.SetPrefabLink(_stableId, _newPrefabLink);
+            return;
+        }
+
+        scene.RecordTransformPrefabOverrides(_stableId, _newTransform);
         if (!_captured)
         {
             _newPrefabLink = scene.Get(_stableId).PrefabLink?.Clone();
@@ -343,42 +387,95 @@ internal sealed class MoveComponentCommand(int stableId, int fromIndex, int toIn
 /// <summary>
 /// Undo 命令：SetComponentField。
 /// </summary>
-internal sealed class SetComponentFieldCommand(int stableId, int componentIndex, string fieldName, string? value) : IEditorCommand
+internal sealed class SetComponentFieldCommand(
+    int stableId,
+    int componentIndex,
+    string fieldName,
+    string? value) : IEditorCommand
 {
+    private readonly int _stableId = stableId;
+    private readonly int _componentIndex = componentIndex;
+    private readonly string _fieldName = fieldName ?? throw new ArgumentNullException(nameof(fieldName));
+    private readonly string? _value = value;
     private string? _oldValue;
     private bool _hadOldValue;
+    private readonly bool _hasExplicitOldValue;
     private EditorPrefabLink? _oldPrefabLink;
     private EditorPrefabLink? _newPrefabLink;
     private bool _captured;
+    private readonly bool _hasExplicitPrefabState;
+
+    public SetComponentFieldCommand(
+        int stableId,
+        int componentIndex,
+        string fieldName,
+        bool hadOldValue,
+        string? oldValue,
+        string? value)
+        : this(stableId, componentIndex, fieldName, value)
+    {
+        _hadOldValue = hadOldValue;
+        _oldValue = oldValue;
+        _hasExplicitOldValue = true;
+    }
+
+    public SetComponentFieldCommand(
+        int stableId,
+        int componentIndex,
+        string fieldName,
+        bool hadOldValue,
+        string? oldValue,
+        EditorPrefabLink? oldPrefabLink,
+        string? value,
+        EditorPrefabLink? newPrefabLink)
+        : this(stableId, componentIndex, fieldName, value)
+    {
+        _hadOldValue = hadOldValue;
+        _oldValue = oldValue;
+        _oldPrefabLink = oldPrefabLink?.Clone();
+        _newPrefabLink = newPrefabLink?.Clone();
+        _hasExplicitOldValue = true;
+        _hasExplicitPrefabState = true;
+    }
 
     public string Name => "Set Component Field";
 
     public void Execute(EditorSceneModel scene)
     {
-        EditorComponentModel component = scene.Get(stableId).Components[componentIndex];
-        if (!_captured)
+        EditorComponentModel component = scene.Get(_stableId).Components[_componentIndex];
+        if (!_captured && !_hasExplicitPrefabState)
         {
-            _hadOldValue = component.SerializedFields.TryGetValue(fieldName, out _oldValue);
-            _oldPrefabLink = scene.Get(stableId).PrefabLink?.Clone();
+            if (!_hasExplicitOldValue)
+            {
+                _hadOldValue = component.SerializedFields.TryGetValue(_fieldName, out _oldValue);
+            }
+
+            _oldPrefabLink = scene.Get(_stableId).PrefabLink?.Clone();
         }
 
-        scene.SetComponentField(stableId, componentIndex, fieldName, value);
-        scene.RecordPrefabOverride(stableId, $"Component:{component.TypeName}:{fieldName}", value ?? string.Empty);
+        scene.SetComponentField(_stableId, _componentIndex, _fieldName, _value);
+        if (_hasExplicitPrefabState)
+        {
+            scene.SetPrefabLink(_stableId, _newPrefabLink);
+            return;
+        }
+
+        scene.RecordPrefabOverride(_stableId, $"Component:{component.TypeName}:{_fieldName}", _value ?? string.Empty);
         if (!_captured)
         {
-            _newPrefabLink = scene.Get(stableId).PrefabLink?.Clone();
+            _newPrefabLink = scene.Get(_stableId).PrefabLink?.Clone();
             _captured = true;
         }
         else
         {
-            scene.SetPrefabLink(stableId, _newPrefabLink);
+            scene.SetPrefabLink(_stableId, _newPrefabLink);
         }
     }
 
     public void Undo(EditorSceneModel scene)
     {
-        scene.SetComponentField(stableId, componentIndex, fieldName, _hadOldValue ? _oldValue : null);
-        scene.SetPrefabLink(stableId, _oldPrefabLink);
+        scene.SetComponentField(_stableId, _componentIndex, _fieldName, _hadOldValue ? _oldValue : null);
+        scene.SetPrefabLink(_stableId, _oldPrefabLink);
     }
 }
 

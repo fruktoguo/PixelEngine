@@ -43,9 +43,15 @@ internal sealed class GameObjectInspectorPanel(
     private int? _transformEditStableId;
     private EditorSceneTransform? _transformEditBefore;
     private EditorGameObject? _transformEditTarget;
+    private EditorPrefabLink? _transformEditOldPrefabLink;
+    private long _transformEditSceneGeneration;
+    private bool _transformEditWasDirty;
+    private bool _transformEditApplied;
     private int? _nameEditStableId;
     private string _nameEditBuffer = string.Empty;
     private EditorGameObject? _nameEditTarget;
+    private ComponentFieldEditTransaction? _componentFieldEdit;
+    private DecimalFieldTextEditState? _decimalFieldTextEdit;
     private int _focusDelayFrames;
     private bool _focusRequested;
     private string _assetPreviewCachePath = string.Empty;
@@ -72,6 +78,7 @@ internal sealed class GameObjectInspectorPanel(
             field = value;
             if (!value)
             {
+                CommitPendingEdits();
                 ClearAssetPreviewState();
             }
         }
@@ -108,6 +115,7 @@ internal sealed class GameObjectInspectorPanel(
 
         if (!ImGui.Begin(Title))
         {
+            CommitPendingEdits();
             ImGui.End();
             return;
         }
@@ -187,11 +195,15 @@ internal sealed class GameObjectInspectorPanel(
     {
         EditorMode mode = _modeProvider?.Invoke() ?? EditorMode.Edit;
         bool targetReplaced = _transformEditStableId.HasValue &&
-            (!_scene.TryGet(_transformEditStableId.Value, out EditorGameObject? currentTarget) ||
+            (_scene.SceneGeneration != _transformEditSceneGeneration ||
+             !_scene.TryGet(_transformEditStableId.Value, out EditorGameObject? currentTarget) ||
              !ReferenceEquals(currentTarget, _transformEditTarget));
         bool nameTargetReplaced = _nameEditStableId.HasValue &&
             (!_scene.TryGet(_nameEditStableId.Value, out EditorGameObject? currentNameTarget) ||
              !ReferenceEquals(currentNameTarget, _nameEditTarget));
+        bool componentTargetReplaced = _componentFieldEdit is { } componentEdit &&
+            (!TryResolveComponentEditTarget(in componentEdit, out _, out _) ||
+             selectedStableId != componentEdit.StableId);
         UpdateRuntimeEditLifetime();
         if (_nameEditStableId.HasValue &&
             (!Visible || mode != EditorMode.Edit || selectedStableId != _nameEditStableId || nameTargetReplaced))
@@ -204,10 +216,57 @@ internal sealed class GameObjectInspectorPanel(
         {
             CommitPendingTransformEdit();
         }
+
+        if (_componentFieldEdit is not null &&
+            (!Visible || mode != EditorMode.Edit || componentTargetReplaced))
+        {
+            CommitPendingComponentFieldEdit();
+        }
+    }
+
+    internal bool BeginNameEdit(int stableId)
+    {
+        CommitPendingTransformEdit();
+        CommitPendingComponentFieldEdit();
+        if (_nameEditStableId.HasValue && _nameEditStableId != stableId)
+        {
+            CommitPendingNameEdit();
+        }
+
+        if (_nameEditStableId.HasValue)
+        {
+            return true;
+        }
+
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject))
+        {
+            return false;
+        }
+
+        _nameEditStableId = stableId;
+        _nameEditTarget = gameObject;
+        _nameEditBuffer = gameObject.Name;
+        return true;
+    }
+
+    internal bool ApplyNameEdit(int stableId, string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        if (!BeginNameEdit(stableId) ||
+            !_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            !ReferenceEquals(gameObject, _nameEditTarget))
+        {
+            return false;
+        }
+
+        _nameEditBuffer = name;
+        return true;
     }
 
     internal bool BeginTransformEdit(int stableId)
     {
+        CommitPendingNameEdit();
+        CommitPendingComponentFieldEdit();
         if (_transformEditStableId.HasValue && _transformEditStableId != stableId)
         {
             CommitPendingTransformEdit();
@@ -226,6 +285,10 @@ internal sealed class GameObjectInspectorPanel(
         _transformEditStableId = stableId;
         _transformEditBefore = gameObject.Transform.Clone();
         _transformEditTarget = gameObject;
+        _transformEditOldPrefabLink = gameObject.PrefabLink?.Clone();
+        _transformEditSceneGeneration = _scene.SceneGeneration;
+        _transformEditWasDirty = _scene.IsDirty;
+        _transformEditApplied = false;
         return true;
     }
 
@@ -240,6 +303,8 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         _scene.SetTransform(stableId, transform);
+        _scene.RecordTransformPrefabOverrides(stableId, transform);
+        _transformEditApplied = true;
         return true;
     }
 
@@ -409,14 +474,7 @@ internal sealed class GameObjectInspectorPanel(
             }
         }
 
-        if (ImGui.BeginTable(
-            "asset-inspector-properties",
-            2,
-            ImGuiTableFlags.SizingStretchProp |
-            ImGuiTableFlags.PadOuterX |
-            ImGuiTableFlags.RowBg |
-            ImGuiTableFlags.BordersInnerV |
-            ImGuiTableFlags.BordersInnerH))
+        if (BeginInspectorPropertyTable("asset-inspector-properties", 2))
         {
             ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
             ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
@@ -424,7 +482,7 @@ internal sealed class GameObjectInspectorPanel(
             DrawReadOnlyProperty("Type", asset.Kind);
             DrawReadOnlyProperty("Stable ID", asset.AssetId ?? "none");
             DrawReadOnlyProperty("Size", FormatAssetSize(asset.SizeBytes));
-            ImGui.EndTable();
+            EndInspectorPropertyTable();
         }
 
         ImGui.Spacing();
@@ -442,13 +500,7 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawAssetPreview(in AssetBrowserItem item, AssetBrowserDetailedPreview preview)
     {
         ImGui.TextWrapped(preview.Summary);
-        if (preview.Properties.Count != 0 && ImGui.BeginTable(
-            "asset-preview-properties",
-            2,
-            ImGuiTableFlags.SizingStretchProp |
-            ImGuiTableFlags.PadOuterX |
-            ImGuiTableFlags.RowBg |
-            ImGuiTableFlags.BordersInnerV))
+        if (preview.Properties.Count != 0 && BeginInspectorPropertyTable("asset-preview-properties", 2))
         {
             ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
             ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
@@ -458,7 +510,7 @@ internal sealed class GameObjectInspectorPanel(
                 DrawReadOnlyProperty(property.Label, property.Value);
             }
 
-            ImGui.EndTable();
+            EndInspectorPropertyTable();
         }
 
         switch (preview.ContentKind)
@@ -532,9 +584,57 @@ internal sealed class GameObjectInspectorPanel(
     {
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        ImGui.TextDisabled(label);
+        DrawPropertyLabel(label, disabled: true);
         _ = ImGui.TableSetColumnIndex(1);
         ImGui.TextWrapped(value);
+    }
+
+    private static void DrawPropertyLabel(string label, bool disabled = false)
+    {
+        ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, ImGui.GetColorU32(new Vector4(0.12f, 0.12f, 0.12f, 1f)));
+        if (disabled)
+        {
+            ImGui.TextDisabled(label);
+        }
+        else
+        {
+            ImGui.TextUnformatted(label);
+        }
+    }
+
+    private static bool BeginInspectorPropertyTable(string id, int columns, ImGuiTableFlags extraFlags = ImGuiTableFlags.None)
+    {
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, 1f);
+        ImGui.PushStyleColor(ImGuiCol.Border, new Vector4(0.10f, 0.10f, 0.10f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.TableRowBg, new Vector4(0.145f, 0.145f, 0.145f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, new Vector4(0.175f, 0.175f, 0.175f, 1f));
+        bool opened = ImGui.BeginTable(
+            id,
+            columns,
+            ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.PadOuterX |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.BordersInnerH |
+            extraFlags);
+        if (!opened)
+        {
+            PopInspectorPropertyTableStyle();
+        }
+
+        return opened;
+    }
+
+    private static void EndInspectorPropertyTable()
+    {
+        ImGui.EndTable();
+        PopInspectorPropertyTableStyle();
+    }
+
+    private static void PopInspectorPropertyTableStyle()
+    {
+        ImGui.PopStyleColor(3);
+        ImGui.PopStyleVar();
     }
 
     internal static float ResolveInspectorLabelWidth(float availableWidth)
@@ -775,6 +875,7 @@ internal sealed class GameObjectInspectorPanel(
             return;
         }
 
+        CommitPendingEdits();
         ClearAssetPreviewState();
         _disposed = true;
     }
@@ -981,8 +1082,7 @@ internal sealed class GameObjectInspectorPanel(
             ImGuiInputTextFlags.EnterReturnsTrue);
         if (ImGui.IsItemActivated())
         {
-            _nameEditStableId = gameObject.StableId;
-            _nameEditTarget = gameObject;
+            _ = ApplyNameEdit(gameObject.StableId, _nameEditBuffer);
         }
 
         if (submitted || ImGui.IsItemDeactivatedAfterEdit())
@@ -1008,31 +1108,33 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawTransform(EditorGameObject gameObject)
     {
         EditorSceneTransform transform = gameObject.Transform.Clone();
-        TransformFieldLayout layout = ResolveTransformFieldLayout(ImGui.GetContentRegionAvail().X);
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        TransformFieldLayout layout = ResolveTransformFieldLayout(availableWidth);
         bool inlineAxes = layout == TransformFieldLayout.InlineAxes;
         string tableId = inlineAxes
             ? "gameobject-transform-fields-inline"
             : "gameobject-transform-fields-stacked";
         int columnCount = inlineAxes ? 5 : 3;
-        if (!ImGui.BeginTable(tableId, columnCount, ImGuiTableFlags.SizingStretchProp))
+        if (!BeginInspectorPropertyTable(tableId, columnCount))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 68f);
-        ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, 12f);
+        float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
+        ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, axisWidth);
         ImGui.TableSetupColumn("ValueA", ImGuiTableColumnFlags.WidthStretch);
         if (inlineAxes)
         {
-            ImGui.TableSetupColumn("AxisB", ImGuiTableColumnFlags.WidthFixed, 12f);
+            ImGui.TableSetupColumn("AxisB", ImGuiTableColumnFlags.WidthFixed, axisWidth);
             ImGui.TableSetupColumn("ValueB", ImGuiTableColumnFlags.WidthStretch);
         }
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        ImGui.TextUnformatted("Position");
+        DrawPropertyLabel("Position");
         _ = ImGui.TableSetColumnIndex(1);
-        ImGui.TextDisabled("X");
+        DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
         float x = transform.X;
         float y = transform.Y;
@@ -1055,7 +1157,7 @@ internal sealed class GameObjectInspectorPanel(
             _ = ImGui.TableSetColumnIndex(1);
         }
 
-        ImGui.TextDisabled("Y");
+        DrawAxisLabel("Y", InspectorAxis.Y);
         _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
         changed = ImGui.DragFloat("##position-y", ref y, 0.25f);
@@ -1068,9 +1170,9 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        ImGui.TextUnformatted("Rotation");
+        DrawPropertyLabel("Rotation");
         _ = ImGui.TableSetColumnIndex(1);
-        ImGui.TextDisabled("Z");
+        DrawAxisLabel("Z", InspectorAxis.Z);
         _ = ImGui.TableSetColumnIndex(2);
         float rotation = RadiansToDegrees(transform.RotationRadians);
         ImGui.SetNextItemWidth(-1f);
@@ -1084,9 +1186,9 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        ImGui.TextUnformatted("Scale");
+        DrawPropertyLabel("Scale");
         _ = ImGui.TableSetColumnIndex(1);
-        ImGui.TextDisabled("X");
+        DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
         float scaleX = transform.ScaleX;
         float scaleY = transform.ScaleY;
@@ -1109,7 +1211,7 @@ internal sealed class GameObjectInspectorPanel(
             _ = ImGui.TableSetColumnIndex(1);
         }
 
-        ImGui.TextDisabled("Y");
+        DrawAxisLabel("Y", InspectorAxis.Y);
         _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
         changed = ImGui.DragFloat("##scale-y", ref scaleY, 0.01f);
@@ -1119,7 +1221,7 @@ internal sealed class GameObjectInspectorPanel(
         }
         HandleTransformInput(gameObject, transform, changed);
         DrawTransformDragTooltip();
-        ImGui.EndTable();
+        EndInspectorPropertyTable();
     }
 
     internal static TransformFieldLayout ResolveTransformFieldLayout(float availableWidth)
@@ -1136,6 +1238,27 @@ internal sealed class GameObjectInspectorPanel(
         {
             ImGui.SetTooltip("左右拖动快速修改；Ctrl+单击后可精确输入。");
         }
+    }
+
+    private static void DrawAxisLabel(string label, InspectorAxis axis)
+    {
+        Vector4 color = GetAxisColor(axis);
+        ImGui.TableSetBgColor(
+            ImGuiTableBgTarget.CellBg,
+            ImGui.GetColorU32(new Vector4(color.X * 0.22f, color.Y * 0.22f, color.Z * 0.22f, 1f)));
+        ImGui.TextColored(color, label);
+    }
+
+    private static Vector4 GetAxisColor(InspectorAxis axis)
+    {
+        return axis switch
+        {
+            InspectorAxis.X => new Vector4(0.95f, 0.42f, 0.40f, 1f),
+            InspectorAxis.Y => new Vector4(0.45f, 0.82f, 0.48f, 1f),
+            InspectorAxis.Z => new Vector4(0.38f, 0.62f, 0.96f, 1f),
+            InspectorAxis.W => new Vector4(0.76f, 0.55f, 0.95f, 1f),
+            _ => throw new ArgumentOutOfRangeException(nameof(axis), axis, "未知 Inspector 向量轴。"),
+        };
     }
 
     internal static float RadiansToDegrees(float radians)
@@ -1210,20 +1333,38 @@ internal sealed class GameObjectInspectorPanel(
         int stableId = _transformEditStableId.Value;
         EditorSceneTransform before = _transformEditBefore;
         EditorGameObject? expectedTarget = _transformEditTarget;
+        EditorPrefabLink? oldPrefabLink = _transformEditOldPrefabLink;
+        long sceneGeneration = _transformEditSceneGeneration;
+        bool wasDirty = _transformEditWasDirty;
+        bool applied = _transformEditApplied;
         _transformEditStableId = null;
         _transformEditBefore = null;
         _transformEditTarget = null;
-        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+        _transformEditOldPrefabLink = null;
+        _transformEditWasDirty = false;
+        _transformEditApplied = false;
+        if (_scene.SceneGeneration != sceneGeneration ||
+            !_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
             !ReferenceEquals(gameObject, expectedTarget))
         {
             return;
         }
 
         EditorSceneTransform after = gameObject.Transform.Clone();
-        if (!TransformEquals(before, after))
+        if (TransformEquals(before, after))
         {
-            _undo.Execute(_scene, new SetTransformCommand(stableId, before, after));
+            if (applied)
+            {
+                _scene.SetPrefabLink(stableId, oldPrefabLink);
+                _scene.RestoreDirtyState(wasDirty);
+            }
+
+            return;
         }
+
+        _undo.Execute(
+            _scene,
+            new SetTransformCommand(stableId, before, oldPrefabLink, after, gameObject.PrefabLink));
     }
 
     private static bool TransformEquals(EditorSceneTransform left, EditorSceneTransform right)
@@ -1234,6 +1375,221 @@ internal sealed class GameObjectInspectorPanel(
             MathF.Abs(left.RotationRadians - right.RotationRadians) <= Epsilon &&
             MathF.Abs(left.ScaleX - right.ScaleX) <= Epsilon &&
             MathF.Abs(left.ScaleY - right.ScaleY) <= Epsilon;
+    }
+
+    internal bool BeginComponentFieldEdit(int stableId, int componentIndex, string fieldName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        if (_decimalFieldTextEdit is { } decimalEdit &&
+            !decimalEdit.HasKey(stableId, componentIndex, fieldName))
+        {
+            _ = CommitPendingDecimalTextEdit();
+        }
+
+        CommitPendingNameEdit();
+        CommitPendingTransformEdit();
+        if (_componentFieldEdit is { } active &&
+            (active.StableId != stableId ||
+             active.ComponentIndex != componentIndex ||
+             !string.Equals(active.FieldName, fieldName, StringComparison.Ordinal)))
+        {
+            CommitPendingComponentFieldEdit();
+        }
+
+        if (_componentFieldEdit is not null)
+        {
+            return true;
+        }
+
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            (uint)componentIndex >= (uint)gameObject.Components.Count)
+        {
+            return false;
+        }
+
+        EditorComponentModel component = gameObject.Components[componentIndex];
+        bool hadOldValue = component.SerializedFields.TryGetValue(fieldName, out string? oldValue);
+        _componentFieldEdit = new ComponentFieldEditTransaction(
+            stableId,
+            componentIndex,
+            fieldName,
+            _scene.SceneGeneration,
+            gameObject,
+            component.TypeName,
+            hadOldValue,
+            oldValue,
+            gameObject.PrefabLink?.Clone(),
+            _scene.IsDirty,
+            PreserveEmptyPrefabOverride: false,
+            Applied: false);
+        return true;
+    }
+
+    internal bool ApplyComponentFieldEdit(int stableId, int componentIndex, string fieldName, string? value)
+    {
+        if (!BeginComponentFieldEdit(stableId, componentIndex, fieldName) ||
+            _componentFieldEdit is not { } active ||
+            !TryResolveComponentEditTarget(in active, out _, out _))
+        {
+            return false;
+        }
+
+        EditorComponentModel component = _scene.Get(stableId).Components[componentIndex];
+        _scene.SetComponentField(stableId, componentIndex, fieldName, value);
+        _scene.RecordPrefabOverride(
+            stableId,
+            $"Component:{component.TypeName}:{fieldName}",
+            value ?? string.Empty);
+        _componentFieldEdit = active with
+        {
+            PreserveEmptyPrefabOverride = value is null,
+            Applied = true,
+        };
+        return true;
+    }
+
+    internal void CommitPendingComponentFieldEdit()
+    {
+        if (_decimalFieldTextEdit is not null)
+        {
+            _ = CommitPendingDecimalTextEdit();
+            return;
+        }
+
+        if (_componentFieldEdit is not { } active)
+        {
+            return;
+        }
+
+        _componentFieldEdit = null;
+        if (!TryResolveComponentEditTarget(in active, out EditorGameObject? gameObject, out EditorComponentModel? component) ||
+            gameObject is null ||
+            component is null)
+        {
+            return;
+        }
+
+        bool hasAfterValue = component.SerializedFields.TryGetValue(active.FieldName, out string? afterValue);
+        bool fieldUnchanged = active.HadOldValue == hasAfterValue &&
+            string.Equals(active.OldValue, afterValue, StringComparison.Ordinal);
+        bool hasNewExplicitNullOverride = fieldUnchanged &&
+            active.PreserveEmptyPrefabOverride &&
+            !PrefabLinksEqual(active.OldPrefabLink, gameObject.PrefabLink);
+        if (fieldUnchanged && !hasNewExplicitNullOverride)
+        {
+            if (active.Applied)
+            {
+                _scene.SetPrefabLink(active.StableId, active.OldPrefabLink);
+                _scene.RestoreDirtyState(active.WasDirty);
+            }
+
+            return;
+        }
+
+        _undo.Execute(
+            _scene,
+            new SetComponentFieldCommand(
+                active.StableId,
+                active.ComponentIndex,
+                active.FieldName,
+                active.HadOldValue,
+                active.OldValue,
+                active.OldPrefabLink,
+                hasAfterValue ? afterValue : null,
+                gameObject.PrefabLink));
+    }
+
+    private static bool PrefabLinksEqual(EditorPrefabLink? left, EditorPrefabLink? right)
+    {
+        if (ReferenceEquals(left, right))
+        {
+            return true;
+        }
+
+        if (left is null || right is null ||
+            !string.Equals(left.AssetId, right.AssetId, StringComparison.Ordinal) ||
+            !string.Equals(left.AssetPath, right.AssetPath, StringComparison.Ordinal) ||
+            !string.Equals(left.SourceStableId, right.SourceStableId, StringComparison.Ordinal) ||
+            left.Overrides.Count != right.Overrides.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < left.Overrides.Count; i++)
+        {
+            EditorPrefabOverride leftOverride = left.Overrides[i];
+            EditorPrefabOverride rightOverride = right.Overrides[i];
+            if (!string.Equals(leftOverride.SourceStableId, rightOverride.SourceStableId, StringComparison.Ordinal) ||
+                !string.Equals(leftOverride.PropertyPath, rightOverride.PropertyPath, StringComparison.Ordinal) ||
+                !string.Equals(leftOverride.Value, rightOverride.Value, StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    internal bool CommitComponentFieldEditIfMatches(int stableId, int componentIndex, string fieldName)
+    {
+        if (_componentFieldEdit is not { } active ||
+            active.StableId != stableId ||
+            active.ComponentIndex != componentIndex ||
+            !string.Equals(active.FieldName, fieldName, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        CommitPendingComponentFieldEdit();
+        return true;
+    }
+
+    internal void CommitPendingEdits()
+    {
+        CommitPendingNameEdit();
+        CommitPendingTransformEdit();
+        CommitPendingComponentFieldEdit();
+    }
+
+    private bool TryResolveComponentEditTarget(
+        in ComponentFieldEditTransaction edit,
+        out EditorGameObject? gameObject,
+        out EditorComponentModel? component)
+    {
+        if (!_scene.TryGet(edit.StableId, out gameObject) ||
+            _scene.SceneGeneration != edit.SceneGeneration ||
+            !ReferenceEquals(gameObject, edit.GameObject) ||
+            (uint)edit.ComponentIndex >= (uint)gameObject.Components.Count)
+        {
+            component = null;
+            return false;
+        }
+
+        component = gameObject.Components[edit.ComponentIndex];
+        return string.Equals(component.TypeName, edit.ComponentTypeName, StringComparison.Ordinal);
+    }
+
+    private void HandleComponentFieldInput(
+        int stableId,
+        int componentIndex,
+        string fieldName,
+        string? serializedValue,
+        bool changed)
+    {
+        if (ImGui.IsItemActivated())
+        {
+            _ = BeginComponentFieldEdit(stableId, componentIndex, fieldName);
+        }
+
+        if (changed)
+        {
+            _ = ApplyComponentFieldEdit(stableId, componentIndex, fieldName, serializedValue);
+        }
+
+        if (ImGui.IsItemDeactivated())
+        {
+            _ = CommitComponentFieldEditIfMatches(stableId, componentIndex, fieldName);
+        }
     }
 
     private void DrawComponents(EditorGameObject gameObject)
@@ -1367,6 +1723,7 @@ internal sealed class GameObjectInspectorPanel(
 
         if (!open)
         {
+            CommitPendingComponentFieldEdit();
             return;
         }
 
@@ -1377,22 +1734,20 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(behaviour);
-        if (!ImGui.BeginTable(
-            $"component-fields-{componentIndex}",
-            2,
-            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.PadOuterX))
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        if (!BeginInspectorPropertyTable($"component-fields-{componentIndex}", 2))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, 116f);
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
         ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
         for (int i = 0; i < fields.Length; i++)
         {
             DrawField(gameObject.StableId, componentIndex, component, fields[i]);
         }
 
-        ImGui.EndTable();
+        EndInspectorPropertyTable();
     }
 
     private static bool DrawInspectorComponentHeader(string label)
@@ -1451,7 +1806,7 @@ internal sealed class GameObjectInspectorPanel(
     {
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        ImGui.TextUnformatted(field.Name);
+        DrawPropertyLabel(field.Name);
         if (ImGui.IsItemHovered())
         {
             ImGui.SetTooltip(field.Name);
@@ -1480,6 +1835,8 @@ internal sealed class GameObjectInspectorPanel(
                 DrawEnum(stableId, componentIndex, component, field);
                 break;
             case ScriptFieldKind.Vector:
+                DrawVector(stableId, componentIndex, component, field);
+                break;
             case ScriptFieldKind.Material:
                 DrawString(stableId, componentIndex, component, field);
                 break;
@@ -1504,17 +1861,784 @@ internal sealed class GameObjectInspectorPanel(
 
     private void DrawNumber(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
-        float value = float.TryParse(ReadFieldValue(component, field), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsed)
-            ? parsed
-            : 0f;
-        ImGui.SetNextItemWidth(-1f);
-        if (ImGui.InputFloat($"##field-{stableId}-{componentIndex}-{field.Name}", ref value))
+        string current = ReadFieldValue(component, field);
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        bool validRange =
+            (!IsIntegerNumericType(target) ||
+             TryResolveIntegerFieldRange(target, field, out _, out _)) &&
+            ((target != typeof(float) && target != typeof(double)) ||
+             TryResolveFloatingFieldRange(target, field, out _, out _)) &&
+            (target != typeof(decimal) ||
+             TryResolveDecimalFieldRange(field, out _, out _));
+        if (!validRange)
         {
-            _undo.Execute(_scene, new SetComponentFieldCommand(
-                stableId,
-                componentIndex,
-                field.Name,
-                value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            ImGui.TextColored(
+                new Vector4(0.95f, 0.55f, 0.35f, 1f),
+                $"Range 中不存在 {target.Name} 可表示的值");
+            return;
+        }
+
+        bool nullableNull = Nullable.GetUnderlyingType(field.FieldType) is not null && current.Length == 0;
+        if (target == typeof(decimal))
+        {
+            DrawDecimalNumber(stableId, componentIndex, field, current);
+            return;
+        }
+
+        if (nullableNull)
+        {
+            if (ImGui.Button($"null  ·  Set 0##field-{stableId}-{componentIndex}-{field.Name}"))
+            {
+                _undo.Execute(
+                    _scene,
+                    new SetComponentFieldCommand(stableId, componentIndex, field.Name, "0"));
+            }
+
+            return;
+        }
+
+        if (!IsValidNumericSerializedValue(target, current))
+        {
+            DrawInvalidNumericValue(stableId, componentIndex, field, target, current);
+            return;
+        }
+
+        ImGui.SetNextItemWidth(-1f);
+        bool changed = TryDrawNumericField(
+            $"##field-{stableId}-{componentIndex}-{field.Name}",
+            field,
+            current,
+            out string serialized);
+        HandleComponentFieldInput(
+            stableId,
+            componentIndex,
+            field.Name,
+            serialized,
+            changed);
+        DrawComponentDragTooltip();
+    }
+
+    private void DrawDecimalNumber(
+        int stableId,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        string current)
+    {
+        DecimalFieldTextEditState? state =
+            _decimalFieldTextEdit is { } existing &&
+            existing.Matches(_scene, stableId, componentIndex, field.Name)
+                ? existing
+                : null;
+        string edited = state?.Text ?? current;
+        ImGui.SetNextItemWidth(-1f);
+        bool submitted = ImGui.InputText(
+            $"##field-{stableId}-{componentIndex}-{field.Name}",
+            ref edited,
+            128,
+            ImGuiInputTextFlags.EnterReturnsTrue);
+        if (ImGui.IsItemActivated())
+        {
+            if (state is null)
+            {
+                _ = CommitPendingDecimalTextEdit();
+                state = CreateDecimalFieldTextEdit(
+                    stableId,
+                    componentIndex,
+                    field,
+                    current);
+            }
+
+            _ = BeginComponentFieldEdit(stableId, componentIndex, field.Name);
+        }
+
+        state?.Update(edited);
+        bool commit = state is not null && (submitted || ImGui.IsItemDeactivated());
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("decimal 使用精确文本编辑；Enter 或失去焦点时提交，中间输入不会被重置。");
+        }
+
+        if (commit)
+        {
+            _ = CommitPendingDecimalTextEdit();
+        }
+    }
+
+    private DecimalFieldTextEditState? CreateDecimalFieldTextEdit(
+        int stableId,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        string current)
+    {
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            (uint)componentIndex >= (uint)gameObject.Components.Count)
+        {
+            return null;
+        }
+
+        EditorComponentModel component = gameObject.Components[componentIndex];
+        return _decimalFieldTextEdit = new DecimalFieldTextEditState(
+            stableId,
+            componentIndex,
+            field,
+            _scene.SceneGeneration,
+            gameObject,
+            component.TypeName,
+            current);
+    }
+
+    private bool CommitPendingDecimalTextEdit()
+    {
+        if (_decimalFieldTextEdit is not { } state)
+        {
+            return false;
+        }
+
+        _decimalFieldTextEdit = null;
+        bool applied = false;
+        if (state.Matches(_scene, state.StableId, state.ComponentIndex, state.Field.Name) &&
+            state.Dirty)
+        {
+            if (TryNormalizeDecimalFieldValue(state.Field, state.Text, out string? serialized))
+            {
+                applied = ApplyComponentFieldEdit(
+                    state.StableId,
+                    state.ComponentIndex,
+                    state.Field.Name,
+                    serialized);
+                Status = ReadyStatus;
+            }
+            else
+            {
+                Status = $"无效 decimal：{(state.Text.Length == 0 ? "<empty>" : state.Text)}";
+            }
+        }
+
+        _ = CommitComponentFieldEditIfMatches(
+            state.StableId,
+            state.ComponentIndex,
+            state.Field.Name);
+        return applied;
+    }
+
+    internal static bool TryNormalizeDecimalFieldValue(
+        ScriptFieldDescriptor field,
+        string text,
+        out string? serialized)
+    {
+        if (Nullable.GetUnderlyingType(field.FieldType) is not null && text.Length == 0)
+        {
+            serialized = null;
+            return true;
+        }
+
+        if (!decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal parsed) ||
+            !TryResolveDecimalFieldRange(field, out decimal minimum, out decimal maximum))
+        {
+            serialized = null;
+            return false;
+        }
+
+        serialized = Math.Clamp(parsed, minimum, maximum).ToString(CultureInfo.InvariantCulture);
+        return true;
+    }
+
+    private void DrawInvalidNumericValue(
+        int stableId,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        Type target,
+        string current)
+    {
+        ImGui.TextColored(
+            new Vector4(0.95f, 0.55f, 0.35f, 1f),
+            $"无效 {target.Name}：{(current.Length == 0 ? "<empty>" : current)}");
+        ImGui.SameLine();
+        if (ImGui.SmallButton($"Reset##number-reset-{stableId}-{componentIndex}-{field.Name}"))
+        {
+            _undo.Execute(
+                _scene,
+                new SetComponentFieldCommand(
+                    stableId,
+                    componentIndex,
+                    field.Name,
+                    ResolveNumericResetValue(field, target)));
+        }
+    }
+
+    internal static bool IsValidNumericSerializedValue(Type target, string value)
+    {
+        return Type.GetTypeCode(target) switch
+        {
+            TypeCode.Byte => byte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.SByte => sbyte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.Int16 => short.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.UInt16 => ushort.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.Int32 => int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.UInt32 => uint.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.Int64 => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.UInt64 => ulong.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            TypeCode.Single => float.TryParse(
+                value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out float parsedSingle) && float.IsFinite(parsedSingle),
+            TypeCode.Double => double.TryParse(
+                value,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out double parsedDouble) && double.IsFinite(parsedDouble),
+            TypeCode.Decimal => decimal.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out _),
+            TypeCode.Empty or
+            TypeCode.Object or
+            TypeCode.DBNull or
+            TypeCode.Boolean or
+            TypeCode.Char or
+            TypeCode.DateTime or
+            TypeCode.String => false,
+            _ => false,
+        };
+    }
+
+    private static string? ResolveNumericResetValue(ScriptFieldDescriptor field, Type target)
+    {
+        if (Nullable.GetUnderlyingType(field.FieldType) is not null)
+        {
+            return null;
+        }
+
+        if (IsIntegerNumericType(target) &&
+            TryResolveIntegerFieldRange(target, field, out double integerMinimum, out double integerMaximum))
+        {
+            return Math.Clamp(0d, integerMinimum, integerMaximum)
+                .ToString("0", CultureInfo.InvariantCulture);
+        }
+
+        if ((target == typeof(float) || target == typeof(double)) &&
+            TryResolveFloatingFieldRange(target, field, out double floatingMinimum, out double floatingMaximum))
+        {
+            double value = Math.Clamp(0d, floatingMinimum, floatingMaximum);
+            return target == typeof(float)
+                ? ((float)value).ToString("R", CultureInfo.InvariantCulture)
+                : value.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        return target == typeof(decimal) &&
+               TryResolveDecimalFieldRange(field, out decimal decimalMinimum, out decimal decimalMaximum)
+            ? Math.Clamp(decimal.Zero, decimalMinimum, decimalMaximum)
+                .ToString(CultureInfo.InvariantCulture)
+            : throw new InvalidOperationException($"无法为 {target.FullName} 构造合法的 Inspector reset 值。");
+    }
+
+    private static unsafe bool TryDrawNumericField(
+        string id,
+        ScriptFieldDescriptor field,
+        string current,
+        out string serialized)
+    {
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        serialized = current;
+        switch (Type.GetTypeCode(target))
+        {
+            case TypeCode.Byte:
+                {
+                    byte value = byte.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte parsed) ? parsed : (byte)0;
+                    if (!DragScalarValue(id, ImGuiDataType.U8, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = (byte)ClampIntegerToFieldRange(value, field, byte.MinValue, byte.MaxValue);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.SByte:
+                {
+                    sbyte value = sbyte.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte parsed) ? parsed : (sbyte)0;
+                    if (!DragScalarValue(id, ImGuiDataType.S8, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = (sbyte)ClampIntegerToFieldRange(value, field, sbyte.MinValue, sbyte.MaxValue);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.Int16:
+                {
+                    short value = short.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out short parsed) ? parsed : (short)0;
+                    if (!DragScalarValue(id, ImGuiDataType.S16, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = (short)ClampIntegerToFieldRange(value, field, short.MinValue, short.MaxValue);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.UInt16:
+                {
+                    ushort value = ushort.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out ushort parsed) ? parsed : (ushort)0;
+                    if (!DragScalarValue(id, ImGuiDataType.U16, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = (ushort)ClampIntegerToFieldRange(value, field, ushort.MinValue, ushort.MaxValue);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.Int32:
+                {
+                    int value = int.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out int parsed) ? parsed : 0;
+                    if (!DragScalarValue(id, ImGuiDataType.S32, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = (int)ClampIntegerToFieldRange(value, field, int.MinValue, int.MaxValue);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.UInt32:
+                {
+                    uint value = uint.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint parsed) ? parsed : 0u;
+                    if (!DragScalarValue(id, ImGuiDataType.U32, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = (uint)ClampIntegerToFieldRange(value, field, uint.MinValue, uint.MaxValue);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.Int64:
+                {
+                    long value = long.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed) ? parsed : 0L;
+                    if (!DragScalarValue(id, ImGuiDataType.S64, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = ClampInt64ToFieldRange(value, field);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.UInt64:
+                {
+                    ulong value = ulong.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong parsed) ? parsed : 0UL;
+                    if (!DragScalarValue(id, ImGuiDataType.U64, ref value, 1f))
+                    {
+                        return false;
+                    }
+
+                    value = ClampUInt64ToFieldRange(value, field);
+                    serialized = value.ToString(CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.Single:
+                {
+                    float value = float.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed) && float.IsFinite(parsed)
+                        ? parsed
+                        : 0f;
+                    if (!DragScalarValue(id, ImGuiDataType.Float, ref value, 0.1f) ||
+                        !float.IsFinite(value))
+                    {
+                        return false;
+                    }
+
+                    value = (float)ClampToFieldRange(value, field, -float.MaxValue, float.MaxValue);
+                    serialized = value.ToString("R", CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.Double:
+                {
+                    double value = double.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && double.IsFinite(parsed)
+                        ? parsed
+                        : 0d;
+                    if (!DragScalarValue(id, ImGuiDataType.Double, ref value, 0.1f) ||
+                        !double.IsFinite(value))
+                    {
+                        return false;
+                    }
+
+                    value = ClampToFieldRange(value, field, -double.MaxValue, double.MaxValue);
+                    serialized = value.ToString("R", CultureInfo.InvariantCulture);
+                    return true;
+                }
+
+            case TypeCode.Decimal:
+                throw new InvalidOperationException("decimal 必须走精确文本编辑路径。");
+
+            case TypeCode.Empty:
+            case TypeCode.Object:
+            case TypeCode.DBNull:
+            case TypeCode.Boolean:
+            case TypeCode.Char:
+            case TypeCode.DateTime:
+            case TypeCode.String:
+            default:
+                throw new NotSupportedException($"Inspector 不支持数值字段类型：{field.FieldType.FullName}");
+        }
+    }
+
+    private static unsafe bool DragScalarValue<T>(
+        string id,
+        ImGuiDataType dataType,
+        ref T value,
+        float speed)
+        where T : unmanaged
+    {
+        fixed (T* valuePointer = &value)
+        {
+            return ImGui.DragScalar(id, dataType, valuePointer, speed);
+        }
+    }
+
+    private static bool IsIntegerNumericType(Type type)
+    {
+        Type normalized = Nullable.GetUnderlyingType(type) ?? type;
+        return normalized == typeof(byte) ||
+            normalized == typeof(sbyte) ||
+            normalized == typeof(short) ||
+            normalized == typeof(ushort) ||
+            normalized == typeof(int) ||
+            normalized == typeof(uint) ||
+            normalized == typeof(long) ||
+            normalized == typeof(ulong);
+    }
+
+    internal static bool TryResolveIntegerFieldRange(
+        Type fieldType,
+        ScriptFieldDescriptor field,
+        out double minimum,
+        out double maximum)
+    {
+        Type normalized = Nullable.GetUnderlyingType(fieldType) ?? fieldType;
+        (double TypeMinimum, double TypeMaximum) bounds = normalized == typeof(byte)
+            ? (byte.MinValue, byte.MaxValue)
+            : normalized == typeof(sbyte)
+                ? (sbyte.MinValue, sbyte.MaxValue)
+                : normalized == typeof(short)
+                    ? (short.MinValue, short.MaxValue)
+                    : normalized == typeof(ushort)
+                        ? (ushort.MinValue, ushort.MaxValue)
+                        : normalized == typeof(int)
+                            ? (int.MinValue, int.MaxValue)
+                            : normalized == typeof(uint)
+                                ? (uint.MinValue, uint.MaxValue)
+                                : normalized == typeof(long)
+                                    ? (long.MinValue, long.MaxValue)
+                                    : normalized == typeof(ulong)
+                                        ? (ulong.MinValue, ulong.MaxValue)
+                                        : throw new ArgumentOutOfRangeException(
+                                            nameof(fieldType),
+                                            fieldType,
+                                            "字段类型不是 Inspector 支持的整数类型。");
+        return TryResolveIntegerBounds(
+            field,
+            bounds.TypeMinimum,
+            bounds.TypeMaximum,
+            out minimum,
+            out maximum);
+    }
+
+    internal static bool TryResolveFloatingFieldRange(
+        Type fieldType,
+        ScriptFieldDescriptor field,
+        out double minimum,
+        out double maximum)
+    {
+        Type normalized = Nullable.GetUnderlyingType(fieldType) ?? fieldType;
+        (double typeMinimum, double typeMaximum) = normalized == typeof(float)
+            ? (-float.MaxValue, float.MaxValue)
+            : normalized == typeof(double)
+                ? (-double.MaxValue, double.MaxValue)
+                : throw new ArgumentOutOfRangeException(
+                    nameof(fieldType),
+                    fieldType,
+                    "字段类型不是 Inspector 支持的浮点类型。");
+        return TryResolveFloatingBounds(
+            field,
+            typeMinimum,
+            typeMaximum,
+            out minimum,
+            out maximum);
+    }
+
+    private static bool TryResolveFloatingBounds(
+        ScriptFieldDescriptor field,
+        double typeMinimum,
+        double typeMaximum,
+        out double minimum,
+        out double maximum)
+    {
+        if ((field.RangeMinimum is double rangeMinimum && double.IsNaN(rangeMinimum)) ||
+            (field.RangeMaximum is double rangeMaximum && double.IsNaN(rangeMaximum)))
+        {
+            minimum = default;
+            maximum = default;
+            return false;
+        }
+
+        minimum = Math.Max(typeMinimum, field.RangeMinimum ?? typeMinimum);
+        maximum = Math.Min(typeMaximum, field.RangeMaximum ?? typeMaximum);
+        return minimum <= maximum;
+    }
+
+    internal static bool TryResolveDecimalFieldRange(
+        ScriptFieldDescriptor field,
+        out decimal minimum,
+        out decimal maximum)
+    {
+        if ((field.RangeMinimum is double rangeMinimum &&
+             (double.IsNaN(rangeMinimum) || rangeMinimum > (double)decimal.MaxValue)) ||
+            (field.RangeMaximum is double rangeMaximum &&
+             (double.IsNaN(rangeMaximum) || rangeMaximum < (double)decimal.MinValue)))
+        {
+            minimum = default;
+            maximum = default;
+            return false;
+        }
+
+        minimum = ConvertDoubleToDecimalBound(field.RangeMinimum, decimal.MinValue);
+        maximum = ConvertDoubleToDecimalBound(field.RangeMaximum, decimal.MaxValue);
+        return minimum <= maximum;
+    }
+
+    private static bool TryResolveIntegerBounds(
+        ScriptFieldDescriptor field,
+        double typeMinimum,
+        double typeMaximum,
+        out double minimum,
+        out double maximum)
+    {
+        minimum = field.RangeMinimum.HasValue
+            ? Math.Max(typeMinimum, Math.Ceiling(field.RangeMinimum.Value))
+            : typeMinimum;
+        maximum = field.RangeMaximum.HasValue
+            ? Math.Min(typeMaximum, Math.Floor(field.RangeMaximum.Value))
+            : typeMaximum;
+        return minimum <= maximum;
+    }
+
+    private static double ClampIntegerToFieldRange(
+        double value,
+        ScriptFieldDescriptor field,
+        double typeMinimum,
+        double typeMaximum)
+    {
+        return TryResolveIntegerBounds(field, typeMinimum, typeMaximum, out double minimum, out double maximum)
+            ? Math.Clamp(value, minimum, maximum)
+            : value;
+    }
+
+    private static decimal ConvertDoubleToDecimalBound(double? value, decimal fallback)
+    {
+        return !value.HasValue
+            ? fallback
+            : value.Value <= (double)decimal.MinValue
+                ? decimal.MinValue
+                : value.Value >= (double)decimal.MaxValue ? decimal.MaxValue : (decimal)value.Value;
+    }
+
+    private static double ClampToFieldRange(
+        double value,
+        ScriptFieldDescriptor field,
+        double typeMinimum,
+        double typeMaximum)
+    {
+        return TryResolveFloatingBounds(field, typeMinimum, typeMaximum, out double minimum, out double maximum)
+            ? Math.Clamp(value, minimum, maximum)
+            : value;
+    }
+
+    private static long ClampInt64ToFieldRange(long value, ScriptFieldDescriptor field)
+    {
+        return !TryResolveIntegerBounds(field, long.MinValue, long.MaxValue, out double minimum, out double maximum)
+            ? value
+            : Math.Clamp(
+                value,
+                ConvertDoubleToInt64Bound(minimum),
+                ConvertDoubleToInt64Bound(maximum));
+    }
+
+    private static ulong ClampUInt64ToFieldRange(ulong value, ScriptFieldDescriptor field)
+    {
+        return !TryResolveIntegerBounds(field, ulong.MinValue, ulong.MaxValue, out double minimum, out double maximum)
+            ? value
+            : Math.Clamp(
+                value,
+                ConvertDoubleToUInt64Bound(minimum),
+                ConvertDoubleToUInt64Bound(maximum));
+    }
+
+    private static long ConvertDoubleToInt64Bound(double value)
+    {
+        return double.IsNaN(value)
+            ? 0L
+            : value <= long.MinValue
+                ? long.MinValue
+                : value >= long.MaxValue ? long.MaxValue : (long)value;
+    }
+
+    private static ulong ConvertDoubleToUInt64Bound(double value)
+    {
+        return double.IsNaN(value) || value <= 0d
+            ? 0UL
+            : value >= ulong.MaxValue ? ulong.MaxValue : (ulong)value;
+    }
+
+    private void DrawVector(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
+    {
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        string current = ReadFieldValue(component, field);
+        Span<float> values = stackalloc float[4];
+        int count;
+        if (target == typeof(Vector2) && SerializedFieldValueCodec.TryParseVector2(current, out Vector2 vector2))
+        {
+            values[0] = vector2.X;
+            values[1] = vector2.Y;
+            count = 2;
+        }
+        else if (target == typeof(Vector3) && SerializedFieldValueCodec.TryParseVector3(current, out Vector3 vector3))
+        {
+            values[0] = vector3.X;
+            values[1] = vector3.Y;
+            values[2] = vector3.Z;
+            count = 3;
+        }
+        else if (target == typeof(Vector4) && SerializedFieldValueCodec.TryParseVector4(current, out Vector4 vector4))
+        {
+            values[0] = vector4.X;
+            values[1] = vector4.Y;
+            values[2] = vector4.Z;
+            values[3] = vector4.W;
+            count = 4;
+        }
+        else
+        {
+            ImGui.TextColored(new Vector4(0.95f, 0.55f, 0.35f, 1f), $"无效 {target.Name}：{current}");
+            if (ImGui.Button($"Reset to Zero##vector-reset-{stableId}-{componentIndex}-{field.Name}"))
+            {
+                string reset = target == typeof(Vector2)
+                    ? SerializedFieldValueCodec.Format(Vector2.Zero)
+                    : target == typeof(Vector3)
+                        ? SerializedFieldValueCodec.Format(Vector3.Zero)
+                        : target == typeof(Vector4)
+                            ? SerializedFieldValueCodec.Format(Vector4.Zero)
+                            : throw new NotSupportedException($"Inspector 不支持向量类型：{target.FullName}");
+                _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, reset));
+            }
+            return;
+        }
+
+        DrawVectorComponents(stableId, componentIndex, field.Name, values[..count]);
+    }
+
+    private void DrawVectorComponents(
+        int stableId,
+        int componentIndex,
+        string fieldName,
+        Span<float> values)
+    {
+        VectorFieldLayout layout = ResolveVectorFieldLayout(ImGui.GetContentRegionAvail().X, values.Length);
+        bool inline = layout == VectorFieldLayout.InlineAxes;
+        int columnCount = inline ? values.Length * 2 : 2;
+        if (!ImGui.BeginTable(
+            $"vector-field-{stableId}-{componentIndex}-{fieldName}",
+            columnCount,
+            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.NoSavedSettings))
+        {
+            return;
+        }
+
+        float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
+        if (inline)
+        {
+            for (int i = 0; i < values.Length; i++)
+            {
+                ImGui.TableSetupColumn($"Axis{i}", ImGuiTableColumnFlags.WidthFixed, axisWidth);
+                ImGui.TableSetupColumn($"Value{i}", ImGuiTableColumnFlags.WidthStretch);
+            }
+        }
+        else
+        {
+            ImGui.TableSetupColumn("Axis", ImGuiTableColumnFlags.WidthFixed, axisWidth);
+            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        }
+
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (!inline || i == 0)
+            {
+                ImGui.TableNextRow();
+            }
+
+            int axisColumn = inline ? i * 2 : 0;
+            int valueColumn = axisColumn + 1;
+            _ = ImGui.TableSetColumnIndex(axisColumn);
+            InspectorAxis axis = (InspectorAxis)i;
+            DrawAxisLabel(axis.ToString(), axis);
+            _ = ImGui.TableSetColumnIndex(valueColumn);
+            ImGui.SetNextItemWidth(-1f);
+            float componentValue = values[i];
+            bool changed = ImGui.DragFloat(
+                $"##vector-{stableId}-{componentIndex}-{fieldName}-{i}",
+                ref componentValue,
+                0.1f);
+            bool validChange = changed && float.IsFinite(componentValue);
+            if (validChange)
+            {
+                values[i] = componentValue;
+            }
+
+            string? serialized = null;
+            if (validChange)
+            {
+                serialized = values.Length switch
+                {
+                    2 => SerializedFieldValueCodec.Format(new Vector2(values[0], values[1])),
+                    3 => SerializedFieldValueCodec.Format(new Vector3(values[0], values[1], values[2])),
+                    4 => SerializedFieldValueCodec.Format(new Vector4(values[0], values[1], values[2], values[3])),
+                    _ => throw new ArgumentOutOfRangeException(nameof(values), values.Length, "Inspector 仅支持 Vector2/3/4。"),
+                };
+            }
+
+            HandleComponentFieldInput(stableId, componentIndex, fieldName, serialized, validChange);
+            DrawComponentDragTooltip();
+        }
+
+        ImGui.EndTable();
+    }
+
+    internal static VectorFieldLayout ResolveVectorFieldLayout(float availableWidth, int componentCount)
+    {
+        if (componentCount is < 2 or > 4)
+        {
+            throw new ArgumentOutOfRangeException(nameof(componentCount));
+        }
+
+        float width = float.IsFinite(availableWidth) ? availableWidth : 0f;
+        return width >= componentCount * 76f
+            ? VectorFieldLayout.InlineAxes
+            : VectorFieldLayout.StackedAxes;
+    }
+
+    private static void DrawComponentDragTooltip()
+    {
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("左右拖动快速修改；Ctrl+单击后可精确输入。一次拖动只生成一条 Undo。");
         }
     }
 
@@ -1522,10 +2646,8 @@ internal sealed class GameObjectInspectorPanel(
     {
         string value = ReadFieldValue(component, field);
         ImGui.SetNextItemWidth(-1f);
-        if (ImGui.InputText($"##field-{stableId}-{componentIndex}-{field.Name}", ref value, 256))
-        {
-            _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, value));
-        }
+        bool changed = ImGui.InputText($"##field-{stableId}-{componentIndex}-{field.Name}", ref value, 256);
+        HandleComponentFieldInput(stableId, componentIndex, field.Name, value, changed);
     }
 
     private void DrawEnum(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
@@ -1637,7 +2759,10 @@ internal sealed class GameObjectInspectorPanel(
         {
             null => string.Empty,
             bool boolean => boolean.ToString(),
-            IFormattable formattable => formattable.ToString(null, System.Globalization.CultureInfo.InvariantCulture),
+            Vector2 vector2 => SerializedFieldValueCodec.Format(vector2),
+            Vector3 vector3 => SerializedFieldValueCodec.Format(vector3),
+            Vector4 vector4 => SerializedFieldValueCodec.Format(vector4),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
             _ => value.ToString() ?? string.Empty,
         };
     }
@@ -1701,6 +2826,89 @@ internal enum TransformFieldLayout
     InlineAxes,
     StackedAxes,
 }
+
+internal enum VectorFieldLayout
+{
+    InlineAxes,
+    StackedAxes,
+}
+
+internal enum InspectorAxis
+{
+    X,
+    Y,
+    Z,
+    W,
+}
+
+internal sealed class DecimalFieldTextEditState(
+    int stableId,
+    int componentIndex,
+    ScriptFieldDescriptor field,
+    long sceneGeneration,
+    EditorGameObject gameObject,
+    string componentTypeName,
+    string text)
+{
+    private readonly long _sceneGeneration = sceneGeneration;
+    private readonly EditorGameObject _gameObject =
+        gameObject ?? throw new ArgumentNullException(nameof(gameObject));
+    private readonly string _componentTypeName =
+        componentTypeName ?? throw new ArgumentNullException(nameof(componentTypeName));
+
+    public int StableId { get; } = stableId;
+
+    public int ComponentIndex { get; } = componentIndex;
+
+    public ScriptFieldDescriptor Field { get; } = field;
+
+    public string Text { get; private set; } =
+        text ?? throw new ArgumentNullException(nameof(text));
+
+    public bool Dirty { get; private set; }
+
+    public bool HasKey(int stableId, int componentIndex, string fieldName)
+    {
+        return StableId == stableId &&
+            ComponentIndex == componentIndex &&
+            string.Equals(Field.Name, fieldName, StringComparison.Ordinal);
+    }
+
+    public bool Matches(EditorSceneModel scene, int stableId, int componentIndex, string fieldName)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        return HasKey(stableId, componentIndex, fieldName) &&
+            scene.SceneGeneration == _sceneGeneration &&
+            scene.TryGet(stableId, out EditorGameObject? currentGameObject) &&
+            ReferenceEquals(currentGameObject, _gameObject) &&
+            (uint)componentIndex < (uint)currentGameObject.Components.Count &&
+            string.Equals(
+                currentGameObject.Components[componentIndex].TypeName,
+                _componentTypeName,
+                StringComparison.Ordinal);
+    }
+
+    public void Update(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        Dirty |= !string.Equals(Text, text, StringComparison.Ordinal);
+        Text = text;
+    }
+}
+
+internal readonly record struct ComponentFieldEditTransaction(
+    int StableId,
+    int ComponentIndex,
+    string FieldName,
+    long SceneGeneration,
+    EditorGameObject GameObject,
+    string ComponentTypeName,
+    bool HadOldValue,
+    string? OldValue,
+    EditorPrefabLink? OldPrefabLink,
+    bool WasDirty,
+    bool PreserveEmptyPrefabOverride,
+    bool Applied);
 
 internal readonly record struct AssetInspectorSnapshot(
     string Path,
