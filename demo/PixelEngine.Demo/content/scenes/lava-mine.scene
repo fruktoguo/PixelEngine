@@ -105,7 +105,6 @@
       },
       "webCanvas": {
         "manifestPath": "ui/ui-manifest.json",
-        "initialScreenId": "pixel-overlay",
         "enabled": true,
         "sortingOrder": 100,
         "primary": false
@@ -136,7 +135,6 @@
       },
       "webCanvas": {
         "manifestPath": "ui/ui-manifest.json",
-        "initialScreenId": "physical-overlay",
         "enabled": true,
         "sortingOrder": 200,
         "primary": false

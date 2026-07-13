@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Simulation;
@@ -54,6 +55,17 @@ public sealed class EngineProbeApi
     /// 当前脚本场景；脚本上下文尚未接入时访问会抛出明确异常。
     /// </summary>
     public ScriptScene ScriptScene => RequireScriptContext().Scene;
+
+    /// <summary>
+    /// 尝试读取当前脚本场景；未装配 Scripting 的基础 Engine 返回 false，不以异常作为 probe 控制流。
+    /// </summary>
+    /// <param name="scene">成功时返回当前脚本场景；未装配时为 null。</param>
+    /// <returns>已接入脚本上下文时返回 true。</returns>
+    public bool TryGetScriptScene([NotNullWhen(true)] out ScriptScene? scene)
+    {
+        scene = ScriptContext?.Scene;
+        return scene is not null;
+    }
 
     /// <summary>
     /// Hosting 注入的脚本输入 probe；用于窗口 scripted probe 写入确定性输入快照。

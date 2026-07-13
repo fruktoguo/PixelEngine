@@ -2254,12 +2254,12 @@ public sealed class HostingProjectDisciplineTests
         EngineSceneEntityDocument pixelOverlay = Assert.Single(entities, item => item.Name == "Pixel Overlay Canvas");
         Assert.False(pixelOverlay.WebCanvas!.Primary);
         Assert.Equal(100, pixelOverlay.WebCanvas.SortingOrder);
-        Assert.Equal("pixel-overlay", pixelOverlay.WebCanvas.InitialScreenId);
+        Assert.Null(pixelOverlay.WebCanvas.InitialScreenId);
         Assert.Equal(PixelEngine.UI.UiScaleMode.ConstantPixelSize, pixelOverlay.CanvasScaler!.ScaleMode);
         EngineSceneEntityDocument physicalOverlay = Assert.Single(entities, item => item.Name == "Physical Overlay Canvas");
         Assert.False(physicalOverlay.WebCanvas!.Primary);
         Assert.Equal(200, physicalOverlay.WebCanvas.SortingOrder);
-        Assert.Equal("physical-overlay", physicalOverlay.WebCanvas.InitialScreenId);
+        Assert.Null(physicalOverlay.WebCanvas.InitialScreenId);
         Assert.Equal(PixelEngine.UI.UiScaleMode.ConstantPhysicalSize, physicalOverlay.CanvasScaler!.ScaleMode);
         Assert.DoesNotContain(
             entities.SelectMany(static item => item.Behaviours ?? []),

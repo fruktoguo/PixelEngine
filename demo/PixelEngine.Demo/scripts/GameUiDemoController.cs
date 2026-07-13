@@ -172,6 +172,16 @@ public sealed class GameUiDemoController : Behaviour
     public UiCanvasHandle PhysicalOverlayCanvas { get; private set; }
 
     /// <summary>
+    /// Constant Pixel Size Canvas 上按需显示的缩放诊断屏幕句柄。
+    /// </summary>
+    public UiScreenHandle PixelOverlayScreenHandle { get; private set; }
+
+    /// <summary>
+    /// Constant Physical Size Canvas 上按需显示的缩放诊断屏幕句柄。
+    /// </summary>
+    public UiScreenHandle PhysicalOverlayScreenHandle { get; private set; }
+
+    /// <summary>
     /// 最近处理的 UI 动作。
     /// </summary>
     public UiActionId LastAction { get; private set; }
@@ -223,9 +233,8 @@ public sealed class GameUiDemoController : Behaviour
         _ui.UiEventRaised += HandleUiEvent;
         _subscribed = true;
         DiscoverSceneCanvases();
-        // gameplay HUD 从 Play 首帧持续发布；主菜单布局在另一侧，避免遮住 HUD 与主要世界视野。
+        // 主菜单与 gameplay HUD 是互斥产品状态；HUD 只在玩家确认开始后进入屏栈。
         MainScreen = _ui.ShowScreen(MainMenuScreen);
-        ShowHud();
         RefreshSettingsStateFromRuntime();
     }
 
@@ -249,12 +258,16 @@ public sealed class GameUiDemoController : Behaviour
         _subscribed = false;
         HideScreenIfVisible(ui, ModalScreen);
         HideScreenIfVisible(ui, TelemetryScreenHandle);
+        HideScreenIfVisible(ui, PixelOverlayScreenHandle);
+        HideScreenIfVisible(ui, PhysicalOverlayScreenHandle);
         HideScreenIfVisible(ui, HudScreenHandle);
         HideScreenIfVisible(ui, MainScreen);
         ModalScreen = default;
         TelemetryScreenHandle = default;
         HudScreenHandle = default;
         MainScreen = default;
+        PixelOverlayScreenHandle = default;
+        PhysicalOverlayScreenHandle = default;
         CanvasCount = 0;
         PixelOverlayCanvas = default;
         PhysicalOverlayCanvas = default;
@@ -315,8 +328,12 @@ public sealed class GameUiDemoController : Behaviour
         // UI 动作分派：主菜单 / 暂停 / 设置模态 / 运行时控制
         if (uiEvent.Action == StartGameAction)
         {
-            HideMainMenu();
             ShowHud();
+            if (HudScreenHandle.Value != 0)
+            {
+                HideMainMenu();
+            }
+
             return;
         }
 
@@ -747,10 +764,8 @@ public sealed class GameUiDemoController : Behaviour
 
     private void SetTelemetryValue(UiPathId path, double value)
     {
-        // 诊断屏默认隐藏；仍将值送入常驻 HUD handle 以保持脚本模型的连续发布契约，
-        // 真实 HUD 文档没有这些 path，因此后端只缓存/忽略而不会绘制诊断控件。
-        UiScreenHandle target = TelemetryScreenHandle.Value != 0 ? TelemetryScreenHandle : HudScreenHandle;
-        SetScreenValue(target, path, new UiValue(Clamp01(value)));
+        // RmlUi 的 model path 是每份文档的严格契约；诊断页隐藏时不能把其字段误写进 HUD 文档。
+        SetScreenValue(TelemetryScreenHandle, path, new UiValue(Clamp01(value)));
     }
 
     private void SetScreenValue(UiScreenHandle screen, UiPathId path, in UiValue value)
@@ -815,11 +830,36 @@ public sealed class GameUiDemoController : Behaviour
         {
             _ui.HideScreen(TelemetryScreenHandle);
             TelemetryScreenHandle = default;
+            HideScalerDiagnostics();
             return;
         }
 
+        HideScalerDiagnostics();
         TelemetryScreenHandle = _ui.ShowScreen(TelemetryScreen);
+        if (TelemetryScreenHandle.Value == 0)
+        {
+            return;
+        }
+
+        if (PixelOverlayCanvas.Value != 0)
+        {
+            PixelOverlayScreenHandle = _ui.ShowScreen(PixelOverlayCanvas, PixelOverlayScreen);
+        }
+
+        if (PhysicalOverlayCanvas.Value != 0)
+        {
+            PhysicalOverlayScreenHandle = _ui.ShowScreen(PhysicalOverlayCanvas, PhysicalOverlayScreen);
+        }
+
         PublishHudDefaults();
+    }
+
+    private void HideScalerDiagnostics()
+    {
+        HideScreenIfVisible(_ui, PixelOverlayScreenHandle);
+        HideScreenIfVisible(_ui, PhysicalOverlayScreenHandle);
+        PixelOverlayScreenHandle = default;
+        PhysicalOverlayScreenHandle = default;
     }
 
     private static void HideScreenIfVisible(IGameUiService? ui, UiScreenHandle screen)
@@ -876,6 +916,11 @@ public sealed class GameUiDemoController : Behaviour
 
     private void OpenPauseMenu()
     {
+        if (MainScreen.Value != 0)
+        {
+            return;
+        }
+
         _runtime?.PauseSimulation();
         _pausedByUi = true;
         OpenModal(PauseScreen);

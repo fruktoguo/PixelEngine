@@ -21,6 +21,11 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
     public int FramesInjected { get; private set; }
 
     /// <summary>
+    /// 真实窗口脚本已把 Web UI 从主菜单切换到 gameplay HUD。
+    /// </summary>
+    public bool UiGameplayStarted { get; private set; }
+
+    /// <summary>
     /// 材质笔刷目标世界坐标。
     /// </summary>
     public Point2F BrushTargetWorld { get; } = new(40f, 240f);
@@ -58,6 +63,7 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
     {
         _ = context;
         int frame = FramesInjected++;
+        StartGameplayUi(frame);
         if (_routeProbe)
         {
             InjectRouteProbe(frame);
@@ -130,6 +136,21 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
             screen.X,
             screen.Y,
             wheelY);
+    }
+
+    private void StartGameplayUi(int frame)
+    {
+        if (UiGameplayStarted ||
+            frame < 2 ||
+            !_probe.TryGetScriptScene(out PixelEngine.Scripting.Scene? scene) ||
+            !scene.TryGetFirstComponent(out GameUiDemoController? controller) ||
+            controller.MainScreen.Value == 0)
+        {
+            return;
+        }
+
+        controller.HandleUiEvent(new UiEvent(default, default, GameUiDemoController.Action("start_game"), default));
+        UiGameplayStarted = controller.MainScreen.Value == 0 && controller.HudScreenHandle.Value != 0;
     }
 
     private void InjectRouteProbe(int frame)

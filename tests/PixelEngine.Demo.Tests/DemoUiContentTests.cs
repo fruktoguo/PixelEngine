@@ -85,8 +85,8 @@ public sealed class DemoUiContentTests
         Assert.Equal(
             [UiScaleMode.ScaleWithScreenSize, UiScaleMode.ConstantPixelSize, UiScaleMode.ConstantPhysicalSize],
             canvases.Select(static canvas => canvas.ScalerSettings.ScaleMode));
-        Assert.Equal(GameUiDemoController.PixelOverlayScreen, canvases[1].InitialScreenId);
-        Assert.Equal(GameUiDemoController.PhysicalOverlayScreen, canvases[2].InitialScreenId);
+        Assert.Null(canvases[1].InitialScreenId);
+        Assert.Null(canvases[2].InitialScreenId);
         Assert.True(resolved.Diagnostics.IsEmpty);
     }
 
@@ -473,6 +473,9 @@ public sealed class DemoUiContentTests
         controller.StartForService(ui);
         ScriptUiStringHandle title = ui.InternString("晶体 3/3");
         // Assert：验证预期结果
+        Assert.NotEqual(default, controller.MainScreen);
+        Assert.Equal(default, controller.HudScreenHandle);
+        Assert.Equal([GameUiDemoController.MainMenuScreen], ui.ShownScreens);
         Assert.Equal(title, ui.InternString("晶体 3/3"));
         Assert.NotEqual(title, ui.InternString("暂停"));
         ui.Raise(GameUiDemoController.Action("open_settings"));
@@ -483,6 +486,8 @@ public sealed class DemoUiContentTests
         ScriptUiScreenHandle dialog = controller.ModalScreen;
         ui.Raise(GameUiDemoController.Action("close_dialog"));
         ui.Raise(GameUiDemoController.Action("start_game"));
+        Assert.Equal(default, controller.TelemetryScreenHandle);
+        Assert.DoesNotContain(GameUiDemoController.Path("hud.weapon"), ui.WrittenPaths);
         ui.Raise(GameUiDemoController.Action("toggle_telemetry"));
 
         Assert.Equal(
@@ -544,6 +549,19 @@ public sealed class DemoUiContentTests
         Assert.Equal(3, controller.CanvasCount);
         Assert.Equal(new ScriptUiCanvasHandle(12), controller.PixelOverlayCanvas);
         Assert.Equal(new ScriptUiCanvasHandle(13), controller.PhysicalOverlayCanvas);
+        Assert.Equal(default, controller.PixelOverlayScreenHandle);
+        Assert.Equal(default, controller.PhysicalOverlayScreenHandle);
+
+        ui.Raise(GameUiDemoController.Action("start_game"));
+        ui.Raise(GameUiDemoController.Action("toggle_telemetry"));
+        Assert.Contains((new ScriptUiCanvasHandle(12), GameUiDemoController.PixelOverlayScreen), ui.ShownCanvasScreens);
+        Assert.Contains((new ScriptUiCanvasHandle(13), GameUiDemoController.PhysicalOverlayScreen), ui.ShownCanvasScreens);
+        Assert.NotEqual(default, controller.PixelOverlayScreenHandle);
+        Assert.NotEqual(default, controller.PhysicalOverlayScreenHandle);
+
+        ui.Raise(GameUiDemoController.Action("toggle_telemetry"));
+        Assert.Equal(default, controller.PixelOverlayScreenHandle);
+        Assert.Equal(default, controller.PhysicalOverlayScreenHandle);
 
         controller.StopForService();
         Assert.Equal(0, controller.CanvasCount);
@@ -625,6 +643,8 @@ public sealed class DemoUiContentTests
             EditorPlaySessionResult firstEnter = play.EnterPlayTemporary();
             engine.RunHeadlessTicks(1);
             ScriptUiScreenHandle firstMain = controller.MainScreen;
+            Assert.Equal(default, controller.HudScreenHandle);
+            ui.Raise(GameUiDemoController.Action("start_game"));
             ScriptUiScreenHandle firstHud = controller.HudScreenHandle;
             EditorPlaySessionResult firstExit = play.ExitPlay();
 
@@ -644,6 +664,8 @@ public sealed class DemoUiContentTests
             Assert.False(controller.Faulted, controller.LastException?.ToString());
             Assert.True(controller.Enabled);
             Assert.NotEqual(default, controller.MainScreen);
+            Assert.Equal(default, controller.HudScreenHandle);
+            ui.Raise(GameUiDemoController.Action("start_game"));
             Assert.NotEqual(default, controller.HudScreenHandle);
             Assert.NotEqual(firstMain, controller.MainScreen);
             Assert.NotEqual(firstHud, controller.HudScreenHandle);
@@ -668,6 +690,7 @@ public sealed class DemoUiContentTests
         FakeRuntimeControlApi runtime = new();
 
         controller.StartForService(ui, runtime);
+        ui.Raise(GameUiDemoController.Action("start_game"));
         ui.Raise(GameUiDemoController.Action("pause_game"));
         ScriptUiScreenHandle firstPause = controller.ModalScreen;
         ui.Raise(GameUiDemoController.Action("open_settings"));
@@ -827,7 +850,7 @@ public sealed class DemoUiContentTests
             mission.TimeLimitSeconds = triggerByLava ? 30f : 0f;
             mission.InitialLavaSurfaceY = triggerByLava ? 0f : 100f;
             mission.LavaRiseCellsPerSecond = 0f;
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -881,7 +904,7 @@ public sealed class DemoUiContentTests
             mission.TimeLimitSeconds = 30f;
             mission.InitialLavaSurfaceY = 100f;
             mission.LavaRiseCellsPerSecond = 0f;
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -937,7 +960,7 @@ public sealed class DemoUiContentTests
             goal.Width = 28f;
             goal.Height = 28f;
             goal.CelebrationParticleCount = 0;
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(4);
@@ -994,7 +1017,7 @@ public sealed class DemoUiContentTests
             goal.Width = 28f;
             goal.Height = 28f;
             goal.CelebrationParticleCount = 0;
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -1063,7 +1086,7 @@ public sealed class DemoUiContentTests
             hazard.LossSurfaceY = 0f;
             hazard.EmitterCount = 1;
             hazard.FillIntervalSeconds = 10f;
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -1173,7 +1196,7 @@ public sealed class DemoUiContentTests
             mission.TimeLimitSeconds = 30f;
             mission.InitialLavaSurfaceY = 100f;
             mission.LavaRiseCellsPerSecond = 0f;
-            _ = playerEntity.AddComponent<GameUiDemoController>();
+            StartGameplay(playerEntity.AddComponent<GameUiDemoController>(), ui);
 
             ObjectiveCrystal crystal = scene.CreateEntity().AddComponent<ObjectiveCrystal>();
             crystal.X = 36;
@@ -1246,7 +1269,7 @@ public sealed class DemoUiContentTests
             hazard.LossSurfaceY = 0f;
             hazard.EmitterCount = 1;
             hazard.FillIntervalSeconds = 10f;
-            _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
+            StartGameplay(scene.CreateEntity().AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -1306,7 +1329,7 @@ public sealed class DemoUiContentTests
             _ = entity.AddComponent<MaterialBrush>();
             ExplosiveTool explosive = entity.AddComponent<ExplosiveTool>();
             explosive.CooldownSeconds = 0f;
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -1367,7 +1390,7 @@ public sealed class DemoUiContentTests
             projectile.ImpactForce = 2f;
             projectile.UseExplosionDamage = false;
             projectile.CollapseScanRadius = 6;
-            _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
+            StartGameplay(scene.CreateEntity().AddComponent<GameUiDemoController>(), ui);
 
             engine.RunHeadlessTicks(1);
             Assert.Equal(0.0, GetHudValue(ui, "hud.shots"), precision: 3);
@@ -1420,7 +1443,7 @@ public sealed class DemoUiContentTests
             player.SpawnX = 12f;
             player.SpawnY = 12f;
             WeaponController weapons = entity.AddComponent<WeaponController>();
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -1479,7 +1502,7 @@ public sealed class DemoUiContentTests
             player.SpawnX = 12f;
             player.SpawnY = 12f;
             WeaponController weapons = entity.AddComponent<WeaponController>();
-            _ = entity.AddComponent<GameUiDemoController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
 
             // Act：执行被测操作
             engine.RunHeadlessTicks(1);
@@ -1525,7 +1548,7 @@ public sealed class DemoUiContentTests
         try
         {
             using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _);
-            _ = scene.CreateEntity().AddComponent<GameUiDemoController>();
+            StartGameplay(scene.CreateEntity().AddComponent<GameUiDemoController>(), ui);
             _ = scene.CreateEntity().AddComponent<TransientFxEmitter>();
 
             // Act：执行被测操作
@@ -1700,6 +1723,7 @@ public sealed class DemoUiContentTests
         mission.InitialLavaSurfaceY = 100f;
         mission.LavaRiseCellsPerSecond = 0f;
         GameUiDemoController controller = entity.AddComponent<GameUiDemoController>();
+        StartGameplay(controller, ui);
 
         engine.RunHeadlessTicks(1);
         mission.MarkLost("scripted_loss");
@@ -1828,6 +1852,16 @@ public sealed class DemoUiContentTests
         Assert.True(manifest.TryGetScreen(id, out UiManifestScreen screen), $"缺少 UI screen: {id}");
         Assert.True(File.Exists(screen.FullPath), screen.FullPath);
         Assert.Equal(new UiScreenId(UiStableId.Hash(id)), screen.ScreenId);
+    }
+
+    private static void StartGameplay(GameUiDemoController controller, FakeGameUiService ui)
+    {
+        controller.StartForService(ui);
+        ui.Raise(GameUiDemoController.Action("start_game"));
+        Assert.Equal(default, controller.MainScreen);
+        Assert.NotEqual(default, controller.HudScreenHandle);
+        ui.Raise(GameUiDemoController.Action("toggle_telemetry"));
+        Assert.NotEqual(default, controller.TelemetryScreenHandle);
     }
 
     private static void AssertHudPathWritten(FakeGameUiService ui, string path)
@@ -2042,6 +2076,7 @@ public sealed class DemoUiContentTests
     {
         private int _nextHandle = 1;
         private readonly Dictionary<string, ScriptUiStringHandle> _strings = new(StringComparer.Ordinal);
+        private readonly Dictionary<int, string> _screenIds = [];
 
         public event Action<ScriptUiEvent>? UiEventRaised;
 
@@ -2050,6 +2085,8 @@ public sealed class DemoUiContentTests
         public List<string> PushedScreens { get; } = [];
 
         public List<ScriptUiScreenHandle> HiddenScreens { get; } = [];
+
+        public List<(ScriptUiCanvasHandle Canvas, string ScreenId)> ShownCanvasScreens { get; } = [];
 
         public List<ScriptUiPathId> WrittenPaths { get; } = [];
 
@@ -2069,7 +2106,18 @@ public sealed class DemoUiContentTests
         public ScriptUiScreenHandle ShowScreen(string screenId)
         {
             ShownScreens.Add(screenId);
-            return new ScriptUiScreenHandle(_nextHandle++);
+            return CreateScreenHandle(screenId);
+        }
+
+        public ScriptUiScreenHandle ShowScreen(ScriptUiCanvasHandle canvas, string screenId)
+        {
+            if (canvas.Value == 0)
+            {
+                return default;
+            }
+
+            ShownCanvasScreens.Add((canvas, screenId));
+            return CreateScreenHandle(screenId);
         }
 
         public void HideScreen(ScriptUiScreenHandle screen)
@@ -2080,7 +2128,7 @@ public sealed class DemoUiContentTests
         public ScriptUiScreenHandle PushModal(string screenId)
         {
             PushedScreens.Add(screenId);
-            return new ScriptUiScreenHandle(_nextHandle++);
+            return CreateScreenHandle(screenId);
         }
 
         public void BindModel(ScriptUiScreenHandle screen, ScriptUiModelName modelName, ScriptIUiModel model)
@@ -2105,9 +2153,45 @@ public sealed class DemoUiContentTests
 
         public void SetValue(ScriptUiScreenHandle screen, ScriptUiPathId path, in ScriptUiValue value)
         {
-            _ = screen;
+            ValidateDocumentPath(screen, path);
             WrittenPaths.Add(path);
             Values[path] = value;
+        }
+
+        private ScriptUiScreenHandle CreateScreenHandle(string screenId)
+        {
+            ScriptUiScreenHandle handle = new(_nextHandle++);
+            _screenIds.Add(handle.Value, screenId);
+            return handle;
+        }
+
+        private void ValidateDocumentPath(ScriptUiScreenHandle screen, ScriptUiPathId path)
+        {
+            if (!_screenIds.TryGetValue(screen.Value, out string? screenId))
+            {
+                return;
+            }
+
+            ReadOnlySpan<string> allowed = screenId switch
+            {
+                GameUiDemoController.HudScreen => GameUiDemoController.HudModelPathNames,
+                GameUiDemoController.TelemetryScreen => GameUiDemoController.TelemetryModelPathNames,
+                _ => default,
+            };
+            if (allowed.IsEmpty)
+            {
+                return;
+            }
+
+            for (int i = 0; i < allowed.Length; i++)
+            {
+                if (GameUiDemoController.Path(allowed[i]) == path)
+                {
+                    return;
+                }
+            }
+
+            throw new InvalidOperationException($"屏幕 {screenId} 未声明 model path {path.Value}。");
         }
 
         public bool TryGetValue(ScriptUiScreenHandle screen, ScriptUiPathId path, out ScriptUiValue value)

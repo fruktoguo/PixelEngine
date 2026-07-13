@@ -661,6 +661,12 @@ public static class DemoProgram
             $"ui_canvases={gameUi?.CanvasCount ?? 0}, " +
             $"ui_pixel_canvas={gameUi?.PixelOverlayCanvas.Value ?? 0}, " +
             $"ui_physical_canvas={gameUi?.PhysicalOverlayCanvas.Value ?? 0}, " +
+            $"ui_gameplay_started={scriptedInput.UiGameplayStarted}, " +
+            $"ui_main_visible={gameUi?.MainScreen.Value > 0}, " +
+            $"ui_hud_visible={gameUi?.HudScreenHandle.Value > 0}, " +
+            $"ui_telemetry_visible={gameUi?.TelemetryScreenHandle.Value > 0}, " +
+            $"ui_pixel_overlay_visible={gameUi?.PixelOverlayScreenHandle.Value > 0}, " +
+            $"ui_physical_overlay_visible={gameUi?.PhysicalOverlayScreenHandle.Value > 0}, " +
             $"hud_blocked={hudBlocked}, " +
             $"fps={diagnostics.FramesPerSecond:0.0}, " +
             $"frame_ms={diagnostics.FrameMilliseconds:0.0}, " +

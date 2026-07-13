@@ -212,6 +212,10 @@ public sealed class PlayerControllerIntegrationTests
         Assert.DoesNotContain(initialGui.Drawn, line => line.StartsWith("begin:demo-pause-menu:", StringComparison.Ordinal));
         Assert.Equal(1, controller.CanvasCount);
 
+        controller.HandleUiEvent(new UiEvent(default, default, GameUiDemoController.Action("start_game"), default));
+        Assert.Equal(default, controller.MainScreen);
+        Assert.NotEqual(default, controller.HudScreenHandle);
+
         input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
 
@@ -2779,6 +2783,31 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(scripted.PlayableCollapseTargetWorld.X, firstLeftClickWorld.X, precision: 3);
         Assert.Equal(scripted.PlayableCollapseTargetWorld.Y, firstLeftClickWorld.Y, precision: 3);
         Assert.NotEqual(scripted.BrushTargetWorld, scripted.PlayableCollapseTargetWorld);
+    }
+
+    /// <summary>
+    /// 验证标记为 gameplay 的真实窗口脚本会先退出主菜单再注入移动/射击，避免自动化在菜单背后操控世界。
+    /// </summary>
+    [Fact]
+    public void ScriptedPlayableDemoEntersGameplayUiBeforeInjectingGameplayInput()
+    {
+        ActiveCanvasGameUiService ui = new();
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            gameUi: ui);
+        GameUiDemoController controller = scene.CreateEntity().AddComponent<GameUiDemoController>();
+        DemoWindowScriptedInput scripted = new(engine.Probe);
+        scripted.RegisterPhases(engine.Phases);
+
+        engine.RunHeadlessTicks(3);
+
+        Assert.True(scripted.UiGameplayStarted);
+        Assert.Equal(default, controller.MainScreen);
+        Assert.NotEqual(default, controller.HudScreenHandle);
     }
 
     /// <summary>
