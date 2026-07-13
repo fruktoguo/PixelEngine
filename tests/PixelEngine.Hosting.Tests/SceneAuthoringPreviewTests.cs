@@ -435,6 +435,61 @@ public sealed class SceneAuthoringPreviewTests
     }
 
     /// <summary>
+    /// 验证真实 lava-mine Player/Goal 都走 Scene gizmo 连续事务，Move/Rotate/Scale
+    /// 会同步 marker 与 Inspector 共用的 Transform，并且宿主 flush 重入后仍只有一条 Undo。
+    /// </summary>
+    [Theory]
+    [InlineData("Player")]
+    [InlineData("Goal")]
+    public void DemoAuthoringAnchorsUseSceneGizmoWithOneUndo(string objectName)
+    {
+        string root = FindRepositoryRoot();
+        string sourcePath = Path.Combine(root, "demo", "PixelEngine.Demo", "content", "scenes", "lava-mine.scene");
+        EditorSceneModel scene = EditorSceneModel.FromDocument(EngineSceneDocumentLoader.LoadDocument(sourcePath));
+        EditorGameObject target = scene.EnumerateDepthFirst().Single(item => item.Name == objectName);
+        EditorSceneTransform before = target.Transform.Clone();
+        EditorSceneTransform desiredWorld = scene.ComputeWorldTransform(target.StableId);
+        desiredWorld.X += 24f;
+        desiredWorld.Y -= 12f;
+        desiredWorld.RotationRadians += MathF.PI / 4f;
+        desiredWorld.ScaleX = 1.75f;
+        desiredWorld.ScaleY = 0.6f;
+        EditorUndoStack undo = new();
+        SceneViewPanel panel = new(scene, undo);
+        undo.BeforeOperation = () => _ = panel.CommitGizmoTransform();
+        panel.PrepareFrame(target.StableId, EditorUiMode.Edit);
+
+        Assert.True(panel.BeginGizmoTransform(target.StableId));
+        Assert.True(panel.ApplyGizmoWorldTransform(target.StableId, desiredWorld));
+
+        SceneAuthoringMarker marker = Assert.Single(
+            panel.Preview.Markers,
+            item => item.StableId == target.StableId);
+        Assert.Equal(desiredWorld.X, marker.Position.X, 3);
+        Assert.Equal(desiredWorld.Y, marker.Position.Y, 3);
+        Assert.Equal(desiredWorld.RotationRadians, marker.RotationRadians, 3);
+        Assert.Equal(desiredWorld.ScaleX, marker.ScaleX, 3);
+        Assert.Equal(desiredWorld.ScaleY, marker.ScaleY, 3);
+        Assert.True(panel.CommitGizmoTransform());
+
+        Assert.True(undo.Undo(scene));
+        Assert.False(undo.CanUndo);
+        Assert.Equal(before.X, target.Transform.X, 3);
+        Assert.Equal(before.Y, target.Transform.Y, 3);
+        Assert.Equal(before.RotationRadians, target.Transform.RotationRadians, 3);
+        Assert.Equal(before.ScaleX, target.Transform.ScaleX, 3);
+        Assert.Equal(before.ScaleY, target.Transform.ScaleY, 3);
+
+        Assert.True(undo.Redo(scene));
+        EditorSceneTransform actualWorld = scene.ComputeWorldTransform(target.StableId);
+        Assert.Equal(desiredWorld.X, actualWorld.X, 3);
+        Assert.Equal(desiredWorld.Y, actualWorld.Y, 3);
+        Assert.Equal(desiredWorld.RotationRadians, actualWorld.RotationRadians, 3);
+        Assert.Equal(desiredWorld.ScaleX, actualWorld.ScaleX, 3);
+        Assert.Equal(desiredWorld.ScaleY, actualWorld.ScaleY, 3);
+    }
+
+    /// <summary>
     /// 验证 Unity 式 Scene Visibility / Picking 是非落盘编辑器状态，父级状态递归影响子级，
     /// 并分别真实控制 preview 绘制、鼠标命中与 gizmo。
     /// </summary>
@@ -764,6 +819,87 @@ public sealed class SceneAuthoringPreviewTests
     }
 
     /// <summary>
+    /// 验证取消或改回原值的 gizmo 手势会恢复进入事务前的 clean/dirty 状态，
+    /// 但内容 Version 仍保持单调，避免已观察者误判为旧快照。
+    /// </summary>
+    [Fact]
+    public void GizmoCancelAndNoOpCommitRestoreDirtyState()
+    {
+        EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "cancel-clean-state",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "Anchor",
+                    Transform = new EngineSceneTransformDocument { X = 10f, Y = 20f },
+                },
+            ],
+        });
+        SceneViewPanel panel = new(scene, new EditorUndoStack());
+        EditorSceneTransform before = scene.ComputeWorldTransform(1);
+        EditorSceneTransform changed = before.Clone();
+        changed.X = 64f;
+        int originalVersion = scene.Version;
+
+        Assert.True(panel.BeginGizmoTransform(1));
+        Assert.True(panel.ApplyGizmoWorldTransform(1, changed));
+        Assert.True(scene.IsDirty);
+        Assert.True(panel.CancelGizmoTransform());
+        Assert.False(scene.IsDirty);
+        Assert.Equal(before.X, scene.Get(1).Transform.X);
+        Assert.True(scene.Version > originalVersion);
+
+        int cancelVersion = scene.Version;
+        Assert.True(panel.BeginGizmoTransform(1));
+        Assert.True(panel.ApplyGizmoWorldTransform(1, changed));
+        Assert.True(panel.ApplyGizmoWorldTransform(1, before));
+        Assert.False(panel.CommitGizmoTransform());
+        Assert.False(scene.IsDirty);
+        Assert.Equal(before.X, scene.Get(1).Transform.X);
+        Assert.True(scene.Version > cancelVersion);
+    }
+
+    /// <summary>
+    /// 验证 prefab gizmo live drag 会立刻写 provisional Transform overrides，
+    /// Cancel 同时恢复原 Transform、prefab link 与事务开始前的 clean 状态。
+    /// </summary>
+    [Fact]
+    public void PrefabGizmoLiveDragPersistsUntilCancelRestoresBaseline()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("prefab-gizmo");
+        EditorGameObject target = scene.Create("Prefab Anchor");
+        target.PrefabLink = new EditorPrefabLink
+        {
+            AssetId = "prefab-anchor",
+            AssetPath = "prefabs/anchor.prefab",
+            SourceStableId = "1",
+        };
+        scene.MarkSaved();
+        SceneViewPanel panel = new(scene, new EditorUndoStack());
+        EditorSceneTransform desired = scene.ComputeWorldTransform(target.StableId);
+        desired.X = 88f;
+        desired.Y = 44f;
+
+        Assert.True(panel.BeginGizmoTransform(target.StableId));
+        Assert.True(panel.ApplyGizmoWorldTransform(target.StableId, desired));
+        Assert.NotNull(target.PrefabLink);
+        Assert.Equal(5, target.PrefabLink.Overrides.Count);
+        Assert.Contains(target.PrefabLink.Overrides, item => item.PropertyPath == "Transform.X" && item.Value == "88");
+        Assert.Contains(target.PrefabLink.Overrides, item => item.PropertyPath == "Transform.Y" && item.Value == "44");
+
+        Assert.True(panel.CancelGizmoTransform());
+        Assert.False(scene.IsDirty);
+        Assert.Equal(0f, target.Transform.X);
+        Assert.Equal(0f, target.Transform.Y);
+        Assert.NotNull(target.PrefabLink);
+        Assert.Empty(target.PrefabLink.Overrides);
+    }
+
+    /// <summary>
     /// 验证真实 Player/Goal Transform 修改进入 Undo/Redo，并经 .scene 保存重开保持坐标。
     /// </summary>
     [Fact]
@@ -1003,6 +1139,37 @@ public sealed class SceneAuthoringPreviewTests
         Assert.Equal(-3.5f, geometry.AxisY.X, 3);
         Assert.Equal(0f, geometry.AxisY.Y, 3);
         Assert.Equal(14f, geometry.Radius, 3);
+    }
+
+    /// <summary>
+    /// 验证 Player/Goal 专用 marker 不再是固定屏幕矩形，而会真实显示 gizmo 写入的旋转与非均匀缩放。
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    public void AuthoringAnchorMarkerGeometryReflectsRotationAndScale(int kindValue)
+    {
+        SceneAuthoringMarkerKind kind = (SceneAuthoringMarkerKind)kindValue;
+        SceneAuthoringMarker marker = new(
+            StableId: 2,
+            Name: kind.ToString(),
+            Position: Vector2.Zero,
+            kind,
+            RotationRadians: MathF.PI / 2f,
+            ScaleX: 2f,
+            ScaleY: 0.5f);
+
+        SceneAnchorMarkerGeometry geometry = SceneViewPanel.BuildAnchorMarkerGeometry(marker);
+
+        Assert.Equal(0f, geometry.AxisX.X, 3);
+        Assert.Equal(20f, geometry.AxisX.Y, 3);
+        Assert.Equal(-5f, geometry.AxisY.X, 3);
+        Assert.Equal(0f, geometry.AxisY.Y, 3);
+
+        marker = marker with { ScaleX = -2f };
+        geometry = SceneViewPanel.BuildAnchorMarkerGeometry(marker);
+        Assert.Equal(0f, geometry.AxisX.X, 3);
+        Assert.Equal(-20f, geometry.AxisX.Y, 3);
     }
 
     /// <summary>

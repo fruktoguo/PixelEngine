@@ -58,7 +58,10 @@ internal sealed class SceneViewPanel(
     private int? _gizmoTransactionStableId;
     private long _gizmoTransactionSceneGeneration = -1;
     private EditorSceneTransform? _gizmoBefore;
+    private EditorPrefabLink? _gizmoBeforePrefabLink;
     private bool _gizmoChanged;
+    private bool _committingGizmoTransform;
+    private bool _gizmoBeforeDirty;
     private SceneGizmoHandle _hoveredGizmoHandle;
     private SceneGizmoHandle _activeGizmoHandle;
     private Vector2 _gizmoDragStartScreen;
@@ -289,6 +292,8 @@ internal sealed class SceneViewPanel(
             _gizmoTransactionStableId = stableId;
             _gizmoTransactionSceneGeneration = _scene.SceneGeneration;
             _gizmoBefore = gameObject.Transform.Clone();
+            _gizmoBeforePrefabLink = gameObject.PrefabLink?.Clone();
+            _gizmoBeforeDirty = _scene.IsDirty;
             _gizmoChanged = false;
         }
 
@@ -304,14 +309,24 @@ internal sealed class SceneViewPanel(
             return false;
         }
 
+        if (_scene.TryGet(stableId, out EditorGameObject? gameObject) &&
+            TransformEquals(gameObject.Transform, localTransform))
+        {
+            _gizmoChanged = _gizmoBefore is not null && !TransformEquals(_gizmoBefore, localTransform);
+            return true;
+        }
+
         _scene.SetTransform(stableId, localTransform);
+        // Edit projection 会在下一帧刷新 prefab baseline；live drag 必须立即写入 provisional
+        // overrides，否则 prefab 实例会在鼠标尚未释放时跳回旧位置。
+        _scene.RecordTransformPrefabOverrides(stableId, localTransform);
         _gizmoChanged = _gizmoBefore is not null && !TransformEquals(_gizmoBefore, localTransform);
         return true;
     }
 
     internal bool CommitGizmoTransform()
     {
-        if (!_gizmoTransactionStableId.HasValue || _gizmoBefore is null)
+        if (_committingGizmoTransform || !_gizmoTransactionStableId.HasValue || _gizmoBefore is null)
         {
             return false;
         }
@@ -328,18 +343,30 @@ internal sealed class SceneViewPanel(
         bool committed = _gizmoChanged && !TransformEquals(before, after);
         if (!committed)
         {
+            _scene.SetPrefabLink(stableId, _gizmoBeforePrefabLink);
+            _scene.RestoreDirtyState(_gizmoBeforeDirty);
             ClearGizmoTransaction();
             return false;
         }
 
         try
         {
+            _committingGizmoTransform = true;
             // live drag 已更新画面；释放时只向 Undo 栈提交一条显式 before/after 命令。
-            _undo.Execute(_scene, new SetTransformCommand(stableId, before, after));
+            // BeforeOperation 会反向调用 FlushPendingAuthoringEdits；guard 防止该回调把同一手势提交两次。
+            _undo.Execute(
+                _scene,
+                new SetTransformCommand(
+                    stableId,
+                    before,
+                    _gizmoBeforePrefabLink,
+                    after,
+                    gameObject.PrefabLink));
             return true;
         }
         finally
         {
+            _committingGizmoTransform = false;
             // 命令异常也不能把旧 scene/stableId 事务遗留到下一帧。
             ClearGizmoTransaction();
         }
@@ -362,6 +389,8 @@ internal sealed class SceneViewPanel(
         try
         {
             _scene.SetTransform(stableId, _gizmoBefore);
+            _scene.SetPrefabLink(stableId, _gizmoBeforePrefabLink);
+            _scene.RestoreDirtyState(_gizmoBeforeDirty);
             return true;
         }
         finally
@@ -987,19 +1016,22 @@ internal sealed class SceneViewPanel(
             float markerRadius = marker.Kind == SceneAuthoringMarkerKind.GameObject ? 6f : 10f;
             if (marker.Kind == SceneAuthoringMarkerKind.PlayerSpawn)
             {
+                SceneAnchorMarkerGeometry geometry = BuildAnchorMarkerGeometry(marker, markerRadius);
                 drawList.AddTriangleFilled(
-                    screen + new Vector2(0f, -markerRadius),
-                    screen + new Vector2(markerRadius, markerRadius),
-                    screen + new Vector2(-markerRadius, markerRadius),
+                    screen - geometry.AxisY,
+                    screen + geometry.AxisX + geometry.AxisY,
+                    screen - geometry.AxisX + geometry.AxisY,
                     color);
             }
             else if (marker.Kind == SceneAuthoringMarkerKind.Goal)
             {
-                drawList.AddRectFilled(
-                    screen - new Vector2(markerRadius, markerRadius),
-                    screen + new Vector2(markerRadius, markerRadius),
-                    color,
-                    2f);
+                SceneAnchorMarkerGeometry geometry = BuildAnchorMarkerGeometry(marker, markerRadius);
+                Vector2 topLeft = screen - geometry.AxisX - geometry.AxisY;
+                Vector2 topRight = screen + geometry.AxisX - geometry.AxisY;
+                Vector2 bottomRight = screen + geometry.AxisX + geometry.AxisY;
+                Vector2 bottomLeft = screen - geometry.AxisX + geometry.AxisY;
+                drawList.AddTriangleFilled(topLeft, topRight, bottomRight, color);
+                drawList.AddTriangleFilled(topLeft, bottomRight, bottomLeft, color);
             }
             else
             {
@@ -1056,6 +1088,31 @@ internal sealed class SceneViewPanel(
         Vector2 axisX = new(cosine * scaleX, sine * scaleX);
         Vector2 axisY = new(-sine * scaleY, cosine * scaleY);
         return new SceneGameObjectMarkerGeometry(axisX, axisY, MathF.Max(scaleX, scaleY));
+    }
+
+    internal static SceneAnchorMarkerGeometry BuildAnchorMarkerGeometry(
+        SceneAuthoringMarker marker,
+        float baseRadius = 10f)
+    {
+        float rotation = float.IsFinite(marker.RotationRadians) ? marker.RotationRadians : 0f;
+        float scaleX = ResolveMarkerScale(marker.ScaleX) * MathF.Max(1f, baseRadius);
+        float scaleY = ResolveMarkerScale(marker.ScaleY) * MathF.Max(1f, baseRadius);
+        float cosine = MathF.Cos(rotation);
+        float sine = MathF.Sin(rotation);
+        return new SceneAnchorMarkerGeometry(
+            new Vector2(cosine * scaleX, sine * scaleX),
+            new Vector2(-sine * scaleY, cosine * scaleY));
+    }
+
+    private static float ResolveMarkerScale(float scale)
+    {
+        if (!float.IsFinite(scale))
+        {
+            return 1f;
+        }
+
+        float sign = scale < 0f ? -1f : 1f;
+        return sign * Math.Clamp(MathF.Abs(scale), 0.25f, 4f);
     }
 
     private void HandleCameraInput()
@@ -1502,7 +1559,9 @@ internal sealed class SceneViewPanel(
         _gizmoTransactionStableId = null;
         _gizmoTransactionSceneGeneration = -1;
         _gizmoBefore = null;
+        _gizmoBeforePrefabLink = null;
         _gizmoChanged = false;
+        _gizmoBeforeDirty = false;
         ClearGizmoInteraction();
     }
 
@@ -1575,6 +1634,10 @@ internal readonly record struct SceneGameObjectMarkerGeometry(
     Vector2 AxisX,
     Vector2 AxisY,
     float Radius);
+
+internal readonly record struct SceneAnchorMarkerGeometry(
+    Vector2 AxisX,
+    Vector2 AxisY);
 
 internal enum SceneToolOverlayDock
 {
