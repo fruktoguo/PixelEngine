@@ -224,8 +224,6 @@ public sealed class EditorDockSpace
         ImGuiP.DockBuilderDockWindow(EditorModeWindowTitle, projectNode);
         ImGuiP.DockBuilderDockWindow(PerformanceHudWindowTitle, inspectorNode);
         ImGuiP.DockBuilderDockWindow(UiManifestWindowTitle, projectNode);
-        ImGuiP.DockBuilderDockWindow(ProjectSettingsWindowTitle, projectNode);
-        ImGuiP.DockBuilderDockWindow(PlayerSettingsWindowTitle, projectNode);
         ImGuiP.DockBuilderDockWindow(BuildSettingsWindowTitle, projectNode);
         ImGuiP.DockBuilderFinish(dockspaceId);
     }

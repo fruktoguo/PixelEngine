@@ -918,7 +918,7 @@ public static class EngineProjectSettingsStore
         }
 
         string json = JsonSerializer.Serialize(settings, typeInfo);
-        File.WriteAllText(filePath, json);
+        AtomicTextFile.WriteAllText(filePath, json);
     }
 }
 

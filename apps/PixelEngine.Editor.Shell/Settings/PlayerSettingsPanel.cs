@@ -1,3 +1,4 @@
+using System.Numerics;
 using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
 using PixelEngine.UI;
@@ -15,22 +16,34 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     private static readonly PlayerReleaseChannel[] ReleaseOptions = [PlayerReleaseChannel.Development, PlayerReleaseChannel.Production];
     private static readonly string[] ReleaseLabels = ["Development", "Production"];
     private readonly PlayerSettingsStore _store;
+    private readonly Func<float> _uiScaleProvider;
     private PlayerSettingsDto _settings;
-    private string _validationMessage = string.Empty;
+    private bool _draftIsValid = true;
+    private float _lastWindowScale = float.NaN;
 
-    public PlayerSettingsPanel(EditorProject project)
+    public PlayerSettingsPanel(EditorProject project, Func<float>? uiScaleProvider = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _store = new PlayerSettingsStore(project);
+        _uiScaleProvider = uiScaleProvider ?? (static () => EditorUiScale.Default);
         _settings = _store.Load();
-        Validate();
+        DraftSettings = _settings;
+        RefreshDraftState();
     }
 
     public string Title => PanelTitle;
 
     public bool Visible { get; set; } = true;
 
-    public string ValidationMessage => _validationMessage;
+    public string ValidationMessage { get; private set; } = string.Empty;
+
+    internal bool HasPendingChanges { get; private set; }
+
+    internal PlayerSettingsDto DraftSettings { get; private set; }
+
+    internal Vector2 LastWindowPosition { get; private set; }
+
+    internal Vector2 LastWindowSize { get; private set; }
 
     public ScriptedPlayerSettingsProbeSnapshot ApplyScriptedPlayerSettingsProbe()
     {
@@ -71,7 +84,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
             EnableGamepad = _settings.InputDefaults.EnableGamepad,
             RuntimeUiBackend = _settings.RuntimeUiBackend,
             ReleaseChannel = _settings.ReleaseChannel,
-            Diagnostic = _validationMessage,
+            Diagnostic = ValidationMessage,
         };
     }
 
@@ -80,23 +93,68 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ArgumentNullException.ThrowIfNull(settings);
         if (!settings.TryNormalize(out diagnostic))
         {
-            _validationMessage = diagnostic;
+            ValidationMessage = diagnostic;
             return false;
         }
 
-        _settings = settings.Normalize();
-        _store.Save(_settings);
-        _validationMessage = string.Empty;
+        PlayerSettingsDto normalized = settings.Normalize();
+        try
+        {
+            _store.Save(normalized);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            diagnostic = $"保存 Player Settings 失败：{exception.Message}";
+            ValidationMessage = diagnostic;
+            return false;
+        }
+
+        _settings = normalized;
+        DraftSettings = normalized;
+        HasPendingChanges = false;
+        _draftIsValid = true;
+        ValidationMessage = string.Empty;
         diagnostic = string.Empty;
         return true;
+    }
+
+    internal void StagePlayerSettings(PlayerSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        DraftSettings = settings;
+        RefreshDraftState();
+    }
+
+    internal bool TryApplyDraft(out string diagnostic)
+    {
+        return TryApplyPlayerSettings(DraftSettings, out diagnostic);
+    }
+
+    internal void RevertDraft()
+    {
+        DraftSettings = _settings;
+        RefreshDraftState();
     }
 
     public void Draw(in EditorContext context)
     {
         _ = context;
-        // 玩家包运行时设置：窗口、VSync、启动场景与发布通道
+        float scale = EditorUiScale.Normalize(_uiScaleProvider());
+        ImGuiViewportPtr viewport = ImGui.GetMainViewport();
+        EditorSettingsWindowPlacement placement = EditorSettingsWindowLayout.Resolve(
+            viewport.WorkPos,
+            viewport.WorkSize,
+            scale);
+        ImGui.SetNextWindowDockID(0, ImGuiCond.Always);
+        ImGui.SetNextWindowSizeConstraints(placement.MinimumSize, placement.MaximumSize);
+        ImGuiCond placementCondition = MathF.Abs(scale - _lastWindowScale) > 0.0001f
+            ? ImGuiCond.Always
+            : ImGuiCond.Appearing;
+        ImGui.SetNextWindowPos(placement.Position, placementCondition);
+        ImGui.SetNextWindowSize(placement.Size, placementCondition);
+        _lastWindowScale = scale;
         bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoCollapse))
         {
             Visible = visible;
             ImGui.End();
@@ -104,93 +162,156 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         }
 
         Visible = visible;
-        DrawSettings();
-        if (!string.IsNullOrWhiteSpace(_validationMessage))
+        LastWindowPosition = ImGui.GetWindowPos();
+        LastWindowSize = ImGui.GetWindowSize();
+        float footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y + 2f;
+        float bodyHeight = MathF.Max(1f, ImGui.GetContentRegionAvail().Y - footerHeight);
+        _ = ImGui.BeginChild("player_settings_body", new Vector2(0f, bodyHeight));
+        ImGui.SeparatorText("Player");
+        ImGui.TextWrapped("玩家包运行时与发布设置。修改会先保留在草稿中，点击 Apply 后才写入工程文件。");
+        DrawSettings(scale);
+        if (!string.IsNullOrWhiteSpace(ValidationMessage))
         {
             ImGui.SeparatorText("诊断");
-            ImGui.TextWrapped(_validationMessage);
+            ImGui.TextWrapped(ValidationMessage);
         }
 
+        ImGui.EndChild();
+        ImGui.Separator();
+        DrawActions(scale);
         ImGui.End();
     }
 
-    private void DrawSettings()
+    private void DrawSettings(float scale)
     {
-        PlayerSettingsDto next = _settings;
-        bool changed = false;
-        changed |= InputText("窗口标题 / Product Name", _settings.WindowTitle, value => next = next with { WindowTitle = value }, 128);
-        int width = _settings.WindowWidth;
-        if (ImGui.InputInt("窗口宽度", ref width))
+        if (!ImGui.BeginTable(
+            "player_settings_fields",
+            2,
+            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.PadOuterX | ImGuiTableFlags.BordersInnerH))
         {
-            next = next with { WindowWidth = width };
-            changed = true;
+            return;
         }
 
-        int height = _settings.WindowHeight;
-        if (ImGui.InputInt("窗口高度", ref height))
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, EditorUiScale.Scale(210f, scale));
+        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+
+        string title = DraftSettings.WindowTitle;
+        NextProperty("窗口标题 / Product Name");
+        if (ImGui.InputText("##player-window-title", ref title, 128))
         {
-            next = next with { WindowHeight = height };
-            changed = true;
+            UpdateDraft(DraftSettings with { WindowTitle = title });
         }
 
-        bool vSync = _settings.VSync;
-        if (ImGui.Checkbox("VSync", ref vSync))
+        int width = DraftSettings.WindowWidth;
+        NextProperty("窗口宽度");
+        if (ImGui.InputInt("##player-window-width", ref width))
         {
-            next = next with { VSync = vSync };
-            changed = true;
+            UpdateDraft(DraftSettings with { WindowWidth = width });
         }
 
-        string iconPath = _settings.IconPath ?? string.Empty;
-        if (InputText("图标路径", iconPath, value => next = next with { IconPath = string.IsNullOrWhiteSpace(value) ? null : value }, 512))
+        int height = DraftSettings.WindowHeight;
+        NextProperty("窗口高度");
+        if (ImGui.InputInt("##player-window-height", ref height))
         {
-            changed = true;
+            UpdateDraft(DraftSettings with { WindowHeight = height });
         }
 
-        changed |= InputText("版本", _settings.Version, value => next = next with { Version = value }, 64);
-        changed |= InputText("启动场景", _settings.StartupScene, value => next = next with { StartupScene = value }, 512);
-
-        bool keyboardMouse = _settings.InputDefaults.EnableKeyboardMouse;
-        if (ImGui.Checkbox("键盘鼠标输入", ref keyboardMouse))
+        bool vSync = DraftSettings.VSync;
+        NextProperty("VSync");
+        if (ImGui.Checkbox("##player-vsync", ref vSync))
         {
-            next = next with { InputDefaults = next.InputDefaults with { EnableKeyboardMouse = keyboardMouse } };
-            changed = true;
+            UpdateDraft(DraftSettings with { VSync = vSync });
         }
 
-        bool gamepad = _settings.InputDefaults.EnableGamepad;
-        if (ImGui.Checkbox("手柄输入", ref gamepad))
+        string iconPath = DraftSettings.IconPath ?? string.Empty;
+        NextProperty("图标路径");
+        if (ImGui.InputText("##player-icon-path", ref iconPath, 512))
         {
-            next = next with { InputDefaults = next.InputDefaults with { EnableGamepad = gamepad } };
-            changed = true;
+            UpdateDraft(DraftSettings with { IconPath = string.IsNullOrWhiteSpace(iconPath) ? null : iconPath });
         }
 
-        int backend = IndexOf(UiBackendOptions, _settings.RuntimeUiBackend);
-        if (ImGui.Combo("运行时 UI 后端", ref backend, UiBackendLabels, UiBackendLabels.Length) && backend >= 0)
+        string version = DraftSettings.Version;
+        NextProperty("版本");
+        if (ImGui.InputText("##player-version", ref version, 64))
         {
-            next = next with { RuntimeUiBackend = UiBackendOptions[backend] };
-            changed = true;
+            UpdateDraft(DraftSettings with { Version = version });
         }
 
-        if (next.RuntimeUiBackend == UiBackendKind.Ultralight)
+        string startupScene = DraftSettings.StartupScene;
+        NextProperty("启动场景");
+        if (ImGui.InputText("##player-startup-scene", ref startupScene, 512))
         {
+            UpdateDraft(DraftSettings with { StartupScene = startupScene });
+        }
+
+        bool keyboardMouse = DraftSettings.InputDefaults.EnableKeyboardMouse;
+        NextProperty("键盘鼠标输入");
+        if (ImGui.Checkbox("##player-keyboard-mouse", ref keyboardMouse))
+        {
+            UpdateDraft(DraftSettings with
+            {
+                InputDefaults = DraftSettings.InputDefaults with { EnableKeyboardMouse = keyboardMouse },
+            });
+        }
+
+        bool gamepad = DraftSettings.InputDefaults.EnableGamepad;
+        NextProperty("手柄输入");
+        if (ImGui.Checkbox("##player-gamepad", ref gamepad))
+        {
+            UpdateDraft(DraftSettings with
+            {
+                InputDefaults = DraftSettings.InputDefaults with { EnableGamepad = gamepad },
+            });
+        }
+
+        int backend = IndexOf(UiBackendOptions, DraftSettings.RuntimeUiBackend);
+        NextProperty("运行时 UI 后端");
+        if (ImGui.Combo("##player-runtime-ui", ref backend, UiBackendLabels, UiBackendLabels.Length) && backend >= 0)
+        {
+            UpdateDraft(DraftSettings with { RuntimeUiBackend = UiBackendOptions[backend] });
+        }
+
+        if (DraftSettings.RuntimeUiBackend == UiBackendKind.Ultralight)
+        {
+            ImGui.TableNextRow();
+            _ = ImGui.TableSetColumnIndex(1);
             ImGui.TextWrapped(UltralightOptionalProfileGate.InactiveReason);
         }
 
-        int release = IndexOf(ReleaseOptions, _settings.ReleaseChannel);
-        if (ImGui.Combo("发行通道", ref release, ReleaseLabels, ReleaseLabels.Length) && release >= 0)
+        int release = IndexOf(ReleaseOptions, DraftSettings.ReleaseChannel);
+        NextProperty("发行通道");
+        if (ImGui.Combo("##player-release-channel", ref release, ReleaseLabels, ReleaseLabels.Length) && release >= 0)
         {
-            next = next with { ReleaseChannel = ReleaseOptions[release] };
-            changed = true;
+            UpdateDraft(DraftSettings with { ReleaseChannel = ReleaseOptions[release] });
         }
 
-        if (changed)
-        {
-            _ = TryApplyPlayerSettings(next, out _);
-        }
+        ImGui.EndTable();
     }
 
-    private void Validate()
+    private void DrawActions(float scale)
     {
-        _ = _settings.TryNormalize(out _validationMessage);
+        float buttonWidth = EditorUiScale.Scale(82f, scale);
+        float spacing = ImGui.GetStyle().ItemSpacing.X;
+        float startX = ImGui.GetCursorPosX();
+        float available = ImGui.GetContentRegionAvail().X;
+        ImGui.TextDisabled(HasPendingChanges ? "有尚未应用的修改" : "设置已应用");
+        float actionX = startX + MathF.Max(0f, available - ((buttonWidth * 2f) + spacing));
+        ImGui.SameLine(actionX);
+        ImGui.BeginDisabled(!HasPendingChanges);
+        if (ImGui.Button("Revert", new Vector2(buttonWidth, 0f)))
+        {
+            RevertDraft();
+        }
+
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        ImGui.BeginDisabled(!HasPendingChanges || !_draftIsValid);
+        if (ImGui.Button("Apply", new Vector2(buttonWidth, 0f)))
+        {
+            _ = TryApplyDraft(out _);
+        }
+
+        ImGui.EndDisabled();
     }
 
     private static int IndexOf(UiBackendKind[] values, UiBackendKind value)
@@ -219,16 +340,43 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         return 0;
     }
 
-    private static bool InputText(string label, string value, Action<string> assign, uint maxLength)
+    private void UpdateDraft(PlayerSettingsDto next)
     {
-        string editable = value;
-        bool changed = ImGui.InputText(label, ref editable, maxLength);
-        if (changed)
-        {
-            assign(editable);
-        }
+        DraftSettings = next;
+        RefreshDraftState();
+    }
 
-        return changed;
+    private void RefreshDraftState()
+    {
+        _draftIsValid = DraftSettings.TryNormalize(out string diagnostic);
+        ValidationMessage = _draftIsValid ? string.Empty : diagnostic;
+        HasPendingChanges = !AreEquivalent(_settings, DraftSettings);
+    }
+
+    private static bool AreEquivalent(PlayerSettingsDto left, PlayerSettingsDto right)
+    {
+        return left.FormatVersion == right.FormatVersion &&
+            string.Equals(left.WindowTitle, right.WindowTitle, StringComparison.Ordinal) &&
+            left.WindowWidth == right.WindowWidth &&
+            left.WindowHeight == right.WindowHeight &&
+            left.VSync == right.VSync &&
+            string.Equals(left.IconPath, right.IconPath, StringComparison.Ordinal) &&
+            string.Equals(left.Version, right.Version, StringComparison.Ordinal) &&
+            string.Equals(left.StartupScene, right.StartupScene, StringComparison.Ordinal) &&
+            left.InputDefaults.EnableKeyboardMouse == right.InputDefaults.EnableKeyboardMouse &&
+            left.InputDefaults.EnableGamepad == right.InputDefaults.EnableGamepad &&
+            left.RuntimeUiBackend == right.RuntimeUiBackend &&
+            left.ReleaseChannel == right.ReleaseChannel;
+    }
+
+    private static void NextProperty(string label)
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(label);
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.SetNextItemWidth(-1f);
     }
 }
 

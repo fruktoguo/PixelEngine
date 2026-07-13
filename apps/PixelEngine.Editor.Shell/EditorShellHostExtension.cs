@@ -479,8 +479,8 @@ internal sealed class EditorShellHostExtension :
             AddHiddenPanel(materialReactionPanel);
         }
 
-        _projectSettingsPanel = new ProjectSettingsPanel(_project);
-        _playerSettingsPanel = new PlayerSettingsPanel(_project);
+        _projectSettingsPanel = new ProjectSettingsPanel(_project, () => _app.UiScale);
+        _playerSettingsPanel = new PlayerSettingsPanel(_project, () => _app.UiScale);
         _buildSettingsPanel = new BuildSettingsPanel(_project, console: _app.ConsoleStore);
         AddHiddenPanel(_projectSettingsPanel);
         AddHiddenPanel(_playerSettingsPanel);

@@ -1,3 +1,4 @@
+using System.Numerics;
 using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
 using PixelEngine.UI;
@@ -13,22 +14,36 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     private static readonly UiBackendKind[] UiBackendOptions = [UiBackendKind.ManagedFallback, UiBackendKind.RmlUi, UiBackendKind.Ultralight];
     private static readonly string[] UiBackendLabels = [.. UiBackendOptions.Select(UltralightOptionalProfileGate.GetDisplayLabel)];
     private readonly ProjectSettingsStore _store;
+    private readonly Func<float> _uiScaleProvider;
     private ProjectSettingsDto _settings;
-    private string _validationMessage = string.Empty;
+    private string _contentGlobsText;
+    private bool _draftIsValid = true;
+    private float _lastWindowScale = float.NaN;
 
-    public ProjectSettingsPanel(EditorProject project)
+    public ProjectSettingsPanel(EditorProject project, Func<float>? uiScaleProvider = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _store = new ProjectSettingsStore(project);
+        _uiScaleProvider = uiScaleProvider ?? (static () => EditorUiScale.Default);
         _settings = _store.Load();
-        Validate();
+        DraftSettings = _settings;
+        _contentGlobsText = FormatContentGlobs(DraftSettings);
+        RefreshDraftState();
     }
 
     public string Title => PanelTitle;
 
     public bool Visible { get; set; } = true;
 
-    public string ValidationMessage => _validationMessage;
+    public string ValidationMessage { get; private set; } = string.Empty;
+
+    internal bool HasPendingChanges { get; private set; }
+
+    internal ProjectSettingsDto DraftSettings { get; private set; }
+
+    internal Vector2 LastWindowPosition { get; private set; }
+
+    internal Vector2 LastWindowSize { get; private set; }
 
     public ScriptedProjectSettingsProbeSnapshot ApplyScriptedProjectSettingsProbe()
     {
@@ -62,7 +77,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
             DefaultUiBackendDiagnostic = UltralightOptionalProfileGate.GetInactiveReason(_settings.DefaultUiBackend),
             RequireStableMaterialNames = _settings.ResourceRules.RequireStableMaterialNames,
             ContentFileGlobCount = _settings.ResourceRules.ContentFileGlobs?.Length ?? 0,
-            Diagnostic = _validationMessage,
+            Diagnostic = ValidationMessage,
         };
     }
 
@@ -71,23 +86,71 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         ArgumentNullException.ThrowIfNull(settings);
         if (!settings.TryNormalize(out diagnostic))
         {
-            _validationMessage = diagnostic;
+            ValidationMessage = diagnostic;
             return false;
         }
 
-        _settings = settings.Normalize();
-        _store.Save(_settings);
-        _validationMessage = string.Empty;
+        ProjectSettingsDto normalized = settings.Normalize();
+        try
+        {
+            _store.Save(normalized);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            diagnostic = $"保存 Project Settings 失败：{exception.Message}";
+            ValidationMessage = diagnostic;
+            return false;
+        }
+
+        _settings = normalized;
+        DraftSettings = normalized;
+        _contentGlobsText = FormatContentGlobs(DraftSettings);
+        HasPendingChanges = false;
+        _draftIsValid = true;
+        ValidationMessage = string.Empty;
         diagnostic = string.Empty;
         return true;
+    }
+
+    internal void StageProjectSettings(ProjectSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        DraftSettings = settings;
+        _contentGlobsText = FormatContentGlobs(DraftSettings);
+        RefreshDraftState();
+    }
+
+    internal bool TryApplyDraft(out string diagnostic)
+    {
+        return TryApplyProjectSettings(DraftSettings, out diagnostic);
+    }
+
+    internal void RevertDraft()
+    {
+        DraftSettings = _settings;
+        _contentGlobsText = FormatContentGlobs(DraftSettings);
+        RefreshDraftState();
     }
 
     public void Draw(in EditorContext context)
     {
         _ = context;
-        // 项目级设置：内容根、脚本目录、启动场景与 UI 后端
+        float scale = EditorUiScale.Normalize(_uiScaleProvider());
+        ImGuiViewportPtr viewport = ImGui.GetMainViewport();
+        EditorSettingsWindowPlacement placement = EditorSettingsWindowLayout.Resolve(
+            viewport.WorkPos,
+            viewport.WorkSize,
+            scale);
+        ImGui.SetNextWindowDockID(0, ImGuiCond.Always);
+        ImGui.SetNextWindowSizeConstraints(placement.MinimumSize, placement.MaximumSize);
+        ImGuiCond placementCondition = MathF.Abs(scale - _lastWindowScale) > 0.0001f
+            ? ImGuiCond.Always
+            : ImGuiCond.Appearing;
+        ImGui.SetNextWindowPos(placement.Position, placementCondition);
+        ImGui.SetNextWindowSize(placement.Size, placementCondition);
+        _lastWindowScale = scale;
         bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoCollapse))
         {
             Visible = visible;
             ImGui.End();
@@ -95,65 +158,135 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         }
 
         Visible = visible;
-        DrawSettings();
-        if (!string.IsNullOrWhiteSpace(_validationMessage))
+        LastWindowPosition = ImGui.GetWindowPos();
+        LastWindowSize = ImGui.GetWindowSize();
+        float footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y + 2f;
+        float bodyHeight = MathF.Max(1f, ImGui.GetContentRegionAvail().Y - footerHeight);
+        _ = ImGui.BeginChild("project_settings_body", new Vector2(0f, bodyHeight));
+        ImGui.SeparatorText("Project");
+        ImGui.TextWrapped("工程级 authoring 设置。修改会先保留在草稿中，点击 Apply 后才写入工程文件。");
+        DrawSettings(scale);
+        if (!string.IsNullOrWhiteSpace(ValidationMessage))
         {
             ImGui.SeparatorText("诊断");
-            ImGui.TextWrapped(_validationMessage);
+            ImGui.TextWrapped(ValidationMessage);
         }
 
+        ImGui.EndChild();
+        ImGui.Separator();
+        DrawActions(scale);
         ImGui.End();
     }
 
-    private void DrawSettings()
+    private void DrawSettings(float scale)
     {
-        ProjectSettingsDto next = _settings;
-        bool changed = false;
-        changed |= InputText("工程名", _settings.Name, value => next = next with { Name = value }, 128);
-        changed |= InputText("Content Root", _settings.ContentRoot, value => next = next with { ContentRoot = value }, 512);
-        changed |= InputText("Script Source Dir", _settings.ScriptSourceDir, value => next = next with { ScriptSourceDir = value }, 512);
-        changed |= InputText("默认场景", _settings.StartScene, value => next = next with { StartScene = value }, 512);
-
-        int backend = IndexOf(UiBackendOptions, _settings.DefaultUiBackend);
-        if (ImGui.Combo("默认 UI 后端", ref backend, UiBackendLabels, UiBackendLabels.Length) && backend >= 0)
+        if (!ImGui.BeginTable(
+            "project_settings_fields",
+            2,
+            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.PadOuterX | ImGuiTableFlags.BordersInnerH))
         {
-            next = next with { DefaultUiBackend = UiBackendOptions[backend] };
-            changed = true;
+            return;
         }
 
-        if (next.DefaultUiBackend == UiBackendKind.Ultralight)
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, EditorUiScale.Scale(210f, scale));
+        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+
+        string name = DraftSettings.Name;
+        NextProperty("工程名");
+        if (ImGui.InputText("##project-name", ref name, 128))
         {
+            UpdateDraft(DraftSettings with { Name = name });
+        }
+
+        string contentRoot = DraftSettings.ContentRoot;
+        NextProperty("Content Root");
+        if (ImGui.InputText("##project-content-root", ref contentRoot, 512))
+        {
+            UpdateDraft(DraftSettings with { ContentRoot = contentRoot });
+        }
+
+        string scriptSourceDir = DraftSettings.ScriptSourceDir;
+        NextProperty("Script Source Dir");
+        if (ImGui.InputText("##project-script-source", ref scriptSourceDir, 512))
+        {
+            UpdateDraft(DraftSettings with { ScriptSourceDir = scriptSourceDir });
+        }
+
+        string startScene = DraftSettings.StartScene;
+        NextProperty("默认场景");
+        if (ImGui.InputText("##project-start-scene", ref startScene, 512))
+        {
+            UpdateDraft(DraftSettings with { StartScene = startScene });
+        }
+
+        int backend = IndexOf(UiBackendOptions, DraftSettings.DefaultUiBackend);
+        NextProperty("默认 UI 后端");
+        if (ImGui.Combo("##project-default-ui-backend", ref backend, UiBackendLabels, UiBackendLabels.Length) && backend >= 0)
+        {
+            UpdateDraft(DraftSettings with { DefaultUiBackend = UiBackendOptions[backend] });
+        }
+
+        if (DraftSettings.DefaultUiBackend == UiBackendKind.Ultralight)
+        {
+            ImGui.TableNextRow();
+            _ = ImGui.TableSetColumnIndex(1);
             ImGui.TextWrapped(UltralightOptionalProfileGate.InactiveReason);
         }
 
-        bool stableNames = _settings.ResourceRules.RequireStableMaterialNames;
-        if (ImGui.Checkbox("材质入盘使用稳定 Name", ref stableNames))
+        bool stableNames = DraftSettings.ResourceRules.RequireStableMaterialNames;
+        NextProperty("材质稳定 Name");
+        if (ImGui.Checkbox("##project-stable-material-names", ref stableNames))
         {
-            next = next with { ResourceRules = next.ResourceRules with { RequireStableMaterialNames = stableNames } };
-            changed = true;
-        }
-
-        string globs = string.Join(";", _settings.ResourceRules.ContentFileGlobs ?? []);
-        if (InputText("Content globs (; 分隔)", globs, value => next = next with
-        {
-            ResourceRules = next.ResourceRules with
+            UpdateDraft(DraftSettings with
             {
-                ContentFileGlobs = [.. value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
-            },
-        }, 1024))
-        {
-            changed = true;
+                ResourceRules = DraftSettings.ResourceRules with { RequireStableMaterialNames = stableNames },
+            });
         }
 
-        if (changed)
+        NextProperty("Content globs (; 分隔)");
+        if (ImGui.InputText("##project-content-globs", ref _contentGlobsText, 1024))
         {
-            _ = TryApplyProjectSettings(next, out _);
+            UpdateDraft(DraftSettings with
+            {
+                ResourceRules = DraftSettings.ResourceRules with
+                {
+                    ContentFileGlobs =
+                    [
+                        .. _contentGlobsText.Split(
+                            ';',
+                            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                    ],
+                },
+            }, refreshGlobsText: false);
         }
+
+        ImGui.EndTable();
     }
 
-    private void Validate()
+    private void DrawActions(float scale)
     {
-        _ = _settings.TryNormalize(out _validationMessage);
+        float buttonWidth = EditorUiScale.Scale(82f, scale);
+        float spacing = ImGui.GetStyle().ItemSpacing.X;
+        float startX = ImGui.GetCursorPosX();
+        float available = ImGui.GetContentRegionAvail().X;
+        ImGui.TextDisabled(HasPendingChanges ? "有尚未应用的修改" : "设置已应用");
+        float actionX = startX + MathF.Max(0f, available - ((buttonWidth * 2f) + spacing));
+        ImGui.SameLine(actionX);
+        ImGui.BeginDisabled(!HasPendingChanges);
+        if (ImGui.Button("Revert", new Vector2(buttonWidth, 0f)))
+        {
+            RevertDraft();
+        }
+
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        ImGui.BeginDisabled(!HasPendingChanges || !_draftIsValid);
+        if (ImGui.Button("Apply", new Vector2(buttonWidth, 0f)))
+        {
+            _ = TryApplyDraft(out _);
+        }
+
+        ImGui.EndDisabled();
     }
 
     private static int IndexOf(UiBackendKind[] values, UiBackendKind value)
@@ -169,16 +302,51 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         return 0;
     }
 
-    private static bool InputText(string label, string value, Action<string> assign, uint maxLength)
+    private void UpdateDraft(ProjectSettingsDto next, bool refreshGlobsText = true)
     {
-        string editable = value;
-        bool changed = ImGui.InputText(label, ref editable, maxLength);
-        if (changed)
+        DraftSettings = next;
+        if (refreshGlobsText)
         {
-            assign(editable);
+            _contentGlobsText = FormatContentGlobs(DraftSettings);
         }
 
-        return changed;
+        RefreshDraftState();
+    }
+
+    private void RefreshDraftState()
+    {
+        _draftIsValid = DraftSettings.TryNormalize(out string diagnostic);
+        ValidationMessage = _draftIsValid ? string.Empty : diagnostic;
+        HasPendingChanges = !AreEquivalent(_settings, DraftSettings);
+    }
+
+    private static bool AreEquivalent(ProjectSettingsDto left, ProjectSettingsDto right)
+    {
+        return left.FormatVersion == right.FormatVersion &&
+            string.Equals(left.Name, right.Name, StringComparison.Ordinal) &&
+            string.Equals(left.ContentRoot, right.ContentRoot, StringComparison.Ordinal) &&
+            string.Equals(left.ScriptSourceDir, right.ScriptSourceDir, StringComparison.Ordinal) &&
+            string.Equals(left.StartScene, right.StartScene, StringComparison.Ordinal) &&
+            left.DefaultUiBackend == right.DefaultUiBackend &&
+            left.ResourceRules.RequireStableMaterialNames == right.ResourceRules.RequireStableMaterialNames &&
+            (left.ResourceRules.ContentFileGlobs ?? []).SequenceEqual(
+                right.ResourceRules.ContentFileGlobs ?? [],
+                StringComparer.Ordinal);
+    }
+
+    private static string FormatContentGlobs(ProjectSettingsDto settings)
+    {
+        return string.Join(";", settings.ResourceRules.ContentFileGlobs ?? []);
+    }
+
+    private static void NextProperty(string label)
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(label);
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.SetNextItemWidth(-1f);
     }
 }
 

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Compression;
+using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
 using PixelEngine.Editor.Shell;
@@ -543,6 +544,90 @@ public sealed class EditorShellBuildTests
         Assert.False(playerPanel.TryApplyPlayerSettings(reloadedPlayer with { WindowWidth = 0 }, out string playerDiagnostic));
         Assert.Contains("窗口尺寸", playerDiagnostic, StringComparison.Ordinal);
         Assert.Equal(1600, playerStore.Load().WindowWidth);
+    }
+
+    /// <summary>
+    /// 验证 Project/Player Settings 把非法中间输入保留在草稿中，只有显式 Apply 才落盘，
+    /// 且窄窗口使用居中浮窗而不是不可编辑的底部窄 dock。
+    /// </summary>
+    [Fact]
+    public void EditorShellSettingsPanelsKeepRecoverableDraftsAndResolveNarrowWindowPlacement()
+    {
+        // Arrange：建立尚未生成独立 settings 文件的新工程。
+        using TempDir temp = new();
+        string projectRoot = Path.Combine(temp.Path, "DraftSettingsProject");
+        EditorProject project = EditorProject.CreateNew(projectRoot, "Draft Settings Project");
+        ProjectSettingsStore projectStore = new(project);
+        PlayerSettingsStore playerStore = new(project);
+        ProjectSettingsPanel projectPanel = new(project);
+        PlayerSettingsPanel playerPanel = new(project);
+
+        // Act：模拟 InputText/InputInt 编辑过程中的暂时非法值。
+        projectPanel.StageProjectSettings(projectPanel.DraftSettings with { Name = string.Empty });
+        playerPanel.StagePlayerSettings(playerPanel.DraftSettings with { WindowWidth = 0 });
+
+        // Assert：非法草稿保持可见且不污染磁盘，用户仍可 Revert。
+        Assert.True(projectPanel.HasPendingChanges);
+        Assert.Equal(string.Empty, projectPanel.DraftSettings.Name);
+        Assert.False(projectPanel.TryApplyDraft(out string projectDiagnostic));
+        Assert.Contains("工程名不能为空", projectDiagnostic, StringComparison.Ordinal);
+        Assert.False(File.Exists(projectStore.SettingsPath));
+        projectPanel.RevertDraft();
+        Assert.False(projectPanel.HasPendingChanges);
+        Assert.Equal("Draft Settings Project", projectPanel.DraftSettings.Name);
+
+        Assert.True(playerPanel.HasPendingChanges);
+        Assert.Equal(0, playerPanel.DraftSettings.WindowWidth);
+        Assert.False(playerPanel.TryApplyDraft(out string playerDiagnostic));
+        Assert.Contains("窗口尺寸", playerDiagnostic, StringComparison.Ordinal);
+        Assert.False(File.Exists(playerStore.SettingsPath));
+        playerPanel.RevertDraft();
+        Assert.False(playerPanel.HasPendingChanges);
+        Assert.Equal(1280, playerPanel.DraftSettings.WindowWidth);
+
+        // Act：合法草稿只在 Apply 时原子保存并同步工程模型。
+        projectPanel.StageProjectSettings(projectPanel.DraftSettings with { Name = "Applied Project Name" });
+        Assert.True(projectPanel.TryApplyDraft(out projectDiagnostic), projectDiagnostic);
+        Assert.Equal("Applied Project Name", projectStore.Load().Name);
+        Assert.Equal("Applied Project Name", project.Name);
+        Assert.False(projectPanel.HasPendingChanges);
+
+        // Assert：672x483 的真实窄窗口仍得到 640x451 的完整可滚动浮窗。
+        EditorSettingsWindowPlacement placement = EditorSettingsWindowLayout.Resolve(
+            Vector2.Zero,
+            new Vector2(672f, 483f),
+            EditorUiScale.Default);
+        Assert.Equal(new Vector2(16f, 16f), placement.Position);
+        Assert.Equal(new Vector2(640f, 451f), placement.Size);
+        Assert.True(placement.MinimumSize.X <= placement.Size.X);
+        Assert.True(placement.MinimumSize.Y <= placement.Size.Y);
+    }
+
+    /// <summary>
+    /// 验证设置写盘失败会保留草稿和既有状态并返回可执行诊断，不会让 UI 帧抛异常退出。
+    /// </summary>
+    [Fact]
+    public void EditorShellSettingsPanelsKeepDraftWhenAtomicSaveFails()
+    {
+        // Arrange：用同名目录稳定制造目标文件提交失败。
+        using TempDir temp = new();
+        string projectRoot = Path.Combine(temp.Path, "SettingsFailureProject");
+        EditorProject project = EditorProject.CreateNew(projectRoot, "Settings Failure Project");
+        ProjectSettingsPanel panel = new(project);
+        _ = Directory.CreateDirectory(Path.Combine(projectRoot, EngineProjectSettingsStore.ProjectSettingsFileName));
+        panel.StageProjectSettings(panel.DraftSettings with { Name = "Pending Name" });
+
+        // Act。
+        bool applied = panel.TryApplyDraft(out string diagnostic);
+
+        // Assert：失败可见、草稿可恢复、运行中的工程模型未被半更新。
+        Assert.False(applied);
+        Assert.Contains("保存 Project Settings 失败", diagnostic, StringComparison.Ordinal);
+        Assert.Equal(diagnostic, panel.ValidationMessage);
+        Assert.True(panel.HasPendingChanges);
+        Assert.Equal("Pending Name", panel.DraftSettings.Name);
+        Assert.Equal("Settings Failure Project", project.Name);
+        Assert.Empty(Directory.EnumerateFiles(projectRoot, "ProjectSettings.json.*.tmp"));
     }
 
     /// <summary>
