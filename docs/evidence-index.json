@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-14",
-  "generatedFromCommit": "ebbc9d91a230893a151ac39d8694f45314dfecd5",
+  "generatedFromCommit": "3b1d9cd204857c91414d642eb79a1b51c0027c8d",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -636,6 +636,19 @@
       "reportPath": "docs/evidence-2026-07-14-ui-004-web-canvas-player-dogfood.md",
       "sha256": "c353d5950b2ad99dfab6d01cc9cfe32236f4e5e6ed5cf7ac948b86f7ae8f5708",
       "notes": "Explicit scene v3 three-Canvas Demo dogfood, all CanvasScaler modes, RmlUi Player, legacy GUI exclusion, Escape pause automation, native desktop GL rendering and commit-bound framebuffer are verified. Windows control discovered the Player but could not activate the desktop GL window, so no real-input pass is claimed; DPI/window-mode matrix, reviewer and clean final output remain pending and UI-004 stays active."
+    },
+    {
+      "entryId": "ui-004-clean-final-output-unicode-path-20260714",
+      "taskIds": ["UI-004"],
+      "evidenceState": "clean_final_output_complete_external_window_matrix_pending",
+      "commit": "3b1d9cd204857c91414d642eb79a1b51c0027c8d",
+      "runSessionId": "local-20260714-ui004-clean-final-unicode-path",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8-Core Processor; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore -m:1; full UI/Hosting/Demo Release tests; PIXELENGINE_RENDERING_GL_SMOKE=1 full UI plus Hosting/Demo native tests; pwsh -NoProfile -File tools/update-final-output.ps1 -Rid win-x64 -DemoChannel r2r -Configuration Release -DemoRuntimeUiBackend RmlUi from detached clean worktree; pwsh -NoProfile -File tools/verify-final-output.ps1 -OutputRoot 最终输出; root final Player --no-hot-reload --window-ticks 80",
+      "reportPath": "docs/evidence-2026-07-14-ui-004-clean-final-output-unicode-path.md",
+      "sha256": "028c2b317e5418e28289cd0cdd58d4ef0ac8193fb3790e48d97ca9136b7389eb",
+      "notes": "RmlUi Windows Unicode font-path failure was reproduced only after moving the Player into the Chinese final-output directory. A UTF-8-aware FileInterface fixed the fallback, release probes now require a non-ASCII content path and actual RmlUi without fallback, and detached-clean plus promoted root final output both pass 341 checksums and live Player probes. Real input, physical-DPI/cross-screen, three Player window modes and external reviewer remain pending, so UI-004 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
