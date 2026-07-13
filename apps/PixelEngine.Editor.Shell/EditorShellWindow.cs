@@ -87,12 +87,15 @@ internal sealed class EditorShellWindow : IDisposable
             TitleBarTextColorRgb = 0xE7E9ED,
             WindowBorderColorRgb = 0x111216,
         };
+        EditorFontStackPaths fonts = EditorFontAssets.Resolve();
         GuiAppOptions guiOptions = new()
         {
             Enabled = true,
             LayoutPath = string.IsNullOrWhiteSpace(layoutPath) ? DefaultLayoutPath : Path.GetFullPath(layoutPath),
             Theme = GuiThemeKind.Unity6Dark,
             DpiScale = EditorUiScale.Normalize(uiScale),
+            PrimaryFontPath = fonts.PrimaryFontPath,
+            CjkFallbackFontPath = fonts.CjkFallbackFontPath,
         };
         return new EditorShellWindow(EditorHostBootstrap.Create(windowOptions, guiOptions));
     }

@@ -18,6 +18,9 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
+    private string? _primaryFontPath;
+    private string? _cjkFallbackFontPath;
+    private float _fontSizePixels = 18f;
     private bool _saveLayoutOnShutdown = true;
     private float _fontAtlasScale = 1f;
     private float _appliedUiScale = 1f;
@@ -63,8 +66,11 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         }
 
         GuiTheme.ApplyCurrent(options.Theme);
-        AddConfiguredFont(io, options);
+        _primaryFontPath = GuiFontManager.ResolvePrimaryFontFile(options.PrimaryFontPath);
+        _cjkFallbackFontPath = _fontManager.ResolveCjkFontPath(options.CjkFallbackFontPath);
+        _fontSizePixels = options.FontSizePixels;
         _fontAtlasScale = NormalizeScale(options.DpiScale);
+        RebuildConfiguredFont(io, _fontAtlasScale);
         _appliedUiScale = _fontAtlasScale;
         if (MathF.Abs(_appliedUiScale - 1f) > 0.0001f)
         {
@@ -83,7 +89,7 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
     }
 
     /// <inheritdoc />
-    public void SetUiScale(float scale)
+    public unsafe void SetUiScale(float scale)
     {
         ThrowIfNotInitialized();
         SetCurrentContext();
@@ -95,7 +101,13 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
             _appliedUiScale = normalized;
         }
 
-        ImGui.GetStyle().FontScaleMain = normalized / _fontAtlasScale;
+        if (MathF.Abs(normalized - _fontAtlasScale) > 0.0001f)
+        {
+            RebuildConfiguredFont(ImGui.GetIO(), normalized);
+            _fontAtlasScale = normalized;
+        }
+
+        ImGui.GetStyle().FontScaleMain = 1f;
     }
 
     /// <inheritdoc />
@@ -251,23 +263,23 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         _context = default;
         _layoutPath = string.Empty;
         _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
+        _primaryFontPath = null;
+        _cjkFallbackFontPath = null;
+        _fontSizePixels = 18f;
         _fontAtlasScale = 1f;
         _appliedUiScale = 1f;
         _lastLayoutSaveTimestamp = 0;
         _initialized = false;
     }
 
-    private void AddConfiguredFont(ImGuiIOPtr io, GuiAppOptions options)
+    private unsafe void RebuildConfiguredFont(ImGuiIOPtr io, float scale)
     {
-        string? fontPath = _fontManager.ResolveCjkFontPath(options.PreferredFontPath);
-        float fontSize = GuiFontManager.ScaleFontSize(options.FontSizePixels, options.DpiScale);
-        if (fontPath is null)
-        {
-            _ = ImGui.AddFontDefault(io.Fonts);
-            return;
-        }
-
-        _ = _fontManager.AddCjkFont(io.Fonts, fontPath, fontSize);
+        float fontSize = GuiFontManager.ScaleFontSize(_fontSizePixels, scale);
+        _ = _fontManager.RebuildFontAtlas(
+            io.Fonts,
+            _primaryFontPath,
+            _cjkFallbackFontPath,
+            fontSize);
     }
 
     private void FlushScheduledMouseReleases(ImGuiIOPtr io)

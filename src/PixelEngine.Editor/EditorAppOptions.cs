@@ -23,7 +23,17 @@ public sealed record EditorAppOptions
     public string LayoutPath { get; init; } = "imgui.ini";
 
     /// <summary>
-    /// 首选中文字体路径；为空时由 <see cref="Gui.GuiFontManager"/> 从系统字体中探测。
+    /// 拉丁字母与数字使用的主字体路径；为空时由后端使用默认主字体。
+    /// </summary>
+    public string? PrimaryFontPath { get; init; }
+
+    /// <summary>
+    /// 合并到主字体 atlas 的 CJK fallback 字体路径；为空时由 <see cref="Gui.GuiFontManager"/> 从系统字体中探测。
+    /// </summary>
+    public string? CjkFallbackFontPath { get; init; }
+
+    /// <summary>
+    /// 兼容旧调用方的 CJK 字体路径；新代码应使用 <see cref="CjkFallbackFontPath"/>。
     /// </summary>
     public string? PreferredFontPath { get; init; }
 
@@ -75,7 +85,14 @@ public sealed record EditorAppOptions
         {
             GlslVersion = GlslVersion.Trim(),
             LayoutPath = LayoutPath.Trim(),
-            PreferredFontPath = string.IsNullOrWhiteSpace(PreferredFontPath) ? null : PreferredFontPath.Trim(),
+            PrimaryFontPath = NormalizeOptionalPath(PrimaryFontPath),
+            CjkFallbackFontPath = NormalizeOptionalPath(CjkFallbackFontPath ?? PreferredFontPath),
+            PreferredFontPath = NormalizeOptionalPath(CjkFallbackFontPath ?? PreferredFontPath),
         };
+    }
+
+    private static string? NormalizeOptionalPath(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path) ? null : path.Trim();
     }
 }

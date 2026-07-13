@@ -22,5 +22,15 @@
 
   <ItemGroup>
     <Content Include="Localization\*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Fonts\Inter-Regular.ttf" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="Fonts\Inter-LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\demo\PixelEngine.Demo\content\ui\fonts\NotoSansSC-VF.ttf"
+             Link="Fonts\NotoSansSC-VF.ttf"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\..\demo\PixelEngine.Demo\content\ui\fonts\OFL.txt"
+             Link="Fonts\NotoSansSC-OFL.txt"
+             CopyToOutputDirectory="PreserveNewest"
+             CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
