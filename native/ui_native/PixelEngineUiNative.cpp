@@ -1,5 +1,6 @@
 #include <RmlUi/Core.h>
 #include <RmlUi/Core/ElementDocument.h>
+#include <RmlUi/Core/FileInterface.h>
 #include <RmlUi/Core/SystemInterface.h>
 #include <RmlUi/Core/TextInputContext.h>
 #include <RmlUi/Core/TextInputHandler.h>
@@ -11,6 +12,7 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstdlib>
+#include <filesystem>
 #include <memory>
 #include <string>
 #include <vector>
@@ -409,7 +411,47 @@ private:
     std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
 };
 
+// RmlUi 默认 FileInterface 在 Windows 直接 fopen UTF-8 路径，会按当前 ANSI code page
+// 解释中文等非 ASCII 字符。引擎所有 native 字符串均为 UTF-8，因此在入口统一转为
+// std::filesystem::path，再由 _wfopen 打开 UTF-16 路径；其他平台保持 UTF-8 fopen。
+class PeUiFileInterface final : public Rml::FileInterface
+{
+public:
+    Rml::FileHandle Open(const Rml::String& path) override
+    {
+#if defined(_WIN32)
+        const std::filesystem::path nativePath = std::filesystem::u8path(path);
+        FILE* file = _wfopen(nativePath.c_str(), L"rb");
+#else
+        FILE* file = std::fopen(path.c_str(), "rb");
+#endif
+        return reinterpret_cast<Rml::FileHandle>(file);
+    }
+
+    void Close(Rml::FileHandle file) override
+    {
+        std::fclose(reinterpret_cast<FILE*>(file));
+    }
+
+    size_t Read(void* buffer, size_t size, Rml::FileHandle file) override
+    {
+        return std::fread(buffer, 1, size, reinterpret_cast<FILE*>(file));
+    }
+
+    bool Seek(Rml::FileHandle file, long offset, int origin) override
+    {
+        return std::fseek(reinterpret_cast<FILE*>(file), offset, origin) == 0;
+    }
+
+    size_t Tell(Rml::FileHandle file) override
+    {
+        const long position = std::ftell(reinterpret_cast<FILE*>(file));
+        return position < 0 ? 0u : static_cast<size_t>(position);
+    }
+};
+
 PeUiSystemInterface g_systemInterface;
+PeUiFileInterface g_fileInterface;
 bool g_rmlInitialised = false;
 int32_t g_rendererCount = 0;
 int32_t g_nextContextId = 1;
@@ -1203,12 +1245,14 @@ PE_UI_NATIVE_API PeUiRenderer* peui_native_create_renderer(int32_t width, int32_
     if (!g_rmlInitialised)
     {
         Rml::SetSystemInterface(&g_systemInterface);
+        Rml::SetFileInterface(&g_fileInterface);
         Rml::SetRenderInterface(instance->renderer.get());
         Rml::SetTextInputHandler(&g_textInputHandler);
         if (!Rml::Initialise())
         {
             Rml::SetTextInputHandler(nullptr);
             Rml::SetRenderInterface(nullptr);
+            Rml::SetFileInterface(nullptr);
             Rml::SetSystemInterface(nullptr);
             return nullptr;
         }
@@ -1223,6 +1267,7 @@ PE_UI_NATIVE_API PeUiRenderer* peui_native_create_renderer(int32_t width, int32_
         Rml::Shutdown();
         g_rmlInitialised = false;
         Rml::SetRenderInterface(nullptr);
+        Rml::SetFileInterface(nullptr);
         Rml::SetSystemInterface(nullptr);
         return nullptr;
     }
@@ -1252,6 +1297,7 @@ PE_UI_NATIVE_API void peui_native_destroy_renderer(PeUiRenderer* renderer)
         g_rmlInitialised = false;
         Rml::SetTextInputHandler(nullptr);
         Rml::SetRenderInterface(nullptr);
+        Rml::SetFileInterface(nullptr);
         Rml::SetSystemInterface(nullptr);
     }
 

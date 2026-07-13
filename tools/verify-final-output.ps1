@@ -320,6 +320,9 @@ if ($validation.editorDefaultWorkbenchProbe.completed -ne $true -or
 if ($validation.demoWindowProbe.completed -ne $true) {
   throw 'Demo 窗口 probe 记录不是完成状态。'
 }
+if ($validation.demoWindowProbe.unicodePath -ne $true) {
+  throw 'Demo 窗口 probe 必须从含非 ASCII 字符的发布路径运行。'
+}
 
 $validationPaths = @(
   [string]$validation.editorDefaultWorkbenchProbe.stdout,
@@ -350,6 +353,7 @@ Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'canvases' '3' 'Demo 窗�
 Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'requested' $requestedDemoRuntimeUiBackend 'Demo 窗口 Game UI probe stdout'
 Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive 'Demo 窗口 Game UI probe stdout'
 Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString() 'Demo 窗口 Game UI probe stdout'
+Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'content_path_non_ascii' 'True' 'Demo 窗口 Game UI probe stdout'
 
 $demoBuildResultPath = Resolve-OutputPath ([string]$validation.demoBuildResult) 'demoBuildResult'
 $demoBuildResult = Get-Content -Raw -LiteralPath $demoBuildResultPath | ConvertFrom-Json

@@ -284,7 +284,7 @@ public static class DemoProgram
             Console.WriteLine(windowFrameProbe.BuildSummary(
                 engine.Context.Counters.FrameGpuTimerAvailable,
                 engine.Context.Counters.VSyncEnabled));
-            WriteGameUiProbeSummary(probe);
+            WriteGameUiProbeSummary(engine, probe);
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, probe, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
@@ -503,15 +503,29 @@ public static class DemoProgram
         return bestIndex;
     }
 
-    private static void WriteGameUiProbeSummary(EngineProbeApi probe)
+    private static void WriteGameUiProbeSummary(Engine engine, EngineProbeApi probe)
     {
         GameUiProbeSnapshot snapshot = probe.CaptureGameUi();
         Console.WriteLine(
             $"game_ui_probe attached={snapshot.IsAttached}, canvases={snapshot.CanvasCount}, " +
             $"requested={snapshot.RequestedBackend}, active={snapshot.ActiveBackend}, " +
             $"fallback={snapshot.UsedFallback}, " +
+            $"content_path_non_ascii={ContainsNonAscii(engine.Context.Options.ContentRoot)}, " +
             $"fallback_reason={NormalizeProbeValue(snapshot.FallbackReason)}, " +
             $"native_profile={NormalizeProbeValue(snapshot.ActiveNativeProfile)}");
+    }
+
+    private static bool ContainsNonAscii(string value)
+    {
+        for (int i = 0; i < value.Length; i++)
+        {
+            if (value[i] > 0x7f)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizeProbeValue(string? value)

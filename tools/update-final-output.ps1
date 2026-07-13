@@ -71,7 +71,9 @@ $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stagingRoot = Join-Path $repoRoot "artifacts/final-output-staging/$timestamp"
 $editorPublish = Join-Path $stagingRoot 'editor-publish'
 $editorBuildOutput = Join-Path $stagingRoot 'editor-probe-build'
-$demoBuildOutput = Join-Path $stagingRoot 'demo-build'
+# 故意在中文路径中构建并运行 Player，覆盖 Windows native fopen/UTF-8 路径边界；
+# 正式目录“最终输出/游戏Demo”不能由纯 ASCII staging probe 冒充。
+$demoBuildOutput = Join-Path $stagingRoot '游戏Demo构建'
 $validationRoot = Join-Path $stagingRoot 'validation'
 $nextRoot = Join-Path $stagingRoot 'next-final-output'
 $logRoot = Join-Path $validationRoot 'logs'
@@ -425,6 +427,7 @@ $demoProbeOk =
   (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'requested' $DemoRuntimeUiBackend) -and
   (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive) -and
   (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString()) -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'content_path_non_ascii' 'True') -and
   (Test-Path -LiteralPath $demoProbeCapture -PathType Leaf)
 
 if (-not $demoProbeOk) {
@@ -481,6 +484,7 @@ $manifest = [ordered]@{
     }
     demoWindowProbe = [ordered]@{
       completed = $true
+      unicodePath = $true
       windowTicks = $DemoWindowTicks
       stdout = '_验证记录/logs/demo-window.stdout.log'
       stderr = '_验证记录/logs/demo-window.stderr.log'

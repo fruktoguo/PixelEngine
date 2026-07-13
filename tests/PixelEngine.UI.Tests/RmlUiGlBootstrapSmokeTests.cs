@@ -85,6 +85,21 @@ public sealed class RmlUiGlBootstrapSmokeTests
     }
 
     /// <summary>
+    /// 验证 native FileInterface 在 Windows 以 UTF-8→filesystem path→_wfopen 打开非 ASCII 路径。
+    /// </summary>
+    [Fact]
+    public void RmlUiNativeFileInterfaceUsesUnicodeSafeWindowsPathOpen()
+    {
+        string nativeShim = File.ReadAllText(ProjectPath("native", "ui_native", "PixelEngineUiNative.cpp"));
+
+        Assert.Contains("class PeUiFileInterface final : public Rml::FileInterface", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("std::filesystem::u8path(path)", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("_wfopen(nativePath.c_str(), L\"rb\")", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("Rml::SetFileInterface(&g_fileInterface)", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("Rml::SetFileInterface(nullptr)", nativeShim, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证Rml Ui Composition Source保持Preedit Separate From Committed Text。
     /// </summary>
     [Fact]
@@ -260,6 +275,47 @@ public sealed class RmlUiGlBootstrapSmokeTests
         RunDocumentLoadRenderHitTestSmoke(
             window,
             expectedProfileId: RmlUiNativeProfileGate.NativeProfileDesktopGl3);
+    }
+
+    /// <summary>
+    /// 验证正式输出常见的中文目录不会让 RmlUi 字体注册回退 ManagedFallback。
+    /// </summary>
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
+    public void RmlUiBackendLoadsFontFromUnicodePathWhenGlSmokeIsEnabled()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"像素引擎-最终输出-{Guid.NewGuid():N}", "游戏Demo", "content", "ui", "fonts");
+        _ = Directory.CreateDirectory(root);
+        string fontPath = Path.Combine(root, "NotoSansSC-VF.ttf");
+        File.Copy(
+            ProjectPath("demo", "PixelEngine.Demo", "content", "ui", "fonts", "NotoSansSC-VF.ttf"),
+            fontPath);
+
+        try
+        {
+            using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+            {
+                Title = "PixelEngine RmlUi Unicode font smoke",
+                Width = 64,
+                Height = 64,
+                BackendPreference = RenderBackendPreference.DesktopGl33,
+                EnableDebugContext = true,
+            });
+            using RmlUiBackend backend = new(window);
+            UiFontSelection font = new(fontPath, 16f, UiFontSource.ContentFonts);
+
+            backend.Initialize(new UiBackendInitializeInfo(
+                new UiViewport(0, 0, window.Width, window.Height, 1f),
+                UiBackendKind.RmlUi,
+                font));
+
+            Assert.Equal(UiBackendKind.RmlUi, backend.Kind);
+            Assert.Equal(RmlUiNativeProfileGate.NativeProfileDesktopGl3, RmlUiNative.GetRendererProfile());
+        }
+        finally
+        {
+            Directory.Delete(Path.GetFullPath(Path.Combine(root, "..", "..", "..", "..")), recursive: true);
+        }
     }
 
     /// <summary>

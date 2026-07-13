@@ -169,6 +169,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("demoRuntimeUiBackendFallback = $expectedDemoRuntimeUiBackendFallback", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString()", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("$demoBuildOutput = Join-Path $stagingRoot '游戏Demo构建'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'game_ui_probe ' 'content_path_non_ascii' 'True'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("unicodePath = $true", finalOutputScript, StringComparison.Ordinal);
         Assert.DoesNotContain("'-RuntimeUiBackend', 'ManagedFallback'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("runtimeUiBackend = $RuntimeUiBackend", buildPlayerPs1, StringComparison.Ordinal);
         Assert.Contains("\"runtimeUiBackend\"", buildPlayerSh, StringComparison.Ordinal);
@@ -239,6 +242,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("game_ui_probe ", verifier, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendActive", verifier, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendFallback", verifier, StringComparison.Ordinal);
+        Assert.Contains("demoWindowProbe.unicodePath -ne $true", verifier, StringComparison.Ordinal);
+        Assert.Contains("'content_path_non_ascii' 'True'", verifier, StringComparison.Ordinal);
         Assert.Contains("Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'", verifier, StringComparison.Ordinal);
         Assert.Contains("正式输出包含未登记文件", verifier, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 登记了不存在的文件", verifier, StringComparison.Ordinal);
@@ -465,6 +470,41 @@ public sealed class HostingProjectDisciplineTests
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("Demo 窗口 Game UI probe stdout 缺少成功摘要", result.CombinedOutput, StringComparison.Ordinal);
             Assert.Contains("active=RmlUi", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证纯 ASCII staging probe 不能替代正式中文目录中的 native UI 路径验收。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsAsciiOnlyDemoProbe()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(
+                outputRoot,
+                "_验证记录/logs/demo-window.stdout.log",
+                "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
+                "content_path_non_ascii=False, fallback_reason=<none>, native_profile=desktop-gl");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult result = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Demo 窗口 Game UI probe stdout 缺少成功摘要", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("content_path_non_ascii=True", result.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -2485,7 +2525,7 @@ public sealed class HostingProjectDisciplineTests
             "_验证记录/logs/demo-window.stdout.log",
             "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
             "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
-            "fallback_reason=<none>, native_profile=desktop-gl");
+            "content_path_non_ascii=True, fallback_reason=<none>, native_profile=desktop-gl");
         WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/demo-window.bmp", "demo capture");
         WriteTextFile(outputRoot, "README.txt", "PixelEngine final output");
@@ -2540,6 +2580,7 @@ public sealed class HostingProjectDisciplineTests
                     demoWindowProbe = new
                     {
                         completed = true,
+                        unicodePath = true,
                         stdout = "_验证记录/logs/demo-window.stdout.log",
                         stderr = "_验证记录/logs/demo-window.stderr.log",
                         capture = "_验证记录/demo-window.bmp",
