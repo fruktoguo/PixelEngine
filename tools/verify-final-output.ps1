@@ -321,6 +321,15 @@ if ($validation.editorDefaultWorkbenchProbe.completed -ne $true -or
   throw '编辑器默认工作台 probe 记录不是通过状态。'
 }
 
+$editorGameViewValidation = $validation.editorGameViewPresentationProbe
+if ($null -eq $editorGameViewValidation -or
+    $editorGameViewValidation.completed -ne $true -or
+    $editorGameViewValidation.allPassed -ne $true -or
+    $editorGameViewValidation.scenarioCount -ne 6 -or
+    $editorGameViewValidation.uiStackLifecycle -ne '1->0->1') {
+  throw '编辑器 Game View presentation probe 记录不是六场景 1->0->1 通过状态。'
+}
+
 if ($validation.demoWindowProbe.completed -ne $true) {
   throw 'Demo 窗口 probe 记录不是完成状态。'
 }
@@ -336,6 +345,9 @@ $validationPaths = @(
   [string]$validation.editorDefaultWorkbenchProbe.stdout,
   [string]$validation.editorDefaultWorkbenchProbe.stderr,
   [string]$validation.editorDefaultWorkbenchProbe.capture,
+  [string]$editorGameViewValidation.stdout,
+  [string]$editorGameViewValidation.stderr,
+  [string]$editorGameViewValidation.report,
   [string]$validation.demoWindowProbe.stdout,
   [string]$validation.demoWindowProbe.stderr,
   [string]$validation.demoWindowProbe.capture,
@@ -352,6 +364,89 @@ Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'comple
 Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'succeeded' 'True' '编辑器默认工作台 probe stdout'
 Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'build_completed' 'True' '编辑器默认工作台 probe stdout'
 Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'build_ok' 'True' '编辑器默认工作台 probe stdout'
+
+$editorGameViewWrapperStdout = Get-OutputFileText ([string]$editorGameViewValidation.stdout) '编辑器 Game View presentation probe stdout'
+Assert-TextContains $editorGameViewWrapperStdout 'pixelengine.editor-gameview-presentation-probe/v1' '编辑器 Game View presentation probe stdout'
+$editorGameViewReportPath = Resolve-OutputPath ([string]$editorGameViewValidation.report) '编辑器 Game View presentation probe report'
+$editorGameViewReport = Get-Content -Raw -LiteralPath $editorGameViewReportPath | ConvertFrom-Json
+if ($editorGameViewReport.schema -ne 'pixelengine.editor-gameview-presentation-probe/v1' -or
+    $editorGameViewReport.allPassed -ne $true -or
+    $editorGameViewReport.gitCommit -ne $manifest.gitCommit) {
+  throw '编辑器 Game View presentation probe 报告 schema、allPassed 或 gitCommit 不匹配。'
+}
+
+$requiredGameViewScenarios = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($scenarioName in @(
+  'aspect-16-9',
+  'aspect-4-3',
+  'aspect-9-16',
+  'resolution-1920-1080',
+  'maximize-on-play',
+  'narrow-toolbar'
+)) {
+  [void]$requiredGameViewScenarios.Add($scenarioName)
+}
+
+$reportedGameViewScenarios = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$editorGameViewReportRoot = [IO.Path]::GetFullPath((Split-Path -Parent $editorGameViewReportPath))
+$editorGameViewReportRootPrefix = $editorGameViewReportRoot.TrimEnd(
+  [IO.Path]::DirectorySeparatorChar,
+  [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+$editorGameViewScenarios = @($editorGameViewReport.scenarios)
+if ($editorGameViewScenarios.Count -ne $requiredGameViewScenarios.Count) {
+  throw "编辑器 Game View presentation probe 场景数量不匹配：expected=$($requiredGameViewScenarios.Count), actual=$($editorGameViewScenarios.Count)"
+}
+
+foreach ($scenario in $editorGameViewScenarios) {
+  $scenarioName = [string]$scenario.name
+  if (-not $requiredGameViewScenarios.Contains($scenarioName) -or
+      -not $reportedGameViewScenarios.Add($scenarioName)) {
+    throw "编辑器 Game View presentation probe 场景未知或重复：$scenarioName"
+  }
+
+  $summary = $scenario.summary
+  $expectedToolbarDensity = if ($scenarioName -eq 'narrow-toolbar') { 'Narrow' } else { 'Full' }
+  $requiredSummaryValues = [ordered]@{
+    completed = 'True'
+    first_ui_stack_depth = '1'
+    first_play_exited = 'True'
+    exit_ui_stack_depth = '0'
+    second_play_entered = 'True'
+    second_ui_stack_depth = '1'
+    second_controller_found = 'True'
+    second_controller_enabled = 'True'
+    second_controller_faulted = 'False'
+    second_play_ui_restored = 'True'
+    presentation_synchronized = 'True'
+    toolbar_density = $expectedToolbarDensity
+    toolbar_fits = 'True'
+    toolbar_overflow_visible = 'True'
+  }
+  foreach ($entry in $requiredSummaryValues.GetEnumerator()) {
+    $actual = [string]$summary.($entry.Key)
+    if ($actual -ne [string]$entry.Value) {
+      throw "编辑器 Game View presentation probe 场景 $scenarioName 字段不匹配：$($entry.Key) expected=$($entry.Value) actual=$actual"
+    }
+  }
+
+  $framebufferRelative = [string]$scenario.framebuffer.path
+  if ([string]::IsNullOrWhiteSpace($framebufferRelative) -or [IO.Path]::IsPathRooted($framebufferRelative)) {
+    throw "编辑器 Game View presentation probe framebuffer path 非法：$scenarioName/$framebufferRelative"
+  }
+  $framebufferPath = [IO.Path]::GetFullPath((Join-Path $editorGameViewReportRoot $framebufferRelative))
+  if (-not $framebufferPath.StartsWith($editorGameViewReportRootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "编辑器 Game View presentation probe framebuffer 逃逸报告目录：$scenarioName/$framebufferRelative"
+  }
+  Assert-FileExists $framebufferPath "编辑器 Game View presentation framebuffer $scenarioName"
+  $expectedFramebufferHash = ([string]$scenario.framebuffer.sha256).ToLowerInvariant()
+  if ($expectedFramebufferHash -notmatch '^[a-f0-9]{64}$') {
+    throw "编辑器 Game View presentation probe framebuffer SHA256 非法：$scenarioName"
+  }
+  $actualFramebufferHash = (Get-FileHash -LiteralPath $framebufferPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($actualFramebufferHash -ne $expectedFramebufferHash) {
+    throw "编辑器 Game View presentation framebuffer SHA256 不匹配：$scenarioName"
+  }
+}
 
 $demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'window_frame_probe' 'Demo 窗口 probe stdout'
@@ -421,6 +516,7 @@ Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'
 Assert-ChecksumContains $relativePaths 'README.txt' 'README'
 Assert-ChecksumContains $relativePaths ([string]$manifest.editorExecutable) '编辑器入口'
 Assert-ChecksumContains $relativePaths ([string]$manifest.demoExecutable) 'Demo 入口'
+Assert-ChecksumContains $relativePaths ([string]$editorGameViewValidation.report) '编辑器 Game View presentation report'
 Assert-ChecksumContains $relativePaths ([string]$validation.demoBuildResult) 'demo-build-result'
 foreach ($assemblyName in $requiredScriptReferenceAssemblies) {
   Assert-ChecksumContains $relativePaths "$scriptReferenceAssembliesRelative/$assemblyName.dll" "脚本引用 DLL $assemblyName"

@@ -257,9 +257,14 @@ public sealed class HostingProjectDisciplineTests
 
         int replaceIndex = finalOutputScript.IndexOf("Replace-FinalOutput $nextRoot $outputRootFull", StringComparison.Ordinal);
         int verifyIndex = finalOutputScript.IndexOf("-Name 'verify-final-output'", StringComparison.Ordinal);
+        int gameViewProbeIndex = finalOutputScript.IndexOf("-Name 'editor-gameview-presentation-probe'", StringComparison.Ordinal);
 
         Assert.True(replaceIndex >= 0, "update-final-output.ps1 应包含原子替换正式输出目录步骤。");
         Assert.True(verifyIndex >= 0 && verifyIndex < replaceIndex, "update-final-output.ps1 应在替换前调用独立 verifier，失败时保留旧正式输出。");
+        Assert.True(gameViewProbeIndex >= 0 && gameViewProbeIndex < verifyIndex, "update-final-output.ps1 应在独立 verifier 前使用已发布 Editor 运行 Game View 六场景门禁。");
+        Assert.Contains("tools/run-editor-gameview-presentation-probe.ps1", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("editorGameViewPresentationProbe", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("uiStackLifecycle = '1->0->1'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("tools/verify-final-output.ps1", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'-OutputRoot', $nextRoot", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("verify-final-output.stdout.log", finalOutputScript, StringComparison.Ordinal);
@@ -288,6 +293,12 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("demoExecutable", verifier, StringComparison.Ordinal);
         Assert.Contains("demo-build-result.json 不是 ok=true", verifier, StringComparison.Ordinal);
         Assert.Contains("editor_default_workbench_probe ", verifier, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.editor-gameview-presentation-probe/v1", verifier, StringComparison.Ordinal);
+        Assert.Contains("first_ui_stack_depth", verifier, StringComparison.Ordinal);
+        Assert.Contains("second_ui_stack_depth", verifier, StringComparison.Ordinal);
+        Assert.Contains("editorGameViewPresentationProbe", verifier, StringComparison.Ordinal);
+        Assert.Contains("narrow-toolbar", verifier, StringComparison.Ordinal);
+        Assert.Contains("Game View presentation framebuffer SHA256 不匹配", verifier, StringComparison.Ordinal);
         Assert.Contains("window_frame_probe", verifier, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Demo", verifier, StringComparison.Ordinal);
         Assert.Contains("game_ui_probe ", verifier, StringComparison.Ordinal);
@@ -488,6 +499,19 @@ public sealed class HostingProjectDisciplineTests
 
             Assert.NotEqual(0, demoMissing.ExitCode);
             Assert.Contains("Demo 窗口 probe stdout 缺少验证标记", demoMissing.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            string gameViewReportPath = Path.Combine(outputRoot, "_验证记录", "editor-gameview-presentation", "report.json");
+            JsonObject gameViewReport = JsonNode.Parse(File.ReadAllText(gameViewReportPath))!.AsObject();
+            JsonObject firstScenario = gameViewReport["scenarios"]!.AsArray()[0]!.AsObject();
+            firstScenario["summary"]!.AsObject()["first_ui_stack_depth"] = "2";
+            File.WriteAllText(gameViewReportPath, gameViewReport.ToJsonString());
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult gameViewStackDrift = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, gameViewStackDrift.ExitCode);
+            Assert.Contains("first_ui_stack_depth expected=1 actual=2", gameViewStackDrift.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -2611,6 +2635,64 @@ public sealed class HostingProjectDisciplineTests
             "editor_default_workbench_probe completed=True succeeded=True build_completed=True build_ok=True");
         WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/editor-default-workbench.bmp", "editor capture");
+        string[] gameViewScenarioNames =
+        [
+            "aspect-16-9",
+            "aspect-4-3",
+            "aspect-9-16",
+            "resolution-1920-1080",
+            "maximize-on-play",
+            "narrow-toolbar",
+        ];
+        var gameViewScenarios = gameViewScenarioNames.Select(name =>
+        {
+            string framebufferRelative = $"_验证记录/editor-gameview-presentation/{name}/framebuffer.bmp";
+            WriteTextFile(outputRoot, framebufferRelative, $"framebuffer {name}");
+            string framebufferPath = Path.Combine(
+                outputRoot,
+                framebufferRelative.Replace('/', Path.DirectorySeparatorChar));
+            return new
+            {
+                name,
+                summary = new
+                {
+                    completed = "True",
+                    first_ui_stack_depth = "1",
+                    first_play_exited = "True",
+                    exit_ui_stack_depth = "0",
+                    second_play_entered = "True",
+                    second_ui_stack_depth = "1",
+                    second_controller_found = "True",
+                    second_controller_enabled = "True",
+                    second_controller_faulted = "False",
+                    second_play_ui_restored = "True",
+                    presentation_synchronized = "True",
+                    toolbar_density = name == "narrow-toolbar" ? "Narrow" : "Full",
+                    toolbar_fits = "True",
+                    toolbar_overflow_visible = "True",
+                },
+                framebuffer = new
+                {
+                    path = $"{name}/framebuffer.bmp",
+                    sha256 = Sha256Hex(framebufferPath),
+                },
+            };
+        }).ToArray();
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/editor-gameview-presentation/report.json",
+            JsonSerializer.Serialize(new
+            {
+                schema = "pixelengine.editor-gameview-presentation-probe/v1",
+                gitCommit,
+                allPassed = true,
+                scenarios = gameViewScenarios,
+            }));
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/logs/editor-gameview-presentation.stdout.log",
+            "pixelengine.editor-gameview-presentation-probe/v1 allPassed=True");
+        WriteTextFile(outputRoot, "_验证记录/logs/editor-gameview-presentation.stderr.log", "");
         WriteTextFile(
             outputRoot,
             "_验证记录/logs/demo-window.stdout.log",
@@ -2670,6 +2752,16 @@ public sealed class HostingProjectDisciplineTests
                         stdout = "_验证记录/logs/editor-default-workbench.stdout.log",
                         stderr = "_验证记录/logs/editor-default-workbench.stderr.log",
                         capture = "_验证记录/editor-default-workbench.bmp",
+                    },
+                    editorGameViewPresentationProbe = new
+                    {
+                        completed = true,
+                        allPassed = true,
+                        scenarioCount = 6,
+                        uiStackLifecycle = "1->0->1",
+                        stdout = "_验证记录/logs/editor-gameview-presentation.stdout.log",
+                        stderr = "_验证记录/logs/editor-gameview-presentation.stderr.log",
+                        report = "_验证记录/editor-gameview-presentation/report.json",
                     },
                     demoWindowProbe = new
                     {

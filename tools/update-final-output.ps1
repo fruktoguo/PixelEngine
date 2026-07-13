@@ -314,6 +314,8 @@ $gitCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 
 $nativeBuildScript = Join-Path $repoRoot 'tools/build-native.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
+$editorGameViewProbeScript = Join-Path $repoRoot 'tools/run-editor-gameview-presentation-probe.ps1'
+$demoProjectRoot = Join-Path $repoRoot 'demo/PixelEngine.Demo'
 $demoBuildScript = Join-Path $repoRoot 'tools/build-player.ps1'
 $editorExe = Join-Path $editorPublish 'PixelEngine.Editor.Shell.exe'
 $scriptReferenceAssemblyNames = @(
@@ -370,6 +372,39 @@ $editorProbeOk =
 
 if (-not $editorProbeOk) {
   throw "编辑器默认工作台验证未通过。日志：$($editorProbeResult.StdoutPath)"
+}
+
+# 默认工作台只能证明 Editor 能启动和出包；正式发布还必须用已经 publish 的 Editor
+# 跑完 Game View preset/maximize/窄工具栏与 Play→Stop→Play 产品状态矩阵。
+$editorGameViewProbeRoot = Join-Path $validationRoot 'editor-gameview-presentation'
+$editorGameViewProbeResult = Invoke-ProcessChecked `
+  -Name 'editor-gameview-presentation-probe' `
+  -FilePath $pwsh `
+  -Arguments @(
+    '-NoProfile',
+    '-File', $editorGameViewProbeScript,
+    '-EditorExecutable', $editorExe,
+    '-ProjectRoot', $demoProjectRoot,
+    '-OutputRoot', $editorGameViewProbeRoot,
+    '-WindowTicks', '100',
+    '-TimeoutSeconds', $EditorProbeTimeoutSeconds.ToString([Globalization.CultureInfo]::InvariantCulture)
+  ) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'editor-gameview-presentation.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'editor-gameview-presentation.stderr.log') `
+  -TimeoutSeconds $EditorProbeTimeoutSeconds
+
+$editorGameViewProbeReportPath = Join-Path $editorGameViewProbeRoot 'report.json'
+if (-not (Test-Path -LiteralPath $editorGameViewProbeReportPath -PathType Leaf)) {
+  throw "编辑器 Game View presentation probe 缺少报告：$editorGameViewProbeReportPath"
+}
+
+$editorGameViewProbeReport = Get-Content -Raw -LiteralPath $editorGameViewProbeReportPath | ConvertFrom-Json
+if ($editorGameViewProbeReport.schema -ne 'pixelengine.editor-gameview-presentation-probe/v1' -or
+    $editorGameViewProbeReport.allPassed -ne $true -or
+    $editorGameViewProbeReport.gitCommit -ne $gitCommit -or
+    @($editorGameViewProbeReport.scenarios).Count -ne 6) {
+  throw "编辑器 Game View presentation probe 报告身份或结果不匹配：$editorGameViewProbeReportPath"
 }
 
 $demoBuildResult = Invoke-ProcessChecked `
@@ -493,6 +528,15 @@ $manifest = [ordered]@{
       stderr = '_验证记录/logs/editor-default-workbench.stderr.log'
       capture = '_验证记录/editor-default-workbench.bmp'
     }
+    editorGameViewPresentationProbe = [ordered]@{
+      completed = $true
+      allPassed = $true
+      scenarioCount = 6
+      uiStackLifecycle = '1->0->1'
+      stdout = '_验证记录/logs/editor-gameview-presentation.stdout.log'
+      stderr = '_验证记录/logs/editor-gameview-presentation.stderr.log'
+      report = '_验证记录/editor-gameview-presentation/report.json'
+    }
     demoWindowProbe = [ordered]@{
       completed = $true
       unicodePath = $true
@@ -520,6 +564,7 @@ PixelEngine 正式输出
 - 脚本开发 SDK：编辑器\ScriptReferenceAssemblies\
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe
 - 验证记录：_验证记录\manifest.json
+- Game View 六场景报告：_验证记录\editor-gameview-presentation\report.json
 - 完整性校验：SHA256SUMS
 "@ | Set-Content -LiteralPath (Join-Path $nextRoot 'README.txt') -Encoding UTF8
 
