@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-14",
-  "generatedFromCommit": "8a700d2083bf1b806169e83101380d60803dc711",
+  "generatedFromCommit": "afac054336d842adc379d23a4502ee95fad859ad",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -701,6 +701,19 @@
       "reportPath": "docs/evidence-2026-07-14-ui-004-game-ui-product-flow.md",
       "sha256": "6c80f1ed394801e57541ea1e41309cfb2231d19625a5f4827a7a3289d0dbaa79",
       "notes": "Default main menu, gameplay HUD, telemetry and two CanvasScaler diagnostic overlays now form mutually exclusive product states; a real RmlUi path-contract crash is fixed and fake tests reject cross-document paths. Commit-bound menu/gameplay framebuffers and five full test projects pass. Computer Use can discover and snapshot the Player but repeated fresh-window activation fails, so physical clicks, different-DPI/cross-screen and reviewer remain and UI-004 stays active."
+    },
+    {
+      "entryId": "ui-004-game-ui-reentry-release-gate-20260714",
+      "taskIds": ["UI-004"],
+      "evidenceState": "local_game_ui_reentry_and_release_gate_complete_clean_final_output_pending",
+      "commit": "afac054336d842adc379d23a4502ee95fad859ad",
+      "runSessionId": "local-20260714-ui004-game-ui-reentry-release-gate",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT driver 32.0.31021.5001; active desktop 1024x768 at 96 DPI; .NET SDK 10.0.108; win-x64",
+      "command": "packaged Editor Game View probe against ef49e9bf final output; fix/editor commit 61124f3d; commit-bound tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; solution Release build; full Hosting tests; build/editor commit afac0543 adding packaged Game View matrix to tools/update-final-output.ps1 and tools/verify-final-output.ps1; FinalOutput filtered negative tests; task/evidence catalog validation",
+      "reportPath": "docs/evidence-2026-07-14-ui-004-game-ui-reentry-release-gate.md",
+      "sha256": "97ed876ba96c46a97f06cd4b793ae073d7cbf8462c6f515214136aeaf83f498a",
+      "notes": "The product UI lifecycle is now strictly 1->0->1 after default HUD removal; the old >=2 probe contract is rejected. Six real desktop-GL scenarios pass at commit 61124f3d. The final-output update and independent verifier now require the packaged Editor matrix, same commit, exact stack/presentation/toolbar fields and framebuffer hashes before replacement. Physical input, different-DPI/cross-screen, reviewer and the final clean-worktree refresh remain, so UI-004 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
