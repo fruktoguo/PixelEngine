@@ -230,7 +230,7 @@ public readonly record struct AssetBrowserDescriptor(
 public readonly record struct AssetThumbnail(uint TextureHandle, int Width, int Height);
 
 /// <summary>
-/// Project Window 底部资产预览的主要内容形态。
+/// Inspector 资产预览的主要内容形态。
 /// </summary>
 public enum AssetBrowserPreviewContentKind
 {
@@ -248,14 +248,14 @@ public enum AssetBrowserPreviewContentKind
 }
 
 /// <summary>
-/// Project Window 预览中的一项只读元数据。
+/// Inspector 资产预览中的一项只读元数据。
 /// </summary>
 /// <param name="Label">短标签。</param>
 /// <param name="Value">面向用户的值。</param>
 public readonly record struct AssetBrowserPreviewProperty(string Label, string Value);
 
 /// <summary>
-/// 按选择懒加载的 Project Window 详细预览。
+/// 按选择懒加载的 Inspector 详细资产预览。
 /// </summary>
 /// <param name="Title">预览标题。</param>
 /// <param name="ContentKind">主要内容形态。</param>
@@ -280,7 +280,7 @@ public sealed record AssetBrowserDetailedPreview(
 /// <param name="LastModifiedUtc">最后修改 UTC 时间。</param>
 /// <param name="Thumbnail">由快照拥有且生命周期稳定的缩略图；生产数据源通常为 null，并通过 <see cref="IAssetBrowserThumbnailDataSource"/> 懒加载。</param>
 /// <param name="AssetId">工程级 stable asset id；旧文件系统数据源可为空。</param>
-/// <param name="PreviewSummary">Project Window 可展示的只读资产预览摘要。</param>
+/// <param name="PreviewSummary">Inspector 可展示的只读资产预览摘要。</param>
 /// <param name="Descriptor">面向用户的类型、用途与静态 badge。</param>
 public readonly record struct AssetBrowserItem(
     string Path,
@@ -677,7 +677,7 @@ public interface IAssetBrowserThumbnailDataSource
 /// 为当前选择提供按需详细预览的数据源扩展。
 /// </summary>
 /// <remarks>
-/// 普通 <see cref="IAssetBrowserDataSource.ListAssets"/> 查询不得调用本接口；Project Window 仅在选择或文件版本变化时读取一次并缓存。
+/// 普通 <see cref="IAssetBrowserDataSource.ListAssets"/> 查询不得调用本接口；Inspector 仅在选择或文件版本变化时读取一次并缓存。
 /// </remarks>
 public interface IAssetBrowserPreviewDataSource
 {

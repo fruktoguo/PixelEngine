@@ -14,6 +14,14 @@ namespace PixelEngine.Editor;
 public delegate bool ScriptAssetOpenHandler(string assetPath, out string diagnostic);
 
 /// <summary>
+/// Project Window Prefab 实例化回调。
+/// </summary>
+/// <param name="assetPath">Prefab 资产 rooted logical path。</param>
+/// <param name="diagnostic">可展示给用户的实例化诊断。</param>
+/// <returns>Prefab 已成功实例化时返回 true。</returns>
+public delegate bool PrefabAssetInstantiateHandler(string assetPath, out string diagnostic);
+
+/// <summary>
 /// Project Window 场景资产打开回调。
 /// </summary>
 /// <param name="assetPath">场景资产 rooted logical path。</param>
@@ -26,7 +34,7 @@ public delegate bool SceneAssetOpenHandler(string assetPath, out string diagnost
 /// </summary>
 /// <param name="source">资产数据源。</param>
 /// <param name="audioPreview">音频试听服务。</param>
-/// <param name="instantiatePrefab">可选 prefab 实例化回调。</param>
+/// <param name="instantiatePrefab">兼容旧调用方的 prefab 实例化回调。</param>
 /// <param name="openScriptAsset">可选脚本资产打开回调。</param>
 /// <param name="openSceneAsset">可选场景资产打开回调。</param>
 /// <param name="deleteAsset">可选资产删除回调。</param>
@@ -36,6 +44,7 @@ public delegate bool SceneAssetOpenHandler(string assetPath, out string diagnost
 /// <param name="createAsset">可选资产创建回调。</param>
 /// <param name="importAsset">可选资产导入回调。</param>
 /// <param name="pickImportSource">可选导入源文件选择回调。</param>
+/// <param name="tryInstantiatePrefab">可返回失败诊断的 prefab 实例化回调；新调用方优先使用。</param>
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
@@ -48,7 +57,8 @@ public sealed class AssetBrowserPanel(
     AssetBrowserFolderMoveHandler? moveFolder = null,
     AssetBrowserCreateHandler? createAsset = null,
     AssetBrowserImportHandler? importAsset = null,
-    AssetBrowserImportSourcePickHandler? pickImportSource = null) : IEditorPanel
+    AssetBrowserImportSourcePickHandler? pickImportSource = null,
+    PrefabAssetInstantiateHandler? tryInstantiatePrefab = null) : IEditorPanel
 {
     /// <summary>
     /// Project Window 网格缩略图允许的最小边长。
@@ -61,10 +71,6 @@ public sealed class AssetBrowserPanel(
     public const float MaximumThumbnailSize = 128f;
 
     private const float DefaultThumbnailSize = 64f;
-    private const float DefaultPreviewPaneHeight = 180f;
-    private const float PreviewSplitterHeight = 5f;
-    private const float MinimumPreviewContentHeight = 48f;
-    private const float MinimumPreviewPaneHeight = 72f;
     private const float GridLabelHeight = 38f;
     private const float GridCellPadding = 10f;
     private const uint SelectedTileColor = 0xCC744C2F;
@@ -77,6 +83,7 @@ public sealed class AssetBrowserPanel(
     private readonly AssetBrowserThumbnailLeaseCache _thumbnailLeases = new(source as IAssetBrowserThumbnailDataSource);
     private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
+    private readonly PrefabAssetInstantiateHandler? _tryInstantiatePrefab = tryInstantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
     private readonly SceneAssetOpenHandler? _openSceneAsset = openSceneAsset;
     private readonly AssetBrowserDeleteHandler? _deleteAsset = deleteAsset;
@@ -119,11 +126,6 @@ public sealed class AssetBrowserPanel(
     private bool _snapshotLoaded;
     private bool _showCreateEditor;
     private bool _showImportEditor;
-    private string _previewCachePath = string.Empty;
-    private long _previewCacheSizeBytes = -1;
-    private long _previewCacheModifiedTicks = -1;
-    private AssetBrowserDetailedPreview? _previewCache;
-    private float _previewPaneHeight = DefaultPreviewPaneHeight;
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
@@ -144,7 +146,6 @@ public sealed class AssetBrowserPanel(
             {
                 _externalDropTargets.Clear();
                 _thumbnailLeases.ReleaseAll();
-                ClearPreviewCache();
             }
         }
     } = true;
@@ -718,6 +719,49 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <summary>
+    /// 实例化指定 Prefab 资产，并把失败原因保留在 Project Window 状态栏。
+    /// </summary>
+    /// <param name="path">Prefab 资产路径。</param>
+    /// <returns>Prefab 已成功实例化时返回 true。</returns>
+    public bool TryInstantiatePrefabAsset(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        AssetBrowserItem? item = FindAsset(path);
+        if (item is null)
+        {
+            Status = $"资产不存在：{path}";
+            return false;
+        }
+
+        if (item.Value.Kind != AssetBrowserItemKind.Prefab)
+        {
+            Status = $"仅 Prefab 资产可实例化：{item.Value.Path}";
+            return false;
+        }
+
+        if (_tryInstantiatePrefab is null && _instantiatePrefab is null)
+        {
+            Status = "Prefab 实例化服务不可用";
+            return false;
+        }
+
+        if (_tryInstantiatePrefab is not null)
+        {
+            bool instantiated = _tryInstantiatePrefab(item.Value.Path, out string diagnostic);
+            Status = string.IsNullOrWhiteSpace(diagnostic)
+                ? instantiated ? $"实例化 {item.Value.Path}" : $"Prefab 实例化失败：{item.Value.Path}"
+                : diagnostic;
+            return instantiated;
+        }
+
+        // 兼容旧 public Action<string> 构造参数；新 Shell 使用 result-aware 回调，
+        // 因此失败诊断不会在 Project Window 内被猜测或重复记录。
+        _instantiatePrefab!(item.Value.Path);
+        Status = $"实例化 {item.Value.Path}";
+        return true;
+    }
+
+    /// <summary>
     /// 通过 Shell dirty-guard 转场打开指定 Scene，且不修改 Project StartScene。
     /// </summary>
     /// <param name="path">场景资产 rooted logical path。</param>
@@ -1132,15 +1176,15 @@ public sealed class AssetBrowserPanel(
                     ImGui.EndChild();
 
                     _ = ImGui.TableNextColumn();
-                    DrawAssetContentsAndPreview(context.Selection, layoutHeight);
+                    DrawAssetContents(context.Selection, layoutHeight);
                     ImGui.EndTable();
                 }
             }
             else
             {
                 // 默认右下角窄停靠区采用 Unity Project 的单栏心智模型；folder item 与 breadcrumb
-                // 仍能完成完整导航，同时把有限宽度留给资产名、缩略图和底部类型化预览。
-                DrawAssetContentsAndPreview(context.Selection, layoutHeight);
+                // 仍能完成完整导航，同时把有限宽度留给资产名和缩略图；详细预览归 Inspector。
+                DrawAssetContents(context.Selection, layoutHeight);
             }
 
             DrawPendingActionEditors();
@@ -1153,7 +1197,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
-    private void DrawAssetContentsAndPreview(EditorSelection selection, float layoutHeight)
+    private void DrawAssetContents(EditorSelection selection, float layoutHeight)
     {
         float contentStartY = ImGui.GetCursorPosY();
         DrawBreadcrumbs(selection);
@@ -1161,29 +1205,9 @@ public sealed class AssetBrowserPanel(
         float availableContentHeight = MathF.Max(
             ImGui.GetFrameHeight(),
             layoutHeight - (ImGui.GetCursorPosY() - contentStartY));
-        AssetBrowserItem? selectedPreviewItem = FindSelectedAsset(selection);
-        ProjectAssetPreviewLayout previewLayout = ResolveAssetPreviewLayout(
-            availableContentHeight,
-            _previewPaneHeight,
-            selectedPreviewItem.HasValue);
-        _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, previewLayout.ContentHeight));
+        _ = ImGui.BeginChild("project_folder_contents", new Vector2(0f, availableContentHeight));
         DrawFolderContents(selection);
         ImGui.EndChild();
-
-        if (selectedPreviewItem is not { } previewItem || !previewLayout.ShowPreview)
-        {
-            return;
-        }
-
-        DrawPreviewSplitter();
-        ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.105f, 0.11f, 0.12f, 1f));
-        _ = ImGui.BeginChild(
-            "project_asset_preview",
-            new Vector2(0f, previewLayout.PreviewHeight),
-            ImGuiChildFlags.Borders);
-        DrawAssetPreviewPane(in previewItem);
-        ImGui.EndChild();
-        ImGui.PopStyleColor();
     }
 
     private void DrawToolbar(EditorSelection selection)
@@ -1874,270 +1898,9 @@ public sealed class AssetBrowserPanel(
         DrawAssetIcon(drawList, item.IconKind, min, size, color);
     }
 
-    private void DrawPreviewSplitter()
-    {
-        Vector2 minimum = ImGui.GetCursorScreenPos();
-        float width = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
-        _ = ImGui.InvisibleButton("##project-preview-splitter", new Vector2(width, PreviewSplitterHeight));
-        bool hovered = ImGui.IsItemHovered();
-        bool active = ImGui.IsItemActive();
-        if (hovered || active)
-        {
-            ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
-        }
-
-        uint color = active ? AccentIconColor : hovered ? 0xFF777A80 : 0xFF3A3C41;
-        ImGui.GetWindowDrawList().AddLine(
-            minimum + new Vector2(0f, PreviewSplitterHeight * 0.5f),
-            minimum + new Vector2(width, PreviewSplitterHeight * 0.5f),
-            color,
-            active ? 2f : 1f);
-        if (active)
-        {
-            _previewPaneHeight = MathF.Max(
-                1f,
-                _previewPaneHeight - ImGui.GetIO().MouseDelta.Y);
-        }
-    }
-
-    private void DrawAssetPreviewPane(in AssetBrowserItem item)
-    {
-        AssetBrowserDetailedPreview preview = ResolveDetailedPreview(in item);
-        ImGui.TextDisabled("Preview");
-        ImGui.SameLine();
-        ImGui.TextUnformatted(preview.Title);
-
-        if (preview.ContentKind == AssetBrowserPreviewContentKind.Text)
-        {
-            float availableWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
-            float availableHeight = MathF.Max(1f, ImGui.GetContentRegionAvail().Y);
-            string? textContent = preview.TextContent;
-            bool hasTextContent = !string.IsNullOrWhiteSpace(textContent);
-            bool compactTextPreview = hasTextContent && (availableWidth < 220f || availableHeight < 200f);
-            if (!compactTextPreview)
-            {
-                ImGui.TextWrapped(preview.Summary);
-            }
-
-            DrawPreviewProperties(
-                preview.Properties,
-                maximumRows: compactTextPreview ? 1 : 3,
-                skipLongValues: true);
-            if (hasTextContent && ImGui.GetContentRegionAvail().Y > ImGui.GetFrameHeight())
-            {
-                ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.075f, 0.08f, 0.09f, 1f));
-                _ = ImGui.BeginChild(
-                    "project_asset_text_preview",
-                    new Vector2(0f, 0f),
-                    ImGuiChildFlags.Borders,
-                    ImGuiWindowFlags.HorizontalScrollbar);
-                ImGui.TextUnformatted(textContent!);
-                ImGui.EndChild();
-                ImGui.PopStyleColor();
-            }
-        }
-        else
-        {
-            float availableWidth = MathF.Max(32f, ImGui.GetContentRegionAvail().X);
-            float availableHeight = MathF.Max(32f, ImGui.GetContentRegionAvail().Y);
-            bool audioPreview = preview.ContentKind == AssetBrowserPreviewContentKind.Audio;
-            bool inlineDetails = availableWidth >= 160f;
-            float mediaSize = audioPreview
-                ? Math.Clamp(MathF.Min(availableHeight * 0.32f, availableWidth * 0.28f), 34f, 48f)
-                : inlineDetails
-                    ? Math.Clamp(MathF.Min(availableHeight, availableWidth * 0.38f), 40f, 104f)
-                    : Math.Clamp(MathF.Min(availableHeight * 0.48f, availableWidth * 0.5f), 36f, 72f);
-            Vector2 mediaMinimum = ImGui.GetCursorScreenPos();
-            _ = ImGui.InvisibleButton("##project-large-preview", new Vector2(mediaSize));
-            AssetThumbnail? thumbnail = preview.ContentKind == AssetBrowserPreviewContentKind.Image
-                ? _thumbnailLeases.Resolve(in item, visible: true)
-                : null;
-            DrawAssetPreview(
-                ImGui.GetWindowDrawList(),
-                item,
-                thumbnail,
-                mediaMinimum,
-                new Vector2(mediaSize));
-
-            bool groupBesideMedia = inlineDetails || audioPreview;
-            if (groupBesideMedia)
-            {
-                ImGui.SameLine();
-                ImGui.BeginGroup();
-            }
-
-            if (item.Kind == AssetBrowserItemKind.Audio && _audioPreview is not null &&
-                ImGui.Button("▶ 试听##project-audio-preview"))
-            {
-                _ = TryPreviewAudio(item.Path);
-            }
-
-            if ((!audioPreview && (inlineDetails || preview.ContentKind == AssetBrowserPreviewContentKind.Summary)) ||
-                (audioPreview && availableWidth >= 240f))
-            {
-                ImGui.TextWrapped(preview.Summary);
-            }
-
-            if (groupBesideMedia)
-            {
-                ImGui.EndGroup();
-            }
-
-            DrawPreviewProperties(
-                preview.Properties,
-                maximumRows: inlineDetails ? 6 : 3,
-                skipLongValues: true);
-        }
-
-        if (!string.IsNullOrWhiteSpace(preview.Diagnostic))
-        {
-            ImGui.TextDisabled(preview.Diagnostic);
-        }
-    }
-
-    private static void DrawPreviewProperties(
-        IReadOnlyList<AssetBrowserPreviewProperty> properties,
-        int maximumRows,
-        bool skipLongValues)
-    {
-        int shown = 0;
-        for (int i = 0; i < properties.Count && shown < maximumRows; i++)
-        {
-            AssetBrowserPreviewProperty property = properties[i];
-            if (skipLongValues &&
-                (string.Equals(property.Label, "路径", StringComparison.Ordinal) ||
-                    string.Equals(property.Label, "用途", StringComparison.Ordinal)))
-            {
-                continue;
-            }
-
-            ImGui.TextDisabled($"{property.Label}:");
-            ImGui.SameLine();
-            ImGui.TextUnformatted(property.Value);
-            shown++;
-        }
-    }
-
-    internal AssetBrowserDetailedPreview CaptureAssetPreview(string path)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        AssetBrowserItem value = FindAsset(path) ?? throw new InvalidOperationException($"资产不存在：{path}");
-        return ResolveDetailedPreview(in value);
-    }
-
-    internal static ProjectAssetPreviewLayout ResolveAssetPreviewLayout(
-        float availableHeight,
-        float desiredPreviewHeight,
-        bool hasSelection)
-    {
-        float height = MathF.Max(1f, availableHeight);
-        if (!hasSelection)
-        {
-            return new ProjectAssetPreviewLayout(height, PreviewHeight: 0f, ShowPreview: false);
-        }
-
-        float maximumPreviewHeight = MathF.Max(
-            1f,
-            height - PreviewSplitterHeight - MinimumPreviewContentHeight);
-        float minimumPreviewHeight = MathF.Min(MinimumPreviewPaneHeight, maximumPreviewHeight);
-        float previewHeight = Math.Clamp(
-            MathF.Max(1f, desiredPreviewHeight),
-            minimumPreviewHeight,
-            maximumPreviewHeight);
-        float contentHeight = MathF.Max(1f, height - PreviewSplitterHeight - previewHeight);
-        return new ProjectAssetPreviewLayout(contentHeight, previewHeight, ShowPreview: true);
-    }
-
     internal static bool ShouldShowFolderTree(float availableWidth)
     {
         return availableWidth >= 420f;
-    }
-
-    private AssetBrowserDetailedPreview ResolveDetailedPreview(in AssetBrowserItem item)
-    {
-        long modifiedTicks = item.LastModifiedUtc.UtcTicks;
-        if (_previewCache is not null &&
-            string.Equals(_previewCachePath, item.Path, StringComparison.OrdinalIgnoreCase) &&
-            _previewCacheSizeBytes == item.SizeBytes &&
-            _previewCacheModifiedTicks == modifiedTicks)
-        {
-            return _previewCache;
-        }
-
-        AssetBrowserDetailedPreview preview = _source is IAssetBrowserPreviewDataSource previewSource &&
-            previewSource.TryGetPreview(item.Path, out AssetBrowserDetailedPreview detailed)
-                ? detailed
-                : BuildFallbackPreview(in item);
-        _previewCachePath = item.Path;
-        _previewCacheSizeBytes = item.SizeBytes;
-        _previewCacheModifiedTicks = modifiedTicks;
-        _previewCache = preview;
-        return preview;
-    }
-
-    private static AssetBrowserDetailedPreview BuildFallbackPreview(in AssetBrowserItem item)
-    {
-        AssetBrowserPreviewContentKind contentKind = item.Kind switch
-        {
-            AssetBrowserItemKind.Texture => AssetBrowserPreviewContentKind.Image,
-            AssetBrowserItemKind.Audio => AssetBrowserPreviewContentKind.Audio,
-            AssetBrowserItemKind.Material or
-            AssetBrowserItemKind.Scene or
-            AssetBrowserItemKind.Prefab or
-            AssetBrowserItemKind.Script or
-            AssetBrowserItemKind.UiScreen or
-            AssetBrowserItemKind.Json => AssetBrowserPreviewContentKind.Text,
-            AssetBrowserItemKind.Folder or AssetBrowserItemKind.Other => AssetBrowserPreviewContentKind.Summary,
-            _ => throw new ArgumentOutOfRangeException(nameof(item), item.Kind, "未知资产类型。"),
-        };
-        AssetBrowserPreviewProperty[] properties =
-        [
-            new("类型", item.Descriptor?.TypeLabel ?? item.Kind.ToString()),
-            new("路径", item.Path),
-            new("大小", FormatPreviewSize(item.SizeBytes)),
-        ];
-        return new AssetBrowserDetailedPreview(
-            item.DisplayName,
-            contentKind,
-            item.PreviewSummary ?? item.Descriptor?.Purpose ?? "暂无摘要",
-            properties);
-    }
-
-    private static string FormatPreviewSize(long bytes)
-    {
-        return bytes < 1024
-            ? $"{bytes.ToString(CultureInfo.InvariantCulture)} B"
-            : $"{(bytes / 1024d).ToString("0.##", CultureInfo.InvariantCulture)} KB";
-    }
-
-    private AssetBrowserItem? FindSelectedAsset(EditorSelection selection)
-    {
-        if (!string.IsNullOrWhiteSpace(selection.AssetPath))
-        {
-            return FindAsset(selection.AssetPath);
-        }
-
-        if (!string.IsNullOrWhiteSpace(selection.AssetId))
-        {
-            EnsureSnapshotLoaded();
-            for (int i = 0; i < LastAssets.Count; i++)
-            {
-                if (string.Equals(LastAssets[i].AssetId, selection.AssetId, StringComparison.OrdinalIgnoreCase))
-                {
-                    return LastAssets[i];
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private void ClearPreviewCache()
-    {
-        _previewCachePath = string.Empty;
-        _previewCacheSizeBytes = -1;
-        _previewCacheModifiedTicks = -1;
-        _previewCache = null;
     }
 
     private static void DrawThumbnail(ImDrawListPtr drawList, AssetThumbnail thumbnail, Vector2 boundsMin, Vector2 boundsSize)
@@ -2395,8 +2158,7 @@ public sealed class AssetBrowserPanel(
 
         if (item.Kind == AssetBrowserItemKind.Prefab && ImGui.MenuItem("实例化"))
         {
-            _instantiatePrefab?.Invoke(item.Path);
-            Status = $"实例化 {item.Path}";
+            _ = TryInstantiatePrefabAsset(item.Path);
         }
 
         ImGui.Separator();
@@ -3379,7 +3141,6 @@ public sealed class AssetBrowserPanel(
     {
         LastAssets = _source.ListAssets();
         _snapshotLoaded = true;
-        ClearPreviewCache();
         ReconcileAssetSelection(_trackedSelection);
         RebuildFolderTargets();
         ReconcileFolderSelection(_trackedSelection);
@@ -3646,11 +3407,6 @@ public sealed class AssetBrowserPanel(
         Vector2 Maximum,
         string FolderPath);
 }
-
-internal readonly record struct ProjectAssetPreviewLayout(
-    float ContentHeight,
-    float PreviewHeight,
-    bool ShowPreview);
 
 /// <summary>
 /// Project Window 可见缩略图 lease 集合。每个 lease 至少跨过提交它的 ImGui render frame，

@@ -1815,7 +1815,53 @@ internal sealed class EditorShellApp
 
     public void InstantiatePrefab(string assetPath)
     {
-        CurrentSession?.InstantiatePrefab(assetPath);
+        _ = InstantiatePrefab(assetPath, out _);
+    }
+
+    public bool InstantiatePrefab(string assetPath, out string diagnostic)
+    {
+        if (string.IsNullOrWhiteSpace(assetPath))
+        {
+            diagnostic = "Prefab 资产路径不能为空。";
+            return RecordPrefabInstantiationResult(success: false, diagnostic);
+        }
+
+        if (CurrentSession is null)
+        {
+            diagnostic = "当前没有打开的工程，无法实例化 Prefab。";
+            return RecordPrefabInstantiationResult(success: false, diagnostic);
+        }
+
+        try
+        {
+            CurrentSession.InstantiatePrefab(assetPath);
+            diagnostic = $"已实例化 Prefab：{assetPath}";
+            return RecordPrefabInstantiationResult(success: true, diagnostic);
+        }
+        catch (Exception exception) when (exception is
+            IOException or
+            UnauthorizedAccessException or
+            InvalidOperationException or
+            JsonException or
+            NotSupportedException or
+            FormatException or
+            ArgumentException)
+        {
+            diagnostic = $"Prefab 实例化失败：{assetPath}。{exception.Message}";
+            return RecordPrefabInstantiationResult(success: false, diagnostic);
+        }
+    }
+
+    private bool RecordPrefabInstantiationResult(bool success, string diagnostic)
+    {
+        LastAssetOpenDiagnostic = diagnostic;
+        ConsoleStore.Add(new EditorConsoleEntry(
+            DateTimeOffset.UtcNow,
+            EditorConsoleCategory.Asset,
+            success ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Error,
+            "prefab-instantiator",
+            diagnostic));
+        return success;
     }
 
     public bool OpenScriptAsset(string assetPath, out string diagnostic)

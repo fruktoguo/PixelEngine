@@ -2,6 +2,7 @@ using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Scripting;
+using System.Globalization;
 using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
@@ -15,10 +16,12 @@ internal sealed class GameObjectInspectorPanel(
     ScriptAssemblyRegistry scripts,
     IEditorConsoleSink? console = null,
     IAssetBrowserDataSource? assetSource = null,
-    Action<string>? instantiatePrefab = null,
+    PrefabAssetInstantiateHandler? instantiatePrefab = null,
     ScriptAssetOpenHandler? openScriptAsset = null,
+    SceneAssetOpenHandler? openSceneAsset = null,
+    IAudioPreviewService? audioPreview = null,
     IRuntimeSceneEditorDataSource? runtimeSource = null,
-    Func<EditorMode>? modeProvider = null) : IEditorPanel
+    Func<EditorMode>? modeProvider = null) : IEditorPanel, IDisposable
 {
     private const string ReadyStatus = "就绪";
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
@@ -26,8 +29,12 @@ internal sealed class GameObjectInspectorPanel(
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
     private readonly IEditorConsoleSink? _console = console;
     private readonly IAssetBrowserDataSource? _assetSource = assetSource;
-    private readonly Action<string>? _instantiatePrefab = instantiatePrefab;
+    private readonly IAssetBrowserPreviewDataSource? _assetPreviewSource = assetSource as IAssetBrowserPreviewDataSource;
+    private readonly IAssetBrowserThumbnailDataSource? _assetThumbnailSource = assetSource as IAssetBrowserThumbnailDataSource;
+    private readonly PrefabAssetInstantiateHandler? _instantiatePrefab = instantiatePrefab;
     private readonly ScriptAssetOpenHandler? _openScriptAsset = openScriptAsset;
+    private readonly SceneAssetOpenHandler? _openSceneAsset = openSceneAsset;
+    private readonly IAudioPreviewService? _audioPreview = audioPreview;
     private readonly IRuntimeSceneEditorDataSource? _runtimeSource = runtimeSource;
     private readonly Func<EditorMode>? _modeProvider = modeProvider;
     private string _componentSearch = string.Empty;
@@ -41,12 +48,34 @@ internal sealed class GameObjectInspectorPanel(
     private EditorGameObject? _nameEditTarget;
     private int _focusDelayFrames;
     private bool _focusRequested;
+    private string _assetPreviewCachePath = string.Empty;
+    private long _assetPreviewCacheSizeBytes = -1;
+    private long _assetPreviewCacheModifiedTicks = -1;
+    private AssetBrowserDetailedPreview? _assetPreviewCache;
+    private AssetPreviewThumbnailLease? _assetPreviewThumbnail;
+    private bool _disposed;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
     internal string Status { get; private set; } = ReadyStatus;
 
-    public bool Visible { get; set; } = true;
+    public bool Visible
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            if (!value)
+            {
+                ClearAssetPreviewState();
+            }
+        }
+    } = true;
 
     internal void RequestFocus()
     {
@@ -58,6 +87,14 @@ internal sealed class GameObjectInspectorPanel(
 
     public void Draw(in EditorContext context)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        PrepareAssetPreviewSelection(
+            !context.Selection.GameObjectStableId.HasValue &&
+            !context.Selection.BodyId.HasValue &&
+            string.IsNullOrWhiteSpace(context.Selection.EntityHandle) &&
+            context.Selection.FolderPath is null
+                ? context.Selection.AssetPath
+                : null);
         PrepareFrame(context.Selection.GameObjectStableId);
         if (_focusDelayFrames > 0)
         {
@@ -211,7 +248,7 @@ internal sealed class GameObjectInspectorPanel(
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
         if (_assetSource is null)
         {
-            return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, "资产数据源不可用");
+            return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, null, null, "资产数据源不可用");
         }
 
         IReadOnlyList<AssetBrowserItem> assets = _assetSource.ListAssets();
@@ -220,6 +257,7 @@ internal sealed class GameObjectInspectorPanel(
             AssetBrowserItem item = assets[i];
             if (string.Equals(item.Path, assetPath, StringComparison.OrdinalIgnoreCase))
             {
+                AssetBrowserDetailedPreview preview = ResolveAssetPreview(in item);
                 return new AssetInspectorSnapshot(
                     item.Path,
                     Found: true,
@@ -228,11 +266,22 @@ internal sealed class GameObjectInspectorPanel(
                     item.SizeBytes,
                     item.PreviewSummary,
                     GetPrimaryAssetActionLabel(item.Kind),
+                    item,
+                    preview,
                     "就绪");
             }
         }
 
-        return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, $"资产不存在：{assetPath}");
+        return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, null, null, $"资产不存在：{assetPath}");
+    }
+
+    internal AssetThumbnail? CaptureAssetPreviewThumbnail(string assetPath)
+    {
+        AssetInspectorSnapshot snapshot = CaptureAssetInspector(assetPath);
+        return snapshot.Item is { } item &&
+            snapshot.DetailedPreview?.ContentKind == AssetBrowserPreviewContentKind.Image
+                ? ResolveAssetPreviewThumbnail(in item)
+                : null;
     }
 
     internal FolderInspectorSnapshot CaptureFolderInspector(string folderPath)
@@ -265,13 +314,13 @@ internal sealed class GameObjectInspectorPanel(
             return false;
         }
 
-        if (!Enum.TryParse(asset.Kind, ignoreCase: false, out AssetBrowserItemKind kind))
+        if (asset.Item is not { } item)
         {
             RecordInspectorStatus($"资产类型不可操作：{asset.Kind}", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
             return false;
         }
 
-        switch (kind)
+        switch (item.Kind)
         {
             case AssetBrowserItemKind.Script:
                 if (_openScriptAsset is null)
@@ -287,7 +336,8 @@ internal sealed class GameObjectInspectorPanel(
                         : diagnostic,
                     opened ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
                     "inspector-asset-action",
-                    GetAssetSelectionKey(asset.Path));
+                    GetAssetSelectionKey(asset.Path),
+                    writeConsole: false);
                 return opened;
 
             case AssetBrowserItemKind.Prefab:
@@ -297,14 +347,37 @@ internal sealed class GameObjectInspectorPanel(
                     return false;
                 }
 
-                _instantiatePrefab(asset.Path);
-                RecordInspectorStatus($"实例化 {asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
-                return true;
+                bool instantiated = _instantiatePrefab(asset.Path, out string prefabDiagnostic);
+                RecordInspectorStatus(
+                    string.IsNullOrWhiteSpace(prefabDiagnostic)
+                        ? instantiated ? $"实例化 {asset.Path}" : $"Prefab 实例化失败：{asset.Path}"
+                        : prefabDiagnostic,
+                    instantiated ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
+                    "inspector-asset-action",
+                    GetAssetSelectionKey(asset.Path),
+                    writeConsole: false);
+                return instantiated;
+
+            case AssetBrowserItemKind.Scene:
+                if (_openSceneAsset is null)
+                {
+                    RecordInspectorStatus("场景打开服务不可用", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
+                    return false;
+                }
+
+                bool sceneOpened = _openSceneAsset(asset.Path, out string sceneDiagnostic);
+                RecordInspectorStatus(
+                    string.IsNullOrWhiteSpace(sceneDiagnostic)
+                        ? sceneOpened ? $"打开场景 {asset.Path}" : $"场景打开失败：{asset.Path}"
+                        : sceneDiagnostic,
+                    sceneOpened ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
+                    "inspector-asset-action",
+                    GetAssetSelectionKey(asset.Path));
+                return sceneOpened;
 
             case AssetBrowserItemKind.Material:
             case AssetBrowserItemKind.Texture:
             case AssetBrowserItemKind.Audio:
-            case AssetBrowserItemKind.Scene:
             case AssetBrowserItemKind.UiScreen:
             case AssetBrowserItemKind.Json:
             case AssetBrowserItemKind.Folder:
@@ -319,18 +392,168 @@ internal sealed class GameObjectInspectorPanel(
     {
         AssetInspectorSnapshot asset = CaptureAssetInspector(assetPath);
         ImGui.SeparatorText("Asset");
-        ImGui.TextUnformatted($"Path: {asset.Path}");
-        ImGui.TextUnformatted($"Type: {asset.Kind}");
-        ImGui.TextUnformatted($"StableId: {asset.AssetId ?? "none"}");
-        ImGui.TextUnformatted($"Size: {asset.SizeBytes} bytes");
-        ImGui.TextUnformatted($"Preview: {asset.PreviewSummary ?? "none"}");
-        if (!string.IsNullOrWhiteSpace(asset.PrimaryActionLabel) && ImGui.Button($"{asset.PrimaryActionLabel}##asset-primary-action"))
+        if (!asset.Found || asset.Item is not { } item || asset.DetailedPreview is not { } preview)
         {
-            _ = TryInvokePrimaryAssetAction(asset.Path);
+            ImGui.TextColored(new Vector4(0.95f, 0.55f, 0.35f, 1f), asset.Status);
+            return;
         }
 
-        ImGui.SeparatorText("Inspector 状态");
-        ImGui.TextUnformatted(GetSelectionStatus(GetAssetSelectionKey(asset.Path), asset.Status));
+        ImGui.TextUnformatted(preview.Title);
+        ImGui.TextDisabled(asset.Kind);
+        if (!string.IsNullOrWhiteSpace(asset.PrimaryActionLabel))
+        {
+            ImGui.Spacing();
+            if (ImGui.Button($"{asset.PrimaryActionLabel}##asset-primary-action", new Vector2(-1f, 0f)))
+            {
+                _ = TryInvokePrimaryAssetAction(asset.Path);
+            }
+        }
+
+        if (ImGui.BeginTable(
+            "asset-inspector-properties",
+            2,
+            ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.PadOuterX |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.BordersInnerH))
+        {
+            ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
+            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+            DrawReadOnlyProperty("Path", asset.Path);
+            DrawReadOnlyProperty("Type", asset.Kind);
+            DrawReadOnlyProperty("Stable ID", asset.AssetId ?? "none");
+            DrawReadOnlyProperty("Size", FormatAssetSize(asset.SizeBytes));
+            ImGui.EndTable();
+        }
+
+        ImGui.Spacing();
+        ImGui.SeparatorText("Preview");
+        DrawAssetPreview(in item, preview);
+
+        string selectionStatus = GetSelectionStatus(GetAssetSelectionKey(asset.Path), asset.Status);
+        if (!string.Equals(selectionStatus, ReadyStatus, StringComparison.Ordinal))
+        {
+            ImGui.Spacing();
+            ImGui.TextColored(new Vector4(0.95f, 0.70f, 0.25f, 1f), selectionStatus);
+        }
+    }
+
+    private void DrawAssetPreview(in AssetBrowserItem item, AssetBrowserDetailedPreview preview)
+    {
+        ImGui.TextWrapped(preview.Summary);
+        if (preview.Properties.Count != 0 && ImGui.BeginTable(
+            "asset-preview-properties",
+            2,
+            ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.PadOuterX |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.BordersInnerV))
+        {
+            ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
+            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+            for (int i = 0; i < preview.Properties.Count; i++)
+            {
+                AssetBrowserPreviewProperty property = preview.Properties[i];
+                DrawReadOnlyProperty(property.Label, property.Value);
+            }
+
+            ImGui.EndTable();
+        }
+
+        switch (preview.ContentKind)
+        {
+            case AssetBrowserPreviewContentKind.Image:
+                DrawAssetImagePreview(in item);
+                break;
+
+            case AssetBrowserPreviewContentKind.Audio:
+                ImGui.Spacing();
+                if (ImGui.Button("▶ 试听##inspector-audio-preview", new Vector2(-1f, 0f)))
+                {
+                    _ = TryPreviewAudioAsset(item.Path);
+                }
+
+                break;
+
+            case AssetBrowserPreviewContentKind.Text:
+                if (!string.IsNullOrWhiteSpace(preview.TextContent))
+                {
+                    ImGui.Spacing();
+                    ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.075f, 0.08f, 0.09f, 1f));
+                    _ = ImGui.BeginChild(
+                        "inspector-asset-text-preview",
+                        new Vector2(0f, ResolveTextPreviewHeight(ImGui.GetContentRegionAvail().Y)),
+                        ImGuiChildFlags.Borders,
+                        ImGuiWindowFlags.HorizontalScrollbar);
+                    ImGui.TextUnformatted(preview.TextContent);
+                    ImGui.EndChild();
+                    ImGui.PopStyleColor();
+                }
+
+                break;
+
+            case AssetBrowserPreviewContentKind.Summary:
+                break;
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(preview), preview.ContentKind, "未知 Inspector 资产预览类型。");
+        }
+
+        if (!string.IsNullOrWhiteSpace(preview.Diagnostic))
+        {
+            ImGui.Spacing();
+            ImGui.TextDisabled(preview.Diagnostic);
+        }
+    }
+
+    private void DrawAssetImagePreview(in AssetBrowserItem item)
+    {
+        AssetThumbnail? thumbnail = ResolveAssetPreviewThumbnail(in item);
+        if (thumbnail is not { } image)
+        {
+            ImGui.TextDisabled("纹理缩略图不可用");
+            return;
+        }
+
+        float availableWidth = MathF.Max(32f, ImGui.GetContentRegionAvail().X);
+        float maximumWidth = MathF.Min(availableWidth, 256f);
+        float maximumHeight = 220f;
+        float sourceWidth = Math.Max(1, image.Width);
+        float sourceHeight = Math.Max(1, image.Height);
+        float scale = MathF.Min(maximumWidth / sourceWidth, maximumHeight / sourceHeight);
+        Vector2 imageSize = new(sourceWidth * scale, sourceHeight * scale);
+        float cursorX = ImGui.GetCursorPosX() + MathF.Max(0f, (availableWidth - imageSize.X) * 0.5f);
+        ImGui.SetCursorPosX(cursorX);
+        ImGui.Image(CreateTextureRef(image.TextureHandle), imageSize, new Vector2(0f, 1f), new Vector2(1f, 0f));
+    }
+
+    private static void DrawReadOnlyProperty(string label, string value)
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.TextDisabled(label);
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.TextWrapped(value);
+    }
+
+    internal static float ResolveInspectorLabelWidth(float availableWidth)
+    {
+        float width = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        return Math.Clamp(width * 0.36f, 72f, 128f);
+    }
+
+    internal static float ResolveTextPreviewHeight(float availableHeight)
+    {
+        float height = float.IsFinite(availableHeight) ? MathF.Max(1f, availableHeight) : 1f;
+        return Math.Clamp(height * 0.45f, 96f, 260f);
+    }
+
+    private static string FormatAssetSize(long bytes)
+    {
+        return bytes < 1024
+            ? $"{bytes.ToString(CultureInfo.InvariantCulture)} B"
+            : $"{(bytes / 1024d).ToString("0.##", CultureInfo.InvariantCulture)} KB";
     }
 
     private void DrawFolderInspector(string folderPath)
@@ -348,12 +571,12 @@ internal sealed class GameObjectInspectorPanel(
     {
         return kind switch
         {
-            AssetBrowserItemKind.Script => "Open",
+            AssetBrowserItemKind.Script => "Open Script",
             AssetBrowserItemKind.Prefab => "Instantiate",
+            AssetBrowserItemKind.Scene => "Open Scene",
             AssetBrowserItemKind.Material or
             AssetBrowserItemKind.Texture or
             AssetBrowserItemKind.Audio or
-            AssetBrowserItemKind.Scene or
             AssetBrowserItemKind.UiScreen or
             AssetBrowserItemKind.Json or
             AssetBrowserItemKind.Folder or
@@ -362,16 +585,24 @@ internal sealed class GameObjectInspectorPanel(
         };
     }
 
-    private void RecordInspectorStatus(string status, EditorConsoleSeverity severity, string source, string selectionKey)
+    private void RecordInspectorStatus(
+        string status,
+        EditorConsoleSeverity severity,
+        string source,
+        string selectionKey,
+        bool writeConsole = true)
     {
         Status = string.IsNullOrWhiteSpace(status) ? ReadyStatus : status;
         _statusSelectionKey = selectionKey;
-        _console?.Add(new EditorConsoleEntry(
-            DateTimeOffset.UtcNow,
-            EditorConsoleCategory.Asset,
-            severity,
-            source,
-            Status));
+        if (writeConsole)
+        {
+            _console?.Add(new EditorConsoleEntry(
+                DateTimeOffset.UtcNow,
+                EditorConsoleCategory.Asset,
+                severity,
+                source,
+                Status));
+        }
     }
 
     private string GetSelectionStatus(string selectionKey, string fallback)
@@ -389,6 +620,163 @@ internal sealed class GameObjectInspectorPanel(
     private static string GetFolderSelectionKey(string folderPath)
     {
         return "folder:" + folderPath;
+    }
+
+    private void PrepareAssetPreviewSelection(string? assetPath)
+    {
+        if (!string.IsNullOrWhiteSpace(assetPath) &&
+            (string.Equals(_assetPreviewCachePath, assetPath, StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(_assetPreviewThumbnail?.Path, assetPath, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        ClearAssetPreviewState();
+    }
+
+    private AssetBrowserDetailedPreview ResolveAssetPreview(in AssetBrowserItem item)
+    {
+        long modifiedTicks = item.LastModifiedUtc.UtcTicks;
+        if (_assetPreviewCache is not null &&
+            string.Equals(_assetPreviewCachePath, item.Path, StringComparison.OrdinalIgnoreCase) &&
+            _assetPreviewCacheSizeBytes == item.SizeBytes &&
+            _assetPreviewCacheModifiedTicks == modifiedTicks)
+        {
+            return _assetPreviewCache;
+        }
+
+        ReleaseAssetPreviewThumbnail();
+        AssetBrowserDetailedPreview preview = _assetPreviewSource is not null &&
+            _assetPreviewSource.TryGetPreview(item.Path, out AssetBrowserDetailedPreview detailed)
+                ? detailed
+                : BuildFallbackAssetPreview(in item);
+        _assetPreviewCachePath = item.Path;
+        _assetPreviewCacheSizeBytes = item.SizeBytes;
+        _assetPreviewCacheModifiedTicks = modifiedTicks;
+        _assetPreviewCache = preview;
+        return preview;
+    }
+
+    private static AssetBrowserDetailedPreview BuildFallbackAssetPreview(in AssetBrowserItem item)
+    {
+        AssetBrowserPreviewContentKind contentKind = item.Kind switch
+        {
+            AssetBrowserItemKind.Texture => AssetBrowserPreviewContentKind.Image,
+            AssetBrowserItemKind.Audio => AssetBrowserPreviewContentKind.Audio,
+            AssetBrowserItemKind.Material or
+            AssetBrowserItemKind.Scene or
+            AssetBrowserItemKind.Prefab or
+            AssetBrowserItemKind.Script or
+            AssetBrowserItemKind.UiScreen or
+            AssetBrowserItemKind.Json => AssetBrowserPreviewContentKind.Text,
+            AssetBrowserItemKind.Folder or AssetBrowserItemKind.Other => AssetBrowserPreviewContentKind.Summary,
+            _ => throw new ArgumentOutOfRangeException(nameof(item), item.Kind, "未知 Inspector 资产类型。"),
+        };
+        AssetBrowserPreviewProperty[] properties =
+        [
+            new("类型", item.Descriptor?.TypeLabel ?? item.Kind.ToString()),
+            new("路径", item.Path),
+            new("大小", FormatAssetSize(item.SizeBytes)),
+        ];
+        return new AssetBrowserDetailedPreview(
+            item.DisplayName,
+            contentKind,
+            item.PreviewSummary ?? item.Descriptor?.Purpose ?? "暂无摘要",
+            properties);
+    }
+
+    private AssetThumbnail? ResolveAssetPreviewThumbnail(in AssetBrowserItem item)
+    {
+        if (item.Thumbnail is { } snapshotThumbnail)
+        {
+            ReleaseAssetPreviewThumbnail();
+            return snapshotThumbnail;
+        }
+
+        if (item.Kind != AssetBrowserItemKind.Texture || _assetThumbnailSource is null)
+        {
+            ReleaseAssetPreviewThumbnail();
+            return null;
+        }
+
+        long modifiedTicks = item.LastModifiedUtc.UtcTicks;
+        if (_assetPreviewThumbnail is { } existing &&
+            string.Equals(existing.Path, item.Path, StringComparison.OrdinalIgnoreCase) &&
+            existing.SizeBytes == item.SizeBytes &&
+            existing.LastModifiedTicks == modifiedTicks)
+        {
+            return existing.Thumbnail;
+        }
+
+        ReleaseAssetPreviewThumbnail();
+        if (!_assetThumbnailSource.TryAcquireThumbnail(item.Path, out AssetThumbnail thumbnail))
+        {
+            return null;
+        }
+
+        _assetPreviewThumbnail = new AssetPreviewThumbnailLease(
+            item.Path,
+            item.SizeBytes,
+            modifiedTicks,
+            thumbnail);
+        return thumbnail;
+    }
+
+    private bool TryPreviewAudioAsset(string assetPath)
+    {
+        if (_audioPreview is null)
+        {
+            RecordInspectorStatus(
+                "音频试听不可用",
+                EditorConsoleSeverity.Warning,
+                "inspector-audio-preview",
+                GetAssetSelectionKey(assetPath));
+            return false;
+        }
+
+        bool played = _audioPreview.TryPlayPreview(assetPath);
+        RecordInspectorStatus(
+            played ? $"试听 {assetPath}" : $"音频试听失败：{assetPath}",
+            played ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
+            "inspector-audio-preview",
+            GetAssetSelectionKey(assetPath));
+        return played;
+    }
+
+    private void ClearAssetPreviewState()
+    {
+        _assetPreviewCachePath = string.Empty;
+        _assetPreviewCacheSizeBytes = -1;
+        _assetPreviewCacheModifiedTicks = -1;
+        _assetPreviewCache = null;
+        ReleaseAssetPreviewThumbnail();
+    }
+
+    private void ReleaseAssetPreviewThumbnail()
+    {
+        if (_assetPreviewThumbnail is not { } thumbnail)
+        {
+            return;
+        }
+
+        _assetThumbnailSource!.ReleaseThumbnail(thumbnail.Path, thumbnail.Thumbnail.TextureHandle);
+        _assetPreviewThumbnail = null;
+    }
+
+    private static unsafe ImTextureRef CreateTextureRef(uint handle)
+    {
+        return new ImTextureRef(null, (ImTextureID)(ulong)handle);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        ClearAssetPreviewState();
+        _disposed = true;
     }
 
     private void UpdateRuntimeEditLifetime()
@@ -1322,7 +1710,15 @@ internal readonly record struct AssetInspectorSnapshot(
     long SizeBytes,
     string? PreviewSummary,
     string? PrimaryActionLabel,
+    AssetBrowserItem? Item,
+    AssetBrowserDetailedPreview? DetailedPreview,
     string Status);
+
+internal readonly record struct AssetPreviewThumbnailLease(
+    string Path,
+    long SizeBytes,
+    long LastModifiedTicks,
+    AssetThumbnail Thumbnail);
 
 internal readonly record struct FolderInspectorSnapshot(
     string Path,

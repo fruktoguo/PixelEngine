@@ -347,7 +347,9 @@ internal sealed class EditorProjectSession : IDisposable
             logicalPath = rootedPath.RelativePath;
         }
 
-        UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, logicalPath, SceneModel.SelectedStableId));
+        // Project / Inspector 的显式 Instantiate 与 Hierarchy drop 语义分离：资产操作始终创建根节点，
+        // 不能依赖旧 Scene 选择或面板绘制顺序偷偷改变父节点。
+        UndoStack.Execute(SceneModel, new InstantiatePrefabCommand(Prefabs, logicalPath, parentId: null));
     }
 
     public EditorScriptAssetOpenResult OpenScriptAsset(string assetPath)

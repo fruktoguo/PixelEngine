@@ -259,6 +259,7 @@ internal sealed class EditorShellHostExtension :
             _assetBrowserDataSource,
             _textureThumbnailProvider,
             _editor,
+            _gameObjectInspectorPanel,
             _sceneViewPanel,
             externalAssetDrop);
     }
@@ -387,6 +388,11 @@ internal sealed class EditorShellHostExtension :
 
         _consolePanel = new EditorConsolePanel(_app);
         _editor.AddPanel(_consolePanel);
+        IAudioPreviewService? audioPreview =
+            engine.Context.TryGetService(out AudioSystem audioSystem) &&
+            engine.Context.TryGetService(out AudioClipCache audioClips)
+                ? new EditorAudioPreviewService(audioSystem, audioClips)
+                : null;
         if (_sceneModel is not null && _undoStack is not null && _prefabs is not null)
         {
             PhysicsSystem? runtimePhysics = engine.Context.TryGetService(out PhysicsSystem registeredPhysics)
@@ -411,6 +417,8 @@ internal sealed class EditorShellHostExtension :
                 assetBrowserDataSource,
                 _app.InstantiatePrefab,
                 _app.OpenScriptAsset,
+                _app.OpenSceneAsset,
+                audioPreview,
                 runtimeSource: runtimeHierarchy,
                 modeProvider: CapturePlayMode);
             // Console 先注册、Inspector 后注册，使共享右侧 dock 默认落在选择上下文；
@@ -451,15 +459,9 @@ internal sealed class EditorShellHostExtension :
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
         _editor.AddPanel(_gameViewPanel);
-        IAudioPreviewService? audioPreview =
-            engine.Context.TryGetService(out AudioSystem audioSystem) &&
-            engine.Context.TryGetService(out AudioClipCache audioClips)
-                ? new EditorAudioPreviewService(audioSystem, audioClips)
-                : null;
         _assetBrowserPanel = new AssetBrowserPanel(
             assetBrowserDataSource,
             audioPreview: audioPreview,
-            instantiatePrefab: _app.InstantiatePrefab,
             openScriptAsset: _app.OpenScriptAsset,
             openSceneAsset: _app.OpenSceneAsset,
             deleteAsset: request => assetBrowserDataSource.DeleteAsset(request, _sceneModel),
@@ -470,7 +472,8 @@ internal sealed class EditorShellHostExtension :
             importAsset: assetBrowserDataSource.ImportAsset,
             pickImportSource: static (initialPath, _) => NativeFolderPicker.TryPickFile(initialPath, out string selectedPath, out string diagnostic)
                 ? new AssetBrowserImportSourcePickResult(true, selectedPath, string.Empty)
-                : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic));
+                : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic),
+            tryInstantiatePrefab: _app.InstantiatePrefab);
         _editor.AddPanel(_assetBrowserPanel);
         AddHiddenPanel(new UiManifestPanel(new EditorAssetManifestStore(_project)));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);

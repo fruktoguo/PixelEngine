@@ -64,26 +64,6 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
-    /// 验证 Project 底部 Preview 在常规和极窄高度下都保留可用的资产列表区域。
-    /// </summary>
-    [Fact]
-    public void AssetPreviewLayoutIsResponsiveAndKeepsContentVisible()
-    {
-        ProjectAssetPreviewLayout hidden = AssetBrowserPanel.ResolveAssetPreviewLayout(300f, 150f, hasSelection: false);
-        ProjectAssetPreviewLayout regular = AssetBrowserPanel.ResolveAssetPreviewLayout(300f, 150f, hasSelection: true);
-        ProjectAssetPreviewLayout compact = AssetBrowserPanel.ResolveAssetPreviewLayout(90f, 150f, hasSelection: true);
-
-        Assert.False(hidden.ShowPreview);
-        Assert.Equal(300f, hidden.ContentHeight);
-        Assert.Equal(0f, hidden.PreviewHeight);
-        Assert.True(regular.ShowPreview);
-        Assert.Equal(145f, regular.ContentHeight);
-        Assert.Equal(150f, regular.PreviewHeight);
-        Assert.Equal(48f, compact.ContentHeight);
-        Assert.Equal(37f, compact.PreviewHeight);
-    }
-
-    /// <summary>
     /// 验证默认右下窄停靠区自动使用单栏导航，足够宽时才恢复 folder tree 双栏。
     /// </summary>
     [Theory]
@@ -94,44 +74,6 @@ public sealed class AssetBrowserPanelTests
     public void ProjectBrowserUsesResponsiveColumnMode(float width, bool expectedFolderTree)
     {
         Assert.Equal(expectedFolderTree, AssetBrowserPanel.ShouldShowFolderTree(width));
-    }
-
-    /// <summary>
-    /// 验证详细预览只在选择或文件签名变化时读取，普通帧复用缓存而不重复 I/O。
-    /// </summary>
-    [Fact]
-    public void AssetPreviewIsLoadedOnDemandAndCachedByFileSignature()
-    {
-        AssetBrowserItem script = new(
-            "ScriptSource/Player.cs",
-            AssetBrowserItemKind.Script,
-            20,
-            DateTimeOffset.UnixEpoch,
-            null,
-            "asset_script");
-        RecordingAssetSource source = new([script]);
-        source.SetPreview(
-            script.Path,
-            new AssetBrowserDetailedPreview(
-                "Player.cs",
-                AssetBrowserPreviewContentKind.Text,
-                "脚本：Player",
-                [new AssetBrowserPreviewProperty("类型", "C# 脚本")],
-                "public sealed class Player {}"));
-        AssetBrowserPanel panel = new(source);
-
-        _ = panel.Refresh();
-        AssetBrowserDetailedPreview first = panel.CaptureAssetPreview(script.Path);
-        AssetBrowserDetailedPreview second = panel.CaptureAssetPreview(script.Path);
-
-        Assert.Same(first, second);
-        Assert.Equal(1, source.PreviewReadCount);
-
-        source.ReplaceAssets([script with { SizeBytes = 21 }]);
-        _ = panel.Refresh();
-        _ = panel.CaptureAssetPreview(script.Path);
-
-        Assert.Equal(2, source.PreviewReadCount);
     }
 
     /// <summary>
@@ -603,6 +545,55 @@ public sealed class AssetBrowserPanelTests
 
         Assert.False(failed);
         Assert.Equal("failed scripts/PlayerController.cs", failingPanel.Status);
+    }
+
+    /// <summary>
+    /// 验证 Prefab 实例化不会在服务缺失或业务失败时假报成功，保留旧 Action 构造兼容，且不吞 programmer error。
+    /// </summary>
+    [Fact]
+    public void AssetBrowserPanelReportsPrefabInstantiationFailuresWithoutFalseSuccess()
+    {
+        RecordingAssetSource source = new(
+        [
+            new AssetBrowserItem("prefabs/Crate.prefab", AssetBrowserItemKind.Prefab, 10, DateTimeOffset.UnixEpoch, null, "asset_prefab"),
+            new AssetBrowserItem("textures/Crate.png", AssetBrowserItemKind.Texture, 20, DateTimeOffset.UnixEpoch, null, "asset_texture"),
+        ]);
+        AssetBrowserPanel unavailable = new(source);
+        _ = unavailable.Refresh();
+
+        Assert.False(unavailable.TryInstantiatePrefabAsset("prefabs/Crate.prefab"));
+        Assert.Equal("Prefab 实例化服务不可用", unavailable.Status);
+        Assert.False(unavailable.TryInstantiatePrefabAsset("textures/Crate.png"));
+        Assert.Contains("仅 Prefab", unavailable.Status, StringComparison.Ordinal);
+
+        static bool FailPrefab(string path, out string diagnostic)
+        {
+            diagnostic = $"missing {path}";
+            return false;
+        }
+
+        AssetBrowserPanel failed = new(source, tryInstantiatePrefab: FailPrefab);
+        _ = failed.Refresh();
+        Assert.False(failed.TryInstantiatePrefabAsset("prefabs/Crate.prefab"));
+        Assert.Equal("missing prefabs/Crate.prefab", failed.Status);
+
+        List<string> legacyInvocations = [];
+        AssetBrowserPanel compatible = new(source, instantiatePrefab: legacyInvocations.Add);
+        _ = compatible.Refresh();
+        Assert.True(compatible.TryInstantiatePrefabAsset("prefabs/Crate.prefab"));
+        Assert.Equal(["prefabs/Crate.prefab"], legacyInvocations);
+
+        static bool ThrowPrefab(string _, out string diagnostic)
+        {
+            diagnostic = string.Empty;
+            throw new InvalidOperationException("broken prefab graph");
+        }
+
+        AssetBrowserPanel throwing = new(source, tryInstantiatePrefab: ThrowPrefab);
+        _ = throwing.Refresh();
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => throwing.TryInstantiatePrefabAsset("prefabs/Crate.prefab"));
+        Assert.Contains("broken prefab graph", exception.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
