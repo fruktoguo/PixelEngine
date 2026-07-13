@@ -1386,6 +1386,7 @@ internal sealed class EditorShellApp
         {
             state.StartX = startX;
             state.StartVisualCommands = startVisualCommands;
+            state.FirstUiStackDepth = CaptureGameUiStackDepth(engine);
             state.StartCaptured = true;
             state.InjectMovement = true;
             return;
@@ -1401,7 +1402,8 @@ internal sealed class EditorShellApp
                 state.PlayerMoved = endX > state.StartX + 0.5f;
                 state.RenderOverlayCommands = CaptureRenderOverlayCommandCount(engine);
                 state.RemainedInPlay = engine.Mode == EngineExecutionMode.Play;
-                state.FirstPlayVerified = state.PlayerMoved &&
+                state.FirstPlayVerified = state.FirstUiStackDepth == ScriptedGameViewProbeState.ExpectedDefaultUiStackDepth &&
+                    state.PlayerMoved &&
                     state.EndVisualCommands > 0 &&
                     state.RenderOverlayCommands > 0 &&
                     state.RemainedInPlay;
@@ -1454,7 +1456,10 @@ internal sealed class EditorShellApp
             bool secondVisualReady = TryCapturePlayerProbe(engine, out _, out int secondVisualCommands) &&
                 secondVisualCommands > 0;
             state.SecondVisualCommands = secondVisualCommands;
-            state.SecondPlayUiRestored = state.SecondUiStackDepth >= 2 &&
+            state.SecondPlayUiRestored = ScriptedGameViewProbeState.IsDefaultUiStackLifecycleRestored(
+                    state.FirstUiStackDepth,
+                    state.ExitUiStackDepth,
+                    state.SecondUiStackDepth) &&
                 state.SecondControllerFound &&
                 state.SecondControllerEnabled &&
                 !state.SecondControllerFaulted;
@@ -1468,7 +1473,7 @@ internal sealed class EditorShellApp
                 engine.Mode == EngineExecutionMode.Play;
             state.Diagnostic = state.Completed
                 ? "Game View 玩家移动与 Play→Stop→Play UI 生命周期探针完成。"
-                : $"探针未满足验收：first={state.FirstPlayVerified}, exit={state.FirstPlayExited}, exit_stack={state.ExitUiStackDepth}, second={state.SecondPlayEntered}, second_stack={state.SecondUiStackDepth}, controller={state.SecondControllerFound}/{state.SecondControllerEnabled}/{state.SecondControllerFaulted}, second_visual={state.SecondVisualCommands}, presentation={state.Presentation.IsSynchronized}, exception={state.SecondControllerException}。";
+                : $"探针未满足验收：first={state.FirstPlayVerified}, first_stack={state.FirstUiStackDepth}, exit={state.FirstPlayExited}, exit_stack={state.ExitUiStackDepth}, second={state.SecondPlayEntered}, second_stack={state.SecondUiStackDepth}, controller={state.SecondControllerFound}/{state.SecondControllerEnabled}/{state.SecondControllerFaulted}, second_visual={state.SecondVisualCommands}, presentation={state.Presentation.IsSynchronized}, exception={state.SecondControllerException}。";
             state.Finished = true;
         }
     }
@@ -1580,6 +1585,7 @@ internal sealed class EditorShellApp
             $"visual_commands={state.EndVisualCommands}, " +
             $"render_overlay_commands={state.RenderOverlayCommands}, " +
             $"remained_in_play={state.RemainedInPlay}, " +
+            $"first_ui_stack_depth={state.FirstUiStackDepth}, " +
             $"first_play_verified={state.FirstPlayVerified}, " +
             $"first_play_exited={state.FirstPlayExited}, " +
             $"exit_ui_stack_depth={state.ExitUiStackDepth}, " +
@@ -2774,7 +2780,21 @@ internal sealed class ScriptedDefaultWorkbenchProbeState
 /// </summary>
 internal sealed class ScriptedGameViewProbeState
 {
+    // UI-004 产品状态规定首次 Play 只显示主菜单。HUD 与 diagnostics 必须由用户动作显式进入，
+    // 因而 Play→Stop→Play 要验证 1→0→1，而不是沿用旧的菜单+HUD 叠加数量。
+    internal const int ExpectedDefaultUiStackDepth = 1;
+
     public readonly Key[] MovementKeys = [Key.D];
+
+    internal static bool IsDefaultUiStackLifecycleRestored(
+        int firstUiStackDepth,
+        int exitUiStackDepth,
+        int secondUiStackDepth)
+    {
+        return firstUiStackDepth == ExpectedDefaultUiStackDepth &&
+            exitUiStackDepth == 0 &&
+            secondUiStackDepth == firstUiStackDepth;
+    }
 
     public bool InputRegistered;
 
@@ -2815,6 +2835,8 @@ internal sealed class ScriptedGameViewProbeState
     public int EndVisualCommands;
 
     public int RenderOverlayCommands;
+
+    public int FirstUiStackDepth = -1;
 
     public int ExitUiStackDepth;
 

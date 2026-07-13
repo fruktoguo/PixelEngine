@@ -28,6 +28,29 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证默认产品 UI 只恢复主菜单，拒绝把旧的菜单+HUD 叠加数量继续当成 Play 重入成功。
+    /// </summary>
+    [Theory]
+    [InlineData(1, 0, 1, true)]
+    [InlineData(2, 0, 2, false)]
+    [InlineData(1, 1, 1, false)]
+    [InlineData(1, 0, 0, false)]
+    [InlineData(1, 0, 2, false)]
+    public void ScriptedProbeRequiresSingleDefaultScreenAcrossPlayReentry(
+        int firstUiStackDepth,
+        int exitUiStackDepth,
+        int secondUiStackDepth,
+        bool expected)
+    {
+        bool actual = ScriptedGameViewProbeState.IsDefaultUiStackLifecycleRestored(
+            firstUiStackDepth,
+            exitUiStackDepth,
+            secondUiStackDepth);
+
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
     /// 验证 Scene View 始终使用 authoring 相机与工具输入，不把它冒充玩家视角。
     /// </summary>
     [Fact]
