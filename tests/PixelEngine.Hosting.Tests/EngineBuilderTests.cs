@@ -216,6 +216,8 @@ public sealed class EngineBuilderTests
         Assert.Equal(selection.RequestedBackend, probeSnapshot.RequestedBackend);
         Assert.Equal(selection.ActiveBackend, probeSnapshot.ActiveBackend);
         Assert.Equal(selection.UsedFallback, probeSnapshot.UsedFallback);
+        Assert.Equal(selection.FallbackReason, probeSnapshot.FallbackReason);
+        Assert.Equal(selection.ActiveNativeProfile, probeSnapshot.ActiveNativeProfile);
         bool nativeAvailable = RmlUiNativeInfo.TryQuery(out _);
         RmlUiNativeProfileDecision decision = RmlUiNativeProfileGate.Evaluate(window.Backend, window.Capabilities);
         if (nativeAvailable && decision.CanUseNativeRenderer)
@@ -639,8 +641,11 @@ public sealed class EngineBuilderTests
         Assert.Same(engine.Probe, engine.Context.GetService<EngineProbeApi>());
         Assert.Equal(0, engine.Probe.ActiveParticles);
         Assert.Equal(-1, engine.Probe.RenderOverlayCount);
-        Assert.False(engine.Probe.CaptureGameUi().IsAttached);
-        Assert.Equal(0, engine.Probe.CaptureGameUi().CanvasCount);
+        GameUiProbeSnapshot gameUiSnapshot = engine.Probe.CaptureGameUi();
+        Assert.False(gameUiSnapshot.IsAttached);
+        Assert.Equal(0, gameUiSnapshot.CanvasCount);
+        Assert.Null(gameUiSnapshot.FallbackReason);
+        Assert.Null(gameUiSnapshot.ActiveNativeProfile);
 
         _ = engine.AttachPhysics();
         Assert.Equal(1, engine.Probe.PhysicsStats.TaskBridgeWorkerCount);

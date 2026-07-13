@@ -45,6 +45,14 @@ function Assert-UnderRepo([string]$Path, [string]$Label) {
 
 Assert-UnderRepo $outputRootFull '正式输出目录'
 
+$expectedDemoRuntimeUiBackendActive = switch ($DemoRuntimeUiBackend) {
+  'RmlUi' { 'RmlUi' }
+  'ManagedFallback' { 'ManagedFallback' }
+  'Ultralight' { 'ManagedFallback' }
+  default { throw "未知 Demo Runtime UI backend：$DemoRuntimeUiBackend" }
+}
+$expectedDemoRuntimeUiBackendFallback = $DemoRuntimeUiBackend -eq 'Ultralight'
+
 function Assert-CleanTrackedWorktree {
   $statusLines = & git -C $repoRoot status --porcelain --untracked-files=no
   if ($LASTEXITCODE -ne 0) {
@@ -412,10 +420,15 @@ $demoProbeResult = Invoke-ProcessChecked `
 $demoProbeOk =
   $demoProbeResult.Stdout.Contains('window_frame_probe', [StringComparison]::Ordinal) -and
   $demoProbeResult.Stdout.Contains('PixelEngine.Demo', [StringComparison]::Ordinal) -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'attached' 'True') -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'canvases' '3') -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'requested' $DemoRuntimeUiBackend) -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive) -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString()) -and
   (Test-Path -LiteralPath $demoProbeCapture -PathType Leaf)
 
 if (-not $demoProbeOk) {
-  throw "Demo 窗口验证未通过。日志：$($demoProbeResult.StdoutPath)"
+  throw "Demo 窗口验证未通过，实际 UI 后端或 Canvas runtime 与发布请求不一致。日志：$($demoProbeResult.StdoutPath)"
 }
 
 $finalEditorDir = Join-Path $nextRoot '编辑器'
@@ -444,6 +457,8 @@ $manifest = [ordered]@{
   configuration = $Configuration
   demoChannel = $DemoChannel
   demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend
+  demoRuntimeUiBackendActive = $expectedDemoRuntimeUiBackendActive
+  demoRuntimeUiBackendFallback = $expectedDemoRuntimeUiBackendFallback
   editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent
   editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'runtime-pdb-and-xml-pruned' }
   editorScriptReferenceAssembliesPath = $scriptReferenceAssembliesRelative

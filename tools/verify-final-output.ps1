@@ -125,6 +125,25 @@ if ($manifest.sourceTrackedWorktreeClean -ne $true) {
   throw 'manifest sourceTrackedWorktreeClean 必须为 true。'
 }
 
+$requestedDemoRuntimeUiBackend = [string]$manifest.demoRuntimeUiBackendRequested
+$expectedDemoRuntimeUiBackendActive = switch ($requestedDemoRuntimeUiBackend) {
+  'RmlUi' { 'RmlUi' }
+  'ManagedFallback' { 'ManagedFallback' }
+  'Ultralight' { 'ManagedFallback' }
+  default { throw "manifest demoRuntimeUiBackendRequested 非法：$requestedDemoRuntimeUiBackend" }
+}
+$expectedDemoRuntimeUiBackendFallback = $requestedDemoRuntimeUiBackend -eq 'Ultralight'
+if ($manifest.demoRuntimeUiBackendActive -ne $expectedDemoRuntimeUiBackendActive) {
+  throw "manifest Demo UI active backend 与请求策略不一致。requested=$requestedDemoRuntimeUiBackend, expected=$expectedDemoRuntimeUiBackendActive, actual=$($manifest.demoRuntimeUiBackendActive)"
+}
+$demoRuntimeUiBackendFallbackProperty = $manifest.PSObject.Properties['demoRuntimeUiBackendFallback']
+if ($null -eq $demoRuntimeUiBackendFallbackProperty -or $demoRuntimeUiBackendFallbackProperty.Value -isnot [bool]) {
+  throw 'manifest demoRuntimeUiBackendFallback 必须存在且为 bool。'
+}
+if ([bool]$demoRuntimeUiBackendFallbackProperty.Value -ne $expectedDemoRuntimeUiBackendFallback) {
+  throw "manifest Demo UI fallback 与请求策略不一致。requested=$requestedDemoRuntimeUiBackend, expected=$expectedDemoRuntimeUiBackendFallback, actual=$($demoRuntimeUiBackendFallbackProperty.Value)"
+}
+
 $head = (& git -C $repoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
   throw '无法读取当前 git HEAD。'
@@ -326,6 +345,11 @@ Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'build_
 $demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'window_frame_probe' 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'PixelEngine.Demo' 'Demo 窗口 probe stdout'
+Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'attached' 'True' 'Demo 窗口 Game UI probe stdout'
+Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'canvases' '3' 'Demo 窗口 Game UI probe stdout'
+Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'requested' $requestedDemoRuntimeUiBackend 'Demo 窗口 Game UI probe stdout'
+Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive 'Demo 窗口 Game UI probe stdout'
+Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString() 'Demo 窗口 Game UI probe stdout'
 
 $demoBuildResultPath = Resolve-OutputPath ([string]$validation.demoBuildResult) 'demoBuildResult'
 $demoBuildResult = Get-Content -Raw -LiteralPath $demoBuildResultPath | ConvertFrom-Json
@@ -333,8 +357,8 @@ if ($demoBuildResult.ok -ne $true) {
   throw "demo-build-result.json 不是 ok=true：$($demoBuildResult.error)"
 }
 
-if ($demoBuildResult.runtimeUiBackend -ne $manifest.demoRuntimeUiBackendRequested) {
-  throw "Demo UI backend 记录不一致。manifest=$($manifest.demoRuntimeUiBackendRequested), build-result=$($demoBuildResult.runtimeUiBackend)"
+if ($demoBuildResult.runtimeUiBackend -ne $requestedDemoRuntimeUiBackend) {
+  throw "Demo UI backend 记录不一致。manifest=$requestedDemoRuntimeUiBackend, build-result=$($demoBuildResult.runtimeUiBackend)"
 }
 
 $checksumLines = Get-Content -LiteralPath $checksumPath

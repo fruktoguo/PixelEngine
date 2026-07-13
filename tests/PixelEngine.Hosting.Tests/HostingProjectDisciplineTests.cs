@@ -165,6 +165,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("[string]$DemoRuntimeUiBackend = 'RmlUi'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'-RuntimeUiBackend', $DemoRuntimeUiBackend", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("demoRuntimeUiBackendActive = $expectedDemoRuntimeUiBackendActive", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("demoRuntimeUiBackendFallback = $expectedDemoRuntimeUiBackendFallback", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString()", finalOutputScript, StringComparison.Ordinal);
         Assert.DoesNotContain("'-RuntimeUiBackend', 'ManagedFallback'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("runtimeUiBackend = $RuntimeUiBackend", buildPlayerPs1, StringComparison.Ordinal);
         Assert.Contains("\"runtimeUiBackend\"", buildPlayerSh, StringComparison.Ordinal);
@@ -232,6 +236,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("editor_default_workbench_probe ", verifier, StringComparison.Ordinal);
         Assert.Contains("window_frame_probe", verifier, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Demo", verifier, StringComparison.Ordinal);
+        Assert.Contains("game_ui_probe ", verifier, StringComparison.Ordinal);
+        Assert.Contains("demoRuntimeUiBackendActive", verifier, StringComparison.Ordinal);
+        Assert.Contains("demoRuntimeUiBackendFallback", verifier, StringComparison.Ordinal);
         Assert.Contains("Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'", verifier, StringComparison.Ordinal);
         Assert.Contains("正式输出包含未登记文件", verifier, StringComparison.Ordinal);
         Assert.Contains("SHA256SUMS 登记了不存在的文件", verifier, StringComparison.Ordinal);
@@ -423,6 +430,41 @@ public sealed class HostingProjectDisciplineTests
 
             Assert.NotEqual(0, demoMissing.ExitCode);
             Assert.Contains("Demo 窗口 probe stdout 缺少验证标记", demoMissing.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证请求 RmlUi 的正式输出若实际回退 ManagedFallback，独立 verifier 必须 fail-closed。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsRequestedRmlUiFallback()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(
+                outputRoot,
+                "_验证记录/logs/demo-window.stdout.log",
+                "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=ManagedFallback, fallback=True, " +
+                "fallback_reason=RmlUi initialization failed; using ManagedFallback, native_profile=<none>");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult result = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Demo 窗口 Game UI probe stdout 缺少成功摘要", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("active=RmlUi", result.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -2438,7 +2480,12 @@ public sealed class HostingProjectDisciplineTests
             "editor_default_workbench_probe completed=True succeeded=True build_completed=True build_ok=True");
         WriteTextFile(outputRoot, "_验证记录/logs/editor-default-workbench.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/editor-default-workbench.bmp", "editor capture");
-        WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stdout.log", "PixelEngine.Demo window_frame_probe frames=80");
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/logs/demo-window.stdout.log",
+            "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+            "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
+            "fallback_reason=<none>, native_profile=desktop-gl");
         WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/demo-window.bmp", "demo capture");
         WriteTextFile(outputRoot, "README.txt", "PixelEngine final output");
@@ -2463,6 +2510,8 @@ public sealed class HostingProjectDisciplineTests
                 configuration = "Release",
                 demoChannel = "r2r",
                 demoRuntimeUiBackendRequested = "RmlUi",
+                demoRuntimeUiBackendActive = "RmlUi",
+                demoRuntimeUiBackendFallback = false,
                 editorSymbolsIncluded = false,
                 editorDeveloperMetadataPolicy = "runtime-pdb-and-xml-pruned",
                 editorScriptReferenceAssembliesPath = "编辑器/ScriptReferenceAssemblies",

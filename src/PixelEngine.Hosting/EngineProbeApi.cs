@@ -125,7 +125,9 @@ public sealed class EngineProbeApi
                 CanvasCount: registry.Count,
                 RequestedBackend: selection.Value.RequestedBackend,
                 ActiveBackend: selection.Value.ActiveBackend,
-                UsedFallback: selection.Value.UsedFallback);
+                UsedFallback: selection.Value.UsedFallback,
+                FallbackReason: selection.Value.FallbackReason,
+                ActiveNativeProfile: selection.Value.ActiveNativeProfile);
     }
 
     /// <summary>
@@ -405,9 +407,13 @@ public readonly record struct ParticleRenderProbeResult(
 /// <param name="RequestedBackend">启动配置请求的后端。</param>
 /// <param name="ActiveBackend">primary Canvas 实际使用的后端。</param>
 /// <param name="UsedFallback">请求后端是否发生显式降级。</param>
+/// <param name="FallbackReason">发生降级时的稳定诊断原因；未降级时为 null。</param>
+/// <param name="ActiveNativeProfile">实际启用的 native renderer profile；无 native 后端时为 null。</param>
 public readonly record struct GameUiProbeSnapshot(
     bool IsAttached,
     int CanvasCount,
     RuntimeUi.UiBackendKind RequestedBackend,
     RuntimeUi.UiBackendKind ActiveBackend,
-    bool UsedFallback);
+    bool UsedFallback,
+    string? FallbackReason,
+    string? ActiveNativeProfile);

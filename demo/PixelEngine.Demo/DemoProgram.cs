@@ -284,6 +284,7 @@ public static class DemoProgram
             Console.WriteLine(windowFrameProbe.BuildSummary(
                 engine.Context.Counters.FrameGpuTimerAvailable,
                 engine.Context.Counters.VSyncEnabled));
+            WriteGameUiProbeSummary(probe);
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, probe, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);
@@ -500,6 +501,24 @@ public static class DemoProgram
         }
 
         return bestIndex;
+    }
+
+    private static void WriteGameUiProbeSummary(EngineProbeApi probe)
+    {
+        GameUiProbeSnapshot snapshot = probe.CaptureGameUi();
+        Console.WriteLine(
+            $"game_ui_probe attached={snapshot.IsAttached}, canvases={snapshot.CanvasCount}, " +
+            $"requested={snapshot.RequestedBackend}, active={snapshot.ActiveBackend}, " +
+            $"fallback={snapshot.UsedFallback}, " +
+            $"fallback_reason={NormalizeProbeValue(snapshot.FallbackReason)}, " +
+            $"native_profile={NormalizeProbeValue(snapshot.ActiveNativeProfile)}");
+    }
+
+    private static string NormalizeProbeValue(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "<none>"
+            : value.Replace('\r', ' ').Replace('\n', ' ').Replace(',', ';');
     }
 
     private static void WriteScriptedWindowSummary(
