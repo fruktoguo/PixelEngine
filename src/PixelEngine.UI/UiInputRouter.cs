@@ -5,7 +5,7 @@ namespace PixelEngine.UI;
 /// </summary>
 public sealed class UiInputRouter
 {
-    private readonly GameUiHost _host;
+    private readonly IGameUiInputTarget _host;
     private readonly IUiInputSource _source;
     private readonly UiKey[] _downKeys;
     private readonly UiKey[] _previousKeys;
@@ -25,7 +25,7 @@ public sealed class UiInputRouter
     /// <param name="source">平台输入源。</param>
     /// <param name="keyCapacity">单帧按键缓冲容量。</param>
     /// <param name="textCapacity">单帧文本缓冲容量。</param>
-    public UiInputRouter(GameUiHost host, IUiInputSource source, int keyCapacity = 64, int textCapacity = 64)
+    public UiInputRouter(IGameUiInputTarget host, IUiInputSource source, int keyCapacity = 64, int textCapacity = 64)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _source = source ?? throw new ArgumentNullException(nameof(source));

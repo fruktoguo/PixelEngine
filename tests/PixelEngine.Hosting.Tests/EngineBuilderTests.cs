@@ -4,6 +4,7 @@ using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
 using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using PixelEngine.Testing;
 using PixelEngine.UI;
 using System.Runtime;
@@ -339,6 +340,58 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证真实窗口 Engine 会在 Attach 前消费编辑态 v3 Canvas，并能在窗口存活期间原子切到全禁用再恢复。
+    /// </summary>
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
+    public void EngineMaterializesAndReconfiguresSceneCanvasRegistryWhenGlSmokeIsEnabled()
+    {
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine multi Canvas registry smoke",
+            Width = 96,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+        });
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithContentRoot(Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content"))
+            .EnableGameUi()
+            .UseUiBackend(UiBackendKind.ManagedFallback)
+            .Build();
+        EngineSceneDocument twoCanvases = CreateCanvasScene(
+            CanvasEntity(10, -10, primary: false, enabled: true),
+            CanvasEntity(20, 100, primary: true, enabled: true));
+        engine.ApplySceneCanvasDocument(twoCanvases);
+        _ = engine.LoadContentPackage();
+        _ = engine.AttachResidentSimulationWorld(64, 64, particleCapacity: 8);
+
+        _ = engine.AttachWindowRuntime(window);
+        GameUiCanvasRegistry registry = engine.Context.GetService<GameUiCanvasRegistry>();
+        IGameUiService service = engine.Context.GetService<IGameUiService>();
+        Assert.Equal(2, registry.Count);
+        Assert.True(service.TryGetCanvas(GameUiCanvasIdentity.FromStableId(20), out UiCanvasHandle primary));
+        Assert.Equal(primary, service.PrimaryCanvas);
+        Assert.True(engine.Context.TryGetService(out GameUiHost _));
+        _ = engine.RunOneTick(1.0 / 60.0);
+
+        engine.ApplySceneCanvasDocument(CreateCanvasScene(
+            CanvasEntity(10, 0, primary: true, enabled: false)));
+        Assert.Equal(0, registry.Count);
+        Assert.Equal(default, service.PrimaryCanvas);
+        Assert.False(engine.Context.TryGetService(out GameUiHost _));
+        _ = engine.RunOneTick(1.0 / 60.0);
+
+        engine.ApplySceneCanvasDocument(CreateCanvasScene(
+            CanvasEntity(30, 0, primary: true, enabled: true)));
+        Assert.Equal(1, registry.Count);
+        Assert.True(service.TryGetCanvas(GameUiCanvasIdentity.FromStableId(30), out UiCanvasHandle restored));
+        Assert.NotEqual(primary, restored);
+        Assert.True(engine.Context.TryGetService(out GameUiHost _));
+        _ = engine.RunOneTick(1.0 / 60.0);
+    }
+
+    /// <summary>
     /// 验证默认构建会把托管 GC 延迟模式写入 SustainedLowLatency。
     /// </summary>
     [Fact]
@@ -625,6 +678,43 @@ public sealed class EngineBuilderTests
 
     private sealed class FakeWorldAccess
     {
+    }
+
+    private static EngineSceneDocument CreateCanvasScene(params EngineSceneEntityDocument[] entities)
+    {
+        return new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "runtime-canvas-smoke",
+            Entities = entities,
+        };
+    }
+
+    private static EngineSceneEntityDocument CanvasEntity(
+        int stableId,
+        int sortingOrder,
+        bool primary,
+        bool enabled)
+    {
+        return new EngineSceneEntityDocument
+        {
+            StableId = stableId,
+            Name = $"Canvas {stableId}",
+            Enabled = true,
+            WebCanvas = new EngineSceneWebCanvasDocument
+            {
+                Enabled = enabled,
+                SortingOrder = sortingOrder,
+                Primary = primary,
+            },
+            CanvasScaler = new EngineSceneCanvasScalerDocument
+            {
+                ScaleMode = UiScaleMode.ScaleWithScreenSize,
+                ReferenceWidth = 1280,
+                ReferenceHeight = 720,
+                MatchWidthOrHeight = 0.5f,
+            },
+        };
     }
 
     private static string FindRepositoryRoot()

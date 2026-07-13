@@ -116,6 +116,12 @@ public sealed class EngineContext
         _services[serviceType] = service;
     }
 
+    internal void RemoveService<TService>()
+        where TService : notnull
+    {
+        _ = _services.Remove(typeof(TService));
+    }
+
     /// <summary>
     /// 尝试获取指定服务。
     /// </summary>

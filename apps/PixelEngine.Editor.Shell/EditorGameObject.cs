@@ -43,6 +43,12 @@ internal sealed class EditorGameObject
 
     public EditorPrefabLink? PrefabLink { get; set; }
 
+    /// <summary>可选内建 Canvas (Web) authoring 组件。</summary>
+    public EditorWebCanvasComponent? WebCanvas { get; set; }
+
+    /// <summary>可选内建 Canvas Scaler authoring 组件。</summary>
+    public EditorCanvasScalerComponent? CanvasScaler { get; set; }
+
     public EditorGameObject CloneShallow()
     {
         EditorGameObject clone = new(StableId, Name)
@@ -53,6 +59,8 @@ internal sealed class EditorGameObject
             ParentId = ParentId,
             Transform = Transform.Clone(),
             PrefabLink = PrefabLink?.Clone(),
+            WebCanvas = WebCanvas?.Clone(),
+            CanvasScaler = CanvasScaler?.Clone(),
         };
         for (int i = 0; i < Components.Count; i++)
         {

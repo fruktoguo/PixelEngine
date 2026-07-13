@@ -1874,7 +1874,7 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证 Hosting 用同一个 UI 字符串池连接脚本服务和 RmlUi 后端，避免 StringHandle 只能裸整数往返。
+    /// 验证 Hosting 用同一个 UI 字符串池连接多 Canvas 注册表、脚本服务和 RmlUi 后端，避免 StringHandle 只能裸整数往返。
     /// </summary>
     [Fact]
     public void HostingSharesUiStringPoolBetweenScriptServiceAndRmlUiBackend()
@@ -1889,7 +1889,11 @@ public sealed class HostingProjectDisciplineTests
         // Assert：验证预期结果
         Assert.Contains("UiStringPool strings = new();", engine, StringComparison.Ordinal);
         Assert.Contains("new RmlUiBackend(window, stringResolver: strings)", engine, StringComparison.Ordinal);
-        Assert.Contains("new(host, Context.Options.ContentRoot, stringPool: strings)", engine, StringComparison.Ordinal);
+        Assert.Matches(
+            @"GameUiCanvasRegistry registry = new\(\s*Context\.Options\.ContentRoot,\s*CreateCanvasHost,\s*strings,",
+            engine);
+        Assert.Contains("GameUiServiceBridge(GameUiCanvasRegistry registry)", bridge, StringComparison.Ordinal);
+        Assert.Contains("_strings = registry.Strings;", bridge, StringComparison.Ordinal);
         Assert.Contains("UiStringHandle InternString(string value)", scripting, StringComparison.Ordinal);
         Assert.Contains("RuntimeUi.UiStringPool? stringPool = null", bridge, StringComparison.Ordinal);
         Assert.Contains("_strings.Intern(value)", bridge, StringComparison.Ordinal);

@@ -13,7 +13,7 @@ public static class EngineSceneDocumentLoader
     /// <summary>
     /// 当前支持的 .scene 格式版本。
     /// </summary>
-    public const int CurrentFormatVersion = 2;
+    public const int CurrentFormatVersion = 3;
 
     /// <summary>
     /// 读取并验证 .scene JSON 文档，不物化脚本实体。
@@ -28,7 +28,7 @@ public static class EngineSceneDocumentLoader
                 json,
                 EngineSceneJsonContext.Default.EngineSceneDocument) ??
             throw new JsonException(".scene 文件为空或格式无效。");
-        ValidateFormat(document);
+        ValidateDocument(document, IsPrefabPath(path));
         return document;
     }
 
@@ -41,7 +41,8 @@ public static class EngineSceneDocumentLoader
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
-        EngineSceneDocument normalized = NormalizeForSave(document);
+        bool isPrefab = IsPrefabPath(path);
+        EngineSceneDocument normalized = NormalizeForSave(document, isPrefab);
         string? directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrEmpty(directory))
         {
@@ -76,8 +77,7 @@ public static class EngineSceneDocumentLoader
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(scriptAssemblies);
-        ValidateFormat(document);
-        ValidateSceneGraph(document);
+        ValidateDocument(document, isPrefab: false);
 
         Scripting.Scene scene = new();
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
@@ -108,12 +108,16 @@ public static class EngineSceneDocumentLoader
         return scene;
     }
 
-    private static void ValidateFormat(EngineSceneDocument document)
+    internal static void ValidateDocument(EngineSceneDocument document, bool isPrefab)
     {
+        ArgumentNullException.ThrowIfNull(document);
         if (document.FormatVersion is < 1 or > CurrentFormatVersion)
         {
             throw new NotSupportedException($"不支持的 .scene 格式版本：{document.FormatVersion}。");
         }
+
+        ValidateSceneGraph(document);
+        ValidateCanvasRules(document, isPrefab);
     }
 
     private static void ValidateSceneGraph(EngineSceneDocument document)
@@ -134,10 +138,9 @@ public static class EngineSceneDocumentLoader
         }
     }
 
-    private static EngineSceneDocument NormalizeForSave(EngineSceneDocument document)
+    private static EngineSceneDocument NormalizeForSave(EngineSceneDocument document, bool isPrefab)
     {
-        ValidateFormat(document);
-        ValidateSceneGraph(document);
+        ValidateDocument(document, isPrefab);
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
         EngineSceneEntityDocument[] normalizedEntities = new EngineSceneEntityDocument[entities.Length];
         EngineSceneEntityDocument[] sorted = [.. entities.OrderBy(static entity => entity.StableId)];
@@ -162,6 +165,8 @@ public static class EngineSceneDocumentLoader
                 Enabled = sorted[i].Enabled ?? true,
                 Transform = sorted[i].Transform ?? new EngineSceneTransformDocument(),
                 Prefab = NormalizePrefab(sorted[i].Prefab),
+                WebCanvas = NormalizeWebCanvas(sorted[i].WebCanvas),
+                CanvasScaler = NormalizeCanvasScaler(sorted[i].CanvasScaler),
                 Behaviours = normalizedBehaviours,
             };
         }
@@ -217,6 +222,121 @@ public static class EngineSceneDocumentLoader
                     }),
             ],
         };
+    }
+
+    private static EngineSceneWebCanvasDocument? NormalizeWebCanvas(EngineSceneWebCanvasDocument? canvas)
+    {
+        return canvas is null
+            ? null
+            : new EngineSceneWebCanvasDocument
+            {
+                ManifestAssetId = NormalizeOptional(canvas.ManifestAssetId),
+                ManifestPath = NormalizeOptional(canvas.ManifestPath),
+                InitialScreenId = NormalizeOptional(canvas.InitialScreenId),
+                Enabled = canvas.Enabled,
+                SortingOrder = canvas.SortingOrder,
+                Primary = canvas.Primary,
+            };
+    }
+
+    private static EngineSceneCanvasScalerDocument? NormalizeCanvasScaler(EngineSceneCanvasScalerDocument? scaler)
+    {
+        if (scaler is null)
+        {
+            return null;
+        }
+
+        PixelEngine.UI.UiCanvasScalerSettings settings = scaler.ToSettings();
+        ValidateCanvasScaler(in settings);
+        return EngineSceneCanvasScalerDocument.FromSettings(in settings);
+    }
+
+    private static void ValidateCanvasRules(EngineSceneDocument document, bool isPrefab)
+    {
+        EngineSceneEntityDocument[] entities = document.Entities ?? [];
+        bool hasVersionThreeComponent = false;
+        int enabledPrimaryCount = 0;
+        Dictionary<int, bool> enabledByStableId = new(entities.Length);
+        for (int i = 0; i < entities.Length; i++)
+        {
+            EngineSceneEntityDocument entity = entities[i];
+            EngineSceneWebCanvasDocument? canvas = entity.WebCanvas;
+            hasVersionThreeComponent |= canvas is not null || entity.CanvasScaler is not null;
+            if (entity.CanvasScaler is not null)
+            {
+                PixelEngine.UI.UiCanvasScalerSettings settings = entity.CanvasScaler.ToSettings();
+                ValidateCanvasScaler(in settings);
+            }
+
+            if (canvas is null)
+            {
+                continue;
+            }
+
+            ValidateRelativeAssetPath(canvas.ManifestPath, entity.StableId);
+            if (isPrefab && canvas.Primary)
+            {
+                throw new InvalidOperationException(
+                    $"Prefab asset 不能持久化 primary Web Canvas：stableId={entity.StableId}。");
+            }
+
+            if (canvas.Primary &&
+                canvas.Enabled &&
+                ResolveEffectiveEnabled(entities, i, enabledByStableId, []))
+            {
+                enabledPrimaryCount++;
+            }
+        }
+
+        if (document.FormatVersion < 3 && hasVersionThreeComponent)
+        {
+            throw new InvalidOperationException(
+                $".scene v{document.FormatVersion} 不能包含 WebCanvas/CanvasScaler；请显式转换为 v3。");
+        }
+
+        if (enabledPrimaryCount > 1)
+        {
+            throw new InvalidOperationException(
+                ".scene 包含多个已启用的 explicit primary Web Canvas，必须修复后才能 Save/Play。");
+        }
+    }
+
+    private static void ValidateCanvasScaler(in PixelEngine.UI.UiCanvasScalerSettings settings)
+    {
+        PixelEngine.UI.UiDisplayMetrics display = new(1, 1, 1f, 1f, null, 0, 0);
+        _ = PixelEngine.UI.UiCanvasScaleResolver.Resolve(in settings, in display);
+    }
+
+    private static void ValidateRelativeAssetPath(string? path, int stableId)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        string value = path.Trim();
+        if (Path.IsPathRooted(value))
+        {
+            throw new InvalidDataException(
+                $"WebCanvas manifestPath 必须相对 content 根目录：stableId={stableId}, path={value}");
+        }
+
+        string[] segments = value.Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Any(static segment => segment == ".."))
+        {
+            throw new InvalidDataException(
+                $"WebCanvas manifestPath 不能逃逸 content 根目录：stableId={stableId}, path={value}");
+        }
+    }
+
+    private static string? NormalizeOptional(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static bool IsPrefabPath(string path)
+    {
+        return string.Equals(Path.GetExtension(path), ".prefab", StringComparison.OrdinalIgnoreCase);
     }
 
     private static EngineSceneTransformDocument ResolveWorldTransform(

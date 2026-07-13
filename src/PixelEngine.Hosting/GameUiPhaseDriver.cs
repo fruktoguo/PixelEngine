@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.UI;
+using ScriptUi = PixelEngine.Scripting;
 
 namespace PixelEngine.Hosting;
 
@@ -9,7 +10,8 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class GameUiPhaseDriver : IEnginePhaseDriver
 {
-    private readonly GameUiHost _host;
+    private readonly GameUiHost? _host;
+    private readonly GameUiCanvasRegistry? _registry;
     private readonly IGameUiEventSink? _eventSink;
     private readonly IGameUiModelPusher? _modelPusher;
     private readonly UiEvent[] _eventBuffer;
@@ -28,6 +30,26 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
         IGameUiModelPusher? modelPusher = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
+        _eventSink = eventSink;
+        _modelPusher = modelPusher;
+        _eventBuffer = new UiEvent[eventCapacity];
+    }
+
+    /// <summary>
+    /// 创建可驱动多个独立 Canvas 的游戏 UI 相位驱动。
+    /// </summary>
+    /// <param name="registry">当前场景 Canvas 注册表。</param>
+    /// <param name="eventCapacity">单 Canvas 单次事件 drain 缓冲容量。</param>
+    /// <param name="eventSink">可选事件接收器。</param>
+    /// <param name="modelPusher">可选模型推送器。</param>
+    public GameUiPhaseDriver(
+        GameUiCanvasRegistry registry,
+        int eventCapacity = 128,
+        IGameUiEventSink? eventSink = null,
+        IGameUiModelPusher? modelPusher = null)
+    {
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
         _eventSink = eventSink;
         _modelPusher = modelPusher;
@@ -67,14 +89,35 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
         long started = Stopwatch.GetTimestamp();
         // 先推送脚本/服务层模型，再 Update 后端并 drain 本帧 UI 事件到桥接层。
         _modelPusher?.PushGameUiModels();
-        _host.Update(deltaSeconds);
-        LastDrainedEventCount = _host.DrainEvents(_eventBuffer);
-        TotalDrainedEventCount += LastDrainedEventCount;
-        RecordSub(context.Context.Profiler, started);
-        if (LastDrainedEventCount > 0)
+        if (_registry is null)
         {
-            _eventSink?.OnGameUiEvents(_eventBuffer.AsSpan(0, LastDrainedEventCount));
+            _host!.Update(deltaSeconds);
+            LastDrainedEventCount = _host.DrainEvents(_eventBuffer);
+            TotalDrainedEventCount += LastDrainedEventCount;
+            RecordSub(context.Context.Profiler, started);
+            if (LastDrainedEventCount > 0)
+            {
+                _eventSink?.OnGameUiEvents(_eventBuffer.AsSpan(0, LastDrainedEventCount));
+            }
+
+            return;
         }
+
+        _registry.Update(deltaSeconds);
+        int drainedThisFrame = 0;
+        for (int canvasIndex = 0; canvasIndex < _registry.Count; canvasIndex++)
+        {
+            int drained = _registry.DrainEventsAt(canvasIndex, _eventBuffer, out ScriptUi.UiCanvasHandle canvas);
+            drainedThisFrame += drained;
+            if (drained > 0)
+            {
+                _eventSink?.OnGameUiEvents(canvas, _eventBuffer.AsSpan(0, drained));
+            }
+        }
+
+        LastDrainedEventCount = drainedThisFrame;
+        TotalDrainedEventCount += drainedThisFrame;
+        RecordSub(context.Context.Profiler, started);
     }
 
     private static void RecordSub(FrameProfiler profiler, long started)
@@ -104,4 +147,15 @@ public interface IGameUiEventSink
     /// </summary>
     /// <param name="events">本帧 UI 事件。</param>
     void OnGameUiEvents(ReadOnlySpan<UiEvent> events);
+
+    /// <summary>
+    /// 接收指定 Canvas 本帧 drain 出来的 UI 事件。旧单 Canvas sink 自动转发到兼容入口。
+    /// </summary>
+    /// <param name="canvas">来源 Canvas 运行时句柄。</param>
+    /// <param name="events">该 Canvas 的本帧 UI 事件。</param>
+    void OnGameUiEvents(ScriptUi.UiCanvasHandle canvas, ReadOnlySpan<UiEvent> events)
+    {
+        _ = canvas;
+        OnGameUiEvents(events);
+    }
 }

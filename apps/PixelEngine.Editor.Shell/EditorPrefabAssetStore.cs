@@ -202,6 +202,8 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
         target.Name = OverrideValue(instanceLink, "Name") ?? source.Name;
         target.Enabled = bool.TryParse(OverrideValue(instanceLink, "Enabled"), out bool enabled) ? enabled : source.Enabled;
         target.Transform = ApplyTransformOverrides(source.Transform, instanceLink);
+        target.WebCanvas = ApplyWebCanvasOverrides(source.WebCanvas, instanceLink);
+        target.CanvasScaler = ApplyCanvasScalerOverrides(source.CanvasScaler, instanceLink);
         target.Components.Clear();
         for (int i = 0; i < source.Components.Count; i++)
         {
@@ -222,6 +224,80 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
             ScaleX = FloatOverride(link, "Transform.ScaleX", source.ScaleX),
             ScaleY = FloatOverride(link, "Transform.ScaleY", source.ScaleY),
         };
+    }
+
+    private static EditorWebCanvasComponent? ApplyWebCanvasOverrides(
+        EditorWebCanvasComponent? source,
+        EditorPrefabLink link)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        EditorWebCanvasComponent result = source.Clone(clearPrimary: true);
+        result.ManifestAssetId = OverrideValue(link, "WebCanvas.ManifestAssetId") ?? result.ManifestAssetId;
+        result.ManifestPath = OverrideValue(link, "WebCanvas.ManifestPath") ?? result.ManifestPath;
+        result.InitialScreenId = OverrideValue(link, "WebCanvas.InitialScreenId") ?? result.InitialScreenId;
+        result.Enabled = bool.TryParse(OverrideValue(link, "WebCanvas.Enabled"), out bool enabled)
+            ? enabled
+            : result.Enabled;
+        result.SortingOrder = int.TryParse(
+            OverrideValue(link, "WebCanvas.SortingOrder"),
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out int sortingOrder)
+                ? sortingOrder
+                : result.SortingOrder;
+        result.Primary = bool.TryParse(OverrideValue(link, "WebCanvas.Primary"), out bool primary) && primary;
+        return result;
+    }
+
+    private static EditorCanvasScalerComponent? ApplyCanvasScalerOverrides(
+        EditorCanvasScalerComponent? source,
+        EditorPrefabLink link)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        PixelEngine.UI.UiCanvasScalerSettings settings = source.Settings;
+        settings = settings with
+        {
+            ScaleFactor = FloatOverride(link, "CanvasScaler.ScaleFactor", settings.ScaleFactor),
+            ReferenceWidth = FloatOverride(link, "CanvasScaler.ReferenceWidth", settings.ReferenceWidth),
+            ReferenceHeight = FloatOverride(link, "CanvasScaler.ReferenceHeight", settings.ReferenceHeight),
+            MatchWidthOrHeight = FloatOverride(link, "CanvasScaler.MatchWidthOrHeight", settings.MatchWidthOrHeight),
+            FallbackScreenDpi = FloatOverride(link, "CanvasScaler.FallbackScreenDpi", settings.FallbackScreenDpi),
+            DefaultSpriteDpi = FloatOverride(link, "CanvasScaler.DefaultSpriteDpi", settings.DefaultSpriteDpi),
+            ReferencePixelsPerUnit = FloatOverride(link, "CanvasScaler.ReferencePixelsPerUnit", settings.ReferencePixelsPerUnit),
+        };
+        if (Enum.TryParse(
+            OverrideValue(link, "CanvasScaler.ScaleMode"),
+            ignoreCase: true,
+            out PixelEngine.UI.UiScaleMode scaleMode))
+        {
+            settings = settings with { ScaleMode = scaleMode };
+        }
+
+        if (Enum.TryParse(
+            OverrideValue(link, "CanvasScaler.ScreenMatchMode"),
+            ignoreCase: true,
+            out PixelEngine.UI.UiScreenMatchMode screenMatchMode))
+        {
+            settings = settings with { ScreenMatchMode = screenMatchMode };
+        }
+
+        if (Enum.TryParse(
+            OverrideValue(link, "CanvasScaler.PhysicalUnit"),
+            ignoreCase: true,
+            out PixelEngine.UI.UiPhysicalUnit physicalUnit))
+        {
+            settings = settings with { PhysicalUnit = physicalUnit };
+        }
+
+        return new EditorCanvasScalerComponent { Settings = settings };
     }
 
     private static void ApplyComponentOverrides(EditorGameObject target, EditorPrefabLink link)
@@ -321,6 +397,8 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
                 Enabled = gameObject.Enabled,
                 Transform = ToDocumentTransform(gameObject.Transform),
                 Prefab = ToDocumentPrefab(gameObject.PrefabLink),
+                WebCanvas = gameObject.WebCanvas?.ToDocument(clearPrimary: true),
+                CanvasScaler = gameObject.CanvasScaler?.ToDocument(),
                 Behaviours = behaviours,
             };
         }

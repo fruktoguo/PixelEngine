@@ -19,6 +19,8 @@ public sealed class GameUiFacadeTests
         Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiValue>());
         Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiEvent>());
         Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiScreenHandle>());
+        Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiCanvasId>());
+        Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiCanvasHandle>());
         Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiElementId>());
         Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiActionId>());
         Assert.False(RuntimeHelpers.IsReferenceOrContainsReferences<UiPathId>());
@@ -92,6 +94,8 @@ public sealed class GameUiFacadeTests
         IGameUiService gameUi = NoopGameUiService.Instance;
         UiScreenHandle screen = gameUi.ShowScreen("hud");
         UiScreenHandle modal = gameUi.PushModal("pause");
+        UiScreenHandle explicitScreen = gameUi.ShowScreen(new UiCanvasHandle(99), "hud");
+        UiScreenHandle explicitModal = gameUi.PushModal(new UiCanvasHandle(99), "pause");
         UiStringHandle text = gameUi.InternString("暂停");
 
         gameUi.HideScreen(new UiScreenHandle(99));
@@ -102,7 +106,13 @@ public sealed class GameUiFacadeTests
         // Assert：验证预期结果
         Assert.Equal(default, screen);
         Assert.Equal(default, modal);
+        Assert.Equal(default, explicitScreen);
+        Assert.Equal(default, explicitModal);
         Assert.Equal(default, text);
+        Assert.Equal(default, gameUi.PrimaryCanvas);
+        Assert.False(gameUi.TryGetCanvas(new UiCanvasId(1), out UiCanvasHandle canvas));
+        Assert.Equal(default, canvas);
+        Assert.Equal(0, gameUi.CopyCanvases(new UiCanvasHandle[2]));
         Assert.False(gameUi.TryGetValue(new UiScreenHandle(99), new UiPathId(7), out UiValue value));
         Assert.Equal(default, value);
     }
@@ -123,6 +133,31 @@ public sealed class GameUiFacadeTests
         Assert.True(flag.AsBoolean());
         Assert.Equal(new UiStringHandle(5), text.AsStringHandle());
         _ = Assert.Throws<InvalidOperationException>(() => flag.AsDouble());
+    }
+
+    /// <summary>旧四字段 UiEvent 构造与解构保持源码兼容，同时新事件携带 Canvas 来源。</summary>
+    [Fact]
+    public void UiEventKeepsFourFieldCompatibilityAndCarriesCanvas()
+    {
+        UiEvent legacy = new(
+            new UiScreenHandle(2),
+            new UiElementId(3),
+            new UiActionId(4),
+            new UiValue(5L));
+        UiEvent current = new(
+            new UiCanvasHandle(1),
+            new UiScreenHandle(2),
+            new UiElementId(3),
+            new UiActionId(4),
+            new UiValue(5L));
+
+        (UiScreenHandle screen, UiElementId element, UiActionId action, UiValue payload) = legacy;
+        Assert.Equal(default, legacy.Canvas);
+        Assert.Equal(new UiScreenHandle(2), screen);
+        Assert.Equal(new UiElementId(3), element);
+        Assert.Equal(new UiActionId(4), action);
+        Assert.Equal(5L, payload.AsInt64());
+        Assert.Equal(new UiCanvasHandle(1), current.Canvas);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

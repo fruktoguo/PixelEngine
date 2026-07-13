@@ -33,6 +33,7 @@ public sealed class Engine : IDisposable
     private readonly double[] _renderFrameSortScratchMs = new double[RenderFrameSampleCapacity];
     private IScriptRuntime? _attachedScriptRuntime;
     private EngineWorldSnapshotStore? _restartSnapshotStore;
+    private EngineSceneCanvasSet? _sceneCanvasSet;
     private bool _editorHostExtensionsAttached;
     private bool _windowRuntimeAttached;
     private int _renderFrameSampleIndex;
@@ -328,6 +329,25 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         EngineSceneDocumentLoader.SaveDocument(document, path);
+    }
+
+    /// <summary>
+    /// 将编辑态或工具链中的 .scene 文档 Canvas authoring 投影原子应用到当前运行时。
+    /// 窗口尚未装配时会保存解析结果，并在 Game UI 创建时一次物化。
+    /// </summary>
+    /// <param name="document">包含内建 WebCanvas/CanvasScaler 的完整场景文档。</param>
+    public void ApplySceneCanvasDocument(EngineSceneDocument document)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(document);
+        EngineSceneCanvasSet canvasSet = EngineSceneCanvasResolver.Resolve(document);
+        if (Context.TryGetService(out GameUiCanvasRegistry registry))
+        {
+            registry.Configure(canvasSet);
+            SynchronizeLegacyGameUiHostService(registry);
+        }
+
+        _sceneCanvasSet = canvasSet;
     }
 
     /// <summary>
@@ -627,13 +647,13 @@ public sealed class Engine : IDisposable
             hasScriptGui = true;
         }
         bool hasGameUi = Context.Options.EnableGameUi;
-        GameUiHost? gameUi = null;
+        GameUiCanvasRegistry? gameUi = null;
         if (hasGameUi)
         {
-            gameUi = ResolveGameUiHost(window);
+            gameUi = ResolveGameUiCanvasRegistry(window);
         }
 
-        // 外部预注册 GameUiHost 时也必须补齐唯一 display-metrics source；不能依赖内部创建 host 的分支副作用。
+        // Game UI 始终使用 Rendering-owned display metrics，所有 Canvas 在同一帧边界消费同一来源。
         IDisplayMetricsSource? displayMetricsSource = hasGameUi
             ? ResolveDisplayMetricsSource(window)
             : null;
@@ -652,11 +672,11 @@ public sealed class Engine : IDisposable
             gameUiPresentTargetProvider = ResolveGameUiPresentTargetProvider(registeredExtensions);
         }
 
-        // RmlUi/Ultralight 走独立 present 层；ManagedFallback 复用 ImGui bridge。
-        bool gameUiNeedsDirectLayer = gameUi is not null && gameUi.BackendKind != UiBackendKind.ManagedFallback;
-        bool gameUiNeedsGuiBridge = gameUi is not null && gameUi.BackendKind == UiBackendKind.ManagedFallback;
-        bool needsGuiBridge = hasScriptGui || gameUiNeedsGuiBridge;
-        bool needsUiLayerCompositor = gameUiNeedsDirectLayer;
+        // 注册表可能同时包含 native Canvas 与 ManagedFallback Canvas，也可能在后续场景切换时改变组合；
+        // 因此 direct present 与共享 ImGui bridge 都保持稳定挂载，由注册表按 backend kind 精确分流。
+        bool gameUiNeedsPresentation = gameUi is not null;
+        bool needsGuiBridge = hasScriptGui || gameUiNeedsPresentation;
+        bool needsUiLayerCompositor = gameUiNeedsPresentation;
 
         if ((!needsGuiBridge || hasGuiBridge) &&
             (!needsUiLayerCompositor || hasUiLayerCompositor) &&
@@ -687,8 +707,8 @@ public sealed class Engine : IDisposable
                     ? new GameplayViewportGuiInputRoute(gameplayViewportMapper)
                     : null;
             input = new GuiWindowInputConnector(window, gui.Input, viewportInputRoute);
-            Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;
-            Action<UiPresentTarget>? gameUiTargetFrame = gameUiNeedsGuiBridge
+            Action<IGuiDrawContext>? managedGui = gameUiNeedsPresentation ? gameUi!.DrawGui : null;
+            Action<UiPresentTarget>? gameUiTargetFrame = gameUiNeedsPresentation
                 ? target => ResizeGameUiAtFrameBoundary(gameUi!, target, displayMetricsSource!)
                 : null;
             GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
@@ -778,10 +798,10 @@ public sealed class Engine : IDisposable
         return created;
     }
 
-    // GameUi 宿主解析：创建后端、初始化字体/输入路由，RmlUi 初始化失败时自动回退 ManagedFallback。
-    private GameUiHost ResolveGameUiHost(RenderWindow window)
+    // GameUi Canvas 注册表解析：每个场景 Canvas 创建独立后端/文档栈，RmlUi 初始化失败逐 Canvas 回退。
+    private GameUiCanvasRegistry ResolveGameUiCanvasRegistry(RenderWindow window)
     {
-        if (Context.TryGetService(out GameUiHost existing))
+        if (Context.TryGetService(out GameUiCanvasRegistry existing))
         {
             return existing;
         }
@@ -789,49 +809,97 @@ public sealed class Engine : IDisposable
         FontEngine fontEngine = new(new FontEngineOptions(Path.Combine(Context.Options.ContentRoot, "ui")));
         UiFontSelection fontSelection = fontEngine.Resolve();
         UiBackendKind requestedBackend = Context.Options.GameUiBackend;
+        UiBackendKind activeBackend = requestedBackend;
+        string? selectionFallbackReason = null;
+        string? selectionNativeProfile = null;
+        bool selectionCaptured = false;
         UiStringPool strings = new();
         IDisplayMetricsSource displayMetricsSource = ResolveDisplayMetricsSource(window);
-        IGameUiBackend backend = CreateGameUiBackend(
-            window,
-            requestedBackend,
+
+        GameUiHost CreateCanvasHost(EngineSceneCanvasDefinition definition)
+        {
+            IGameUiBackend backend = CreateGameUiBackend(
+                window,
+                requestedBackend,
+                strings,
+                out string? fallbackReason,
+                out string? activeNativeProfile);
+            GameUiHost host = new(backend);
+            try
+            {
+                InitializeGameUiHost(
+                    host,
+                    backend,
+                    window,
+                    fontSelection,
+                    displayMetricsSource.Current,
+                    definition.ScalerSettings);
+            }
+            // native 库缺失、入口点不匹配或 GL 初始化失败时只降级当前 Canvas。
+            catch (Exception ex) when (backend.Kind == UiBackendKind.RmlUi && IsRmlUiFallbackException(ex))
+            {
+                fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
+                activeNativeProfile = null;
+                host.Dispose();
+                backend = CreateManagedFallbackGameUiBackend(window);
+                host = new GameUiHost(backend);
+                InitializeGameUiHost(
+                    host,
+                    backend,
+                    window,
+                    fontSelection,
+                    displayMetricsSource.Current,
+                    definition.ScalerSettings);
+            }
+
+            if (!selectionCaptured || definition.IsPrimary)
+            {
+                activeBackend = backend.Kind;
+                selectionFallbackReason = fallbackReason;
+                selectionNativeProfile = activeNativeProfile;
+                selectionCaptured = true;
+            }
+
+            return host;
+        }
+
+        Func<string, string?>? manifestAssetResolver = null;
+        if (Context.TryGetService(out IGameUiManifestAssetResolver registeredManifestResolver))
+        {
+            manifestAssetResolver = assetId => registeredManifestResolver.TryResolveManifest(assetId, out string path)
+                ? path
+                : null;
+        }
+
+        GameUiCanvasRegistry registry = new(
+            Context.Options.ContentRoot,
+            CreateCanvasHost,
             strings,
-            out string? fallbackReason,
-            out string? activeNativeProfile);
-        GameUiHost host = new(backend);
-        try
-        {
-            InitializeGameUiHost(host, backend, window, fontSelection, displayMetricsSource.Current);
-        }
-        // native 库缺失、入口点不匹配或 GL 初始化失败时降级到托管 UI 后端。
-        catch (Exception ex) when (backend.Kind == UiBackendKind.RmlUi && IsRmlUiFallbackException(ex))
-        {
-            fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
-            activeNativeProfile = null;
-            host.Dispose();
-            backend = CreateManagedFallbackGameUiBackend(window);
-            host = new GameUiHost(backend);
-            InitializeGameUiHost(host, backend, window, fontSelection, displayMetricsSource.Current);
-        }
+            manifestAssetResolver);
+        EngineSceneCanvasSet canvasSet = _sceneCanvasSet ?? ResolveCurrentSceneCanvasSet();
+        registry.Configure(canvasSet);
+        _sceneCanvasSet = canvasSet;
 
         Context.RegisterService(fontEngine);
         Context.RegisterService(new GameUiBackendSelection(
             requestedBackend,
-            backend.Kind,
-            fallbackReason,
-            activeNativeProfile));
-        Context.RegisterService(host);
-        Context.RegisterService(backend);
+            activeBackend,
+            selectionFallbackReason,
+            selectionNativeProfile));
+        Context.RegisterService(registry);
+        SynchronizeLegacyGameUiHostService(registry);
+
         IUiInputSource inputSource = new RenderWindowUiInputSource(window);
         if (Context.TryGetService(out IGameUiInputSourceFactory inputSourceFactory))
         {
             inputSource = inputSourceFactory.CreateGameUiInputSource(window, inputSource);
         }
 
-        UiInputRouter inputRouter = new(host, inputSource);
+        UiInputRouter inputRouter = new(registry, inputSource);
         inputRouter.TextCompositionCapabilities.Validate();
         Context.RegisterService(inputRouter.TextCompositionCapabilities);
         Context.RegisterService(inputRouter);
-        GameUiServiceBridge service = new(host, Context.Options.ContentRoot, stringPool: strings);
+        GameUiServiceBridge service = new(registry);
         Context.RegisterService(service);
         Context.RegisterService<IGameUiService>(service);
         // Editor 会先接入脚本运行时以便 GuiRenderBridge 同帧绘制 OnGui，再创建窗口 Game UI。
@@ -845,11 +913,11 @@ public sealed class Engine : IDisposable
             }
         }
 
-        GameUiPhaseDriver driver = new(host, eventSink: service, modelPusher: service);
+        GameUiPhaseDriver driver = new(registry, eventSink: service, modelPusher: service);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
-        _ownedRuntimeResources.Add(host);
-        return host;
+        _ownedRuntimeResources.Add(registry);
+        return registry;
     }
 
     // 按请求后端类型选择实现；RmlUi 需通过 native profile gate 与 DLL 探针双重校验。
@@ -915,7 +983,8 @@ public sealed class Engine : IDisposable
         IGameUiBackend backend,
         RenderWindow window,
         UiFontSelection fontSelection,
-        DisplayMetricsSnapshot displayMetrics)
+        DisplayMetricsSnapshot displayMetrics,
+        UiCanvasScalerSettings canvasScalerSettings)
     {
         UiDisplayMetrics uiDisplayMetrics = UiDisplayMetrics.FromRendering(
             Math.Max(1, window.Width),
@@ -923,7 +992,7 @@ public sealed class Engine : IDisposable
             in displayMetrics);
         host.Initialize(new UiBackendInitializeInfo(
             uiDisplayMetrics,
-            UiCanvasScalerSettings.Default,
+            canvasScalerSettings,
             backend.Kind,
             fontSelection));
     }
@@ -941,7 +1010,7 @@ public sealed class Engine : IDisposable
     }
 
     private static void ResizeGameUiAtFrameBoundary(
-        GameUiHost host,
+        GameUiCanvasRegistry registry,
         UiPresentTarget target,
         IDisplayMetricsSource displayMetricsSource)
     {
@@ -950,7 +1019,7 @@ public sealed class Engine : IDisposable
             target.Width,
             target.Height,
             in snapshot);
-        host.Resize(in displayMetrics);
+        registry.Resize(in displayMetrics);
     }
 
     private static bool IsRmlUiFallbackException(Exception ex)
@@ -1326,6 +1395,7 @@ public sealed class Engine : IDisposable
         ResetRestartSnapshot();
         Scene scene = Context.GetService<ISceneService>().SwitchTo(name);
         MaterializeSceneScripts(scene);
+        MaterializeSceneCanvases(scene);
         return scene;
     }
 
@@ -1619,6 +1689,59 @@ public sealed class Engine : IDisposable
             scene.AttachScriptScene(scriptScene);
             Context.RegisterService(scriptScene);
         }
+    }
+
+    private EngineSceneCanvasSet ResolveCurrentSceneCanvasSet()
+    {
+        ISceneService scenes = Context.GetService<ISceneService>();
+        return scenes.Current is Scene current
+            ? ResolveSceneCanvasSet(current)
+            : CreateImplicitCanvasSet("Runtime");
+    }
+
+    private void MaterializeSceneCanvases(Scene scene)
+    {
+        EngineSceneCanvasSet canvasSet = ResolveSceneCanvasSet(scene);
+        if (Context.TryGetService(out GameUiCanvasRegistry registry))
+        {
+            registry.Configure(canvasSet);
+            SynchronizeLegacyGameUiHostService(registry);
+        }
+
+        _sceneCanvasSet = canvasSet;
+    }
+
+    private static EngineSceneCanvasSet ResolveSceneCanvasSet(Scene scene)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        if (scene.Descriptor.SourceKind == SceneSourceKind.SceneFile && scene.ResolvedSource is not null)
+        {
+            EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scene.ResolvedSource);
+            return EngineSceneCanvasResolver.Resolve(document);
+        }
+
+        return CreateImplicitCanvasSet(scene.Name);
+    }
+
+    private static EngineSceneCanvasSet CreateImplicitCanvasSet(string sceneName)
+    {
+        return EngineSceneCanvasResolver.Resolve(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = sceneName,
+            Entities = [],
+        });
+    }
+
+    private void SynchronizeLegacyGameUiHostService(GameUiCanvasRegistry registry)
+    {
+        if (registry.TryGetPrimaryHost(out GameUiHost primaryHost))
+        {
+            Context.RegisterService(primaryHost);
+            return;
+        }
+
+        Context.RemoveService<GameUiHost>();
     }
 
     private Scripting.Scene ResolveCurrentScriptScene()
@@ -2551,7 +2674,15 @@ public sealed class Engine : IDisposable
     // GameUi present 降频：过载越高，paint/composite 间隔越大以回收 CPU/GPU 预算。
     private void ApplyGameUiDegradation(EngineQualityTier tier)
     {
-        if (!Context.TryGetService(out GameUiHost gameUiHost))
+        bool hasRegistry = Context.TryGetService(out GameUiCanvasRegistry gameUiRegistry);
+        GameUiHost? legacyGameUiHost = null;
+        bool hasLegacyHost = false;
+        if (!hasRegistry && Context.TryGetService(out GameUiHost resolvedLegacyHost))
+        {
+            legacyGameUiHost = resolvedLegacyHost;
+            hasLegacyHost = true;
+        }
+        if (!hasRegistry && !hasLegacyHost)
         {
             return;
         }
@@ -2564,7 +2695,14 @@ public sealed class Engine : IDisposable
             EngineQualityTier.SlowMotion => 4,
             _ => throw new ArgumentOutOfRangeException(nameof(tier), tier, "未知引擎质量档位。"),
         };
-        gameUiHost.SetPresentationFrameInterval(intervalFrames);
+        if (hasRegistry)
+        {
+            gameUiRegistry.SetPresentationFrameInterval(intervalFrames);
+        }
+        else
+        {
+            legacyGameUiHost!.SetPresentationFrameInterval(intervalFrames);
+        }
     }
 
     private void PublishRenderFrameRate(double realDeltaSeconds)
@@ -2632,15 +2770,25 @@ public sealed class Engine : IDisposable
         double uiCompositeMs = GetSubPhase(subPhases, FrameSubPhase.UiComposite);
         double uiPaintMs = GetSubPhase(subPhases, FrameSubPhase.UiPaint);
         double uiUploadMs = GetSubPhase(subPhases, FrameSubPhase.UiUpload);
-        if (Context.TryGetService(out GameUiHost gameUiHost))
+        if (Context.TryGetService(out GameUiCanvasRegistry gameUiRegistry))
         {
             if (uiPaintMs <= 0.0)
             {
-                uiPaintMs = gameUiHost.LastPaintMilliseconds;
+                uiPaintMs = gameUiRegistry.LastPaintMilliseconds;
             }
 
-            Context.Counters.UiPresentationIntervalFrames = gameUiHost.PresentationIntervalFrames;
-            Context.Counters.UiSkippedPresentationFrames = gameUiHost.SkippedPresentationFrames;
+            Context.Counters.UiPresentationIntervalFrames = gameUiRegistry.PresentationIntervalFrames;
+            Context.Counters.UiSkippedPresentationFrames = gameUiRegistry.SkippedPresentationFrames;
+        }
+        else if (Context.TryGetService(out GameUiHost legacyGameUiHost))
+        {
+            if (uiPaintMs <= 0.0)
+            {
+                uiPaintMs = legacyGameUiHost.LastPaintMilliseconds;
+            }
+
+            Context.Counters.UiPresentationIntervalFrames = legacyGameUiHost.PresentationIntervalFrames;
+            Context.Counters.UiSkippedPresentationFrames = legacyGameUiHost.SkippedPresentationFrames;
         }
         else
         {

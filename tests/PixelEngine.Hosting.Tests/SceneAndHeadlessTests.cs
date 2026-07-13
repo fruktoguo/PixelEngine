@@ -353,10 +353,10 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
-    /// 验证 Hosting 可稳定写出 .scene v2，并在读回时保持实体排序与字段排序。
+    /// 验证 Hosting 可稳定写出 .scene v3，并在读回时保持实体排序与字段排序。
     /// </summary>
     [Fact]
-    public void SaveSceneDocumentWritesStableV2Json()
+    public void SaveSceneDocumentWritesStableV3Json()
     {
         // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-scene-save-{Guid.NewGuid():N}");
@@ -420,7 +420,7 @@ public sealed class SceneAndHeadlessTests
 
             string json = File.ReadAllText(scenePath);
             // Assert：验证预期结果
-            Assert.Contains("\"formatVersion\":2", json, StringComparison.Ordinal);
+            Assert.Contains("\"formatVersion\":3", json, StringComparison.Ordinal);
             Assert.True(json.IndexOf("\"stableId\":10", StringComparison.Ordinal) < json.IndexOf("\"stableId\":20", StringComparison.Ordinal));
             Assert.True(json.IndexOf("\"Label\"", StringComparison.Ordinal) < json.IndexOf("\"Position\"", StringComparison.Ordinal));
             EngineSceneDocument loaded = EngineSceneDocumentLoader.LoadDocument(scenePath);

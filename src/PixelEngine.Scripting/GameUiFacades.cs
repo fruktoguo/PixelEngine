@@ -13,11 +13,51 @@ public interface IGameUiService
     event Action<UiEvent>? UiEventRaised;
 
     /// <summary>
+    /// 当前场景的 primary Canvas；不存在可用 Canvas 时返回默认句柄。
+    /// </summary>
+    UiCanvasHandle PrimaryCanvas => default;
+
+    /// <summary>
+    /// 按由场景 GameObject StableId 派生的 opaque id 查找本次运行时句柄。
+    /// </summary>
+    /// <param name="id">稳定 Canvas id。</param>
+    /// <param name="canvas">当前场景实例句柄。</param>
+    /// <returns>找到已启用且已物化的 Canvas 时返回 true。</returns>
+    bool TryGetCanvas(UiCanvasId id, out UiCanvasHandle canvas)
+    {
+        _ = id;
+        canvas = default;
+        return false;
+    }
+
+    /// <summary>
+    /// 按确定性合成顺序复制当前已物化 Canvas；不分配临时集合。
+    /// </summary>
+    /// <param name="destination">句柄写入缓冲。</param>
+    /// <returns>实际写入数量。</returns>
+    int CopyCanvases(Span<UiCanvasHandle> destination)
+    {
+        _ = destination;
+        return 0;
+    }
+
+    /// <summary>
     /// 显示一个普通 UI 屏幕。
     /// </summary>
     /// <param name="screenId">稳定屏幕 id 或内容 id。</param>
     /// <returns>可见屏幕实例句柄。</returns>
     UiScreenHandle ShowScreen(string screenId);
+
+    /// <summary>
+    /// 在指定 Canvas 的独立屏栈中显示一个普通 UI 屏幕。
+    /// </summary>
+    /// <param name="canvas">目标 Canvas 运行时句柄。</param>
+    /// <param name="screenId">稳定屏幕 id 或内容 id。</param>
+    /// <returns>跨 Canvas 全局唯一的可见屏幕实例句柄；目标无效时返回默认句柄。</returns>
+    UiScreenHandle ShowScreen(UiCanvasHandle canvas, string screenId)
+    {
+        return canvas == PrimaryCanvas ? ShowScreen(screenId) : default;
+    }
 
     /// <summary>
     /// 隐藏一个可见 UI 屏幕。
@@ -31,6 +71,17 @@ public interface IGameUiService
     /// <param name="screenId">稳定屏幕 id 或内容 id。</param>
     /// <returns>可见屏幕实例句柄。</returns>
     UiScreenHandle PushModal(string screenId);
+
+    /// <summary>
+    /// 在指定 Canvas 的独立屏栈中压入一个模态 UI 屏幕。
+    /// </summary>
+    /// <param name="canvas">目标 Canvas 运行时句柄。</param>
+    /// <param name="screenId">稳定屏幕 id 或内容 id。</param>
+    /// <returns>跨 Canvas 全局唯一的可见屏幕实例句柄；目标无效时返回默认句柄。</returns>
+    UiScreenHandle PushModal(UiCanvasHandle canvas, string screenId)
+    {
+        return canvas == PrimaryCanvas ? PushModal(screenId) : default;
+    }
 
     /// <summary>
     /// 把脚本模型绑定到指定屏幕。
@@ -95,8 +146,34 @@ public sealed class NoopGameUiService : IGameUiService
     }
 
     /// <inheritdoc />
+    public UiCanvasHandle PrimaryCanvas => default;
+
+    /// <inheritdoc />
+    public bool TryGetCanvas(UiCanvasId id, out UiCanvasHandle canvas)
+    {
+        _ = id;
+        canvas = default;
+        return false;
+    }
+
+    /// <inheritdoc />
+    public int CopyCanvases(Span<UiCanvasHandle> destination)
+    {
+        _ = destination;
+        return 0;
+    }
+
+    /// <inheritdoc />
     public UiScreenHandle ShowScreen(string screenId)
     {
+        _ = screenId;
+        return default;
+    }
+
+    /// <inheritdoc />
+    public UiScreenHandle ShowScreen(UiCanvasHandle canvas, string screenId)
+    {
+        _ = canvas;
         _ = screenId;
         return default;
     }
@@ -110,6 +187,14 @@ public sealed class NoopGameUiService : IGameUiService
     /// <inheritdoc />
     public UiScreenHandle PushModal(string screenId)
     {
+        _ = screenId;
+        return default;
+    }
+
+    /// <inheritdoc />
+    public UiScreenHandle PushModal(UiCanvasHandle canvas, string screenId)
+    {
+        _ = canvas;
         _ = screenId;
         return default;
     }
@@ -172,16 +257,60 @@ public interface IUiModel
 /// <summary>
 /// 脚本可见的 UI 到游戏事件。
 /// </summary>
+/// <param name="Canvas">来源 Canvas；旧四参数构造产生默认兼容句柄。</param>
 /// <param name="Screen">来源屏幕实例。</param>
 /// <param name="Element">来源元素 id。</param>
 /// <param name="Action">动作 id。</param>
 /// <param name="Payload">事件载荷。</param>
 [StructLayout(LayoutKind.Sequential)]
 public readonly record struct UiEvent(
+    UiCanvasHandle Canvas,
     UiScreenHandle Screen,
     UiElementId Element,
     UiActionId Action,
-    UiValue Payload);
+    UiValue Payload)
+{
+    /// <summary>
+    /// 创建不携带 Canvas 来源的兼容事件。
+    /// </summary>
+    /// <param name="screen">来源屏幕实例。</param>
+    /// <param name="element">来源元素 id。</param>
+    /// <param name="action">动作 id。</param>
+    /// <param name="payload">事件载荷。</param>
+    public UiEvent(UiScreenHandle screen, UiElementId element, UiActionId action, UiValue payload)
+        : this(default, screen, element, action, payload)
+    {
+    }
+
+    /// <summary>
+    /// 以旧四字段形状解构事件，保持既有脚本源码兼容。
+    /// </summary>
+    public void Deconstruct(
+        out UiScreenHandle screen,
+        out UiElementId element,
+        out UiActionId action,
+        out UiValue payload)
+    {
+        screen = Screen;
+        element = Element;
+        action = Action;
+        payload = Payload;
+    }
+}
+
+/// <summary>
+/// 由 owning GameObject StableId 确定性派生的 opaque Canvas id。
+/// </summary>
+/// <param name="Value">非零稳定值。</param>
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct UiCanvasId(ulong Value);
+
+/// <summary>
+/// 当前场景物化出的 Canvas 实例句柄；切场景或重新进入 Play 后旧句柄失效。
+/// </summary>
+/// <param name="Value">正整数运行时句柄。</param>
+[StructLayout(LayoutKind.Sequential)]
+public readonly record struct UiCanvasHandle(int Value);
 
 /// <summary>
 /// 可见 UI 屏幕实例句柄。

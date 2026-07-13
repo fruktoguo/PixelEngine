@@ -69,6 +69,8 @@ internal sealed class EditorSceneModel
                 ParentId = entity.ParentId,
                 Transform = FromDocumentTransform(entity.Transform),
                 PrefabLink = FromDocumentPrefab(entity.Prefab),
+                WebCanvas = entity.WebCanvas is null ? null : EditorWebCanvasComponent.FromDocument(entity.WebCanvas),
+                CanvasScaler = entity.CanvasScaler is null ? null : EditorCanvasScalerComponent.FromDocument(entity.CanvasScaler),
             };
 
             EngineSceneBehaviourDocument[] behaviours = entity.Behaviours ?? [];
@@ -132,6 +134,8 @@ internal sealed class EditorSceneModel
                 Enabled = gameObject.Enabled,
                 Transform = ToDocumentTransform(gameObject.Transform),
                 Prefab = ToDocumentPrefab(gameObject.PrefabLink),
+                WebCanvas = gameObject.WebCanvas?.ToDocument(),
+                CanvasScaler = gameObject.CanvasScaler?.ToDocument(),
                 Behaviours = behaviours,
             };
         }
@@ -636,6 +640,8 @@ internal sealed class EditorSceneModel
             Enabled = source.Enabled,
             Transform = source.Transform.Clone(),
             PrefabLink = source.PrefabLink?.Clone(),
+            WebCanvas = source.WebCanvas?.Clone(clearPrimary: true),
+            CanvasScaler = source.CanvasScaler?.Clone(),
         };
         for (int i = 0; i < source.Components.Count; i++)
         {
@@ -663,6 +669,8 @@ internal sealed class EditorSceneModel
             Enabled = source.Enabled,
             Transform = source.Transform.Clone(),
             PrefabLink = source.PrefabLink?.Clone(),
+            WebCanvas = source.WebCanvas?.Clone(clearPrimary: true),
+            CanvasScaler = source.CanvasScaler?.Clone(),
         };
         for (int i = 0; i < source.Components.Count; i++)
         {

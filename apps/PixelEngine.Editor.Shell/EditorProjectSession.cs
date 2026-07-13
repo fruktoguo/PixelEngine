@@ -110,6 +110,8 @@ internal sealed class EditorProjectSession : IDisposable
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = new();
             EditorAssetManifestStore assets = new(project);
+            engine.Context.RegisterService<IGameUiManifestAssetResolver>(
+                new EditorGameUiManifestAssetResolver(assets, project.ContentRootPath));
             EditorPrefabAssetStore prefabs = new(project.ContentRootPath, assets);
             EditorScriptAssetOpenService scriptAssetOpenService = new(
                 project,
@@ -654,6 +656,7 @@ internal sealed class EditorProjectSession : IDisposable
             sceneModel,
             engine.Context.GetService<ScriptAssemblyRegistry>());
         engine.AttachScriptScene(projection.Scene);
+        engine.ApplySceneCanvasDocument(sceneModel.ToDocument());
         engine.Context.RegisterService(sceneModel);
         engine.Context.RegisterService(projection);
         return projection;

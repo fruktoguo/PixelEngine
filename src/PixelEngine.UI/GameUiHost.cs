@@ -7,7 +7,7 @@ namespace PixelEngine.UI;
 /// <summary>
 /// 游戏大 UI 顶层门面，负责屏栈管理并把生命周期调用转发给当前后端。
 /// </summary>
-public sealed class GameUiHost : IDisposable
+public sealed class GameUiHost : IGameUiInputTarget, IGameUiPresentationTarget, IDisposable
 {
     private readonly IGameUiBackend _backend;
     private readonly UiScreenStackEntry[] _screenStackBuffer;

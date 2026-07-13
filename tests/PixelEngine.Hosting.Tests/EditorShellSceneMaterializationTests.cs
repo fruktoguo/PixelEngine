@@ -2,6 +2,7 @@ using System.Numerics;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
+using PixelEngine.UI;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -203,6 +204,126 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal("saved-world", roundTrip.Name);
         Assert.Equal("../saves/checkpoint", roundTrip.InitialSaveDirectory);
         Assert.False(active.IsDirty);
+    }
+
+    /// <summary>
+    /// 验证复制 Web Canvas 时保留 manifest/scaler 但清除 copied primary，避免一次快捷复制制造非法双 primary。
+    /// </summary>
+    [Fact]
+    public void DuplicateCanvasPreservesSettingsButClearsPrimaryIdentity()
+    {
+        EditorSceneModel model = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "canvas-duplicate",
+            Entities =
+            [
+                new EngineSceneEntityDocument
+                {
+                    StableId = 1,
+                    Name = "HUD Canvas",
+                    Enabled = true,
+                    WebCanvas = new EngineSceneWebCanvasDocument
+                    {
+                        ManifestPath = "ui/ui-manifest.json",
+                        InitialScreenId = "hud",
+                        Enabled = true,
+                        SortingOrder = 100,
+                        Primary = true,
+                    },
+                    CanvasScaler = new EngineSceneCanvasScalerDocument
+                    {
+                        ScaleMode = UiScaleMode.ScaleWithScreenSize,
+                        ReferenceWidth = 1920,
+                        ReferenceHeight = 1080,
+                        MatchWidthOrHeight = 0.35f,
+                        ReferencePixelsPerUnit = 120f,
+                    },
+                },
+            ],
+        });
+        EditorUndoStack undo = new();
+
+        undo.Execute(model, new DuplicateGameObjectCommand(1));
+        EditorGameObject duplicate = model.Get(model.SelectedStableId!.Value);
+
+        Assert.NotEqual(1, duplicate.StableId);
+        Assert.Equal("ui/ui-manifest.json", duplicate.WebCanvas!.ManifestPath);
+        Assert.Equal("hud", duplicate.WebCanvas.InitialScreenId);
+        Assert.Equal(100, duplicate.WebCanvas.SortingOrder);
+        Assert.False(duplicate.WebCanvas.Primary);
+        Assert.Equal(UiScaleMode.ScaleWithScreenSize, duplicate.CanvasScaler!.Settings.ScaleMode);
+        Assert.Equal(1920f, duplicate.CanvasScaler.Settings.ReferenceWidth);
+        Assert.Equal(0.35f, duplicate.CanvasScaler.Settings.MatchWidthOrHeight);
+        EngineSceneCanvasSet canvasSet = EngineSceneCanvasResolver.Resolve(model.ToDocument());
+        Assert.Equal(2, canvasSet.Count);
+        Assert.Equal(GameUiCanvasIdentity.FromStableId(1), canvasSet.PrimaryId);
+
+        Assert.True(undo.Undo(model));
+        Assert.Equal(1, model.Count);
+        Assert.True(undo.Redo(model));
+        Assert.False(model.Get(model.SelectedStableId!.Value).WebCanvas!.Primary);
+    }
+
+    /// <summary>Prefab 资产与实例永不持久 primary，但保留 Web Canvas 与完整 scaler baseline。</summary>
+    [Fact]
+    public void PrefabCanvasClearsPrimaryAndPreservesScalerBaseline()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), $"pixelengine-canvas-prefab-{Guid.NewGuid():N}");
+        try
+        {
+            EditorPrefabAssetStore prefabs = new(contentRoot);
+            EditorSceneModel authoring = EditorSceneModel.Empty("canvas-prefab-source");
+            EditorGameObject source = authoring.Create("HUD Canvas");
+            source.WebCanvas = new EditorWebCanvasComponent
+            {
+                ManifestPath = "ui/ui-manifest.json",
+                InitialScreenId = "hud",
+                Enabled = true,
+                SortingOrder = 50,
+                Primary = true,
+            };
+            source.CanvasScaler = new EditorCanvasScalerComponent
+            {
+                Settings = UiCanvasScalerSettings.Default with
+                {
+                    ScaleMode = UiScaleMode.ConstantPhysicalSize,
+                    PhysicalUnit = UiPhysicalUnit.Millimeters,
+                    FallbackScreenDpi = 144f,
+                    ReferencePixelsPerUnit = 110f,
+                },
+            };
+            const string AssetPath = "prefabs/hud.prefab";
+
+            prefabs.CreatePrefabFromSubtree(authoring, source.StableId, AssetPath);
+            EngineSceneEntityDocument persisted = Assert.Single(
+                EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "prefabs", "hud.prefab")).Entities!);
+            EditorSceneModel scene = EditorSceneModel.Empty("instance");
+            EditorGameObject instance = prefabs.InstantiatePrefab(scene, AssetPath, parentId: null);
+            EditorGameObject secondInstance = prefabs.InstantiatePrefab(scene, AssetPath, parentId: null);
+            EngineSceneCanvasSet runtimeCanvases = EngineSceneCanvasResolver.Resolve(scene.ToDocument());
+
+            Assert.False(persisted.WebCanvas!.Primary);
+            Assert.Equal("ui/ui-manifest.json", persisted.WebCanvas.ManifestPath);
+            Assert.Equal(UiScaleMode.ConstantPhysicalSize, persisted.CanvasScaler!.ScaleMode);
+            Assert.False(instance.WebCanvas!.Primary);
+            Assert.Equal(50, instance.WebCanvas.SortingOrder);
+            Assert.Equal(UiPhysicalUnit.Millimeters, instance.CanvasScaler!.Settings.PhysicalUnit);
+            Assert.Equal(144f, instance.CanvasScaler.Settings.FallbackScreenDpi);
+            Assert.NotEqual(instance.StableId, secondInstance.StableId);
+            Assert.Equal(2, runtimeCanvases.Count);
+            Assert.Contains(runtimeCanvases.Canvases.ToArray(), item =>
+                item.Id == GameUiCanvasIdentity.FromStableId(instance.StableId));
+            Assert.Contains(runtimeCanvases.Canvases.ToArray(), item =>
+                item.Id == GameUiCanvasIdentity.FromStableId(secondInstance.StableId));
+        }
+        finally
+        {
+            if (Directory.Exists(contentRoot))
+            {
+                Directory.Delete(contentRoot, recursive: true);
+            }
+        }
     }
 
     /// <summary>

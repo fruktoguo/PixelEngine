@@ -48,22 +48,24 @@ public sealed class EngineWindowOwnershipTests
     }
 
     /// <summary>
-    /// 验证 RmlUi 游戏 UI 走独立 present 层，ManagedFallback 仍复用中性 Gui bridge。
+    /// 验证多 Canvas 注册表稳定挂载 direct present 与中性 Gui bridge，再按每个 backend 精确分流。
     /// </summary>
     [Fact]
     public void GameUiRuntimeRoutesDirectBackendsThroughUiLayerCompositorBySourceContract()
     {
         string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
         string body = ExtractAttachGuiRuntimeBody(source);
+        string registry = ReadRepositoryFile("src", "PixelEngine.Hosting", "GameUiCanvasRegistry.cs");
 
-        Assert.Contains("gameUi.BackendKind != UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
+        Assert.Contains("bool gameUiNeedsPresentation = gameUi is not null;", body, StringComparison.Ordinal);
         Assert.Contains("UiLayerCompositor.Attach(", body, StringComparison.Ordinal);
         Assert.Contains("UiPresentSurface.RuntimeViewport", body, StringComparison.Ordinal);
         Assert.Contains("ResolveGameUiPresentTargetProvider(registeredExtensions)", body, StringComparison.Ordinal);
-        Assert.Contains("gameUi.BackendKind == UiBackendKind.ManagedFallback", body, StringComparison.Ordinal);
         Assert.Contains("GuiRenderBridge.AttachIfEnabled", body, StringComparison.Ordinal);
         Assert.Contains("UiPresentSurface.RuntimeViewport", body, StringComparison.Ordinal);
-        Assert.Contains("Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;", body, StringComparison.Ordinal);
+        Assert.Contains("Action<IGuiDrawContext>? managedGui = gameUiNeedsPresentation ? gameUi!.DrawGui : null;", body, StringComparison.Ordinal);
+        Assert.Contains("slot.Host.BackendKind != RuntimeUi.UiBackendKind.ManagedFallback", registry, StringComparison.Ordinal);
+        Assert.Contains("slot.Host.BackendKind == RuntimeUi.UiBackendKind.ManagedFallback", registry, StringComparison.Ordinal);
         Assert.Contains("new GameplayViewportGuiInputRoute(gameplayViewportMapper)", body, StringComparison.Ordinal);
         Assert.Contains("new GuiWindowInputConnector(window, gui.Input, viewportInputRoute)", body, StringComparison.Ordinal);
     }
@@ -146,7 +148,7 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("IUiInputSource inputSource = new RenderWindowUiInputSource(window);", source, StringComparison.Ordinal);
         Assert.Contains("IGameUiInputSourceFactory", source, StringComparison.Ordinal);
         Assert.Contains("inputSourceFactory.CreateGameUiInputSource(window, inputSource)", source, StringComparison.Ordinal);
-        Assert.Contains("UiInputRouter inputRouter = new(host, inputSource);", source, StringComparison.Ordinal);
+        Assert.Contains("UiInputRouter inputRouter = new(registry, inputSource);", source, StringComparison.Ordinal);
         Assert.Contains("inputRouter.TextCompositionCapabilities.Validate();", source, StringComparison.Ordinal);
         Assert.Contains("Context.RegisterService(inputRouter.TextCompositionCapabilities);", source, StringComparison.Ordinal);
         Assert.Contains("Context.RegisterService(inputRouter);", source, StringComparison.Ordinal);

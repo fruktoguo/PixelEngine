@@ -9,7 +9,7 @@ namespace PixelEngine.UI;
 /// </summary>
 public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
 {
-    private readonly GameUiHost _host;
+    private readonly IGameUiPresentationTarget _host;
     private readonly IUiPresentTargetProvider? _targetProvider;
     private readonly IDisplayMetricsSource? _displayMetricsSource;
     private readonly IDisposable _registration;
@@ -20,7 +20,7 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     private UiLayerCompositor(
         RenderPipeline pipeline,
         UiPresentSurface surface,
-        GameUiHost host,
+        IGameUiPresentationTarget host,
         IUiPresentTargetProvider? targetProvider,
         IDisplayMetricsSource? displayMetricsSource)
     {
@@ -125,6 +125,27 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     }
 
     /// <summary>
+    /// 在显式 present surface 注册可包含多个 Canvas 的中性合成目标。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="surface">目标 present surface。</param>
+    /// <param name="target">单 Canvas host 或多 Canvas registry。</param>
+    /// <param name="targetProvider">可选目标区域提供者。</param>
+    /// <param name="displayMetricsSource">帧边界 display metrics 来源。</param>
+    /// <returns>已注册的合成层。</returns>
+    public static UiLayerCompositor Attach(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        IGameUiPresentationTarget target,
+        IUiPresentTargetProvider? targetProvider,
+        IDisplayMetricsSource displayMetricsSource)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(displayMetricsSource);
+        return new UiLayerCompositor(pipeline, surface, target, targetProvider, displayMetricsSource);
+    }
+
+    /// <summary>
     /// present 层被调用的帧数。
     /// </summary>
     public long FrameIndex { get; private set; }
@@ -157,7 +178,9 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         else if (!_hasPresentTarget || presentContext.Target != _lastPresentTarget)
         {
             UiPresentTarget presentTarget = presentContext.Target;
-            _host.Resize(new UiViewport(0, 0, presentTarget.Width, presentTarget.Height, presentTarget.DpiScale));
+            UiViewport viewport = new(0, 0, presentTarget.Width, presentTarget.Height, presentTarget.DpiScale);
+            UiDisplayMetrics displayMetrics = UiDisplayMetrics.FromViewport(in viewport);
+            _host.Resize(in displayMetrics);
             _lastPresentTarget = presentTarget;
             _hasPresentTarget = true;
         }

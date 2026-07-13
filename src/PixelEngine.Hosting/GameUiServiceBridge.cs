@@ -8,8 +8,10 @@ namespace PixelEngine.Hosting;
 /// </summary>
 public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventSink, IGameUiModelPusher
 {
-    private readonly RuntimeUi.GameUiHost _host;
-    private readonly GameUiModelBridge _modelBridge;
+    private static readonly ScriptUi.UiCanvasHandle LegacyCanvasHandle = new(1);
+    private readonly RuntimeUi.GameUiHost? _host;
+    private readonly GameUiCanvasRegistry? _registry;
+    private readonly GameUiModelBridge? _modelBridge;
     private readonly RuntimeUi.UiStringPool _strings;
     private readonly string _uiRoot;
     private readonly RuntimeUi.UiManifest? _manifest;
@@ -38,6 +40,60 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         _manifest = manifest ?? LoadManifestIfPresent(_uiRoot);
         PreloadManifestScreens();
         PreloadManifestImages();
+    }
+
+    /// <summary>
+    /// 创建多 Canvas Game UI 脚本服务桥。
+    /// </summary>
+    /// <param name="registry">当前场景 Canvas 注册表。</param>
+    public GameUiServiceBridge(GameUiCanvasRegistry registry)
+    {
+        _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _strings = registry.Strings;
+        _uiRoot = string.Empty;
+    }
+
+    /// <summary>获取当前场景的 primary Canvas；旧单 Canvas 模式返回兼容句柄。</summary>
+    public ScriptUi.UiCanvasHandle PrimaryCanvas => _registry?.PrimaryCanvas ?? LegacyCanvasHandle;
+
+    /// <summary>按稳定 Canvas id 查询本次场景物化产生的运行时句柄。</summary>
+    /// <param name="id">由场景 StableId 派生的稳定 Canvas id。</param>
+    /// <param name="canvas">查询成功时返回运行时 Canvas 句柄。</param>
+    /// <returns>当前场景存在对应 Canvas 时为 <see langword="true"/>。</returns>
+    public bool TryGetCanvas(ScriptUi.UiCanvasId id, out ScriptUi.UiCanvasHandle canvas)
+    {
+        if (_registry is not null)
+        {
+            return _registry.TryGetCanvas(id, out canvas);
+        }
+
+        if (id == GameUiCanvasIdentity.LegacyImplicit)
+        {
+            canvas = LegacyCanvasHandle;
+            return true;
+        }
+
+        canvas = default;
+        return false;
+    }
+
+    /// <summary>把当前场景的运行时 Canvas 句柄复制到调用方缓冲区。</summary>
+    /// <param name="destination">接收 Canvas 句柄的缓冲区。</param>
+    /// <returns>实际复制的句柄数量。</returns>
+    public int CopyCanvases(Span<ScriptUi.UiCanvasHandle> destination)
+    {
+        if (_registry is not null)
+        {
+            return _registry.CopyCanvases(destination);
+        }
+
+        if (destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        destination[0] = LegacyCanvasHandle;
+        return 1;
     }
 
     /// <summary>
@@ -122,9 +178,25 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <returns>可见屏幕实例句柄。</returns>
     public ScriptUi.UiScreenHandle ShowScreen(string screenId)
     {
+        if (_registry is not null)
+        {
+            return _registry.ShowScreen(_registry.PrimaryCanvas, screenId);
+        }
+
         ResolveScreen(screenId, out RuntimeUi.UiScreenId runtimeScreen, out RuntimeUi.UiDocumentSource source);
-        RuntimeUi.UiScreenHandle screen = _host.ShowScreen(runtimeScreen, in source);
+        RuntimeUi.UiScreenHandle screen = _host!.ShowScreen(runtimeScreen, in source);
         return new ScriptUi.UiScreenHandle(screen.Value);
+    }
+
+    /// <summary>在指定 Canvas 上显示一个普通 UI 屏幕。</summary>
+    /// <param name="canvas">目标 Canvas 运行时句柄。</param>
+    /// <param name="screenId">屏幕资产 id 或路径。</param>
+    /// <returns>全局唯一的可见屏幕实例句柄；Canvas 无效时返回默认值。</returns>
+    public ScriptUi.UiScreenHandle ShowScreen(ScriptUi.UiCanvasHandle canvas, string screenId)
+    {
+        return _registry is not null
+            ? _registry.ShowScreen(canvas, screenId)
+            : canvas == LegacyCanvasHandle ? ShowScreen(screenId) : default;
     }
 
     /// <summary>
@@ -133,7 +205,13 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="screen">可见屏幕实例句柄。</param>
     public void HideScreen(ScriptUi.UiScreenHandle screen)
     {
-        _ = _host.HideScreen(new RuntimeUi.UiScreenHandle(screen.Value));
+        if (_registry is not null)
+        {
+            _ = _registry.HideScreen(screen);
+            return;
+        }
+
+        _ = _host!.HideScreen(new RuntimeUi.UiScreenHandle(screen.Value));
     }
 
     /// <summary>
@@ -143,9 +221,25 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <returns>可见屏幕实例句柄。</returns>
     public ScriptUi.UiScreenHandle PushModal(string screenId)
     {
+        if (_registry is not null)
+        {
+            return _registry.PushModal(_registry.PrimaryCanvas, screenId);
+        }
+
         ResolveScreen(screenId, out RuntimeUi.UiScreenId runtimeScreen, out RuntimeUi.UiDocumentSource source);
-        RuntimeUi.UiScreenHandle screen = _host.PushModal(runtimeScreen, in source);
+        RuntimeUi.UiScreenHandle screen = _host!.PushModal(runtimeScreen, in source);
         return new ScriptUi.UiScreenHandle(screen.Value);
+    }
+
+    /// <summary>在指定 Canvas 上压入一个模态 UI 屏幕。</summary>
+    /// <param name="canvas">目标 Canvas 运行时句柄。</param>
+    /// <param name="screenId">屏幕资产 id 或路径。</param>
+    /// <returns>全局唯一的可见屏幕实例句柄；Canvas 无效时返回默认值。</returns>
+    public ScriptUi.UiScreenHandle PushModal(ScriptUi.UiCanvasHandle canvas, string screenId)
+    {
+        return _registry is not null
+            ? _registry.PushModal(canvas, screenId)
+            : canvas == LegacyCanvasHandle ? PushModal(screenId) : default;
     }
 
     /// <summary>
@@ -156,7 +250,13 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="model">脚本模型。</param>
     public void BindModel(ScriptUi.UiScreenHandle screen, ScriptUi.UiModelName modelName, ScriptUi.IUiModel model)
     {
-        _modelBridge.BindModel(screen, modelName, model);
+        if (_registry is not null)
+        {
+            _registry.BindModel(screen, modelName, model);
+            return;
+        }
+
+        _modelBridge!.BindModel(screen, modelName, model);
     }
 
     /// <summary>
@@ -179,7 +279,13 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     public void SetValue(ScriptUi.UiScreenHandle screen, ScriptUi.UiPathId path, in ScriptUi.UiValue value)
     {
         RuntimeUi.UiValue runtimeValue = ToRuntimeValue(in value);
-        _host.SetModelValue(new RuntimeUi.UiScreenHandle(screen.Value), new RuntimeUi.UiPathId(path.Value), in runtimeValue);
+        if (_registry is not null)
+        {
+            _registry.SetValue(screen, new RuntimeUi.UiPathId(path.Value), in runtimeValue);
+            return;
+        }
+
+        _host!.SetModelValue(new RuntimeUi.UiScreenHandle(screen.Value), new RuntimeUi.UiPathId(path.Value), in runtimeValue);
     }
 
     /// <summary>
@@ -191,10 +297,14 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <returns>读取成功则返回 true。</returns>
     public bool TryGetValue(ScriptUi.UiScreenHandle screen, ScriptUi.UiPathId path, out ScriptUi.UiValue value)
     {
-        if (_host.TryGetModelValue(
-            new RuntimeUi.UiScreenHandle(screen.Value),
-            new RuntimeUi.UiPathId(path.Value),
-            out RuntimeUi.UiValue runtimeValue))
+        bool found = _registry is not null
+            ? _registry.TryGetValue(screen, new RuntimeUi.UiPathId(path.Value), out RuntimeUi.UiValue runtimeValue)
+            : _host!.TryGetModelValue(
+                new RuntimeUi.UiScreenHandle(screen.Value),
+                new RuntimeUi.UiPathId(path.Value),
+                out runtimeValue);
+
+        if (found)
         {
             value = ToScriptValue(in runtimeValue);
             return true;
@@ -213,10 +323,12 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     public void Invoke(ScriptUi.UiScreenHandle screen, ScriptUi.UiActionId action, in ScriptUi.UiValue payload)
     {
         RuntimeUi.UiValue runtimePayload = ToRuntimeValue(in payload);
-        bool invoked = _host.InvokeAction(
-            new RuntimeUi.UiScreenHandle(screen.Value),
-            new RuntimeUi.UiActionId(action.Value),
-            in runtimePayload);
+        bool invoked = _registry is not null
+            ? _registry.Invoke(screen, new RuntimeUi.UiActionId(action.Value), in runtimePayload)
+            : _host!.InvokeAction(
+                new RuntimeUi.UiScreenHandle(screen.Value),
+                new RuntimeUi.UiActionId(action.Value),
+                in runtimePayload);
         if (!invoked)
         {
             throw new KeyNotFoundException($"Game UI 屏幕 {screen.Value} 未绑定 action: {action.Value}");
@@ -229,6 +341,23 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// <param name="events">运行时 UI 事件。</param>
     public void OnGameUiEvents(ReadOnlySpan<RuntimeUi.UiEvent> events)
     {
+        DispatchGameUiEvents(LegacyCanvasHandle, events);
+    }
+
+    /// <summary>接收指定 Canvas 后端 drain 出来的事件并转换为脚本事件。</summary>
+    /// <param name="canvas">事件来源 Canvas。</param>
+    /// <param name="events">运行时 UI 事件。</param>
+    public void OnGameUiEvents(
+        ScriptUi.UiCanvasHandle canvas,
+        ReadOnlySpan<RuntimeUi.UiEvent> events)
+    {
+        DispatchGameUiEvents(canvas, events);
+    }
+
+    private void DispatchGameUiEvents(
+        ScriptUi.UiCanvasHandle canvas,
+        ReadOnlySpan<RuntimeUi.UiEvent> events)
+    {
         ScriptUi.IEventBus? scriptEvents = _scriptEvents;
         Action<ScriptUi.UiEvent>? directHandlers = _directHandlers;
         if (scriptEvents is null && directHandlers is null)
@@ -239,12 +368,25 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
         for (int i = 0; i < events.Length; i++)
         {
             ref readonly RuntimeUi.UiEvent runtimeEvent = ref events[i];
-            RuntimeUi.UiScreenHandle runtimeScreen = _host.TryGetVisibleScreen(runtimeEvent.Document, out RuntimeUi.UiScreenHandle visible)
-                ? visible
-                : new RuntimeUi.UiScreenHandle(runtimeEvent.Document.Value);
+            ScriptUi.UiScreenHandle scriptScreen;
+            if (_registry is not null)
+            {
+                _ = _registry.TryResolveEventScreen(canvas, runtimeEvent.Document, out scriptScreen);
+            }
+            else
+            {
+                RuntimeUi.UiScreenHandle runtimeScreen = _host!.TryGetVisibleScreen(
+                    runtimeEvent.Document,
+                    out RuntimeUi.UiScreenHandle visible)
+                        ? visible
+                        : new RuntimeUi.UiScreenHandle(runtimeEvent.Document.Value);
+                scriptScreen = new ScriptUi.UiScreenHandle(runtimeScreen.Value);
+            }
+
             RuntimeUi.UiValue payload = runtimeEvent.Payload;
             ScriptUi.UiEvent scriptEvent = new(
-                new ScriptUi.UiScreenHandle(runtimeScreen.Value),
+                canvas,
+                scriptScreen,
                 new ScriptUi.UiElementId(runtimeEvent.Element.Value),
                 new ScriptUi.UiActionId(runtimeEvent.Action.Value),
                 ToScriptValue(in payload));
@@ -263,7 +405,13 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     /// </summary>
     public void PushGameUiModels()
     {
-        _modelBridge.PushGameUiModels();
+        if (_registry is not null)
+        {
+            _registry.PushGameUiModels();
+            return;
+        }
+
+        _modelBridge!.PushGameUiModels();
     }
 
     private void ResolveScreen(
@@ -331,15 +479,16 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
             return;
         }
 
+        RuntimeUi.GameUiHost host = _host!;
         foreach (RuntimeUi.UiManifestScreen screen in _manifest.Screens)
         {
-            if (!screen.Preload || _host.Documents.TryGetDocument(screen.ScreenId, out _))
+            if (!screen.Preload || host.Documents.TryGetDocument(screen.ScreenId, out _))
             {
                 continue;
             }
 
             RuntimeUi.UiDocumentSource source = screen.ToDocumentSource();
-            _ = _host.LoadDocument(screen.ScreenId, in source);
+            _ = host.LoadDocument(screen.ScreenId, in source);
         }
     }
 
@@ -350,11 +499,12 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
             return;
         }
 
+        RuntimeUi.GameUiHost host = _host!;
         foreach (RuntimeUi.UiManifestImage image in _manifest.Images)
         {
             if (image.Preload)
             {
-                _ = _host.PreloadImage(image.FullPath);
+                _ = host.PreloadImage(image.FullPath);
             }
         }
     }
