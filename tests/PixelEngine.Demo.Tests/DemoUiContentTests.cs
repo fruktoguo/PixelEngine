@@ -248,6 +248,33 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证正常产品态使用独立菜单简报与 HUD 信息区，缩放标尺只存在于按需诊断屏而不混入主循环。
+    /// </summary>
+    [Fact]
+    public void DemoMenuAndHudUseSeparateProductLayoutRegionsWithoutScalerCalibrationCopy()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        string mainPath = manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath;
+        string hudPath = manifest.GetRequiredScreen(GameUiDemoController.HudScreen).FullPath;
+        XDocument main = XDocument.Load(mainPath);
+        XDocument hud = XDocument.Load(hudPath);
+
+        _ = Assert.Single(main.Descendants(), element => (string?)element.Attribute("id") == "menu_scrim");
+        _ = Assert.Single(main.Descendants(), element => (string?)element.Attribute("id") == "briefing");
+        XElement start = Assert.Single(main.Descendants(), element => (string?)element.Attribute("id") == "start_game");
+        Assert.Equal("start_game", (string?)start.Attribute("data-event-click"));
+
+        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
+        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
+        XElement telemetry = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_telemetry");
+        Assert.Equal("toggle_telemetry", (string?)telemetry.Attribute("data-event-click"));
+
+        string normalLoopText = string.Concat(UiVisibleText(mainPath)) + string.Concat(UiVisibleText(hudPath));
+        Assert.DoesNotContain("Constant Pixel Size", normalLoopText, StringComparison.Ordinal);
+        Assert.DoesNotContain("Constant Physical Size", normalLoopText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证背包与对话屏幕绑定默认六武器目录和横向熔岩闯关提示，不退回静态占位文案。
     /// </summary>
     [Fact]
