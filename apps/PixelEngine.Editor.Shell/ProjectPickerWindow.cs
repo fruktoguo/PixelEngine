@@ -12,6 +12,7 @@ internal sealed class ProjectPickerWindow
     private const float SidebarWidth = 188f;
     private const float ContentPadding = 28f;
     private const float HeaderSearchWidth = 220f;
+    private const float HeaderMinimumSearchWidth = 112f;
     private const float HeaderAddWidth = 78f;
     private const float HeaderNewWidth = 116f;
     private const float BrowseButtonWidth = 88f;
@@ -186,31 +187,34 @@ internal sealed class ProjectPickerWindow
     {
         float padding = EditorUiScale.Scale(ContentPadding, scale);
         float contentWidth = MathF.Max(1f, ImGui.GetWindowSize().X - (padding * 2f));
-        float searchWidth = EditorUiScale.Scale(HeaderSearchWidth, scale);
-        float addWidth = EditorUiScale.Scale(HeaderAddWidth, scale);
-        float newWidth = EditorUiScale.Scale(HeaderNewWidth, scale);
-        float spacing = ImGui.GetStyle().ItemSpacing.X;
-        float controlsWidth = searchWidth + addWidth + newWidth + (spacing * 2f);
+        ProjectPickerHeaderLayout header = ResolveProjectsHeaderLayout(
+            contentWidth,
+            scale,
+            ImGui.GetStyle().ItemSpacing.X);
 
         ImGui.SetCursorPos(new Vector2(padding, padding));
         ImGui.TextUnformatted("Projects");
-        bool compactHeader = contentWidth < EditorUiScale.Scale(650f, scale);
-        if (compactHeader)
+        if (header.TitleOnOwnRow)
         {
             ImGui.SetCursorPos(new Vector2(padding, ImGui.GetCursorPosY() + ImGui.GetStyle().ItemSpacing.Y));
-            searchWidth = MathF.Max(
-                EditorUiScale.Scale(112f, scale),
-                contentWidth - addWidth - newWidth - (spacing * 2f));
         }
         else
         {
-            ImGui.SameLine(MathF.Max(padding, padding + contentWidth - controlsWidth));
+            ImGui.SameLine(MathF.Max(padding, padding + contentWidth - header.TotalControlsWidth));
         }
 
-        ImGui.SetNextItemWidth(searchWidth);
+        ImGui.SetNextItemWidth(header.SearchWidth);
         _ = ImGui.InputTextWithHint("##project-picker-search", "Search", ref _recentSearch, 256);
-        ImGui.SameLine();
-        if (ImGui.Button("Add##project-picker-add", new Vector2(addWidth, 0f)))
+        if (header.ActionsOnOwnRow)
+        {
+            ImGui.SetCursorPosX(padding);
+        }
+        else
+        {
+            ImGui.SameLine();
+        }
+
+        if (ImGui.Button("Add##project-picker-add", new Vector2(header.AddWidth, 0f)))
         {
             ImGui.OpenPopup("project-picker-add-menu");
         }
@@ -226,8 +230,16 @@ internal sealed class ProjectPickerWindow
             ImGui.EndPopup();
         }
 
-        ImGui.SameLine();
-        if (DrawPrimaryButton("+ New project", new Vector2(newWidth, 0f)))
+        if (header.ActionsStacked)
+        {
+            ImGui.SetCursorPosX(padding);
+        }
+        else
+        {
+            ImGui.SameLine();
+        }
+
+        if (DrawPrimaryButton("+ New project", new Vector2(header.NewWidth, 0f)))
         {
             Navigate(ProjectPickerMode.NewProject);
         }
@@ -277,23 +289,34 @@ internal sealed class ProjectPickerWindow
         }
 
         ImGui.SetCursorPosX(padding);
-        float tableHeight = MathF.Max(96f, ImGui.GetContentRegionAvail().Y - padding);
+        float tableHeight = MathF.Max(
+            EditorUiScale.Scale(96f, app.UiScale),
+            ImGui.GetContentRegionAvail().Y - padding);
+        bool compact = UseCompactRecentProjectTable(contentWidth, app.UiScale);
         ImGuiTableFlags flags =
             ImGuiTableFlags.RowBg |
             ImGuiTableFlags.BordersInnerH |
             ImGuiTableFlags.Resizable |
             ImGuiTableFlags.ScrollY |
             ImGuiTableFlags.SizingStretchProp;
-        if (!ImGui.BeginTable("project-picker-recent", 5, flags, new Vector2(contentWidth, tableHeight)))
+        if (!ImGui.BeginTable(
+            "project-picker-recent",
+            compact ? 3 : 5,
+            flags,
+            new Vector2(contentWidth, tableHeight)))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("★", ImGuiTableColumnFlags.WidthFixed, 34f);
-        ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 2.4f);
-        ImGui.TableSetupColumn("Last opened", ImGuiTableColumnFlags.WidthStretch, 1.0f);
-        ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, 74f);
-        ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, 34f);
+        ImGui.TableSetupColumn("★", ImGuiTableColumnFlags.WidthFixed, EditorUiScale.Scale(34f, app.UiScale));
+        ImGui.TableSetupColumn(compact ? "Project" : "Name", ImGuiTableColumnFlags.WidthStretch, 2.4f);
+        if (!compact)
+        {
+            ImGui.TableSetupColumn("Last opened", ImGuiTableColumnFlags.WidthStretch, 1.0f);
+            ImGui.TableSetupColumn("Status", ImGuiTableColumnFlags.WidthFixed, EditorUiScale.Scale(74f, app.UiScale));
+        }
+
+        ImGui.TableSetupColumn(string.Empty, ImGuiTableColumnFlags.WidthFixed, EditorUiScale.Scale(34f, app.UiScale));
         ImGui.TableHeadersRow();
 
         DateTimeOffset now = DateTimeOffset.Now;
@@ -341,20 +364,39 @@ internal sealed class ProjectPickerWindow
                 ImGui.SetTooltip(entry.ProjectPath);
             }
 
-            _ = ImGui.TableNextColumn();
-            ImGui.TextUnformatted(FormatLastOpened(entry.LastOpenedUtc, now));
-
-            _ = ImGui.TableNextColumn();
-            if (exists)
+            string lastOpened = FormatLastOpened(entry.LastOpenedUtc, now);
+            if (compact)
             {
-                ImGui.TextDisabled("Ready");
+                if (exists)
+                {
+                    ImGui.TextDisabled($"Ready · {lastOpened}");
+                }
+                else
+                {
+                    ImGui.TextColored(WarningColor, $"Missing · {lastOpened}");
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip($"Missing {EditorProject.ProjectFileName}");
+                    }
+                }
             }
             else
             {
-                ImGui.TextColored(WarningColor, "Missing");
-                if (ImGui.IsItemHovered())
+                _ = ImGui.TableNextColumn();
+                ImGui.TextUnformatted(lastOpened);
+
+                _ = ImGui.TableNextColumn();
+                if (exists)
                 {
-                    ImGui.SetTooltip($"Missing {EditorProject.ProjectFileName}");
+                    ImGui.TextDisabled("Ready");
+                }
+                else
+                {
+                    ImGui.TextColored(WarningColor, "Missing");
+                    if (ImGui.IsItemHovered())
+                    {
+                        ImGui.SetTooltip($"Missing {EditorProject.ProjectFileName}");
+                    }
                 }
             }
 
@@ -413,7 +455,25 @@ internal sealed class ProjectPickerWindow
         DrawDiagnostic(app, contentWidth);
 
         ImGui.SetCursorPosX(padding);
-        float tableHeight = MathF.Max(180f, ImGui.GetContentRegionAvail().Y - padding);
+        float contentHeight = MathF.Max(1f, ImGui.GetContentRegionAvail().Y - padding);
+        if (UseStackedNewProjectLayout(contentWidth, scale))
+        {
+            bool visible = ImGui.BeginChild(
+                "project-picker-new-stacked",
+                new Vector2(contentWidth, contentHeight),
+                ImGuiChildFlags.Borders);
+            if (visible)
+            {
+                DrawNewProjectTemplate();
+                ImGui.SeparatorText("Project settings");
+                DrawNewProjectSettings(app, scale);
+            }
+
+            ImGui.EndChild();
+            return;
+        }
+
+        float tableHeight = MathF.Max(EditorUiScale.Scale(180f, scale), contentHeight);
         if (!ImGui.BeginTable(
             "project-picker-new-layout",
             2,
@@ -427,6 +487,17 @@ internal sealed class ProjectPickerWindow
         ImGui.TableSetupColumn("Project settings", ImGuiTableColumnFlags.WidthStretch, 0.9f);
         ImGui.TableNextRow();
         _ = ImGui.TableNextColumn();
+        DrawNewProjectTemplate();
+
+        _ = ImGui.TableNextColumn();
+        ImGui.TextUnformatted("Project settings");
+        ImGui.Separator();
+        DrawNewProjectSettings(app, scale);
+        ImGui.EndTable();
+    }
+
+    private static void DrawNewProjectTemplate()
+    {
         ImGui.TextUnformatted("Templates");
         ImGui.Separator();
         ImGui.PushStyleColor(ImGuiCol.Header, SelectedNavigationColor);
@@ -434,10 +505,10 @@ internal sealed class ProjectPickerWindow
         ImGui.PopStyleColor();
         ImGui.Spacing();
         ImGui.TextWrapped("The built-in template creates a complete PixelEngine project with content, scripts and a playable main scene.");
+    }
 
-        _ = ImGui.TableNextColumn();
-        ImGui.TextUnformatted("Project settings");
-        ImGui.Separator();
+    private void DrawNewProjectSettings(EditorShellApp app, float scale)
+    {
         ImGui.TextUnformatted("Project name");
         ImGui.SetNextItemWidth(-1f);
         _ = ImGui.InputText("##new-project-name", ref _newProjectName, 128);
@@ -457,8 +528,9 @@ internal sealed class ProjectPickerWindow
         }
 
         ImGui.Spacing();
-        float createWidth = EditorUiScale.Scale(132f, scale);
-        float createX = ImGui.GetCursorPosX() + MathF.Max(0f, ImGui.GetContentRegionAvail().X - createWidth);
+        float availableWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+        float createWidth = MathF.Min(EditorUiScale.Scale(132f, scale), availableWidth);
+        float createX = ImGui.GetCursorPosX() + MathF.Max(0f, availableWidth - createWidth);
         ImGui.SetCursorPosX(createX);
         if (!valid)
         {
@@ -475,8 +547,6 @@ internal sealed class ProjectPickerWindow
         {
             ImGui.EndDisabled();
         }
-
-        ImGui.EndTable();
     }
 
     private void DrawOpenProjectPage(EditorShellApp app, float scale)
@@ -497,9 +567,10 @@ internal sealed class ProjectPickerWindow
             ImGui.BeginDisabled();
         }
 
-        if (DrawPrimaryButton(
-            "Open project",
-            new Vector2(EditorUiScale.Scale(112f, scale), 0f)))
+        float openButtonWidth = MathF.Min(
+            EditorUiScale.Scale(112f, scale),
+            MathF.Max(1f, ImGui.GetContentRegionAvail().X));
+        if (DrawPrimaryButton("Open project", new Vector2(openButtonWidth, 0f)))
         {
             app.OpenProjectPath(_openProjectPath);
         }
@@ -554,18 +625,92 @@ internal sealed class ProjectPickerWindow
 
     private void DrawPathInputWithBrowse(string label, ref string path, string id, float uiScale)
     {
-        float scaledButtonWidth = EditorUiScale.Scale(BrowseButtonWidth, uiScale);
         ImGui.TextUnformatted(label);
-        float inputWidth = MathF.Max(
-            EditorUiScale.Scale(160f, uiScale),
-            ImGui.GetContentRegionAvail().X - scaledButtonWidth - ImGui.GetStyle().ItemSpacing.X);
-        ImGui.SetNextItemWidth(inputWidth);
+        float rowStart = ImGui.GetCursorPosX();
+        ProjectPickerPathInputLayout layout = ResolvePathInputLayout(
+            ImGui.GetContentRegionAvail().X,
+            uiScale,
+            ImGui.GetStyle().ItemSpacing.X);
+        ImGui.SetNextItemWidth(layout.InputWidth);
         _ = ImGui.InputText($"##{id}_path", ref path, 512);
-        ImGui.SameLine();
-        if (ImGui.Button($"Browse...##{id}", new Vector2(scaledButtonWidth, 0f)))
+        if (layout.Inline)
+        {
+            ImGui.SameLine();
+        }
+        else
+        {
+            ImGui.SetCursorPosX(rowStart + MathF.Max(0f, layout.AvailableWidth - layout.ButtonWidth));
+        }
+
+        if (ImGui.Button($"Browse...##{id}", new Vector2(layout.ButtonWidth, 0f)))
         {
             _ = ApplyFolderPicker(ref path);
         }
+    }
+
+    internal static ProjectPickerHeaderLayout ResolveProjectsHeaderLayout(
+        float contentWidth,
+        float uiScale,
+        float itemSpacing)
+    {
+        float width = float.IsFinite(contentWidth) ? MathF.Max(1f, contentWidth) : 1f;
+        float spacing = float.IsFinite(itemSpacing) ? MathF.Max(0f, itemSpacing) : 0f;
+        float searchWidth = EditorUiScale.Scale(HeaderSearchWidth, uiScale);
+        float minimumSearchWidth = EditorUiScale.Scale(HeaderMinimumSearchWidth, uiScale);
+        float naturalAddWidth = EditorUiScale.Scale(HeaderAddWidth, uiScale);
+        float naturalNewWidth = EditorUiScale.Scale(HeaderNewWidth, uiScale);
+        bool actionsStacked = width < naturalAddWidth + spacing + naturalNewWidth;
+        float addWidth = actionsStacked ? MathF.Min(naturalAddWidth, width) : naturalAddWidth;
+        float newWidth = actionsStacked ? MathF.Min(naturalNewWidth, width) : naturalNewWidth;
+        float actionsWidth = actionsStacked
+            ? MathF.Max(addWidth, newWidth)
+            : addWidth + spacing + newWidth;
+        bool actionsOnOwnRow = actionsStacked || width < minimumSearchWidth + spacing + actionsWidth;
+        searchWidth = actionsOnOwnRow
+            ? width
+            : MathF.Min(searchWidth, MathF.Max(minimumSearchWidth, width - spacing - actionsWidth));
+
+        bool titleOnOwnRow = width < EditorUiScale.Scale(650f, uiScale) || actionsOnOwnRow;
+        float controlsWidth = actionsOnOwnRow
+            ? MathF.Max(searchWidth, actionsWidth)
+            : searchWidth + spacing + actionsWidth;
+        return new ProjectPickerHeaderLayout(
+            titleOnOwnRow,
+            actionsOnOwnRow,
+            actionsStacked,
+            searchWidth,
+            addWidth,
+            newWidth,
+            controlsWidth);
+    }
+
+    internal static ProjectPickerPathInputLayout ResolvePathInputLayout(
+        float availableWidth,
+        float uiScale,
+        float itemSpacing)
+    {
+        float available = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        float spacing = float.IsFinite(itemSpacing) ? MathF.Max(0f, itemSpacing) : 0f;
+        float naturalButtonWidth = EditorUiScale.Scale(BrowseButtonWidth, uiScale);
+        float minimumInputWidth = EditorUiScale.Scale(160f, uiScale);
+        bool inline = available >= minimumInputWidth + spacing + naturalButtonWidth;
+        float buttonWidth = inline ? naturalButtonWidth : MathF.Min(naturalButtonWidth, available);
+        float inputWidth = inline
+            ? MathF.Max(1f, available - spacing - buttonWidth)
+            : available;
+        return new ProjectPickerPathInputLayout(inline, available, inputWidth, buttonWidth);
+    }
+
+    internal static bool UseStackedNewProjectLayout(float contentWidth, float uiScale)
+    {
+        float width = float.IsFinite(contentWidth) ? MathF.Max(1f, contentWidth) : 1f;
+        return width < EditorUiScale.Scale(640f, uiScale);
+    }
+
+    internal static bool UseCompactRecentProjectTable(float contentWidth, float uiScale)
+    {
+        float width = float.IsFinite(contentWidth) ? MathF.Max(1f, contentWidth) : 1f;
+        return width < EditorUiScale.Scale(520f, uiScale);
     }
 
     private void TryOpenFromFolderPicker(EditorShellApp app)
@@ -707,6 +852,21 @@ internal sealed class ProjectPickerWindow
         FolderPickerDiagnostic = string.Empty;
     }
 }
+
+internal readonly record struct ProjectPickerHeaderLayout(
+    bool TitleOnOwnRow,
+    bool ActionsOnOwnRow,
+    bool ActionsStacked,
+    float SearchWidth,
+    float AddWidth,
+    float NewWidth,
+    float TotalControlsWidth);
+
+internal readonly record struct ProjectPickerPathInputLayout(
+    bool Inline,
+    float AvailableWidth,
+    float InputWidth,
+    float ButtonWidth);
 
 /// <summary>
 /// 项目选择器模式：最近工程、新建或从磁盘打开。

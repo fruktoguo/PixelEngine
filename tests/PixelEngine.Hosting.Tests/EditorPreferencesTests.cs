@@ -276,6 +276,42 @@ public sealed class EditorPreferencesTests
     }
 
     /// <summary>
+    /// 验证 Preferences 在窄窗口或 200% UI Scale 下折叠固定侧栏，保留最小可编辑设置宽度。
+    /// </summary>
+    [Fact]
+    public void PreferencesNavigationCollapsesAtScaledReadableWidth()
+    {
+        Assert.False(EditorPreferencesWindow.UseCompactNavigation(470f, 1f));
+        Assert.True(EditorPreferencesWindow.UseCompactNavigation(469f, 1f));
+        Assert.False(EditorPreferencesWindow.UseCompactNavigation(940f, 2f));
+        Assert.True(EditorPreferencesWindow.UseCompactNavigation(939f, 2f));
+        Assert.True(EditorPreferencesWindow.UseCompactNavigation(float.NaN, 1f));
+    }
+
+    /// <summary>
+    /// 验证自定义编辑器命令先作为可校验草稿存在：空值、未闭合引号和 executable 占位符
+    /// 不可应用，合法带空格路径与定位参数可应用。
+    /// </summary>
+    [Fact]
+    public void CustomEditorCommandDraftRequiresValidCommandBeforeApply()
+    {
+        Assert.False(EditorPreferencesWindow.TryValidateCustomEditorCommand(string.Empty, out string emptyDiagnostic));
+        Assert.Contains("不能为空", emptyDiagnostic, StringComparison.Ordinal);
+        Assert.False(EditorPreferencesWindow.TryValidateCustomEditorCommand("\"\" --goto {file}", out string emptyExecutableDiagnostic));
+        Assert.Contains("不能为空", emptyExecutableDiagnostic, StringComparison.Ordinal);
+        Assert.False(EditorPreferencesWindow.TryValidateCustomEditorCommand("\"C:\\Tools\\Code.exe", out string quoteDiagnostic));
+        Assert.Contains("未闭合", quoteDiagnostic, StringComparison.Ordinal);
+        Assert.False(EditorPreferencesWindow.TryValidateCustomEditorCommand(
+            "{file} --goto {line}:{column}",
+            out string executableDiagnostic));
+        Assert.Contains("executable", executableDiagnostic, StringComparison.Ordinal);
+        Assert.True(EditorPreferencesWindow.TryValidateCustomEditorCommand(
+            "\"C:\\Program Files\\Editor\\editor.exe\" --goto \"{file}:{line}:{column}\"",
+            out string validDiagnostic));
+        Assert.Empty(validDiagnostic);
+    }
+
+    /// <summary>
     /// 菜单、帮助与命令调度共用唯一且无冲突的快捷键表。
     /// </summary>
     [Fact]

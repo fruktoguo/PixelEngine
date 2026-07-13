@@ -121,6 +121,54 @@ public sealed class ProjectPickerWindowStateTests
             now));
     }
 
+    /// <summary>
+    /// 验证 Project Picker 在窄窗口和 200% UI Scale 下把搜索、操作按钮与路径浏览改为分行，
+    /// 宽窗口仍保持紧凑横排。
+    /// </summary>
+    [Fact]
+    public void PickerChromeUsesResponsiveRowsAtNarrowHighDpiWidths()
+    {
+        ProjectPickerHeaderLayout wide = ProjectPickerWindow.ResolveProjectsHeaderLayout(900f, 1f, 8f);
+        ProjectPickerHeaderLayout narrow = ProjectPickerWindow.ResolveProjectsHeaderLayout(300f, 1f, 8f);
+        ProjectPickerHeaderLayout highDpi = ProjectPickerWindow.ResolveProjectsHeaderLayout(600f, 2f, 16f);
+        ProjectPickerHeaderLayout veryNarrowHighDpi = ProjectPickerWindow.ResolveProjectsHeaderLayout(300f, 2f, 16f);
+
+        Assert.False(wide.TitleOnOwnRow);
+        Assert.False(wide.ActionsOnOwnRow);
+        Assert.Equal(220f, wide.SearchWidth);
+        Assert.True(narrow.TitleOnOwnRow);
+        Assert.True(narrow.ActionsOnOwnRow);
+        Assert.Equal(300f, narrow.SearchWidth);
+        Assert.True(highDpi.ActionsOnOwnRow);
+        Assert.True(highDpi.TotalControlsWidth <= 600f);
+        Assert.True(veryNarrowHighDpi.ActionsStacked);
+        Assert.True(veryNarrowHighDpi.TotalControlsWidth <= 300f);
+
+        ProjectPickerPathInputLayout inline = ProjectPickerWindow.ResolvePathInputLayout(600f, 2f, 16f);
+        ProjectPickerPathInputLayout stacked = ProjectPickerWindow.ResolvePathInputLayout(480f, 2f, 16f);
+        Assert.True(inline.Inline);
+        Assert.Equal(408f, inline.InputWidth);
+        Assert.False(stacked.Inline);
+        Assert.Equal(480f, stacked.InputWidth);
+        Assert.Equal(176f, stacked.ButtonWidth);
+    }
+
+    /// <summary>
+    /// 验证新建工程页按缩放后的可读宽度切换双栏/单栏，而不是在高 DPI 下压扁表单。
+    /// </summary>
+    [Fact]
+    public void NewProjectPageStacksByScaledReadableWidth()
+    {
+        Assert.False(ProjectPickerWindow.UseStackedNewProjectLayout(640f, 1f));
+        Assert.True(ProjectPickerWindow.UseStackedNewProjectLayout(639f, 1f));
+        Assert.False(ProjectPickerWindow.UseStackedNewProjectLayout(1280f, 2f));
+        Assert.True(ProjectPickerWindow.UseStackedNewProjectLayout(1279f, 2f));
+        Assert.False(ProjectPickerWindow.UseCompactRecentProjectTable(520f, 1f));
+        Assert.True(ProjectPickerWindow.UseCompactRecentProjectTable(519f, 1f));
+        Assert.False(ProjectPickerWindow.UseCompactRecentProjectTable(1040f, 2f));
+        Assert.True(ProjectPickerWindow.UseCompactRecentProjectTable(1039f, 2f));
+    }
+
     private sealed class NoOpFolderPicker : IProjectFolderPicker
     {
         public bool TryPickFolder(string initialPath, out string selectedPath, out string diagnostic)

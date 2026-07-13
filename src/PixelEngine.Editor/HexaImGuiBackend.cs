@@ -153,7 +153,15 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IEditorImGuiBackend
         SetCurrentContext();
         if (!string.IsNullOrWhiteSpace(_layoutPath))
         {
-            File.Delete(_layoutPath);
+            try
+            {
+                File.Delete(_layoutPath);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                // Shell 入口会把删除失败写入 Console；后端仍重建内存 dock tree，
+                // 避免一个被同步软件短暂占用的 ini 让 Reset Layout 崩溃。
+            }
         }
 
         _dockSpace.ResetLayoutState(buildDefaultLayout: true);

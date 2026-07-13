@@ -161,6 +161,63 @@ Collapsed=0
         }
     }
 
+    /// <summary>
+    /// 验证 Reset Layout 删除持久化 ini 并报告成功，使下一帧可重建默认 dock tree。
+    /// </summary>
+    [Fact]
+    public void ResetLayoutDeletesSavedIniWithoutThrowing()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            File.WriteAllText(path, "[Window][WindowOverViewport_1]\nSize=1280,720\n");
+            EditorShellLayout layout = new(path, 1280, 720);
+
+            bool reset = layout.TryResetLayout(out string diagnostic);
+
+            Assert.True(reset, diagnostic);
+            Assert.Empty(diagnostic);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// Windows 上布局文件被其它进程占用时，Reset Layout 仍保留内存重建路径并返回可见诊断，
+    /// 不让 Preferences 按钮把整个 Editor 弄崩。
+    /// </summary>
+    [Fact]
+    public void ResetLayoutReportsLockedIniInsteadOfThrowing()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            File.WriteAllText(path, "[Window][WindowOverViewport_1]\nSize=1280,720\n");
+            EditorShellLayout layout = new(path, 1280, 720);
+            using FileStream locked = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            bool reset = layout.TryResetLayout(out string diagnostic);
+
+            Assert.False(reset);
+            Assert.Contains("无法删除旧布局文件", diagnostic, StringComparison.Ordinal);
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "PixelEngine.EditorShellLayoutTests", Guid.NewGuid().ToString("N"));

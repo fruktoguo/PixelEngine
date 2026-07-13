@@ -31,6 +31,9 @@ internal sealed class EditorPreferencesWindow(
     private readonly Action _resetLayout = resetLayout ?? throw new ArgumentNullException(nameof(resetLayout));
     private readonly Action<string>? _languageChanged = languageChanged;
     private string _diagnostic = store.LastDiagnostic;
+    private string _customEditorDraft = string.Empty;
+    private string _customEditorSource = string.Empty;
+    private bool _customEditorDraftDirty;
     private float _lastWindowScale = float.NaN;
 
     public const string PanelTitle = "Preferences";
@@ -88,12 +91,28 @@ internal sealed class EditorPreferencesWindow(
         LastWindowPosition = ImGui.GetWindowPos();
         LastWindowSize = ImGui.GetWindowSize();
         float navigationWidth = EditorUiScale.Scale(170f, scale);
-        Vector2 tableSize = ImGui.GetContentRegionAvail();
+        Vector2 availableSize = ImGui.GetContentRegionAvail();
+        if (UseCompactNavigation(availableSize.X, scale))
+        {
+            LastNavigationVisible = true;
+            DrawCompactCategorySelector();
+            ImGui.Separator();
+            bool childVisible = ImGui.BeginChild("preferences_compact_settings", Vector2.Zero);
+            if (childVisible)
+            {
+                DrawSettingsContent();
+            }
+
+            ImGui.EndChild();
+            ImGui.End();
+            return;
+        }
+
         LastNavigationVisible = ImGui.BeginTable(
             "preferences_layout",
             2,
             ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.ScrollY,
-            tableSize);
+            availableSize);
         if (LastNavigationVisible)
         {
             ImGui.TableSetupColumn("Categories", ImGuiTableColumnFlags.WidthFixed, navigationWidth);
@@ -110,17 +129,71 @@ internal sealed class EditorPreferencesWindow(
             }
 
             _ = ImGui.TableNextColumn();
-            DrawSelectedCategory();
-            string diagnostic = string.IsNullOrWhiteSpace(_diagnostic) ? _store.LastDiagnostic : _diagnostic;
-            if (!string.IsNullOrWhiteSpace(diagnostic))
-            {
-                ImGui.SeparatorText("Diagnostic");
-                ImGui.TextWrapped(diagnostic);
-            }
+            DrawSettingsContent();
 
             ImGui.EndTable();
         }
         ImGui.End();
+    }
+
+    internal static bool UseCompactNavigation(float availableWidth, float uiScale)
+    {
+        float width = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        float navigationWidth = EditorUiScale.Scale(170f, uiScale);
+        float minimumSettingsWidth = EditorUiScale.Scale(300f, uiScale);
+        return width < navigationWidth + minimumSettingsWidth;
+    }
+
+    private void DrawCompactCategorySelector()
+    {
+        string preview = GetCategoryLabel(SelectedCategory);
+        ImGui.TextUnformatted(EditorLocalization.Get("prefs.category", "Category"));
+        ImGui.SetNextItemWidth(-1f);
+        if (!ImGui.BeginCombo("##preferences-category", preview))
+        {
+            return;
+        }
+
+        for (int i = 0; i < Categories.Length; i++)
+        {
+            EditorPreferencesCategory category = Categories[i].Category;
+            bool selected = SelectedCategory == category;
+            if (ImGui.Selectable(GetCategoryLabel(category), selected))
+            {
+                SelectedCategory = category;
+            }
+
+            if (selected)
+            {
+                ImGui.SetItemDefaultFocus();
+            }
+        }
+
+        ImGui.EndCombo();
+    }
+
+    private static string GetCategoryLabel(EditorPreferencesCategory category)
+    {
+        for (int i = 0; i < Categories.Length; i++)
+        {
+            if (Categories[i].Category == category)
+            {
+                return EditorLocalization.Get(Categories[i].Key, Categories[i].Fallback);
+            }
+        }
+
+        throw new ArgumentOutOfRangeException(nameof(category), category, "未知 Preferences 分类。");
+    }
+
+    private void DrawSettingsContent()
+    {
+        DrawSelectedCategory();
+        string diagnostic = string.IsNullOrWhiteSpace(_diagnostic) ? _store.LastDiagnostic : _diagnostic;
+        if (!string.IsNullOrWhiteSpace(diagnostic))
+        {
+            ImGui.SeparatorText("Diagnostic");
+            ImGui.TextWrapped(diagnostic);
+        }
     }
 
     private void DrawSelectedCategory()
@@ -157,7 +230,7 @@ internal sealed class EditorPreferencesWindow(
             "%.0f%%"))
         {
             float nextScale = EditorUiScale.Normalize(percent / 100f);
-            Update(_store.Current with { UiScale = nextScale });
+            _ = Update(_store.Current with { UiScale = nextScale });
         }
 
         ImGui.TextWrapped("4K 显示器推荐 150%。字体、菜单、间距、滚动条和工具栏尺寸会一起缩放。");
@@ -190,9 +263,9 @@ internal sealed class EditorPreferencesWindow(
         {
             EditorLanguageInfo language = languages[i];
             bool selected = string.Equals(language.Locale, _store.Current.Language, StringComparison.OrdinalIgnoreCase);
-            if (ImGui.Selectable($"{language.DisplayName}##language_{language.Locale}", selected))
+            if (ImGui.Selectable($"{language.DisplayName}##language_{language.Locale}", selected) &&
+                Update(_store.Current with { Language = language.Locale }))
             {
-                Update(_store.Current with { Language = language.Locale });
                 _languageChanged?.Invoke(language.Locale);
             }
 
@@ -211,21 +284,21 @@ internal sealed class EditorPreferencesWindow(
         bool saveLayout = _store.Current.SaveLayoutOnExit;
         if (ImGui.Checkbox(EditorLocalization.Get("prefs.saveLayout", "Save layout continuously"), ref saveLayout))
         {
-            Update(_store.Current with { SaveLayoutOnExit = saveLayout });
+            _ = Update(_store.Current with { SaveLayoutOnExit = saveLayout });
         }
 
         ImGui.TextWrapped("关闭时保存窗口停靠和尺寸；关闭此选项会保留上一次已保存的布局。");
         bool reopenLastProject = _store.Current.ReopenLastProject;
         if (ImGui.Checkbox(EditorLocalization.Get("prefs.reopenProject", "Reopen last project on startup"), ref reopenLastProject))
         {
-            Update(_store.Current with { ReopenLastProject = reopenLastProject });
+            _ = Update(_store.Current with { ReopenLastProject = reopenLastProject });
         }
 
         ImGui.TextWrapped("无显式 --project 时恢复最后一次成功打开的工程；自动化和上次异常退出不会盲目重试。");
         bool restoreLastScene = _store.Current.RestoreLastScene;
         if (ImGui.Checkbox(EditorLocalization.Get("prefs.restoreScene", "Restore last open scene"), ref restoreLastScene))
         {
-            Update(_store.Current with { RestoreLastScene = restoreLastScene });
+            _ = Update(_store.Current with { RestoreLastScene = restoreLastScene });
         }
 
         ImGui.TextWrapped("当前编辑场景保存在用户 workspace，不会改写工程的 Start Scene。");
@@ -253,14 +326,46 @@ internal sealed class EditorPreferencesWindow(
 
         if (currentKind == ExternalCodeEditorKind.Custom)
         {
-            if (ImGui.InputText(EditorLocalization.Get("prefs.customEditorCommand", "Custom Command"), ref command, 1024))
+            SynchronizeCustomEditorDraft(command);
+            if (ImGui.InputText(
+                EditorLocalization.Get("prefs.customEditorCommand", "Custom Command"),
+                ref _customEditorDraft,
+                1024))
             {
-                Update(_store.Current with { ExternalScriptEditor = command });
+                _customEditorDraftDirty = !string.Equals(
+                    _customEditorDraft,
+                    _customEditorSource,
+                    StringComparison.Ordinal);
             }
 
             ImGui.TextWrapped(EditorLocalization.Get(
                 "prefs.customEditorHelp",
                 "Placeholders: {file}, {line}, {column}, {project}. Without {file}, the script path is appended."));
+            bool valid = TryValidateCustomEditorCommand(_customEditorDraft, out string validationDiagnostic);
+            if (!valid)
+            {
+                ImGui.TextColored(new Vector4(1f, 0.55f, 0.25f, 1f), validationDiagnostic);
+            }
+
+            ImGui.BeginDisabled(!_customEditorDraftDirty || !valid);
+            if (ImGui.Button(EditorLocalization.Get("prefs.apply", "Apply")) &&
+                Update(_store.Current with { ExternalScriptEditor = _customEditorDraft }))
+            {
+                _customEditorSource = _store.Current.ExternalScriptEditor;
+                _customEditorDraft = _customEditorSource;
+                _customEditorDraftDirty = false;
+            }
+
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            ImGui.BeginDisabled(!_customEditorDraftDirty);
+            if (ImGui.Button(EditorLocalization.Get("prefs.revert", "Revert")))
+            {
+                _customEditorDraft = _customEditorSource;
+                _customEditorDraftDirty = false;
+            }
+
+            ImGui.EndDisabled();
         }
 
         ImGui.TextWrapped(EditorLocalization.Get(
@@ -271,15 +376,52 @@ internal sealed class EditorPreferencesWindow(
     private void DrawEditorPreset(ExternalCodeEditorKind kind, string value, ExternalCodeEditorKind currentKind)
     {
         bool selected = kind == currentKind;
-        if (ImGui.Selectable(EditorDisplayName(kind), selected))
+        if (ImGui.Selectable(EditorDisplayName(kind), selected) &&
+            Update(_store.Current with { ExternalScriptEditor = value }))
         {
-            Update(_store.Current with { ExternalScriptEditor = value });
+            _customEditorSource = _store.Current.ExternalScriptEditor;
+            _customEditorDraft = _customEditorSource;
+            _customEditorDraftDirty = false;
         }
 
         if (selected)
         {
             ImGui.SetItemDefaultFocus();
         }
+    }
+
+    internal static bool TryValidateCustomEditorCommand(string command, out string diagnostic)
+    {
+        string[] tokens = ExternalCodeEditorCommandLine.Split(command, out diagnostic);
+        if (tokens.Length == 0 || string.IsNullOrWhiteSpace(tokens[0]))
+        {
+            diagnostic = string.IsNullOrWhiteSpace(diagnostic)
+                ? "自定义外部编辑器命令不能为空。"
+                : diagnostic;
+            return false;
+        }
+
+        if (tokens[0].Contains("{file}", StringComparison.Ordinal) ||
+            tokens[0].Contains("{line}", StringComparison.Ordinal) ||
+            tokens[0].Contains("{column}", StringComparison.Ordinal))
+        {
+            diagnostic = "自定义外部编辑器 executable 不能使用 {file}/{line}/{column} 占位符。";
+            return false;
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    private void SynchronizeCustomEditorDraft(string command)
+    {
+        if (_customEditorDraftDirty || string.Equals(_customEditorSource, command, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _customEditorSource = command;
+        _customEditorDraft = command;
     }
 
     private static string EditorDisplayName(ExternalCodeEditorKind kind)
@@ -320,10 +462,10 @@ internal sealed class EditorPreferencesWindow(
         ImGui.EndTable();
     }
 
-    private void Update(EditorPreferencesDocument next)
+    private bool Update(EditorPreferencesDocument next)
     {
-        _diagnostic = _store.TryUpdate(next, out string diagnostic)
-            ? string.Empty
-            : diagnostic;
+        bool updated = _store.TryUpdate(next, out string diagnostic);
+        _diagnostic = updated ? string.Empty : diagnostic;
+        return updated;
     }
 }

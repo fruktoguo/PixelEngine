@@ -45,15 +45,23 @@ internal sealed class EditorShellLayout
         _dockSpace.Draw();
     }
 
-    public void ResetLayout()
+    public bool TryResetLayout(out string diagnostic)
     {
-        if (File.Exists(LayoutPath))
+        diagnostic = string.Empty;
+        bool deleted = true;
+        try
         {
             File.Delete(LayoutPath);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            deleted = false;
+            diagnostic = $"无法删除旧布局文件；当前会话已恢复默认布局，但退出后可能再次加载旧布局：{exception.Message}";
         }
 
         _dockSpace.ResetLayoutState(buildDefaultLayout: true);
         TryWriteCurrentLayoutVersion(LayoutPath);
+        return deleted;
     }
 
     internal static bool SavedDockLayoutIsTooSmall(string layoutPath)

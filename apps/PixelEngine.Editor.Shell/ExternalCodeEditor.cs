@@ -502,6 +502,7 @@ internal static class ExternalCodeEditorCommandLine
         List<string> tokens = [];
         StringBuilder current = new();
         char quote = '\0';
+        bool tokenStarted = false;
         for (int i = 0; i < command.Length; i++)
         {
             char ch = command[i];
@@ -510,6 +511,7 @@ internal static class ExternalCodeEditorCommandLine
                 if (quote == '\0')
                 {
                     quote = ch;
+                    tokenStarted = true;
                     continue;
                 }
 
@@ -522,10 +524,11 @@ internal static class ExternalCodeEditorCommandLine
 
             if (char.IsWhiteSpace(ch) && quote == '\0')
             {
-                AddToken(tokens, current);
+                AddToken(tokens, current, ref tokenStarted);
                 continue;
             }
 
+            tokenStarted = true;
             _ = current.Append(ch);
         }
 
@@ -535,18 +538,19 @@ internal static class ExternalCodeEditorCommandLine
             return [];
         }
 
-        AddToken(tokens, current);
+        AddToken(tokens, current, ref tokenStarted);
         return [.. tokens];
     }
 
-    private static void AddToken(List<string> tokens, StringBuilder current)
+    private static void AddToken(List<string> tokens, StringBuilder current, ref bool tokenStarted)
     {
-        if (current.Length == 0)
+        if (!tokenStarted)
         {
             return;
         }
 
         tokens.Add(current.ToString());
         _ = current.Clear();
+        tokenStarted = false;
     }
 }

@@ -1718,7 +1718,12 @@ internal sealed class EditorShellApp
 
     public void ResetLayout()
     {
-        Layout.ResetLayout();
+        if (!Layout.TryResetLayout(out string diagnostic))
+        {
+            LastProjectError = diagnostic;
+            ConsoleStore.AddProjectError("layout", diagnostic);
+        }
+
         CurrentSession?.ResetLayout();
     }
 
