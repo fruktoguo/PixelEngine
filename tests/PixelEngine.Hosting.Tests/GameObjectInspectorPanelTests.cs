@@ -1,6 +1,7 @@
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
+using PixelEngine.UI;
 using System.Numerics;
 using Xunit;
 using EditorSurfaceMode = PixelEngine.Editor.EditorMode;
@@ -1105,6 +1106,203 @@ public sealed class GameObjectInspectorPanelTests
         Assert.True(GameObjectInspectorPanel.IsValidNumericSerializedValue(typeof(decimal), "79228162514264337593543950335"));
     }
 
+
+    /// <summary>
+    /// 验证内建 Canvas/Scaler 的结构修改、primary 切换与 prefab override 都是单步 Undo/Redo。
+    /// </summary>
+    [Fact]
+    public void CanvasCommandsRoundTripUndoPrimaryAndPrefabOverrides()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("canvas-commands");
+        EditorGameObject first = scene.Create("HUD");
+        EditorGameObject second = scene.Create("Menu");
+        scene.SetPrefabLink(first.StableId, new EditorPrefabLink
+        {
+            AssetPath = "prefabs/hud.prefab",
+            SourceStableId = "1",
+        });
+        scene.MarkSaved();
+        EditorUndoStack undo = new();
+
+        EditorWebCanvasComponent firstCanvas = new()
+        {
+            ManifestPath = "ui/ui-manifest.json",
+            InitialScreenId = "hud",
+            Primary = true,
+        };
+        EditorCanvasScalerComponent firstScaler = new()
+        {
+            Settings = UiCanvasScalerSettings.Default with
+            {
+                ScaleMode = UiScaleMode.ScaleWithScreenSize,
+                ReferenceWidth = 1920f,
+                ReferenceHeight = 1080f,
+            },
+        };
+        undo.Execute(
+            scene,
+            new SetBuiltInCanvasComponentsCommand(first.StableId, firstCanvas, firstScaler));
+
+        Assert.NotNull(first.WebCanvas);
+        Assert.NotNull(first.CanvasScaler);
+        Assert.Contains(first.PrefabLink!.Overrides, item =>
+            item.PropertyPath == "WebCanvas.Exists" && item.Value == bool.TrueString);
+        Assert.Contains(first.PrefabLink.Overrides, item =>
+            item.PropertyPath == "CanvasScaler.ReferenceWidth" && item.Value == "1920");
+        Assert.True(undo.Undo(scene));
+        Assert.Null(first.WebCanvas);
+        Assert.Null(first.CanvasScaler);
+        Assert.Empty(first.PrefabLink!.Overrides);
+        Assert.True(undo.Redo(scene));
+        Assert.True(first.WebCanvas!.Primary);
+        Assert.Equal(1920f, first.CanvasScaler!.Settings.ReferenceWidth);
+
+        undo.Execute(
+            scene,
+            new SetBuiltInCanvasComponentsCommand(
+                second.StableId,
+                new EditorWebCanvasComponent { ManifestPath = "ui/menu.json" },
+                new EditorCanvasScalerComponent()));
+        undo.Execute(scene, new SetPrimaryWebCanvasCommand(second.StableId));
+
+        Assert.False(first.WebCanvas.Primary);
+        Assert.True(second.WebCanvas!.Primary);
+        Assert.True(undo.Undo(scene));
+        Assert.True(first.WebCanvas.Primary);
+        Assert.False(second.WebCanvas.Primary);
+        Assert.True(undo.Redo(scene));
+        Assert.False(first.WebCanvas.Primary);
+        Assert.True(second.WebCanvas.Primary);
+    }
+
+    /// <summary>
+    /// 验证 Inspector 明确呈现 implicit、默认 Scaler、孤立 Scaler、Primary None 与冲突诊断。
+    /// </summary>
+    [Fact]
+    public void CanvasInspectorSnapshotExposesDerivedIdentityAndDiagnostics()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("canvas-inspector");
+        EditorGameObject canvasObject = scene.Create("Canvas");
+        EditorGameObject orphan = scene.Create("Orphan Scaler");
+        using GameObjectInspectorPanel panel = new(scene, new EditorUndoStack(), new ScriptAssemblyRegistry());
+
+        CanvasInspectorSnapshot implicitSnapshot = panel.CaptureCanvasInspector(canvasObject.StableId);
+        Assert.False(implicitSnapshot.HasExplicitCanvases);
+        Assert.Contains("implicit primary", implicitSnapshot.Diagnostic, StringComparison.Ordinal);
+
+        canvasObject.WebCanvas = new EditorWebCanvasComponent { Primary = true };
+        CanvasInspectorSnapshot defaultScaler = panel.CaptureCanvasInspector(canvasObject.StableId);
+        Assert.True(defaultScaler.HasExplicitCanvases);
+        Assert.True(defaultScaler.UsesDefaultScaler);
+        Assert.True(defaultScaler.IsEffectivePrimary);
+        Assert.Equal(GameUiCanvasIdentity.FromStableId(canvasObject.StableId).Value, defaultScaler.DerivedCanvasId);
+        Assert.Contains("默认值", defaultScaler.Diagnostic, StringComparison.Ordinal);
+
+        orphan.CanvasScaler = new EditorCanvasScalerComponent();
+        CanvasInspectorSnapshot orphanSnapshot = panel.CaptureCanvasInspector(orphan.StableId);
+        Assert.True(orphanSnapshot.IsOrphanScaler);
+        Assert.Contains("不会物化", orphanSnapshot.Diagnostic, StringComparison.Ordinal);
+
+        canvasObject.WebCanvas.Enabled = false;
+        CanvasInspectorSnapshot none = panel.CaptureCanvasInspector(canvasObject.StableId);
+        Assert.True(none.PrimaryNone);
+        Assert.False(none.IsRuntimeEnabled);
+
+        canvasObject.WebCanvas.Enabled = true;
+        orphan.WebCanvas = new EditorWebCanvasComponent { Primary = true };
+        CanvasInspectorSnapshot conflict = panel.CaptureCanvasInspector(canvasObject.StableId);
+        Assert.True(conflict.HasConflict);
+        Assert.Contains("多个", conflict.Diagnostic, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证 prefab 源没有内建 Canvas 时，scene instance 的结构 override 仍可在 baseline 刷新后保留。
+    /// </summary>
+    [Fact]
+    public void PrefabInstanceCanvasStructuralOverridesSurviveRefresh()
+    {
+        string root = CreateTempProjectRoot();
+        try
+        {
+            EditorSceneModel prefabScene = EditorSceneModel.Empty("plain-prefab");
+            EditorGameObject source = prefabScene.Create("Plain");
+            EditorPrefabAssetStore store = new(root);
+            store.CreatePrefabFromSubtree(prefabScene, source.StableId, "prefabs/plain.prefab");
+
+            EditorSceneModel scene = EditorSceneModel.Empty("instance");
+            EditorGameObject instance = store.InstantiatePrefab(scene, "prefabs/plain.prefab", parentId: null);
+            EditorUndoStack undo = new();
+            undo.Execute(
+                scene,
+                new SetBuiltInCanvasComponentsCommand(
+                    instance.StableId,
+                    new EditorWebCanvasComponent { ManifestPath = "ui/ui-manifest.json", Primary = true },
+                    new EditorCanvasScalerComponent
+                    {
+                        Settings = UiCanvasScalerSettings.Default with { ScaleFactor = 1.5f },
+                    }));
+
+            store.RefreshPrefabInstances(scene);
+
+            Assert.Equal("ui/ui-manifest.json", instance.WebCanvas!.ManifestPath);
+            Assert.True(instance.WebCanvas.Primary);
+            Assert.Equal(1.5f, instance.CanvasScaler!.Settings.ScaleFactor);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 prefab instance 能用空 optional override 清除源 Canvas 的 manifest 与 initial screen，
+    /// baseline 刷新时不会因 null-coalescing 把源值错误复活。
+    /// </summary>
+    [Fact]
+    public void PrefabCanvasOptionalOverridesCanClearSourceValues()
+    {
+        string root = CreateTempProjectRoot();
+        try
+        {
+            EditorSceneModel prefabScene = EditorSceneModel.Empty("canvas-prefab");
+            EditorGameObject source = prefabScene.Create("Canvas");
+            prefabScene.SetBuiltInCanvasComponents(
+                source.StableId,
+                new EditorWebCanvasComponent
+                {
+                    ManifestAssetId = "source-manifest",
+                    ManifestPath = "ui/source.json",
+                    InitialScreenId = "source-screen",
+                },
+                new EditorCanvasScalerComponent());
+            EditorPrefabAssetStore store = new(root);
+            store.CreatePrefabFromSubtree(prefabScene, source.StableId, "prefabs/canvas.prefab");
+
+            EditorSceneModel scene = EditorSceneModel.Empty("instance");
+            EditorGameObject instance = store.InstantiatePrefab(scene, "prefabs/canvas.prefab", parentId: null);
+            EditorWebCanvasComponent cleared = instance.WebCanvas!.Clone();
+            cleared.ManifestAssetId = null;
+            cleared.ManifestPath = null;
+            cleared.InitialScreenId = null;
+            EditorUndoStack undo = new();
+            undo.Execute(
+                scene,
+                new SetBuiltInCanvasComponentsCommand(
+                    instance.StableId,
+                    cleared,
+                    instance.CanvasScaler));
+
+            store.RefreshPrefabInstances(scene);
+
+            Assert.Null(instance.WebCanvas!.ManifestAssetId);
+            Assert.Null(instance.WebCanvas.ManifestPath);
+            Assert.Null(instance.WebCanvas.InitialScreenId);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 
     private sealed class RecordingAssetSource(IReadOnlyList<AssetBrowserItem> assets) :
         IAssetBrowserDataSource,

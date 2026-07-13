@@ -30,6 +30,7 @@ internal sealed class EditorShellHostExtension :
     private EditorUndoStack? _undoStack;
     private EditorPrefabAssetStore? _prefabs;
     private AuthoringWorldPreviewRuntime? _authoringWorld;
+    private SceneWebCanvasAuthoringPreview? _sceneWebCanvasPreview;
     private ProjectSettingsPanel? _projectSettingsPanel;
     private PlayerSettingsPanel? _playerSettingsPanel;
     private BuildSettingsPanel? _buildSettingsPanel;
@@ -97,6 +98,13 @@ internal sealed class EditorShellHostExtension :
     public void PrepareFrame()
     {
         EditorMode mode = CapturePlayMode();
+        if (_assetBrowserDataSource?.ApplyPendingChanges() == true)
+        {
+            // Project 面板被关闭时文件 watcher 仍必须推进；Scene XHTML/CSS/字体/图片预览
+            // 不能依赖 Project Window 是否正在 Draw。
+            _sceneWebCanvasPreview?.InvalidateAssets();
+        }
+
         if (_lastPreparedMode is EditorMode.Play or EditorMode.Paused && mode == EditorMode.Edit)
         {
             // Runtime Inspector 即使被用户关闭，也必须在退出 Play 时结束临时编辑事务，
@@ -270,6 +278,7 @@ internal sealed class EditorShellHostExtension :
             _textureThumbnailProvider,
             _editor,
             _gameObjectInspectorPanel,
+            _sceneWebCanvasPreview,
             _sceneViewPanel,
             externalAssetDrop);
     }
@@ -460,12 +469,26 @@ internal sealed class EditorShellHostExtension :
                     sceneTemperature,
                     engine.Context.Jobs)
                 : null;
+        Func<string, string?>? manifestAssetResolver = null;
+        if (engine.Context.TryGetService(out IGameUiManifestAssetResolver registeredManifestResolver))
+        {
+            manifestAssetResolver = assetId =>
+                registeredManifestResolver.TryResolveManifest(assetId, out string path) ? path : null;
+        }
+
+        _sceneWebCanvasPreview = new SceneWebCanvasAuthoringPreview(
+            _sceneModel ?? throw new InvalidOperationException("Scene Web Canvas 预览需要先配置 authoring scene model。"),
+            _project.ContentRootPath,
+            window,
+            pipeline,
+            manifestAssetResolver);
         _sceneViewPanel = new SceneViewPanel(
             _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
             brushPanel,
             sceneWorldTexture,
-            () => _authoringWorld?.Snapshot ?? default);
+            () => _authoringWorld?.Snapshot ?? default,
+            _sceneWebCanvasPreview);
         _undoStack.BeforeOperation = FlushPendingAuthoringEdits;
         _editor.AddPanel(_sceneViewPanel);
         _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);

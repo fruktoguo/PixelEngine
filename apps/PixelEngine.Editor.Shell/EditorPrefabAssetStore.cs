@@ -230,15 +230,34 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
         EditorWebCanvasComponent? source,
         EditorPrefabLink link)
     {
-        if (source is null)
+        string? existsOverride = OverrideValue(link, "WebCanvas.Exists");
+        bool exists = bool.TryParse(existsOverride, out bool overriddenExists)
+            ? overriddenExists
+            : source is not null;
+        if (!exists)
         {
             return null;
         }
 
-        EditorWebCanvasComponent result = source.Clone(clearPrimary: true);
-        result.ManifestAssetId = OverrideValue(link, "WebCanvas.ManifestAssetId") ?? result.ManifestAssetId;
-        result.ManifestPath = OverrideValue(link, "WebCanvas.ManifestPath") ?? result.ManifestPath;
-        result.InitialScreenId = OverrideValue(link, "WebCanvas.InitialScreenId") ?? result.InitialScreenId;
+        EditorWebCanvasComponent result = source?.Clone(clearPrimary: true) ?? new EditorWebCanvasComponent();
+        string? manifestAssetId = OverrideValue(link, "WebCanvas.ManifestAssetId");
+        if (manifestAssetId is not null)
+        {
+            result.ManifestAssetId = NormalizeOptional(manifestAssetId);
+        }
+
+        string? manifestPath = OverrideValue(link, "WebCanvas.ManifestPath");
+        if (manifestPath is not null)
+        {
+            result.ManifestPath = NormalizeOptional(manifestPath);
+        }
+
+        string? initialScreenId = OverrideValue(link, "WebCanvas.InitialScreenId");
+        if (initialScreenId is not null)
+        {
+            result.InitialScreenId = NormalizeOptional(initialScreenId);
+        }
+
         result.Enabled = bool.TryParse(OverrideValue(link, "WebCanvas.Enabled"), out bool enabled)
             ? enabled
             : result.Enabled;
@@ -257,12 +276,16 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
         EditorCanvasScalerComponent? source,
         EditorPrefabLink link)
     {
-        if (source is null)
+        string? existsOverride = OverrideValue(link, "CanvasScaler.Exists");
+        bool exists = bool.TryParse(existsOverride, out bool overriddenExists)
+            ? overriddenExists
+            : source is not null;
+        if (!exists)
         {
             return null;
         }
 
-        PixelEngine.UI.UiCanvasScalerSettings settings = source.Settings;
+        PixelEngine.UI.UiCanvasScalerSettings settings = source?.Settings ?? PixelEngine.UI.UiCanvasScalerSettings.Default;
         settings = settings with
         {
             ScaleFactor = FloatOverride(link, "CanvasScaler.ScaleFactor", settings.ScaleFactor),
@@ -346,6 +369,11 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
         }
 
         return null;
+    }
+
+    private static string? NormalizeOptional(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     private static string NormalizeAssetPath(string assetPath)

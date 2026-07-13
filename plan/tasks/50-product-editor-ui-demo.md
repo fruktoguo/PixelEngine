@@ -97,7 +97,7 @@
   - 优先级：P2。
   - 验收：不是 create-renderer/load-only；真实 UI 文档能交互、合成、unload，GL 状态恢复且 fallback gate 正确。
 
-- [~] `UI-004` 建立场景级 Web Canvas / CanvasScaler、多 Canvas runtime 与 Unity-like Game View 呈现工作流。2026-07-13 已以 commit `10659e60` 完成提交节点一的设计/schema/公开 API/Player WindowMode 合同，并以 commit `0576be9c` 完成提交节点二的三模式 CanvasScaler resolver、帧边界 display metrics source、ManagedFallback/RmlUi 同源 layout/raster/input/IME metrics 与真实 desktop GL framebuffer smoke；提交节点三已在本提交完成 `.scene` v3、StableId/prefab/primary 规则、多 Canvas registry、脚本兼容桥与真实窗口动态重配，当前进入提交节点四：Inspector/Scene authoring preview。
+- [~] `UI-004` 建立场景级 Web Canvas / CanvasScaler、多 Canvas runtime 与 Unity-like Game View 呈现工作流。2026-07-13 已以 commit `10659e60` 完成提交节点一的设计/schema/公开 API/Player WindowMode 合同，并以 commit `0576be9c` 完成提交节点二的三模式 CanvasScaler resolver、帧边界 display metrics source、ManagedFallback/RmlUi 同源 layout/raster/input/IME metrics 与真实 desktop GL framebuffer smoke；提交节点三已完成 `.scene` v3、StableId/prefab/primary 规则、多 Canvas registry、脚本兼容桥与真实窗口动态重配；提交节点四已在本提交完成 Inspector Canvas/Scaler authoring、Undo/Redo、Prefab override/诊断，以及同 GL context 的真实 XHTML/CSS/字体/图片 Scene 无副作用离屏预览与 hot refresh，当前进入提交节点五：固定 world→presentation pipeline、Game View toolbar/maximize、revision、两阶段输入/IME 与 Player 窗口启动链。
   - 优先级：P0。
   - 依赖：`BASE-013`、`BASE-014`、`EDITOR-009`。
   - 设计来源：`docs/PixelEngine-核心目标与产品定位.md` §5/§6.3；`plan/20-interactive-html-ui.md` §1.1；`plan/19-standalone-editor-app.md` §Web Canvas 与 Game View 呈现设计补充；`plan/18-hosting-runtime.md` §1.1；`plan/11-scripting-system.md` §3.10/§3.11。

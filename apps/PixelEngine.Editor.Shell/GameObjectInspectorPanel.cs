@@ -2,6 +2,7 @@ using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Scripting;
+using PixelEngine.UI;
 using System.Globalization;
 using System.Numerics;
 
@@ -24,6 +25,26 @@ internal sealed class GameObjectInspectorPanel(
     Func<EditorMode>? modeProvider = null) : IEditorPanel, IDisposable
 {
     private const string ReadyStatus = "就绪";
+    private static readonly string[] ScaleModeLabels =
+    [
+        "Constant Pixel Size",
+        "Scale With Screen Size",
+        "Constant Physical Size",
+    ];
+    private static readonly string[] ScreenMatchModeLabels =
+    [
+        "Match Width Or Height",
+        "Expand",
+        "Shrink",
+    ];
+    private static readonly string[] PhysicalUnitLabels =
+    [
+        "Centimeters",
+        "Millimeters",
+        "Inches",
+        "Points",
+        "Picas",
+    ];
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
@@ -51,6 +72,7 @@ internal sealed class GameObjectInspectorPanel(
     private string _nameEditBuffer = string.Empty;
     private EditorGameObject? _nameEditTarget;
     private ComponentFieldEditTransaction? _componentFieldEdit;
+    private BuiltInCanvasEditTransaction? _builtInCanvasEdit;
     private DecimalFieldTextEditState? _decimalFieldTextEdit;
     private int _focusDelayFrames;
     private bool _focusRequested;
@@ -218,6 +240,11 @@ internal sealed class GameObjectInspectorPanel(
         bool componentTargetReplaced = _componentFieldEdit is { } componentEdit &&
             (!TryResolveComponentEditTarget(in componentEdit, out _, out _) ||
              selectedStableId != componentEdit.StableId);
+        bool canvasTargetReplaced = _builtInCanvasEdit is { } canvasEdit &&
+            (_scene.SceneGeneration != canvasEdit.SceneGeneration ||
+             !_scene.TryGet(canvasEdit.StableId, out EditorGameObject? canvasTarget) ||
+             !ReferenceEquals(canvasTarget, canvasEdit.GameObject) ||
+             selectedStableId != canvasEdit.StableId);
         UpdateRuntimeEditLifetime();
         if (_nameEditStableId.HasValue &&
             (!Visible || mode != EditorMode.Edit || selectedStableId != _nameEditStableId || nameTargetReplaced))
@@ -235,6 +262,12 @@ internal sealed class GameObjectInspectorPanel(
             (!Visible || mode != EditorMode.Edit || componentTargetReplaced))
         {
             CommitPendingComponentFieldEdit();
+        }
+
+        if (_builtInCanvasEdit is not null &&
+            (!Visible || mode != EditorMode.Edit || canvasTargetReplaced))
+        {
+            CommitPendingBuiltInCanvasEdit();
         }
     }
 
@@ -1588,6 +1621,7 @@ internal sealed class GameObjectInspectorPanel(
         CommitPendingNameEdit();
         CommitPendingTransformEdit();
         CommitPendingComponentFieldEdit();
+        CommitPendingBuiltInCanvasEdit();
     }
 
     private bool TryResolveComponentEditTarget(
@@ -1634,6 +1668,7 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawComponents(EditorGameObject gameObject)
     {
         // 遍历已有组件并提供 Unity 式 Add Component 搜索弹层。
+        DrawBuiltInCanvasComponents(gameObject);
         for (int i = 0; i < gameObject.Components.Count; i++)
         {
             DrawComponent(gameObject, i);
@@ -1654,6 +1689,44 @@ internal sealed class GameObjectInspectorPanel(
             ImGui.SetNextItemWidth(280f);
             _ = ImGui.InputTextWithHint("##component-search", "Search components", ref _componentSearch, 128);
             ImGui.Separator();
+            bool hasBuiltInMatch = false;
+            if (gameObject.WebCanvas is null && MatchesComponentSearch("Canvas (Web)"))
+            {
+                hasBuiltInMatch = true;
+                if (ImGui.Selectable("Canvas (Web)##add-built-in-web-canvas"))
+                {
+                    _undo.Execute(
+                        _scene,
+                        new SetBuiltInCanvasComponentsCommand(
+                            gameObject.StableId,
+                            CreateDefaultWebCanvas(makePrimary: !HasExplicitWebCanvas()),
+                            gameObject.CanvasScaler));
+                    _componentSearch = string.Empty;
+                    ImGui.CloseCurrentPopup();
+                }
+            }
+
+            if (gameObject.CanvasScaler is null && MatchesComponentSearch("Canvas Scaler"))
+            {
+                hasBuiltInMatch = true;
+                if (ImGui.Selectable("Canvas Scaler##add-built-in-canvas-scaler"))
+                {
+                    _undo.Execute(
+                        _scene,
+                        new SetBuiltInCanvasComponentsCommand(
+                            gameObject.StableId,
+                            gameObject.WebCanvas,
+                            new EditorCanvasScalerComponent()));
+                    _componentSearch = string.Empty;
+                    ImGui.CloseCurrentPopup();
+                }
+            }
+
+            if (hasBuiltInMatch)
+            {
+                ImGui.Separator();
+            }
+
             Type[] behaviours = GetBehaviourTypes(_componentSearch);
             for (int i = 0; i < behaviours.Length; i++)
             {
@@ -1672,13 +1745,694 @@ internal sealed class GameObjectInspectorPanel(
                 }
             }
 
-            if (behaviours.Length == 0)
+            if (behaviours.Length == 0 && !hasBuiltInMatch)
             {
                 ImGui.TextDisabled("No matching Behaviour");
             }
 
             ImGui.EndPopup();
         }
+    }
+
+    private void DrawBuiltInCanvasComponents(EditorGameObject gameObject)
+    {
+        CanvasInspectorSnapshot snapshot = CaptureCanvasInspector(gameObject.StableId);
+        if (!snapshot.HasExplicitCanvases && gameObject.WebCanvas is null)
+        {
+            ImGui.PushStyleColor(ImGuiCol.ChildBg, new Vector4(0.11f, 0.14f, 0.18f, 1f));
+            _ = ImGui.BeginChild(
+                "legacy-implicit-canvas",
+                new Vector2(0f, 104f),
+                ImGuiChildFlags.Borders,
+                ImGuiWindowFlags.NoScrollbar);
+            ImGui.TextColored(new Vector4(0.45f, 0.72f, 1f, 1f), "Legacy implicit Web Canvas");
+            ImGui.TextWrapped("旧场景正在使用不落盘的 primary Canvas。转换前不会静默改写场景。");
+            if (ImGui.Button("Convert To Canvas (Web)", new Vector2(-1f, 0f)))
+            {
+                _undo.Execute(
+                    _scene,
+                    new SetBuiltInCanvasComponentsCommand(
+                        gameObject.StableId,
+                        CreateDefaultWebCanvas(makePrimary: true),
+                        new EditorCanvasScalerComponent()));
+            }
+
+            ImGui.EndChild();
+            ImGui.PopStyleColor();
+            ImGui.Spacing();
+        }
+
+        if (gameObject.WebCanvas is not null)
+        {
+            DrawWebCanvasComponent(gameObject, snapshot);
+        }
+
+        if (gameObject.CanvasScaler is not null)
+        {
+            DrawCanvasScalerComponent(gameObject, snapshot);
+        }
+    }
+
+    private void DrawWebCanvasComponent(EditorGameObject gameObject, CanvasInspectorSnapshot snapshot)
+    {
+        bool open = DrawInspectorComponentHeader("Canvas (Web)##built-in-web-canvas");
+        bool reset = false;
+        bool remove = false;
+        if (ImGui.BeginPopupContextItem("built-in-web-canvas-context"))
+        {
+            reset = ImGui.MenuItem("Reset");
+            remove = ImGui.MenuItem("Remove Component");
+            ImGui.EndPopup();
+        }
+
+        if (reset)
+        {
+            _undo.Execute(
+                _scene,
+                new SetBuiltInCanvasComponentsCommand(
+                    gameObject.StableId,
+                    CreateDefaultWebCanvas(gameObject.WebCanvas!.Primary),
+                    gameObject.CanvasScaler));
+            return;
+        }
+
+        if (remove)
+        {
+            _undo.Execute(
+                _scene,
+                new SetBuiltInCanvasComponentsCommand(gameObject.StableId, null, gameObject.CanvasScaler));
+            return;
+        }
+
+        if (!open)
+        {
+            CommitPendingBuiltInCanvasEdit();
+            return;
+        }
+
+        EditorWebCanvasComponent webCanvas = gameObject.WebCanvas!.Clone();
+        EditorCanvasScalerComponent? scaler = gameObject.CanvasScaler?.Clone();
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        if (!BeginInspectorPropertyTable("built-in-web-canvas-fields", 2))
+        {
+            return;
+        }
+
+        SetupInspectorPropertyColumns(availableWidth);
+        bool enabled = webCanvas.Enabled;
+        bool changed = DrawBooleanProperty("Enabled", "##web-canvas-enabled", ref enabled);
+        if (changed)
+        {
+            webCanvas.Enabled = enabled;
+            _undo.Execute(
+                _scene,
+                new SetBuiltInCanvasComponentsCommand(gameObject.StableId, webCanvas, scaler));
+        }
+
+        string manifestAssetId = webCanvas.ManifestAssetId ?? string.Empty;
+        changed = DrawTextProperty("Manifest Asset ID", "##web-canvas-manifest-id", ref manifestAssetId, 512);
+        if (changed)
+        {
+            webCanvas.ManifestAssetId = NormalizeOptionalText(manifestAssetId);
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        string manifestPath = webCanvas.ManifestPath ?? string.Empty;
+        changed = DrawTextProperty("Manifest Path", "##web-canvas-manifest-path", ref manifestPath, 512);
+        if (changed)
+        {
+            webCanvas.ManifestPath = NormalizeOptionalText(manifestPath);
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        string initialScreen = webCanvas.InitialScreenId ?? string.Empty;
+        changed = DrawTextProperty("Initial Screen", "##web-canvas-initial-screen", ref initialScreen, 256);
+        if (changed)
+        {
+            webCanvas.InitialScreenId = NormalizeOptionalText(initialScreen);
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        int sortingOrder = webCanvas.SortingOrder;
+        changed = DrawIntegerProperty("Sorting Order", "##web-canvas-sorting-order", ref sortingOrder, 1f);
+        if (changed)
+        {
+            webCanvas.SortingOrder = sortingOrder;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        bool primary = webCanvas.Primary;
+        changed = DrawBooleanProperty("Primary", "##web-canvas-primary", ref primary);
+        if (changed)
+        {
+            CommitPendingBuiltInCanvasEdit();
+            if (primary)
+            {
+                _undo.Execute(_scene, new SetPrimaryWebCanvasCommand(gameObject.StableId));
+            }
+            else
+            {
+                webCanvas.Primary = false;
+                _undo.Execute(
+                    _scene,
+                    new SetBuiltInCanvasComponentsCommand(gameObject.StableId, webCanvas, scaler));
+            }
+        }
+
+        DrawReadOnlyProperty("Derived Canvas ID", snapshot.DerivedCanvasId == 0
+            ? "none"
+            : $"0x{snapshot.DerivedCanvasId:X16}");
+        DrawReadOnlyProperty("Effective Primary", snapshot.IsEffectivePrimary ? "Yes" : "No");
+        DrawReadOnlyProperty("Runtime State", snapshot.IsRuntimeEnabled ? "Enabled" : "Not materialized");
+        EndInspectorPropertyTable();
+
+        if (snapshot.UsesDefaultScaler)
+        {
+            if (ImGui.Button("Add Canvas Scaler", new Vector2(-1f, 0f)))
+            {
+                _undo.Execute(
+                    _scene,
+                    new SetBuiltInCanvasComponentsCommand(
+                        gameObject.StableId,
+                        gameObject.WebCanvas,
+                        new EditorCanvasScalerComponent()));
+            }
+        }
+
+        DrawCanvasSnapshotDiagnostic(snapshot);
+    }
+
+    private void DrawCanvasScalerComponent(EditorGameObject gameObject, CanvasInspectorSnapshot snapshot)
+    {
+        bool open = DrawInspectorComponentHeader("Canvas Scaler##built-in-canvas-scaler");
+        bool reset = false;
+        bool remove = false;
+        if (ImGui.BeginPopupContextItem("built-in-canvas-scaler-context"))
+        {
+            reset = ImGui.MenuItem("Reset");
+            remove = ImGui.MenuItem("Remove Component");
+            ImGui.EndPopup();
+        }
+
+        if (reset)
+        {
+            _undo.Execute(
+                _scene,
+                new SetBuiltInCanvasComponentsCommand(
+                    gameObject.StableId,
+                    gameObject.WebCanvas,
+                    new EditorCanvasScalerComponent()));
+            return;
+        }
+
+        if (remove)
+        {
+            _undo.Execute(
+                _scene,
+                new SetBuiltInCanvasComponentsCommand(gameObject.StableId, gameObject.WebCanvas, null));
+            return;
+        }
+
+        if (!open)
+        {
+            CommitPendingBuiltInCanvasEdit();
+            return;
+        }
+
+        EditorWebCanvasComponent? webCanvas = gameObject.WebCanvas?.Clone();
+        EditorCanvasScalerComponent scaler = gameObject.CanvasScaler!.Clone();
+        UiCanvasScalerSettings settings = scaler.Settings;
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        if (!BeginInspectorPropertyTable("built-in-canvas-scaler-fields", 2))
+        {
+            return;
+        }
+
+        SetupInspectorPropertyColumns(availableWidth);
+        int scaleMode = (int)settings.ScaleMode;
+        bool changed = DrawComboProperty("UI Scale Mode", "##canvas-scaler-mode", ref scaleMode, ScaleModeLabels);
+        if (changed)
+        {
+            settings = settings with { ScaleMode = (UiScaleMode)scaleMode };
+            scaler.Settings = settings;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        switch (settings.ScaleMode)
+        {
+            case UiScaleMode.ConstantPixelSize:
+                DrawConstantPixelSizeSettings(gameObject, webCanvas, scaler);
+                break;
+            case UiScaleMode.ScaleWithScreenSize:
+                DrawScaleWithScreenSizeSettings(gameObject, webCanvas, scaler);
+                break;
+            case UiScaleMode.ConstantPhysicalSize:
+                DrawConstantPhysicalSizeSettings(gameObject, webCanvas, scaler);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(settings), settings.ScaleMode, "未知 CanvasScaler 模式。");
+        }
+
+        EndInspectorPropertyTable();
+        if (snapshot.IsOrphanScaler)
+        {
+            DrawCanvasDiagnostic("该 Canvas Scaler 没有同对象 Canvas (Web)，会保留序列化但当前 inactive。", warning: true);
+        }
+    }
+
+    private void DrawConstantPixelSizeSettings(
+        EditorGameObject gameObject,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent scaler)
+    {
+        UiCanvasScalerSettings settings = scaler.Settings;
+        float scaleFactor = settings.ScaleFactor;
+        bool changed = DrawPositiveFloatProperty("Scale Factor", "##canvas-scale-factor", ref scaleFactor, 0.01f);
+        if (changed)
+        {
+            scaler.Settings = settings with { ScaleFactor = scaleFactor };
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+        DrawReferencePixelsPerUnit(gameObject, webCanvas, scaler);
+    }
+
+    private void DrawScaleWithScreenSizeSettings(
+        EditorGameObject gameObject,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent scaler)
+    {
+        UiCanvasScalerSettings settings = scaler.Settings;
+        float referenceWidth = settings.ReferenceWidth;
+        bool changed = DrawPositiveFloatProperty(
+            "Reference Width",
+            "##canvas-reference-width",
+            ref referenceWidth,
+            1f);
+        if (changed)
+        {
+            settings = settings with { ReferenceWidth = referenceWidth };
+            scaler.Settings = settings;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        float referenceHeight = settings.ReferenceHeight;
+        changed = DrawPositiveFloatProperty(
+            "Reference Height",
+            "##canvas-reference-height",
+            ref referenceHeight,
+            1f);
+        if (changed)
+        {
+            settings = settings with { ReferenceHeight = referenceHeight };
+            scaler.Settings = settings;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        int matchMode = (int)settings.ScreenMatchMode;
+        changed = DrawComboProperty("Screen Match Mode", "##canvas-screen-match", ref matchMode, ScreenMatchModeLabels);
+        if (changed)
+        {
+            settings = settings with { ScreenMatchMode = (UiScreenMatchMode)matchMode };
+            scaler.Settings = settings;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+        if (settings.ScreenMatchMode == UiScreenMatchMode.MatchWidthOrHeight)
+        {
+            float match = settings.MatchWidthOrHeight;
+            changed = DrawUnitFloatProperty("Match", "##canvas-match-width-height", ref match);
+            if (changed)
+            {
+                scaler.Settings = settings with { MatchWidthOrHeight = match };
+            }
+
+            HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+        }
+
+        DrawReferencePixelsPerUnit(gameObject, webCanvas, scaler);
+    }
+
+    private void DrawConstantPhysicalSizeSettings(
+        EditorGameObject gameObject,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent scaler)
+    {
+        UiCanvasScalerSettings settings = scaler.Settings;
+        int physicalUnit = (int)settings.PhysicalUnit;
+        bool changed = DrawComboProperty("Physical Unit", "##canvas-physical-unit", ref physicalUnit, PhysicalUnitLabels);
+        if (changed)
+        {
+            settings = settings with { PhysicalUnit = (UiPhysicalUnit)physicalUnit };
+            scaler.Settings = settings;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        float fallbackDpi = settings.FallbackScreenDpi;
+        changed = DrawPositiveFloatProperty("Fallback Screen DPI", "##canvas-fallback-dpi", ref fallbackDpi, 1f);
+        if (changed)
+        {
+            settings = settings with { FallbackScreenDpi = fallbackDpi };
+            scaler.Settings = settings;
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+
+        float spriteDpi = settings.DefaultSpriteDpi;
+        changed = DrawPositiveFloatProperty("Default Sprite DPI", "##canvas-default-sprite-dpi", ref spriteDpi, 1f);
+        if (changed)
+        {
+            scaler.Settings = settings with { DefaultSpriteDpi = spriteDpi };
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+        DrawReferencePixelsPerUnit(gameObject, webCanvas, scaler);
+    }
+
+    private void DrawReferencePixelsPerUnit(
+        EditorGameObject gameObject,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent scaler)
+    {
+        UiCanvasScalerSettings settings = scaler.Settings;
+        float referencePixelsPerUnit = settings.ReferencePixelsPerUnit;
+        bool changed = DrawPositiveFloatProperty(
+            "Reference Pixels Per Unit",
+            "##canvas-reference-ppu",
+            ref referencePixelsPerUnit,
+            1f);
+        if (changed)
+        {
+            scaler.Settings = settings with { ReferencePixelsPerUnit = referencePixelsPerUnit };
+        }
+
+        HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
+    }
+
+    private static void SetupInspectorPropertyColumns(float availableWidth)
+    {
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
+        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+    }
+
+    private static bool DrawBooleanProperty(string label, string id, ref bool value)
+    {
+        BeginPropertyRow(label);
+        return ImGui.Checkbox(id, ref value);
+    }
+
+    private static bool DrawTextProperty(string label, string id, ref string value, uint capacity)
+    {
+        BeginPropertyRow(label);
+        ImGui.SetNextItemWidth(-1f);
+        return ImGui.InputText(id, ref value, capacity);
+    }
+
+    private static bool DrawIntegerProperty(string label, string id, ref int value, float speed)
+    {
+        BeginPropertyRow(label);
+        ImGui.SetNextItemWidth(-1f);
+        return ImGui.DragInt(id, ref value, speed);
+    }
+
+    private static bool DrawPositiveFloatProperty(string label, string id, ref float value, float speed)
+    {
+        BeginPropertyRow(label);
+        ImGui.SetNextItemWidth(-1f);
+        float candidate = value;
+        bool changed = ImGui.DragFloat(id, ref candidate, speed);
+        if (changed && float.IsFinite(candidate))
+        {
+            value = MathF.Max(0.0001f, candidate);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool DrawUnitFloatProperty(string label, string id, ref float value)
+    {
+        BeginPropertyRow(label);
+        ImGui.SetNextItemWidth(-1f);
+        float candidate = value;
+        bool changed = ImGui.SliderFloat(id, ref candidate, 0f, 1f, "%.2f");
+        if (changed && float.IsFinite(candidate))
+        {
+            value = Math.Clamp(candidate, 0f, 1f);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool DrawComboProperty(string label, string id, ref int value, string[] labels)
+    {
+        BeginPropertyRow(label);
+        ImGui.SetNextItemWidth(-1f);
+        return ImGui.Combo(id, ref value, labels, labels.Length);
+    }
+
+    private static void BeginPropertyRow(string label)
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        DrawPropertyLabel(label);
+        _ = ImGui.TableSetColumnIndex(1);
+    }
+
+    private void DrawCanvasSnapshotDiagnostic(CanvasInspectorSnapshot snapshot)
+    {
+        if (!string.IsNullOrWhiteSpace(snapshot.Diagnostic))
+        {
+            DrawCanvasDiagnostic(snapshot.Diagnostic, snapshot.HasConflict || snapshot.PrimaryNone);
+        }
+    }
+
+    private static void DrawCanvasDiagnostic(string diagnostic, bool warning)
+    {
+        ImGui.Spacing();
+        ImGui.PushStyleColor(
+            ImGuiCol.Text,
+            warning ? new Vector4(0.95f, 0.70f, 0.25f, 1f) : new Vector4(0.55f, 0.75f, 0.95f, 1f));
+        ImGui.TextWrapped(diagnostic);
+        ImGui.PopStyleColor();
+    }
+
+    internal CanvasInspectorSnapshot CaptureCanvasInspector(int stableId)
+    {
+        EditorGameObject gameObject = _scene.Get(stableId);
+        bool hasWebCanvas = gameObject.WebCanvas is not null;
+        ulong derivedId = hasWebCanvas ? GameUiCanvasIdentity.FromStableId(stableId).Value : 0;
+        try
+        {
+            EngineSceneCanvasSet set = EngineSceneCanvasResolver.Resolve(_scene.ToDocument());
+            bool runtimeEnabled = false;
+            bool effectivePrimary = false;
+            ReadOnlySpan<EngineSceneCanvasDefinition> canvases = set.Canvases;
+            for (int i = 0; i < canvases.Length; i++)
+            {
+                if (canvases[i].StableId == stableId)
+                {
+                    runtimeEnabled = true;
+                    effectivePrimary = canvases[i].IsPrimary;
+                    break;
+                }
+            }
+
+            List<string> messages = [];
+            ReadOnlySpan<EngineSceneCanvasDiagnostic> diagnostics = set.Diagnostics;
+            for (int i = 0; i < diagnostics.Length; i++)
+            {
+                if (diagnostics[i].StableId == 0 || diagnostics[i].StableId == stableId)
+                {
+                    messages.Add(diagnostics[i].Message);
+                }
+            }
+
+            return new CanvasInspectorSnapshot(
+                set.HasExplicitCanvases,
+                hasWebCanvas,
+                gameObject.CanvasScaler is not null,
+                runtimeEnabled,
+                effectivePrimary,
+                hasWebCanvas && gameObject.CanvasScaler is null,
+                !hasWebCanvas && gameObject.CanvasScaler is not null,
+                set.HasExplicitCanvases && set.Count == 0,
+                HasConflict: false,
+                derivedId,
+                string.Join(Environment.NewLine, messages));
+        }
+        catch (InvalidOperationException exception)
+        {
+            return new CanvasInspectorSnapshot(
+                HasExplicitCanvases: hasWebCanvas || HasExplicitWebCanvas(),
+                HasWebCanvas: hasWebCanvas,
+                HasCanvasScaler: gameObject.CanvasScaler is not null,
+                IsRuntimeEnabled: false,
+                IsEffectivePrimary: false,
+                UsesDefaultScaler: hasWebCanvas && gameObject.CanvasScaler is null,
+                IsOrphanScaler: !hasWebCanvas && gameObject.CanvasScaler is not null,
+                PrimaryNone: false,
+                HasConflict: true,
+                DerivedCanvasId: derivedId,
+                Diagnostic: exception.Message);
+        }
+    }
+
+    private bool HasExplicitWebCanvas()
+    {
+        foreach (EditorGameObject gameObject in _scene.EnumerateDepthFirst())
+        {
+            if (gameObject.WebCanvas is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool MatchesComponentSearch(string displayName)
+    {
+        return string.IsNullOrWhiteSpace(_componentSearch) ||
+            displayName.Contains(_componentSearch, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static EditorWebCanvasComponent CreateDefaultWebCanvas(bool makePrimary)
+    {
+        return new EditorWebCanvasComponent { Primary = makePrimary };
+    }
+
+    private static string? NormalizeOptionalText(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private bool BeginBuiltInCanvasEdit(int stableId)
+    {
+        if (!CanModifyAuthoringScene())
+        {
+            return false;
+        }
+
+        CommitPendingNameEdit();
+        CommitPendingTransformEdit();
+        CommitPendingComponentFieldEdit();
+        if (_builtInCanvasEdit is { } active && active.StableId != stableId)
+        {
+            CommitPendingBuiltInCanvasEdit();
+        }
+
+        if (_builtInCanvasEdit is not null)
+        {
+            return true;
+        }
+
+        if (!_scene.TryGet(stableId, out EditorGameObject? gameObject))
+        {
+            return false;
+        }
+
+        _builtInCanvasEdit = new BuiltInCanvasEditTransaction(
+            stableId,
+            _scene.SceneGeneration,
+            gameObject,
+            gameObject.WebCanvas?.Clone(),
+            gameObject.CanvasScaler?.Clone(),
+            gameObject.PrefabLink?.Clone(),
+            _scene.IsDirty,
+            Applied: false);
+        return true;
+    }
+
+    private bool ApplyBuiltInCanvasEdit(
+        int stableId,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent? scaler)
+    {
+        if (!BeginBuiltInCanvasEdit(stableId) ||
+            _builtInCanvasEdit is not { } active ||
+            _scene.SceneGeneration != active.SceneGeneration ||
+            !_scene.TryGet(stableId, out EditorGameObject? gameObject) ||
+            !ReferenceEquals(gameObject, active.GameObject))
+        {
+            return false;
+        }
+
+        _scene.SetBuiltInCanvasComponents(stableId, webCanvas, scaler);
+        _scene.RecordBuiltInCanvasPrefabOverrides(stableId, webCanvas, scaler);
+        _builtInCanvasEdit = active with { Applied = true };
+        return true;
+    }
+
+    private void HandleBuiltInCanvasInput(
+        EditorGameObject gameObject,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent? scaler,
+        bool changed)
+    {
+        if (ImGui.IsItemActivated())
+        {
+            _ = BeginBuiltInCanvasEdit(gameObject.StableId);
+        }
+
+        if (changed)
+        {
+            _ = ApplyBuiltInCanvasEdit(gameObject.StableId, webCanvas, scaler);
+        }
+
+        if (ImGui.IsItemDeactivated())
+        {
+            CommitPendingBuiltInCanvasEdit();
+        }
+    }
+
+    private void CommitPendingBuiltInCanvasEdit()
+    {
+        if (_builtInCanvasEdit is not { } active)
+        {
+            return;
+        }
+
+        _builtInCanvasEdit = null;
+        if (_scene.SceneGeneration != active.SceneGeneration ||
+            !_scene.TryGet(active.StableId, out EditorGameObject? gameObject) ||
+            !ReferenceEquals(gameObject, active.GameObject))
+        {
+            return;
+        }
+
+        bool unchanged = EditorWebCanvasComponent.ContentEquals(active.OldWebCanvas, gameObject.WebCanvas) &&
+            EditorCanvasScalerComponent.ContentEquals(active.OldCanvasScaler, gameObject.CanvasScaler);
+        if (unchanged)
+        {
+            if (active.Applied)
+            {
+                _scene.SetPrefabLink(active.StableId, active.OldPrefabLink);
+                _scene.RestoreDirtyState(active.WasDirty);
+            }
+
+            return;
+        }
+
+        _undo.Execute(
+            _scene,
+            new SetBuiltInCanvasComponentsCommand(
+                active.StableId,
+                active.OldWebCanvas,
+                active.OldCanvasScaler,
+                active.OldPrefabLink,
+                gameObject.WebCanvas,
+                gameObject.CanvasScaler,
+                gameObject.PrefabLink));
     }
 
     private void DrawComponent(EditorGameObject gameObject, int componentIndex)
@@ -2948,6 +3702,29 @@ internal readonly record struct ComponentFieldEditTransaction(
     bool WasDirty,
     bool PreserveEmptyPrefabOverride,
     bool Applied);
+
+internal readonly record struct BuiltInCanvasEditTransaction(
+    int StableId,
+    long SceneGeneration,
+    EditorGameObject GameObject,
+    EditorWebCanvasComponent? OldWebCanvas,
+    EditorCanvasScalerComponent? OldCanvasScaler,
+    EditorPrefabLink? OldPrefabLink,
+    bool WasDirty,
+    bool Applied);
+
+internal readonly record struct CanvasInspectorSnapshot(
+    bool HasExplicitCanvases,
+    bool HasWebCanvas,
+    bool HasCanvasScaler,
+    bool IsRuntimeEnabled,
+    bool IsEffectivePrimary,
+    bool UsesDefaultScaler,
+    bool IsOrphanScaler,
+    bool PrimaryNone,
+    bool HasConflict,
+    ulong DerivedCanvasId,
+    string Diagnostic);
 
 internal readonly record struct AssetInspectorSnapshot(
     string Path,

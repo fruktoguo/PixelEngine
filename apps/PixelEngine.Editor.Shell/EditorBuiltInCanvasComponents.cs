@@ -59,6 +59,19 @@ internal sealed class EditorWebCanvasComponent
             Primary = !clearPrimary && Primary,
         };
     }
+
+    public static bool ContentEquals(EditorWebCanvasComponent? left, EditorWebCanvasComponent? right)
+    {
+        return ReferenceEquals(left, right) ||
+            (left is not null &&
+             right is not null &&
+             string.Equals(left.ManifestAssetId, right.ManifestAssetId, StringComparison.Ordinal) &&
+             string.Equals(left.ManifestPath, right.ManifestPath, StringComparison.Ordinal) &&
+             string.Equals(left.InitialScreenId, right.InitialScreenId, StringComparison.Ordinal) &&
+             left.Enabled == right.Enabled &&
+             left.SortingOrder == right.SortingOrder &&
+             left.Primary == right.Primary);
+    }
 }
 
 /// <summary>
@@ -83,5 +96,13 @@ internal sealed class EditorCanvasScalerComponent
     {
         UiCanvasScalerSettings settings = Settings;
         return EngineSceneCanvasScalerDocument.FromSettings(in settings);
+    }
+
+    public static bool ContentEquals(EditorCanvasScalerComponent? left, EditorCanvasScalerComponent? right)
+    {
+        return ReferenceEquals(left, right) ||
+            (left is not null &&
+             right is not null &&
+             left.Settings == right.Settings);
     }
 }

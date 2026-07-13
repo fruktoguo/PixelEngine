@@ -351,6 +351,169 @@ internal sealed class SetTransformCommand : IEditorCommand
 }
 
 /// <summary>
+/// Undo 命令：原子替换内建 Canvas (Web) 与 Canvas Scaler，并保持 prefab override 状态。
+/// </summary>
+internal sealed class SetBuiltInCanvasComponentsCommand : IEditorCommand
+{
+    private readonly int _stableId;
+    private readonly EditorWebCanvasComponent? _newWebCanvas;
+    private readonly EditorCanvasScalerComponent? _newCanvasScaler;
+    private EditorWebCanvasComponent? _oldWebCanvas;
+    private EditorCanvasScalerComponent? _oldCanvasScaler;
+    private EditorPrefabLink? _oldPrefabLink;
+    private EditorPrefabLink? _newPrefabLink;
+    private bool _captured;
+    private readonly bool _hasExplicitState;
+
+    public SetBuiltInCanvasComponentsCommand(
+        int stableId,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent? canvasScaler)
+    {
+        if (stableId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(stableId));
+        }
+
+        _stableId = stableId;
+        _newWebCanvas = webCanvas?.Clone();
+        _newCanvasScaler = canvasScaler?.Clone();
+    }
+
+    public SetBuiltInCanvasComponentsCommand(
+        int stableId,
+        EditorWebCanvasComponent? oldWebCanvas,
+        EditorCanvasScalerComponent? oldCanvasScaler,
+        EditorPrefabLink? oldPrefabLink,
+        EditorWebCanvasComponent? newWebCanvas,
+        EditorCanvasScalerComponent? newCanvasScaler,
+        EditorPrefabLink? newPrefabLink)
+        : this(stableId, newWebCanvas, newCanvasScaler)
+    {
+        _oldWebCanvas = oldWebCanvas?.Clone();
+        _oldCanvasScaler = oldCanvasScaler?.Clone();
+        _oldPrefabLink = oldPrefabLink?.Clone();
+        _newPrefabLink = newPrefabLink?.Clone();
+        _hasExplicitState = true;
+    }
+
+    public string Name => "Set Canvas Components";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        EditorGameObject gameObject = scene.Get(_stableId);
+        if (!_captured && !_hasExplicitState)
+        {
+            _oldWebCanvas = gameObject.WebCanvas?.Clone();
+            _oldCanvasScaler = gameObject.CanvasScaler?.Clone();
+            _oldPrefabLink = gameObject.PrefabLink?.Clone();
+        }
+
+        scene.SetBuiltInCanvasComponents(_stableId, _newWebCanvas, _newCanvasScaler);
+        if (_hasExplicitState)
+        {
+            scene.SetPrefabLink(_stableId, _newPrefabLink);
+            return;
+        }
+
+        scene.RecordBuiltInCanvasPrefabOverrides(_stableId, _newWebCanvas, _newCanvasScaler);
+        if (!_captured)
+        {
+            _newPrefabLink = scene.Get(_stableId).PrefabLink?.Clone();
+            _captured = true;
+        }
+        else
+        {
+            scene.SetPrefabLink(_stableId, _newPrefabLink);
+        }
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        scene.SetBuiltInCanvasComponents(_stableId, _oldWebCanvas, _oldCanvasScaler);
+        scene.SetPrefabLink(_stableId, _oldPrefabLink);
+    }
+}
+
+/// <summary>
+/// Undo 命令：把一个 Web Canvas 设为显式 primary，并在同一事务中清除其他 primary。
+/// </summary>
+internal sealed class SetPrimaryWebCanvasCommand(int stableId) : IEditorCommand
+{
+    private CanvasPrimaryState[]? _before;
+    private CanvasPrimaryState[]? _after;
+
+    public string Name => "Set Primary Web Canvas";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        if (_after is not null)
+        {
+            Apply(scene, _after);
+            return;
+        }
+
+        if (scene.Get(stableId).WebCanvas is null)
+        {
+            throw new InvalidOperationException($"GameObject {stableId} 没有 Canvas (Web)。");
+        }
+
+        List<CanvasPrimaryState> before = [];
+        List<CanvasPrimaryState> after = [];
+        foreach (EditorGameObject gameObject in scene.EnumerateDepthFirst())
+        {
+            if (gameObject.WebCanvas is null)
+            {
+                continue;
+            }
+
+            before.Add(Capture(gameObject));
+            EditorWebCanvasComponent webCanvas = gameObject.WebCanvas.Clone();
+            webCanvas.Primary = gameObject.StableId == stableId;
+            scene.SetBuiltInCanvasComponents(gameObject.StableId, webCanvas, gameObject.CanvasScaler);
+            scene.RecordPrefabOverride(gameObject.StableId, "WebCanvas.Primary", webCanvas.Primary.ToString());
+            after.Add(Capture(scene.Get(gameObject.StableId)));
+        }
+
+        _before = [.. before];
+        _after = [.. after];
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_before is not null)
+        {
+            Apply(scene, _before);
+        }
+    }
+
+    private static CanvasPrimaryState Capture(EditorGameObject gameObject)
+    {
+        return new CanvasPrimaryState(
+            gameObject.StableId,
+            gameObject.WebCanvas?.Clone(),
+            gameObject.CanvasScaler?.Clone(),
+            gameObject.PrefabLink?.Clone());
+    }
+
+    private static void Apply(EditorSceneModel scene, ReadOnlySpan<CanvasPrimaryState> states)
+    {
+        for (int i = 0; i < states.Length; i++)
+        {
+            ref readonly CanvasPrimaryState state = ref states[i];
+            scene.SetBuiltInCanvasComponents(state.StableId, state.WebCanvas, state.CanvasScaler);
+            scene.SetPrefabLink(state.StableId, state.PrefabLink);
+        }
+    }
+
+    private readonly record struct CanvasPrimaryState(
+        int StableId,
+        EditorWebCanvasComponent? WebCanvas,
+        EditorCanvasScalerComponent? CanvasScaler,
+        EditorPrefabLink? PrefabLink);
+}
+
+/// <summary>
 /// Undo 命令：AddComponent。
 /// </summary>
 internal sealed class AddComponentCommand(int stableId, EditorComponentModel component, int? insertIndex = null) : IEditorCommand

@@ -322,6 +322,20 @@ internal sealed class EditorSceneModel
         MarkDirty();
     }
 
+    /// <summary>
+    /// 原子替换 GameObject 的两个内建 Canvas authoring 组件；传入 <see langword="null"/> 表示移除。
+    /// </summary>
+    public void SetBuiltInCanvasComponents(
+        int stableId,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent? canvasScaler)
+    {
+        EditorGameObject gameObject = Get(stableId);
+        gameObject.WebCanvas = webCanvas?.Clone();
+        gameObject.CanvasScaler = canvasScaler?.Clone();
+        MarkDirty();
+    }
+
     public void AddComponent(int stableId, EditorComponentModel component, int? insertIndex = null)
     {
         ArgumentNullException.ThrowIfNull(component);
@@ -437,6 +451,68 @@ internal sealed class EditorSceneModel
         RecordPrefabOverride(stableId, "Transform.RotationRadians", transform.RotationRadians.ToString(System.Globalization.CultureInfo.InvariantCulture));
         RecordPrefabOverride(stableId, "Transform.ScaleX", transform.ScaleX.ToString(System.Globalization.CultureInfo.InvariantCulture));
         RecordPrefabOverride(stableId, "Transform.ScaleY", transform.ScaleY.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// 记录完整内建 Canvas/Scaler prefab override，包含组件存在性和可清空的字符串字段。
+    /// </summary>
+    public void RecordBuiltInCanvasPrefabOverrides(
+        int stableId,
+        EditorWebCanvasComponent? webCanvas,
+        EditorCanvasScalerComponent? canvasScaler)
+    {
+        RecordPrefabOverride(stableId, "WebCanvas.Exists", (webCanvas is not null).ToString());
+        if (webCanvas is not null)
+        {
+            RecordPrefabOverride(stableId, "WebCanvas.ManifestAssetId", webCanvas.ManifestAssetId ?? string.Empty);
+            RecordPrefabOverride(stableId, "WebCanvas.ManifestPath", webCanvas.ManifestPath ?? string.Empty);
+            RecordPrefabOverride(stableId, "WebCanvas.InitialScreenId", webCanvas.InitialScreenId ?? string.Empty);
+            RecordPrefabOverride(stableId, "WebCanvas.Enabled", webCanvas.Enabled.ToString());
+            RecordPrefabOverride(
+                stableId,
+                "WebCanvas.SortingOrder",
+                webCanvas.SortingOrder.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            RecordPrefabOverride(stableId, "WebCanvas.Primary", webCanvas.Primary.ToString());
+        }
+
+        RecordPrefabOverride(stableId, "CanvasScaler.Exists", (canvasScaler is not null).ToString());
+        if (canvasScaler is null)
+        {
+            return;
+        }
+
+        PixelEngine.UI.UiCanvasScalerSettings settings = canvasScaler.Settings;
+        RecordPrefabOverride(stableId, "CanvasScaler.ScaleMode", settings.ScaleMode.ToString());
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.ScaleFactor",
+            settings.ScaleFactor.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.ReferenceWidth",
+            settings.ReferenceWidth.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.ReferenceHeight",
+            settings.ReferenceHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(stableId, "CanvasScaler.ScreenMatchMode", settings.ScreenMatchMode.ToString());
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.MatchWidthOrHeight",
+            settings.MatchWidthOrHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(stableId, "CanvasScaler.PhysicalUnit", settings.PhysicalUnit.ToString());
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.FallbackScreenDpi",
+            settings.FallbackScreenDpi.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.DefaultSpriteDpi",
+            settings.DefaultSpriteDpi.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        RecordPrefabOverride(
+            stableId,
+            "CanvasScaler.ReferencePixelsPerUnit",
+            settings.ReferencePixelsPerUnit.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public void ClearPrefabOverrides(int stableId)

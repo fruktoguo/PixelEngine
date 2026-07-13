@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGuizmo;
+using PixelEngine.UI;
 using System.Numerics;
 
 namespace PixelEngine.Editor.Shell;
@@ -12,7 +13,8 @@ internal sealed class SceneViewPanel(
     EditorUndoStack undo,
     MaterialBrushPalettePanel? brushPanel = null,
     IAuthoringWorldTexture? worldTexture = null,
-    Func<AuthoringWorldPreviewSnapshot>? authoringWorldSnapshot = null) : IEditorPanel, IDisposable
+    Func<AuthoringWorldPreviewSnapshot>? authoringWorldSnapshot = null,
+    SceneWebCanvasAuthoringPreview? webCanvasPreview = null) : IEditorPanel, IDisposable
 {
     private const uint CanvasColor = 0xFF_18_1A_1F;
     private const uint WorldColor = 0xFF_25_2A_34;
@@ -41,11 +43,13 @@ internal sealed class SceneViewPanel(
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
     private readonly IAuthoringWorldTexture? _worldTexture = worldTexture;
     private readonly Func<AuthoringWorldPreviewSnapshot>? _authoringWorldSnapshot = authoringWorldSnapshot;
+    private readonly SceneWebCanvasAuthoringPreview? _webCanvasPreview = webCanvasPreview;
     private readonly SceneAuthoringCamera _camera = new();
     private Vector2 _canvasMin;
     private Vector2 _canvasSize;
     private bool _canvasHovered;
     private bool _toolOverlayHovered;
+    private bool _webCanvasPreviewHovered;
     private bool _cameraAutoFit = true;
     private SceneToolOverlayDock _toolOverlayDock = SceneToolOverlayDock.Right;
     private Vector2 _toolOverlayFloatingOffset = new(ToolOverlayInset, ToolOverlayInset);
@@ -69,6 +73,7 @@ internal sealed class SceneViewPanel(
     private Vector2 _gizmoDragCenterScreen;
     private EditorSceneTransform? _gizmoDragStartWorldTransform;
     private EditorMode _preparedMode = EditorMode.Edit;
+    private int? _preparedSelectedStableId;
     private bool _disposed;
 
     public string Title => EditorDockSpace.ViewportWindowTitle;
@@ -83,6 +88,7 @@ internal sealed class SceneViewPanel(
             if (!value)
             {
                 InputFocused = false;
+                _webCanvasPreview?.Request(null, false, false, 0f, 0f);
                 if (closing)
                 {
                     _ = CommitGizmoTransform();
@@ -120,6 +126,12 @@ internal sealed class SceneViewPanel(
     internal void PrepareFrame(int? selectedStableId, EditorMode mode)
     {
         _preparedMode = mode;
+        _preparedSelectedStableId = selectedStableId;
+        if (!Visible || mode != EditorMode.Edit)
+        {
+            _webCanvasPreview?.Request(null, false, false, 0f, 0f);
+        }
+
         if (_brushPanel is { Visible: false, IsActive: true })
         {
             _brushPanel.SetActive(false);
@@ -153,6 +165,7 @@ internal sealed class SceneViewPanel(
         if (!ImGui.Begin(Title, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
             InputFocused = false;
+            _webCanvasPreview?.Request(null, false, false, 0f, 0f);
             ImGui.End();
             return;
         }
@@ -746,6 +759,7 @@ internal sealed class SceneViewPanel(
 
             DrawBoundary(drawList, preview.Bounds);
             DrawMarkers(drawList, preview);
+            DrawWebCanvasPreview(drawList);
             DrawCanvasLabel(drawList, preview);
         }
         finally
@@ -955,6 +969,175 @@ internal sealed class SceneViewPanel(
             0xFFFFFFFF);
     }
 
+    private void DrawWebCanvasPreview(ImDrawListPtr drawList)
+    {
+        _webCanvasPreviewHovered = false;
+        if (_webCanvasPreview is null || _preparedMode != EditorMode.Edit)
+        {
+            _webCanvasPreview?.Request(null, false, false, 0f, 0f);
+            return;
+        }
+
+        int? selectedStableId = _preparedSelectedStableId ?? _scene.SelectedStableId;
+        if (!selectedStableId.HasValue ||
+            !_scene.TryGet(selectedStableId.Value, out EditorGameObject? gameObject) ||
+            gameObject.WebCanvas is null)
+        {
+            _webCanvasPreview.Request(null, false, false, 0f, 0f);
+            return;
+        }
+
+        SceneWebCanvasPreviewSnapshot snapshot = _webCanvasPreview.Snapshot;
+        bool matchingSnapshot = snapshot.Visible && snapshot.StableId == selectedStableId.Value;
+        UiCanvasScalerSettings settings = gameObject.CanvasScaler?.Settings ?? UiCanvasScalerSettings.Default;
+        (int presentationWidth, int presentationHeight) =
+            SceneWebCanvasPreviewDescriptorResolver.ResolvePresentationSize(in settings);
+        UiCanvasMetrics metrics = default;
+        try
+        {
+            UiDisplayMetrics display = new(
+                presentationWidth,
+                presentationHeight,
+                1f,
+                1f,
+                null,
+                0,
+                0);
+            metrics = UiCanvasScaleResolver.Resolve(in settings, in display);
+        }
+        catch (ArgumentException)
+        {
+            // Inspector 与 preview runtime 会显示权威校验错误；Scene frame 仍保持可定位，
+            // 避免一次非法草稿让整个 Editor Draw 中断。
+        }
+
+        if (matchingSnapshot && snapshot.CanvasMetrics.PresentationWidth > 0)
+        {
+            metrics = snapshot.CanvasMetrics;
+            presentationWidth = metrics.PresentationWidth;
+            presentationHeight = metrics.PresentationHeight;
+        }
+
+        SceneWebCanvasPreviewLayout layout = ResolveWebCanvasPreviewLayout(
+            _canvasMin,
+            _canvasSize,
+            presentationWidth,
+            presentationHeight);
+        DrawPreviewCheckerboard(drawList, in layout);
+        bool ready = matchingSnapshot && snapshot.Ready && snapshot.TextureHandle != 0;
+        if (ready)
+        {
+            // ColorRenderTarget 由 FBO 写入，OpenGL texture V 轴与 ImGui 顶部原点相反。
+            drawList.AddImage(
+                ViewportPanel.CreateTextureRef(snapshot.TextureHandle),
+                layout.Min,
+                layout.Max,
+                new Vector2(0f, 1f),
+                new Vector2(1f, 0f),
+                0xFFFFFFFF);
+        }
+        else
+        {
+            drawList.AddRectFilled(layout.Min, layout.Max, 0xB8_12_16_1D);
+        }
+
+        drawList.AddRect(layout.Min, layout.Max, SelectedColor, 0f, 0, 1.5f);
+        Vector2 mouse = ImGui.GetIO().MousePos;
+        _webCanvasPreviewHovered = _canvasHovered &&
+            ImGui.IsMouseHoveringRect(layout.Min, layout.Max, clip: true);
+        float previewX = 0f;
+        float previewY = 0f;
+        if (_webCanvasPreviewHovered)
+        {
+            previewX = Math.Clamp(
+                (mouse.X - layout.Min.X) / layout.Size.X * presentationWidth,
+                0f,
+                MathF.Max(0f, presentationWidth - 0.001f));
+            previewY = Math.Clamp(
+                (mouse.Y - layout.Min.Y) / layout.Size.Y * presentationHeight,
+                0f,
+                MathF.Max(0f, presentationHeight - 0.001f));
+        }
+
+        _webCanvasPreview.Request(
+            selectedStableId,
+            true,
+            _webCanvasPreviewHovered,
+            previewX,
+            previewY);
+
+        string screen = ready ? snapshot.ScreenId : "loading / unavailable";
+        string label = metrics.PresentationWidth > 0
+            ? $"Canvas (Web) · {screen} · {presentationWidth}×{presentationHeight} px · layout {metrics.LayoutWidth}×{metrics.LayoutHeight}"
+            : $"Canvas (Web) · {screen} · {presentationWidth}×{presentationHeight} px";
+        Vector2 labelSize = ImGui.CalcTextSize(label);
+        Vector2 labelMin = layout.Min + new Vector2(7f, 6f);
+        drawList.AddRectFilled(
+            layout.Min,
+            new Vector2(layout.Max.X, layout.Min.Y + labelSize.Y + 12f),
+            0xD8_18_1B_22);
+        drawList.AddText(labelMin, SelectedColor, label);
+
+        string diagnostic = matchingSnapshot ? snapshot.Diagnostic : string.Empty;
+        if (!ready && !string.IsNullOrWhiteSpace(diagnostic))
+        {
+            string summary = diagnostic.Length <= 120 ? diagnostic : diagnostic[..117] + "...";
+            Vector2 textSize = ImGui.CalcTextSize(summary);
+            Vector2 textPosition = new(
+                layout.Min.X + 10f,
+                MathF.Max(layout.Min.Y + labelSize.Y + 18f, layout.Max.Y - textSize.Y - 10f));
+            drawList.AddText(textPosition, 0xFF_5D_B5_F2, summary);
+            if (_webCanvasPreviewHovered)
+            {
+                ImGui.SetTooltip(diagnostic);
+            }
+        }
+    }
+
+    internal static SceneWebCanvasPreviewLayout ResolveWebCanvasPreviewLayout(
+        Vector2 canvasMin,
+        Vector2 canvasSize,
+        int presentationWidth,
+        int presentationHeight,
+        float inset = 24f)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(presentationWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(presentationHeight);
+        float safeInset = MathF.Max(0f, float.IsFinite(inset) ? inset : 0f);
+        Vector2 available = new(
+            MathF.Max(1f, canvasSize.X - (safeInset * 2f)),
+            MathF.Max(1f, canvasSize.Y - (safeInset * 2f)));
+        float scale = MathF.Min(
+            available.X / presentationWidth,
+            available.Y / presentationHeight);
+        Vector2 size = new(
+            MathF.Max(1f, presentationWidth * scale),
+            MathF.Max(1f, presentationHeight * scale));
+        Vector2 min = canvasMin + ((canvasSize - size) * 0.5f);
+        return new SceneWebCanvasPreviewLayout(min, size);
+    }
+
+    private static void DrawPreviewCheckerboard(
+        ImDrawListPtr drawList,
+        in SceneWebCanvasPreviewLayout layout)
+    {
+        const float TileSize = 24f;
+        int columns = Math.Max(1, (int)MathF.Ceiling(layout.Size.X / TileSize));
+        int rows = Math.Max(1, (int)MathF.Ceiling(layout.Size.Y / TileSize));
+        for (int y = 0; y < rows; y++)
+        {
+            float top = layout.Min.Y + (y * TileSize);
+            float bottom = MathF.Min(layout.Max.Y, top + TileSize);
+            for (int x = 0; x < columns; x++)
+            {
+                float left = layout.Min.X + (x * TileSize);
+                float right = MathF.Min(layout.Max.X, left + TileSize);
+                uint color = ((x + y) & 1) == 0 ? 0xFF_2A_2E_36 : 0xFF_20_23_2A;
+                drawList.AddRectFilled(new Vector2(left, top), new Vector2(right, bottom), color);
+            }
+        }
+    }
+
     private void DrawGrid(ImDrawListPtr drawList)
     {
         SceneAuthoringCameraSnapshot snapshot = _camera.Snapshot;
@@ -1139,7 +1322,10 @@ internal sealed class SceneViewPanel(
     private void HandleSceneMouse(EditorSelection selection)
     {
         bool hasSelection = selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
-        if (!_canvasHovered || _toolOverlayHovered || (!MaterialBrushActive && hasSelection && IsGizmoCapturingMouse()))
+        if (!_canvasHovered ||
+            _toolOverlayHovered ||
+            _webCanvasPreviewHovered ||
+            (!MaterialBrushActive && hasSelection && IsGizmoCapturingMouse()))
         {
             return;
         }
@@ -1606,6 +1792,7 @@ internal sealed class SceneViewPanel(
             return;
         }
 
+        _webCanvasPreview?.Request(null, false, false, 0f, 0f);
         _worldTexture?.Dispose();
         _disposed = true;
     }
@@ -1619,6 +1806,13 @@ internal enum SceneGizmoHandle
     Both,
     Rotate,
     Uniform,
+}
+
+internal readonly record struct SceneWebCanvasPreviewLayout(
+    Vector2 Min,
+    Vector2 Size)
+{
+    public Vector2 Max => Min + Size;
 }
 
 internal readonly record struct SceneGizmoGeometry(
