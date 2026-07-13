@@ -202,6 +202,48 @@ public sealed class GamePresentationTests
         Assert.True(restored.MaximizeOnPlay);
     }
 
+    /// <summary>验证真实窗口探针只在 Hosting commit 与面板 texture/revision/world rect 完全一致时通过。</summary>
+    [Fact]
+    public void ScriptedPresentationSnapshotRejectsMixedRevisionOrGeometry()
+    {
+        GamePresentationDescriptor descriptor = CreateSquareDescriptor();
+        PresentationViewport worldContent = descriptor.WorldContentRect;
+        GameViewViewportSnapshot matching = GameViewViewportSnapshot.Create(
+            descriptor.PresentationWidth,
+            descriptor.PresentationHeight,
+            descriptor.PresentationRevision,
+            in worldContent,
+            Vector2.Zero,
+            new Vector2(800f, 600f),
+            Vector2.One,
+            0f,
+            Vector2.Zero);
+        ScriptedGameViewPresentationSnapshot valid = ScriptedGameViewPresentationSnapshot.Create(
+            "resolution-800-800",
+            0f,
+            maximizeOnPlay: true,
+            isMaximized: true,
+            in descriptor,
+            in matching,
+            new Vector2(1.5f));
+        GameViewViewportSnapshot stale = matching with { PresentationRevision = descriptor.PresentationRevision + 1 };
+        ScriptedGameViewPresentationSnapshot mixed = ScriptedGameViewPresentationSnapshot.Create(
+            "resolution-800-800",
+            0f,
+            maximizeOnPlay: true,
+            isMaximized: true,
+            in descriptor,
+            in stale,
+            Vector2.One);
+
+        Assert.True(valid.IsSynchronized);
+        Assert.Equal(GamePresentationSource.EditorFixedResolution, valid.Source);
+        Assert.Equal((800, 800), (valid.PresentationWidth, valid.PresentationHeight));
+        Assert.True(valid.MaximizeOnPlay);
+        Assert.True(valid.IsMaximized);
+        Assert.False(mixed.IsSynchronized);
+    }
+
     /// <summary>验证 ratio preset 受可用区域约束并拒绝 GPU 纹理溢出。</summary>
     [Fact]
     public void PresetResolverKeepsAspectInsideAvailableFramebufferAndRejectsGpuOverflow()

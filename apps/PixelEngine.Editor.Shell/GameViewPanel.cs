@@ -149,6 +149,21 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
 
     internal string LastDiagnostic { get; private set; } = string.Empty;
 
+    /// <summary>捕获 toolbar 请求、已提交 presentation 与当前可见 viewport 的同帧探针快照。</summary>
+    internal ScriptedGameViewPresentationSnapshot CaptureScriptedPresentationSnapshot()
+    {
+        GamePresentationDescriptor descriptor = _descriptorProvider();
+        GameViewViewportSnapshot viewport = LastViewportSnapshot;
+        return ScriptedGameViewPresentationSnapshot.Create(
+            SelectedPresetId,
+            ScalePercent,
+            MaximizeOnPlay,
+            IsMaximized,
+            in descriptor,
+            in viewport,
+            LastFramebufferScale);
+    }
+
     public EditorViewportContract CaptureContract(EditorMode mode)
     {
         return EditorGameViewContract.GameView(mode);
@@ -915,5 +930,73 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private static float NormalizeScale(float scale)
     {
         return float.IsFinite(scale) && scale > 0f ? scale : 1f;
+    }
+}
+
+/// <summary>
+/// Game View 真实窗口探针的原子 presentation 快照；请求 preset、Hosting commit 与面板纹理 revision 必须一致。
+/// </summary>
+internal readonly record struct ScriptedGameViewPresentationSnapshot(
+    bool IsSynchronized,
+    string PresetId,
+    float ScalePercent,
+    bool MaximizeOnPlay,
+    bool IsMaximized,
+    GamePresentationSource Source,
+    int PresentationWidth,
+    int PresentationHeight,
+    long PresentationRevision,
+    PresentationViewport WorldContentRect,
+    GameViewRect DisplayAreaRect,
+    GameViewRect ImageRect,
+    GameViewRect VisibleViewportRect,
+    Vector2 FramebufferScale)
+{
+    public static ScriptedGameViewPresentationSnapshot Missing => new(
+        IsSynchronized: false,
+        PresetId: string.Empty,
+        ScalePercent: 0f,
+        MaximizeOnPlay: false,
+        IsMaximized: false,
+        Source: default,
+        PresentationWidth: 0,
+        PresentationHeight: 0,
+        PresentationRevision: 0,
+        WorldContentRect: default,
+        DisplayAreaRect: default,
+        ImageRect: default,
+        VisibleViewportRect: default,
+        FramebufferScale: Vector2.One);
+
+    public static ScriptedGameViewPresentationSnapshot Create(
+        string presetId,
+        float scalePercent,
+        bool maximizeOnPlay,
+        bool isMaximized,
+        in GamePresentationDescriptor descriptor,
+        in GameViewViewportSnapshot viewport,
+        Vector2 framebufferScale)
+    {
+        bool synchronized = descriptor.IsValid &&
+            viewport.IsValid &&
+            viewport.TextureWidth == descriptor.PresentationWidth &&
+            viewport.TextureHeight == descriptor.PresentationHeight &&
+            viewport.PresentationRevision == descriptor.PresentationRevision &&
+            viewport.WorldContentRect == descriptor.WorldContentRect;
+        return new ScriptedGameViewPresentationSnapshot(
+            synchronized,
+            presetId,
+            scalePercent,
+            maximizeOnPlay,
+            isMaximized,
+            descriptor.Source,
+            descriptor.PresentationWidth,
+            descriptor.PresentationHeight,
+            descriptor.PresentationRevision,
+            descriptor.WorldContentRect,
+            viewport.DisplayAreaRect,
+            viewport.ImageRect,
+            viewport.VisibleViewportRect,
+            framebufferScale);
     }
 }

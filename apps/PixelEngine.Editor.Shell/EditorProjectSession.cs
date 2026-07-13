@@ -75,6 +75,13 @@ internal sealed class EditorProjectSession : IDisposable
 
     public long EditorBridgeFrameCount => _editorHost.BridgeFrameCount;
 
+    /// <summary>捕获 Game View 实际提交和显示的 presentation，同步性由探针快照 fail-closed 表示。</summary>
+    public ScriptedGameViewPresentationSnapshot CaptureScriptedGameViewPresentation()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedGameViewPresentation();
+    }
+
     internal void FlushPendingAuthoringEdits()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

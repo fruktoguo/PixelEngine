@@ -74,6 +74,13 @@ internal sealed class EditorShellHostExtension :
 
     public long BridgeFrameCount => Bridge?.FrameIndex ?? 0;
 
+    /// <summary>捕获 Game View toolbar、Hosting presentation 与 viewport 的同帧脚本化验收快照。</summary>
+    public ScriptedGameViewPresentationSnapshot CaptureScriptedGameViewPresentation()
+    {
+        return _gameViewPanel?.CaptureScriptedPresentationSnapshot() ??
+            ScriptedGameViewPresentationSnapshot.Missing;
+    }
+
     public EditorRenderBridge? Bridge { get; private set; }
 
     public bool TryShowPanel(string title)

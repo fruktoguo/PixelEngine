@@ -199,6 +199,31 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("pixelengine.player-window-mode-probe/v1", script, StringComparison.Ordinal);
     }
 
+    /// <summary>验证 Game View 矩阵从隔离 workspace 驱动真实 preset/maximize，并要求原子 presentation 与非空 framebuffer。</summary>
+    [Fact]
+    public void EditorGameViewPresentationProbeRequiresRealCommittedMatrix()
+    {
+        string root = FindRepositoryRoot();
+        string script = File.ReadAllText(Path.Combine(root, "tools", "run-editor-gameview-presentation-probe.ps1"));
+        string editorSource = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
+
+        Assert.Contains("aspect-16-9", script, StringComparison.Ordinal);
+        Assert.Contains("aspect-4-3", script, StringComparison.Ordinal);
+        Assert.Contains("aspect-9-16", script, StringComparison.Ordinal);
+        Assert.Contains("resolution-1920-1080", script, StringComparison.Ordinal);
+        Assert.Contains("MaximizeOnPlay", script, StringComparison.Ordinal);
+        Assert.Contains("editor-workspace.json", script, StringComparison.Ordinal);
+        Assert.Contains("presentation_synchronized", script, StringComparison.Ordinal);
+        Assert.Contains("world_content", script, StringComparison.Ordinal);
+        Assert.Contains("Get-BmpEvidence", script, StringComparison.Ordinal);
+        Assert.Contains("chromeSampledUniqueColors", script, StringComparison.Ordinal);
+        Assert.Contains("rightSampledUniqueColors", script, StringComparison.Ordinal);
+        Assert.Contains("dockSampledUniqueColors", script, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.editor-gameview-presentation-probe/v1", script, StringComparison.Ordinal);
+        Assert.Contains("Engine.Probe.RegisterBeforeSwapBuffers", editorSource, StringComparison.Ordinal);
+        Assert.Contains("Editor framebuffer 未在交换缓冲前完成捕获", editorSource, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// 验证本机正式输出会写出根级 SHA256SUMS，并在 manifest / README 中登记，便于人工验收绑定到已验证产物。
     /// </summary>

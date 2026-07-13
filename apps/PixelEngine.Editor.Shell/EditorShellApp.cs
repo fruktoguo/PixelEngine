@@ -1444,6 +1444,7 @@ internal sealed class EditorShellApp
 
         if (state.SecondPlayEntered && executedTicks >= 74)
         {
+            state.Presentation = CurrentSession.CaptureScriptedGameViewPresentation();
             state.SecondUiStackDepth = CaptureGameUiStackDepth(engine);
             state.SecondControllerFound = TryCaptureGameUiControllerProbe(
                 engine,
@@ -1463,10 +1464,11 @@ internal sealed class EditorShellApp
                 state.SecondPlayEntered &&
                 state.SecondPlayUiRestored &&
                 secondVisualReady &&
+                state.Presentation.IsSynchronized &&
                 engine.Mode == EngineExecutionMode.Play;
             state.Diagnostic = state.Completed
                 ? "Game View 玩家移动与 Play→Stop→Play UI 生命周期探针完成。"
-                : $"探针未满足验收：first={state.FirstPlayVerified}, exit={state.FirstPlayExited}, exit_stack={state.ExitUiStackDepth}, second={state.SecondPlayEntered}, second_stack={state.SecondUiStackDepth}, controller={state.SecondControllerFound}/{state.SecondControllerEnabled}/{state.SecondControllerFaulted}, second_visual={state.SecondVisualCommands}, exception={state.SecondControllerException}。";
+                : $"探针未满足验收：first={state.FirstPlayVerified}, exit={state.FirstPlayExited}, exit_stack={state.ExitUiStackDepth}, second={state.SecondPlayEntered}, second_stack={state.SecondUiStackDepth}, controller={state.SecondControllerFound}/{state.SecondControllerEnabled}/{state.SecondControllerFaulted}, second_visual={state.SecondVisualCommands}, presentation={state.Presentation.IsSynchronized}, exception={state.SecondControllerException}。";
             state.Finished = true;
         }
     }
@@ -1565,9 +1567,10 @@ internal sealed class EditorShellApp
 
     private static void WriteScriptedGameViewProbeSummary(ScriptedGameViewProbeState state)
     {
+        ScriptedGameViewPresentationSnapshot presentation = state.Presentation;
         Console.WriteLine(
             "editor_gameview_probe " +
-            "schema=pixelengine.editor-gameview-probe/v1, " +
+            "schema=pixelengine.editor-gameview-probe/v2, " +
             $"completed={state.Completed}, " +
             $"input_registered={state.InputRegistered}, " +
             $"play_entered={state.PlayEntered}, " +
@@ -1587,7 +1590,32 @@ internal sealed class EditorShellApp
             $"second_controller_faulted={state.SecondControllerFaulted}, " +
             $"second_visual_commands={state.SecondVisualCommands}, " +
             $"second_play_ui_restored={state.SecondPlayUiRestored}, " +
+            $"presentation_synchronized={presentation.IsSynchronized}, " +
+            $"preset_id={SanitizeSummaryValue(presentation.PresetId)}, " +
+            $"scale_percent={presentation.ScalePercent.ToString("F1", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"maximize_on_play={presentation.MaximizeOnPlay}, " +
+            $"maximized={presentation.IsMaximized}, " +
+            $"presentation_source={presentation.Source}, " +
+            $"presentation={presentation.PresentationWidth}x{presentation.PresentationHeight}, " +
+            $"presentation_revision={presentation.PresentationRevision}, " +
+            $"world_content={FormatPresentationViewport(presentation.WorldContentRect)}, " +
+            $"display_area={FormatGameViewRect(presentation.DisplayAreaRect)}, " +
+            $"image_rect={FormatGameViewRect(presentation.ImageRect)}, " +
+            $"visible_viewport={FormatGameViewRect(presentation.VisibleViewportRect)}, " +
+            $"framebuffer_scale={presentation.FramebufferScale.X.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}x{presentation.FramebufferScale.Y.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
+    private static string FormatGameViewRect(in GameViewRect rect)
+    {
+        return string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"{rect.X:F3}:{rect.Y:F3}:{rect.Width:F3}x{rect.Height:F3}");
+    }
+
+    private static string FormatPresentationViewport(in PresentationViewport viewport)
+    {
+        return $"{viewport.X}:{viewport.Y}:{viewport.Width}x{viewport.Height}:{viewport.SourceWidth}x{viewport.SourceHeight}:{viewport.TargetWidth}x{viewport.TargetHeight}";
     }
 
     private void RunScriptedProbeActions(
@@ -2462,13 +2490,82 @@ internal sealed class EditorShellApp
             _ = Directory.CreateDirectory(directory);
         }
 
-        int width = shellWindow.Window.Width;
-        int height = shellWindow.Window.Height;
-        byte[] bgra = new byte[checked(width * height * 4)];
-        shellWindow.Window.BindPresentationFramebuffer();
-        shellWindow.Window.Gl.ReadPixels(0, 0, (uint)width, (uint)height, PixelFormat.Bgra, PixelType.UnsignedByte, bgra);
+        int width = 0;
+        int height = 0;
+        byte[]? bgra = null;
+        void CaptureCompletedFrame()
+        {
+            width = shellWindow.Window.Width;
+            height = shellWindow.Window.Height;
+            bgra = new byte[checked(width * height * 4)];
+            shellWindow.Window.BindPresentationFramebuffer();
+            shellWindow.Window.Gl.ReadPixels(
+                0,
+                0,
+                (uint)width,
+                (uint)height,
+                PixelFormat.Bgra,
+                PixelType.UnsignedByte,
+                bgra);
+        }
+
+        if (CurrentSession is { } session)
+        {
+            // DXGI/WGL presenter 会在 SwapBuffers 后立即以 WRITE_DISCARD 锁定下一帧共享纹理；
+            // 此时再读 framebuffer 得到的是未定义内容。与 Player/Demo 证据路径一致，
+            // 只在完整 Editor UI 已绘制、交换缓冲前执行一次 readback。
+            using IDisposable registration = session.Engine.Probe.RegisterBeforeSwapBuffers(CaptureCompletedFrame);
+            session.RunOneTick(0);
+        }
+        else
+        {
+            DrawProjectPickerCaptureFrame(shellWindow, CaptureCompletedFrame);
+        }
+
+        if (bgra is null || width <= 0 || height <= 0)
+        {
+            throw new InvalidOperationException("Editor framebuffer 未在交换缓冲前完成捕获。");
+        }
+
         WriteBgraBottomUpBmp(path, width, height, bgra);
         Console.WriteLine($"EditorShell framebuffer 截图已写入：{path}");
+    }
+
+    private void DrawProjectPickerCaptureFrame(EditorShellWindow shellWindow, Action captureCompletedFrame)
+    {
+        ArgumentNullException.ThrowIfNull(captureCompletedFrame);
+        shellWindow.Window.DoEvents();
+        if (!shellWindow.Gui.IsRunning)
+        {
+            shellWindow.Gui.Initialize();
+        }
+
+        Layout.ConfigureImGui();
+        shellWindow.Window.BindPresentationFramebuffer();
+        shellWindow.Window.Gl.Viewport(
+            0,
+            0,
+            (uint)shellWindow.Window.Width,
+            (uint)shellWindow.Window.Height);
+        shellWindow.Window.Gl.Disable(EnableCap.ScissorTest);
+        shellWindow.Window.Gl.ClearColor(0.125f, 0.133f, 0.149f, 1f);
+        shellWindow.Window.Gl.Clear(ClearBufferMask.ColorBufferBit);
+        shellWindow.Gui.SetUiScale(Preferences.Current.UiScale);
+        shellWindow.Gui.SetLayoutPersistence(Preferences.Current.SaveLayoutOnExit);
+        shellWindow.Gui.DrawFrame(
+            0f,
+            shellWindow.Window.LogicalWidth,
+            shellWindow.Window.LogicalHeight,
+            _ =>
+            {
+                EditorMainMenuBar.DispatchShortcuts(this);
+                ProjectPicker.Draw(this);
+                PreferencesWindow.Draw();
+            },
+            shellWindow.Window.FramebufferScaleX,
+            shellWindow.Window.FramebufferScaleY);
+        captureCompletedFrame();
+        shellWindow.Window.SwapBuffers();
     }
 
     private static void WriteBgraBottomUpBmp(string path, int width, int height, ReadOnlySpan<byte> bgra)
@@ -2719,6 +2816,8 @@ internal sealed class ScriptedGameViewProbeState
     public int SecondUiStackDepth;
 
     public int SecondVisualCommands;
+
+    public ScriptedGameViewPresentationSnapshot Presentation = ScriptedGameViewPresentationSnapshot.Missing;
 
     public string SecondControllerException = string.Empty;
 
