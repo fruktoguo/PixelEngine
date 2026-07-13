@@ -38,9 +38,22 @@ internal sealed class GameObjectHierarchyPanel(
         }
 
         SyncSelection(context.Selection);
-        DrawToolbar();
+        bool canModify = CanModifyAuthoringScene();
+        if (!canModify)
+        {
+            _renameTarget = 0;
+            _renameBuffer = string.Empty;
+            _draggingStableId = null;
+        }
+
+        DrawToolbar(canModify);
+        if (!canModify)
+        {
+            ImGui.TextDisabled("Play/Paused：Authoring 层级只读");
+        }
+
         ImGui.Separator();
-        DrawSceneStateHeader();
+        DrawSceneStateHeader(canModify);
         ImGuiTreeNodeFlags sceneFlags = ImGuiTreeNodeFlags.DefaultOpen |
             ImGuiTreeNodeFlags.OpenOnArrow |
             ImGuiTreeNodeFlags.SpanAvailWidth;
@@ -65,12 +78,16 @@ internal sealed class GameObjectHierarchyPanel(
             context.Selection.Clear();
         }
 
-        DrawRootDropTarget();
+        if (canModify)
+        {
+            DrawRootDropTarget();
+        }
+
         if (sceneOpen)
         {
             for (int i = 0; i < _scene.RootIds.Count; i++)
             {
-                DrawNode(_scene.RootIds[i], context.Selection);
+                DrawNode(_scene.RootIds[i], context.Selection, canModify);
             }
 
             DrawGeneratedMarkers();
@@ -83,7 +100,11 @@ internal sealed class GameObjectHierarchyPanel(
             _draggingStableId = null;
         }
 
-        DrawContextMenu(null);
+        if (canModify)
+        {
+            DrawContextMenu(null);
+        }
+
         ImGui.End();
     }
 
@@ -208,8 +229,14 @@ internal sealed class GameObjectHierarchyPanel(
         }
     }
 
-    private void DrawToolbar()
+    private bool CanModifyAuthoringScene()
     {
+        return (_modeProvider?.Invoke() ?? EditorMode.Edit) == EditorMode.Edit;
+    }
+
+    private void DrawToolbar(bool canModify)
+    {
+        ImGui.BeginDisabled(!canModify);
         if (ImGui.Button("+##hierarchy-create"))
         {
             ImGui.OpenPopup("hierarchy-create-menu");
@@ -238,12 +265,13 @@ internal sealed class GameObjectHierarchyPanel(
             ImGui.SetTooltip("Create GameObject");
         }
 
+        ImGui.EndDisabled();
         ImGui.SameLine();
         ImGui.SetNextItemWidth(-1f);
         _ = ImGui.InputTextWithHint("##hierarchy-search", "Search", ref _search, 128);
     }
 
-    private void DrawSceneStateHeader()
+    private void DrawSceneStateHeader(bool canModify)
     {
         bool allVisible = true;
         bool allPickable = true;
@@ -253,6 +281,7 @@ internal sealed class GameObjectHierarchyPanel(
             allPickable &= gameObject.ScenePickable;
         }
 
+        ImGui.BeginDisabled(!canModify);
         if (DrawVisibilityToggle("hierarchy-visible-all", allVisible, allObjects: true))
         {
             _scene.SetAllSceneVisible(!allVisible);
@@ -263,13 +292,14 @@ internal sealed class GameObjectHierarchyPanel(
         {
             _scene.SetAllScenePickable(!allPickable);
         }
+        ImGui.EndDisabled();
 
         ImGui.SameLine();
         ImGui.TextDisabled("Name");
         ImGui.Separator();
     }
 
-    private void DrawNode(int stableId, EditorSelection selection)
+    private void DrawNode(int stableId, EditorSelection selection, bool canModify)
     {
         EditorGameObject gameObject = _scene.Get(stableId);
         if (!MatchesSearch(_scene, stableId, _search))
@@ -293,6 +323,7 @@ internal sealed class GameObjectHierarchyPanel(
             flags |= ImGuiTreeNodeFlags.Selected;
         }
 
+        ImGui.BeginDisabled(!canModify);
         if (DrawVisibilityToggle($"hierarchy-visible-{stableId}", gameObject.SceneVisible, allObjects: false))
         {
             _scene.SetSceneVisible(stableId, !gameObject.SceneVisible);
@@ -303,6 +334,7 @@ internal sealed class GameObjectHierarchyPanel(
         {
             _scene.SetScenePickable(stableId, !gameObject.ScenePickable);
         }
+        ImGui.EndDisabled();
 
         ImGui.SameLine();
         bool effectivelyVisible = _scene.IsSceneVisible(stableId);
@@ -325,19 +357,22 @@ internal sealed class GameObjectHierarchyPanel(
             Select(stableId, selection);
         }
 
-        TrackManualDrag(stableId, gameObject.Name);
-        DrawManualDropTarget(stableId);
-        DrawContextMenu(stableId);
-        if (_renameTarget == stableId)
+        if (canModify)
         {
-            DrawRenameInline(stableId);
+            TrackManualDrag(stableId, gameObject.Name);
+            DrawManualDropTarget(stableId);
+            DrawContextMenu(stableId);
+            if (_renameTarget == stableId)
+            {
+                DrawRenameInline(stableId);
+            }
         }
 
         if (open)
         {
             for (int i = 0; i < gameObject.Children.Count; i++)
             {
-                DrawNode(gameObject.Children[i], selection);
+                DrawNode(gameObject.Children[i], selection, canModify);
             }
 
             ImGui.TreePop();

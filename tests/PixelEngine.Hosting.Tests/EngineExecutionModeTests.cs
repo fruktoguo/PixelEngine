@@ -222,6 +222,63 @@ public sealed class EngineExecutionModeTests
     }
 
     /// <summary>
+    /// 验证临时 Play 已运行或暂停时重复进入不会再次保存、覆盖或改变原快照来源。
+    /// </summary>
+    [Fact]
+    public void ActiveTemporaryPlaySessionRejectsNestedEntryWithoutOverwritingSnapshot()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        RecordingPlaySnapshotStore store = new();
+        EngineEditorPlaySessionService service = new(engine, store);
+
+        Assert.True(service.EnterPlayTemporary().Succeeded);
+        Assert.False(service.EnterPlayTemporary().Succeeded);
+        Assert.False(service.EnterPlayCurrent().Succeeded);
+        Assert.Equal(["save"], store.Calls);
+
+        Assert.True(service.PausePlay().Succeeded);
+        Assert.False(service.EnterPlayTemporary().Succeeded);
+        Assert.False(service.EnterPlayCurrent().Succeeded);
+        EditorPlaySessionSnapshot paused = service.Capture();
+        Assert.Equal(EditorMode.Paused, paused.Mode);
+        Assert.Equal(EditorPlaySource.TemporarySnapshot, paused.Source);
+        Assert.True(paused.TemporarySnapshotActive);
+        Assert.Equal(["save"], store.Calls);
+
+        Assert.True(service.ExitPlay().Succeeded);
+        Assert.Equal(["save", "restore"], store.Calls);
+    }
+
+    /// <summary>
+    /// 验证当前态 Play 拒绝嵌套临时 Play，且不会误写临时快照或在退出时误恢复。
+    /// </summary>
+    [Fact]
+    public void ActiveCurrentStatePlayRejectsNestedTemporaryEntryWithoutSavingSnapshot()
+    {
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        RecordingPlaySnapshotStore store = new();
+        EngineEditorPlaySessionService service = new(engine, store);
+
+        Assert.True(service.EnterPlayCurrent().Succeeded);
+        Assert.False(service.EnterPlayTemporary().Succeeded);
+        Assert.True(service.PausePlay().Succeeded);
+        Assert.False(service.EnterPlayTemporary().Succeeded);
+
+        EditorPlaySessionSnapshot paused = service.Capture();
+        Assert.Equal(EditorMode.Paused, paused.Mode);
+        Assert.Equal(EditorPlaySource.CurrentState, paused.Source);
+        Assert.False(paused.TemporarySnapshotActive);
+        Assert.Empty(store.Calls);
+
+        Assert.True(service.ExitPlay().Succeeded);
+        Assert.Empty(store.Calls);
+    }
+
+    /// <summary>
     /// 验证 Engine 暴露脚本程序集注册入口，且重复注册不会产生重复项。
     /// </summary>
     [Fact]

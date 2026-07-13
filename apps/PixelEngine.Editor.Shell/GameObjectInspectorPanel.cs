@@ -157,6 +157,19 @@ internal sealed class GameObjectInspectorPanel(
             return;
         }
 
+        EditorMode mode = CaptureMode();
+        bool canModify = mode == EditorMode.Edit;
+        if (!canModify)
+        {
+            ImGui.TextColored(
+                new Vector4(0.95f, 0.70f, 0.25f, 1f),
+                mode == EditorMode.Paused
+                    ? "Play 已暂停：Authoring 数据只读"
+                    : "Play 运行中：Authoring 数据只读");
+            ImGui.Separator();
+        }
+
+        ImGui.BeginDisabled(!canModify);
         DrawHeader(gameObject);
         bool transformOpen = DrawInspectorComponentHeader("Transform##gameobject-transform");
         bool resetTransform = false;
@@ -177,6 +190,7 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         DrawComponents(gameObject);
+        ImGui.EndDisabled();
         if (!string.Equals(Status, ReadyStatus, StringComparison.Ordinal))
         {
             ImGui.Separator();
@@ -193,7 +207,7 @@ internal sealed class GameObjectInspectorPanel(
     /// </summary>
     internal void PrepareFrame(int? selectedStableId)
     {
-        EditorMode mode = _modeProvider?.Invoke() ?? EditorMode.Edit;
+        EditorMode mode = CaptureMode();
         bool targetReplaced = _transformEditStableId.HasValue &&
             (_scene.SceneGeneration != _transformEditSceneGeneration ||
              !_scene.TryGet(_transformEditStableId.Value, out EditorGameObject? currentTarget) ||
@@ -226,6 +240,11 @@ internal sealed class GameObjectInspectorPanel(
 
     internal bool BeginNameEdit(int stableId)
     {
+        if (!CanModifyAuthoringScene())
+        {
+            return false;
+        }
+
         CommitPendingTransformEdit();
         CommitPendingComponentFieldEdit();
         if (_nameEditStableId.HasValue && _nameEditStableId != stableId)
@@ -265,6 +284,11 @@ internal sealed class GameObjectInspectorPanel(
 
     internal bool BeginTransformEdit(int stableId)
     {
+        if (!CanModifyAuthoringScene())
+        {
+            return false;
+        }
+
         CommitPendingNameEdit();
         CommitPendingComponentFieldEdit();
         if (_transformEditStableId.HasValue && _transformEditStableId != stableId)
@@ -1380,6 +1404,11 @@ internal sealed class GameObjectInspectorPanel(
     internal bool BeginComponentFieldEdit(int stableId, int componentIndex, string fieldName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        if (!CanModifyAuthoringScene())
+        {
+            return false;
+        }
+
         if (_decimalFieldTextEdit is { } decimalEdit &&
             !decimalEdit.HasKey(stableId, componentIndex, fieldName))
         {
@@ -1423,6 +1452,16 @@ internal sealed class GameObjectInspectorPanel(
             PreserveEmptyPrefabOverride: false,
             Applied: false);
         return true;
+    }
+
+    private EditorMode CaptureMode()
+    {
+        return _modeProvider?.Invoke() ?? EditorMode.Edit;
+    }
+
+    private bool CanModifyAuthoringScene()
+    {
+        return CaptureMode() == EditorMode.Edit;
     }
 
     internal bool ApplyComponentFieldEdit(int stableId, int componentIndex, string fieldName, string? value)

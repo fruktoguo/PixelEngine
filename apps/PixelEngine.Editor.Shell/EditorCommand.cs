@@ -27,9 +27,15 @@ internal sealed class EditorUndoStack
     /// </summary>
     public Action? BeforeOperation { get; set; }
 
-    public bool CanUndo => _undo.Count != 0;
+    /// <summary>
+    /// 返回当前 authoring scene 是否允许写入。Play/Paused 时由 Editor session 关闭，
+    /// 作为菜单、面板与脚本化入口之外的最后一道统一写屏障。
+    /// </summary>
+    public Func<bool>? CanModifyScene { get; set; }
 
-    public bool CanRedo => _redo.Count != 0;
+    public bool CanUndo => IsModificationAllowed() && _undo.Count != 0;
+
+    public bool CanRedo => IsModificationAllowed() && _redo.Count != 0;
 
     public string? UndoName => _undo.Count == 0 ? null : _undo.Peek().Name;
 
@@ -39,6 +45,11 @@ internal sealed class EditorUndoStack
     {
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(command);
+        if (!IsModificationAllowed())
+        {
+            return;
+        }
+
         PrepareOperation();
         command.Execute(scene);
         _undo.Push(command);
@@ -48,6 +59,11 @@ internal sealed class EditorUndoStack
     public bool Undo(EditorSceneModel scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
+        if (!IsModificationAllowed())
+        {
+            return false;
+        }
+
         PrepareOperation();
         if (_undo.Count == 0)
         {
@@ -63,6 +79,11 @@ internal sealed class EditorUndoStack
     public bool Redo(EditorSceneModel scene)
     {
         ArgumentNullException.ThrowIfNull(scene);
+        if (!IsModificationAllowed())
+        {
+            return false;
+        }
+
         PrepareOperation();
         if (_redo.Count == 0)
         {
@@ -79,6 +100,11 @@ internal sealed class EditorUndoStack
     {
         _undo.Clear();
         _redo.Clear();
+    }
+
+    private bool IsModificationAllowed()
+    {
+        return CanModifyScene?.Invoke() ?? true;
     }
 
     private void PrepareOperation()

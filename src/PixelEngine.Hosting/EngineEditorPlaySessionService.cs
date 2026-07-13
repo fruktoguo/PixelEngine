@@ -83,6 +83,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     private readonly IEditorPlaySnapshotStore? _snapshotStore = snapshotStore;
     private EditorPlaySource _source = EditorPlaySource.CurrentState;
     private bool _temporarySnapshotActive;
+    private bool _sessionActive;
     private string _statusMessage = string.Empty;
 
     /// <summary>
@@ -109,10 +110,17 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>模式切换结果。</returns>
     public EditorPlaySessionResult EnterPlayCurrent()
     {
+        if (_sessionActive)
+        {
+            _statusMessage = "Play session 已经处于运行或暂停状态。";
+            return Failed(_statusMessage);
+        }
+
         // 直接 Play：不捕获快照，退出时保留运行期对世界造成的修改。
         _engine.EnterPlayMode();
         _source = EditorPlaySource.CurrentState;
         _temporarySnapshotActive = false;
+        _sessionActive = true;
         _statusMessage = "以当前世界态进入 Play。";
         return Succeeded(_statusMessage);
     }
@@ -123,6 +131,12 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
     /// <returns>模式切换结果。</returns>
     public EditorPlaySessionResult EnterPlayTemporary()
     {
+        if (_sessionActive)
+        {
+            _statusMessage = "Play session 已经处于运行或暂停状态。";
+            return Failed(_statusMessage);
+        }
+
         // 临时 Play：进入前保存世界快照，退出 Edit 时回滚到进入 Play 前的编辑态。
         if (_snapshotStore is null)
         {
@@ -140,6 +154,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
         _engine.EnterPlayMode();
         _source = EditorPlaySource.TemporarySnapshot;
         _temporarySnapshotActive = true;
+        _sessionActive = true;
         _statusMessage = save.Message;
         return Succeeded(_statusMessage);
     }
@@ -210,6 +225,7 @@ public sealed class EngineEditorPlaySessionService(Engine engine, IEditorPlaySna
 
         _engine.EnterEditMode();
         _source = EditorPlaySource.CurrentState;
+        _sessionActive = false;
         return Succeeded(_statusMessage);
     }
 

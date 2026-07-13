@@ -235,6 +235,7 @@ internal sealed class EditorShellHostExtension :
 
         _sceneModel = sceneModel ?? throw new ArgumentNullException(nameof(sceneModel));
         _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
+        _undoStack.CanModifyScene = () => CapturePlayMode() == EditorMode.Edit;
         _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
         _authoringWorld = authoringWorld ?? throw new ArgumentNullException(nameof(authoringWorld));
     }

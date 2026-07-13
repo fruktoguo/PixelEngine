@@ -3,6 +3,7 @@ using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
 using System.Numerics;
 using Xunit;
+using EditorSurfaceMode = PixelEngine.Editor.EditorMode;
 
 namespace PixelEngine.Hosting.Tests;
 
@@ -12,6 +13,100 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class GameObjectInspectorPanelTests
 {
+    /// <summary>
+    /// 验证 Play/Paused 会在 Undo 栈边界阻止所有 authoring 命令，同时保留既有历史，
+    /// 回到 Edit 后才能继续 Undo/Redo。
+    /// </summary>
+    [Fact]
+    public void UndoStackBlocksAuthoringWritesOutsideEditMode()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("play-mode-write-gate");
+        EditorGameObject gameObject = scene.Create("Original");
+        EditorUndoStack undo = new();
+        EditorSurfaceMode mode = EditorSurfaceMode.Play;
+        undo.CanModifyScene = () => mode == EditorSurfaceMode.Edit;
+        scene.MarkSaved();
+
+        undo.Execute(scene, new RenameGameObjectCommand(gameObject.StableId, "Blocked"));
+
+        Assert.Equal("Original", gameObject.Name);
+        Assert.False(scene.IsDirty);
+        Assert.False(undo.CanUndo);
+
+        mode = EditorSurfaceMode.Edit;
+        undo.Execute(scene, new RenameGameObjectCommand(gameObject.StableId, "Editable"));
+        Assert.Equal("Editable", gameObject.Name);
+        Assert.True(undo.CanUndo);
+
+        mode = EditorSurfaceMode.Paused;
+        Assert.False(undo.CanUndo);
+        Assert.False(undo.Undo(scene));
+        undo.Execute(scene, new SetGameObjectEnabledCommand(gameObject.StableId, enabled: false));
+        Assert.True(gameObject.Enabled);
+        Assert.Equal("Editable", gameObject.Name);
+
+        mode = EditorSurfaceMode.Edit;
+        Assert.True(undo.Undo(scene));
+        Assert.Equal("Original", gameObject.Name);
+        Assert.True(undo.CanRedo);
+
+        mode = EditorSurfaceMode.Play;
+        Assert.False(undo.CanRedo);
+        Assert.False(undo.Redo(scene));
+        Assert.Equal("Original", gameObject.Name);
+
+        mode = EditorSurfaceMode.Edit;
+        Assert.True(undo.Redo(scene));
+        Assert.Equal("Editable", gameObject.Name);
+    }
+
+    /// <summary>
+    /// 验证 Inspector 的连续编辑入口自身也遵守 Play/Paused 只读策略，
+    /// 避免测试钩子或未来非 ImGui 调用绕过 disabled UI。
+    /// </summary>
+    [Fact]
+    public void InspectorRejectsAuthoringEditsOutsideEditMode()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("inspector-play-read-only");
+        EditorGameObject gameObject = scene.Create("Player");
+        EditorComponentModel component = new("Game.PlayerController");
+        component.SerializedFields["MoveSpeed"] = "1";
+        gameObject.Components.Add(component);
+        EditorSurfaceMode mode = EditorSurfaceMode.Play;
+        using GameObjectInspectorPanel panel = new(
+            scene,
+            new EditorUndoStack(),
+            new ScriptAssemblyRegistry(),
+            modeProvider: () => mode);
+        scene.MarkSaved();
+        EditorSceneTransform blockedTransform = gameObject.Transform.Clone();
+        blockedTransform.X = 24f;
+
+        Assert.False(panel.BeginNameEdit(gameObject.StableId));
+        Assert.False(panel.ApplyTransformEdit(gameObject.StableId, blockedTransform));
+        Assert.False(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "8"));
+
+        mode = EditorSurfaceMode.Paused;
+        Assert.False(panel.ApplyNameEdit(gameObject.StableId, "Blocked"));
+        Assert.False(panel.ApplyTransformEdit(gameObject.StableId, blockedTransform));
+        Assert.False(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "12"));
+        Assert.Equal("Player", gameObject.Name);
+        Assert.Equal(0f, gameObject.Transform.X);
+        Assert.Equal("1", component.SerializedFields["MoveSpeed"]);
+        Assert.False(scene.IsDirty);
+
+        mode = EditorSurfaceMode.Edit;
+        Assert.True(panel.ApplyTransformEdit(gameObject.StableId, blockedTransform));
+        Assert.True(panel.ApplyComponentFieldEdit(gameObject.StableId, 0, "MoveSpeed", "8"));
+        Assert.True(panel.ApplyNameEdit(gameObject.StableId, "Editable"));
+        panel.CommitPendingEdits();
+
+        Assert.Equal("Editable", gameObject.Name);
+        Assert.Equal(24f, gameObject.Transform.X);
+        Assert.Equal("8", component.SerializedFields["MoveSpeed"]);
+        Assert.True(scene.IsDirty);
+    }
+
     /// <summary>
     /// 验证 Unity 式 Hierarchy 搜索会保留命中节点的祖先路径，并隐藏无关分支。
     /// </summary>
