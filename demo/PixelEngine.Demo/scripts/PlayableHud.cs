@@ -62,6 +62,11 @@ public sealed class PlayableHud : Behaviour
     /// <inheritdoc />
     protected override void OnGui(IGuiContext gui)
     {
+        if (!LegacyGuiFallback.IsRequired(Context.GameUi))
+        {
+            return;
+        }
+
         ResolveComponents();
         float height = ShowDiagnostics ? 304f : 176f;
         gui.SetNextWindow(X, Y, Width, height, GuiCondition.FirstUseEver);

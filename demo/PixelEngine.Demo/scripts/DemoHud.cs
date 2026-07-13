@@ -46,6 +46,11 @@ public sealed class DemoHud : Behaviour
     /// <inheritdoc />
     protected override void OnGui(IGuiContext gui)
     {
+        if (!LegacyGuiFallback.IsRequired(Context.GameUi))
+        {
+            return;
+        }
+
         ResolveComponents();
         gui.SetNextWindow(X, Y, Width, Height, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |

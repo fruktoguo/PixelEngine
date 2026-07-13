@@ -14,6 +14,8 @@ public sealed class GameUiDemoController : Behaviour
     internal const string DialogScreen = "dialog";
     internal const string HudScreen = "hud";
     internal const string TelemetryScreen = "telemetry";
+    internal const string PixelOverlayScreen = "pixel-overlay";
+    internal const string PhysicalOverlayScreen = "physical-overlay";
     internal const string PauseScreen = "pause";
     internal const string ResultScreen = "result";
 
@@ -132,6 +134,7 @@ public sealed class GameUiDemoController : Behaviour
     private string _modalScreenId = string.Empty;
     private MissionState _lastMissionState = MissionState.Playing;
     private bool _lastGoalReached;
+    private long _lastEscapeFrame = -1;
 
     /// <summary>
     /// 当前主菜单屏幕句柄。
@@ -154,6 +157,21 @@ public sealed class GameUiDemoController : Behaviour
     public UiScreenHandle ModalScreen { get; private set; }
 
     /// <summary>
+    /// 当前场景实际物化的 Canvas 数量；用于 Demo dogfood 与运行诊断。
+    /// </summary>
+    public int CanvasCount { get; private set; }
+
+    /// <summary>
+    /// 按场景排序解析出的 Constant Pixel Size overlay Canvas。
+    /// </summary>
+    public UiCanvasHandle PixelOverlayCanvas { get; private set; }
+
+    /// <summary>
+    /// 按场景排序解析出的 Constant Physical Size overlay Canvas。
+    /// </summary>
+    public UiCanvasHandle PhysicalOverlayCanvas { get; private set; }
+
+    /// <summary>
     /// 最近处理的 UI 动作。
     /// </summary>
     public UiActionId LastAction { get; private set; }
@@ -168,8 +186,17 @@ public sealed class GameUiDemoController : Behaviour
     protected override void OnUpdate(float dt)
     {
         _ = dt;
+        HandleEscapeShortcut();
         // 每帧聚合玩法数据源并推送到 HUD 绑定路径
         PublishHudState();
+    }
+
+    /// <inheritdoc />
+    protected override void OnGui(IGuiContext gui)
+    {
+        _ = gui;
+        // 暂停态不执行 OnUpdate；借 GUI 相位继续接收 Esc，且不在这里绘制任何旧式窗口。
+        HandleEscapeShortcut();
     }
 
     internal void StartForService(IGameUiService ui)
@@ -195,6 +222,7 @@ public sealed class GameUiDemoController : Behaviour
         _runtime = runtime;
         _ui.UiEventRaised += HandleUiEvent;
         _subscribed = true;
+        DiscoverSceneCanvases();
         // gameplay HUD 从 Play 首帧持续发布；主菜单布局在另一侧，避免遮住 HUD 与主要世界视野。
         MainScreen = _ui.ShowScreen(MainMenuScreen);
         ShowHud();
@@ -227,6 +255,9 @@ public sealed class GameUiDemoController : Behaviour
         TelemetryScreenHandle = default;
         HudScreenHandle = default;
         MainScreen = default;
+        CanvasCount = 0;
+        PixelOverlayCanvas = default;
+        PhysicalOverlayCanvas = default;
         _ui = null;
         _runtime = null;
         _health = null;
@@ -245,7 +276,34 @@ public sealed class GameUiDemoController : Behaviour
         _modalScreenId = string.Empty;
         _lastMissionState = MissionState.Playing;
         _lastGoalReached = false;
+        _lastEscapeFrame = -1;
         LastAction = default;
+    }
+
+    private void DiscoverSceneCanvases()
+    {
+        IGameUiService ui = _ui!;
+        Span<UiCanvasHandle> canvases = stackalloc UiCanvasHandle[8];
+        CanvasCount = ui.CopyCanvases(canvases);
+        UiCanvasHandle primary = ui.PrimaryCanvas;
+        int secondaryIndex = 0;
+        for (int i = 0; i < CanvasCount; i++)
+        {
+            UiCanvasHandle canvas = canvases[i];
+            if (canvas == primary)
+            {
+                continue;
+            }
+
+            if (secondaryIndex++ == 0)
+            {
+                PixelOverlayCanvas = canvas;
+            }
+            else if (secondaryIndex == 2)
+            {
+                PhysicalOverlayCanvas = canvas;
+            }
+        }
     }
 
     /// <summary>
@@ -770,6 +828,50 @@ public sealed class GameUiDemoController : Behaviour
         {
             ui.HideScreen(screen);
         }
+    }
+
+    private void HandleEscapeShortcut()
+    {
+        if (_ui is null ||
+            _ui.PrimaryCanvas.Value == 0 ||
+            !Context.Input.WasPressed(Key.Escape))
+        {
+            return;
+        }
+
+        long frame = Context.Time.FrameCount;
+        if (frame == _lastEscapeFrame)
+        {
+            return;
+        }
+
+        _lastEscapeFrame = frame;
+        if (_resultVisible)
+        {
+            return;
+        }
+
+        if (_modalScreenId == PauseScreen)
+        {
+            ResumeGame();
+            return;
+        }
+
+        if (ModalScreen.Value != 0)
+        {
+            if (_pausedByUi)
+            {
+                CloseModalOrReturnToPause();
+            }
+            else
+            {
+                CloseModal();
+            }
+
+            return;
+        }
+
+        OpenPauseMenu();
     }
 
     private void OpenPauseMenu()

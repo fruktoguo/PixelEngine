@@ -2054,7 +2054,7 @@ public sealed class HostingProjectDisciplineTests
         // Assert：验证预期结果
         Assert.Equal("lava-mine", document.Name);
         EngineSceneEntityDocument[] entities = document.Entities!;
-        Assert.Equal(3, entities.Length);
+        Assert.Equal(6, entities.Length);
         EngineSceneEntityDocument entity = Assert.Single(entities, item => item.Name == "LevelDirector");
         EngineSceneBehaviourDocument behaviour = Assert.Single(entity.Behaviours!);
         Assert.Equal("PixelEngine.Demo.LevelDirector", behaviour.TypeName);
@@ -2074,8 +2074,22 @@ public sealed class HostingProjectDisciplineTests
         Assert.Equal(570f, goal.Transform!.X);
         Assert.Equal(208f, goal.Transform.Y);
         Assert.Equal("PixelEngine.Demo.GoalPoint", Assert.Single(goal.Behaviours!).TypeName);
+        EngineSceneEntityDocument gameUi = Assert.Single(entities, item => item.Name == "Game UI Canvas");
+        Assert.True(gameUi.WebCanvas!.Primary);
+        Assert.Equal(0, gameUi.WebCanvas.SortingOrder);
+        Assert.Equal(PixelEngine.UI.UiScaleMode.ScaleWithScreenSize, gameUi.CanvasScaler!.ScaleMode);
+        EngineSceneEntityDocument pixelOverlay = Assert.Single(entities, item => item.Name == "Pixel Overlay Canvas");
+        Assert.False(pixelOverlay.WebCanvas!.Primary);
+        Assert.Equal(100, pixelOverlay.WebCanvas.SortingOrder);
+        Assert.Equal("pixel-overlay", pixelOverlay.WebCanvas.InitialScreenId);
+        Assert.Equal(PixelEngine.UI.UiScaleMode.ConstantPixelSize, pixelOverlay.CanvasScaler!.ScaleMode);
+        EngineSceneEntityDocument physicalOverlay = Assert.Single(entities, item => item.Name == "Physical Overlay Canvas");
+        Assert.False(physicalOverlay.WebCanvas!.Primary);
+        Assert.Equal(200, physicalOverlay.WebCanvas.SortingOrder);
+        Assert.Equal("physical-overlay", physicalOverlay.WebCanvas.InitialScreenId);
+        Assert.Equal(PixelEngine.UI.UiScaleMode.ConstantPhysicalSize, physicalOverlay.CanvasScaler!.ScaleMode);
         Assert.DoesNotContain(
-            entities.SelectMany(item => item.Behaviours!),
+            entities.SelectMany(static item => item.Behaviours ?? []),
             item => item.TypeName is
                 "PixelEngine.Demo.MissionDirector" or
                 "PixelEngine.Demo.RisingHazardDirector" or

@@ -203,7 +203,7 @@ public sealed class MissionDirector : Behaviour
     /// <inheritdoc />
     protected override void OnGui(IGuiContext gui)
     {
-        if (State == MissionState.Playing)
+        if (State == MissionState.Playing || !LegacyGuiFallback.IsRequired(Context.GameUi))
         {
             return;
         }

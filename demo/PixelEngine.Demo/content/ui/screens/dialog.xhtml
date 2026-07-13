@@ -1,16 +1,23 @@
-<rml title="对话" data-screen="dialog" data-contract="demo.webfirst.dialog/v1" style="left: 120px; top: 270px; width: 450px; height: 168px">
+<rml title="对话" data-screen="dialog" data-contract="demo.webfirst.dialog/v1" style="left: 210px; top: 398px; width: 620px; height: 172px">
   <head>
     <style>
-      body { font-family: "Noto Sans SC"; color: #f4f0e7; background-color: rgba(31, 25, 16, 232); }
-      button { width: 132px; height: 26px; margin-top: 8px; background-color: #7a6234; color: #ffffff; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #f4f0e7; background-color: transparent; }
+      #dialog_panel { position: absolute; left: 210px; top: 398px; width: 588px; height: 140px; padding: 16px; background-color: rgba(31, 25, 16, 238); border-width: 1px; border-color: #8b7444; }
+      #dialog_title { color: #f5c451; font-size: 20px; }
+      #dialog_line { color: #fff7dd; }
+      #dialog_hint { color: #c7bda4; }
+      button { width: 132px; height: 28px; margin-top: 8px; background-color: #7a6234; color: #ffffff; border-width: 1px; border-color: #a48750; }
+      button:hover { background-color: #987b43; }
       p { margin: 4px 0px; }
     </style>
   </head>
   <body>
-    <p id="dialog_title">矿工通讯</p>
-    <p id="dialog_line">出口在右侧高台，先越过熔岩坑。</p>
-    <p id="dialog_hint">用 Grenade / Bomb 拆障碍，Builder 可补桥。</p>
-    <button id="dialog_next" data-event-click="dialog_next">继续</button>
-    <button id="dialog_close" data-event-click="close_dialog">关闭</button>
+    <div id="dialog_panel">
+      <p id="dialog_title">矿工通讯</p>
+      <p id="dialog_line">出口在右侧高台，先越过熔岩坑。</p>
+      <p id="dialog_hint">用 Grenade / Bomb 拆障碍，Builder 可补桥。</p>
+      <button id="dialog_next" data-event-click="dialog_next">继续</button>
+      <button id="dialog_close" data-event-click="close_dialog">关闭</button>
+    </div>
   </body>
 </rml>

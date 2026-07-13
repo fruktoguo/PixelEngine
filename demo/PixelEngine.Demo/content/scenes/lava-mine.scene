@@ -1,5 +1,5 @@
 {
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "lava-mine",
   "entities": [
     {
@@ -61,6 +61,98 @@
           "typeName": "PixelEngine.Demo.GoalPoint"
         }
       ]
+    },
+    {
+      "stableId": 4,
+      "name": "Game UI Canvas",
+      "enabled": true,
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "rotationRadians": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "webCanvas": {
+        "manifestPath": "ui/ui-manifest.json",
+        "enabled": true,
+        "sortingOrder": 0,
+        "primary": true
+      },
+      "canvasScaler": {
+        "scaleMode": 1,
+        "scaleFactor": 1,
+        "referenceWidth": 1280,
+        "referenceHeight": 720,
+        "screenMatchMode": 0,
+        "matchWidthOrHeight": 0.5,
+        "physicalUnit": 3,
+        "fallbackScreenDpi": 96,
+        "defaultSpriteDpi": 96,
+        "referencePixelsPerUnit": 100
+      }
+    },
+    {
+      "stableId": 5,
+      "name": "Pixel Overlay Canvas",
+      "enabled": true,
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "rotationRadians": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "webCanvas": {
+        "manifestPath": "ui/ui-manifest.json",
+        "initialScreenId": "pixel-overlay",
+        "enabled": true,
+        "sortingOrder": 100,
+        "primary": false
+      },
+      "canvasScaler": {
+        "scaleMode": 0,
+        "scaleFactor": 1,
+        "referenceWidth": 1280,
+        "referenceHeight": 720,
+        "screenMatchMode": 0,
+        "matchWidthOrHeight": 0,
+        "physicalUnit": 3,
+        "fallbackScreenDpi": 96,
+        "defaultSpriteDpi": 96,
+        "referencePixelsPerUnit": 100
+      }
+    },
+    {
+      "stableId": 6,
+      "name": "Physical Overlay Canvas",
+      "enabled": true,
+      "transform": {
+        "x": 0,
+        "y": 0,
+        "rotationRadians": 0,
+        "scaleX": 1,
+        "scaleY": 1
+      },
+      "webCanvas": {
+        "manifestPath": "ui/ui-manifest.json",
+        "initialScreenId": "physical-overlay",
+        "enabled": true,
+        "sortingOrder": 200,
+        "primary": false
+      },
+      "canvasScaler": {
+        "scaleMode": 2,
+        "scaleFactor": 1,
+        "referenceWidth": 1280,
+        "referenceHeight": 720,
+        "screenMatchMode": 0,
+        "matchWidthOrHeight": 0,
+        "physicalUnit": 3,
+        "fallbackScreenDpi": 96,
+        "defaultSpriteDpi": 96,
+        "referencePixelsPerUnit": 100
+      }
     }
   ]
 }

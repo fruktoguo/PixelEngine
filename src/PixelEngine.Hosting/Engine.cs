@@ -78,6 +78,12 @@ public sealed class Engine : IDisposable
                 Context.TryGetService(out ScriptLightingApi lighting) ? lighting : null,
                 Context.TryGetService(out ScriptCameraSynchronizer cameraSynchronizer) ? cameraSynchronizer : null,
                 Context.TryGetService(out ScriptLightingSynchronizer lightingSynchronizer) ? lightingSynchronizer : null);
+            if (Context.TryGetService(out GameUiCanvasRegistry gameUiRegistry) &&
+                Context.TryGetService(out GameUiBackendSelection gameUiSelection))
+            {
+                probe.AttachGameUi(gameUiRegistry, in gameUiSelection);
+            }
+
             return probe;
         }
     }
@@ -901,12 +907,18 @@ public sealed class Engine : IDisposable
         _sceneCanvasSet = canvasSet;
 
         Context.RegisterService(fontEngine);
-        Context.RegisterService(new GameUiBackendSelection(
+        GameUiBackendSelection backendSelection = new(
             requestedBackend,
             activeBackend,
             selectionFallbackReason,
-            selectionNativeProfile));
+            selectionNativeProfile);
+        Context.RegisterService(backendSelection);
         Context.RegisterService(registry);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachGameUi(registry, in backendSelection);
+        }
+
         SynchronizeLegacyGameUiHostService(registry);
 
         IUiInputSource inputSource = new RenderWindowUiInputSource(window);

@@ -134,6 +134,7 @@ public sealed class DemoStartupOptionsTests
             Assert.Equal(810, engine.Context.Options.WindowHeight);
             Assert.Equal(PlayerWindowMode.MaximizedWindow, engine.Context.Options.WindowMode);
             Assert.False(engine.Context.Options.VSync);
+            Assert.True(engine.Context.Options.EnableGameUi);
             Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
         }
         finally
@@ -262,6 +263,7 @@ public sealed class DemoStartupOptionsTests
         ]);
         EngineProject project = DemoProgram.BuildProject(options);
         using Engine engine = DemoProgram.BuildEngine(options, project);
+        Assert.False(engine.Context.Options.EnableGameUi);
         PlayableCavernWorldGenerator generator = new();
         engine.RegisterProceduralWorldGenerator(
             PlayableCavernWorldGenerator.Key,
@@ -539,7 +541,8 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void DefaultEngineUsesPlayableWindowSize()
     {
-        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload"]);
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--no-hot-reload", "--content", contentRoot]);
         EngineProject project = DemoProgram.BuildProject(options);
         using Engine engine = DemoProgram.BuildEngine(options, project);
 
@@ -547,6 +550,8 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal(720, engine.Context.Options.WindowHeight);
         Assert.Equal(720, engine.Context.Options.InternalWidth);
         Assert.Equal(480, engine.Context.Options.InternalHeight);
+        Assert.True(engine.Context.Options.EnableGameUi);
+        Assert.Equal(UiBackendKind.RmlUi, engine.Context.Options.GameUiBackend);
         Assert.Equal(1000.0 / 30.0, engine.Context.Options.Overload.FrameBudgetMs, precision: 3);
         Assert.Equal(30, engine.Context.Options.Overload.SustainWindow);
     }

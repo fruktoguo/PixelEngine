@@ -521,6 +521,7 @@ public static class DemoProgram
         PlayerHealth? health = FindBehaviour<PlayerHealth>(scene);
         PlayerController? player = FindBehaviour<PlayerController>(scene);
         PlayerVisual? playerVisual = FindBehaviour<PlayerVisual>(scene);
+        GameUiDemoController? gameUi = FindBehaviour<GameUiDemoController>(scene);
         PlayableProjectileTool? projectile = FindBehaviour<PlayableProjectileTool>(scene);
         WeaponController? weapons = FindBehaviour<WeaponController>(scene);
         LevelDirector? director = FindBehaviour<LevelDirector>(scene);
@@ -540,6 +541,24 @@ public static class DemoProgram
         int playerCenterY = (int)MathF.Round(player?.CenterY ?? 0f);
         ushort playerCenterMaterial = probe.MaterialAt(playerCenterX, playerCenterY);
         engine.Context.Counters.CustomMetric.Read(out string customMetricName, out long customMetricValue);
+        GameUiProbeSnapshot gameUiProbe = probe.CaptureGameUi();
+        int runtimeCanvasCount = gameUiProbe.CanvasCount;
+        int serviceCanvasCount = gameUi?.CanvasCount ?? 0;
+        string requestedUiBackend = gameUiProbe.IsAttached
+            ? gameUiProbe.RequestedBackend.ToString()
+            : "<missing>";
+        string activeUiBackend = gameUiProbe.IsAttached
+            ? gameUiProbe.ActiveBackend.ToString()
+            : "<missing>";
+        string usedUiFallback = gameUiProbe.IsAttached
+            ? gameUiProbe.UsedFallback.ToString()
+            : "<missing>";
+
+        PixelEngine.Hosting.Scene? hostingScene = engine.CurrentScene;
+        int resolvedSceneCanvasCount = hostingScene?.Descriptor.SourceKind == SceneSourceKind.SceneFile &&
+            hostingScene.ResolvedSource is string resolvedScenePath
+                ? EngineSceneCanvasResolver.Resolve(EngineSceneDocumentLoader.LoadDocument(resolvedScenePath)).Count
+                : -1;
 
         Console.WriteLine(
             $"脚本化窗口输入摘要：frames={scriptedInput.FramesInjected}, " +
@@ -580,6 +599,16 @@ public static class DemoProgram
             $"max_audio_played={scriptedProbe?.MaxAudioPlayed ?? engine.Context.Counters.AudioPlayed}, " +
             $"max_audio_drained={scriptedProbe?.MaxAudioDrained ?? engine.Context.Counters.AudioDrained}, " +
             $"audio_loaded={engine.Context.Counters.AudioLoadedClips}, " +
+            $"ui_runtime_canvases={runtimeCanvasCount}, " +
+            $"ui_service_canvases={serviceCanvasCount}, " +
+            $"ui_resolved_scene_canvases={resolvedSceneCanvasCount}, " +
+            $"ui_backend_requested={requestedUiBackend}, " +
+            $"ui_backend_active={activeUiBackend}, " +
+            $"ui_backend_fallback={usedUiFallback}, " +
+            $"hosting_scene_kind={hostingScene?.Descriptor.SourceKind.ToString() ?? "<missing>"}, " +
+            $"ui_canvases={gameUi?.CanvasCount ?? 0}, " +
+            $"ui_pixel_canvas={gameUi?.PixelOverlayCanvas.Value ?? 0}, " +
+            $"ui_physical_canvas={gameUi?.PhysicalOverlayCanvas.Value ?? 0}, " +
             $"hud_blocked={hudBlocked}, " +
             $"fps={diagnostics.FramesPerSecond:0.0}, " +
             $"frame_ms={diagnostics.FrameMilliseconds:0.0}, " +
@@ -820,6 +849,7 @@ public static class DemoProgram
             .WithInternalResolution(PlayableInternalWidth, PlayableInternalHeight)
             .WithOverloadPolicy(PlayableOverloadFrameBudgetMs, PlayableOverloadSustainWindow)
             .UseVSync(options.VSync)
+            .EnableGameUi()
             .UseUiBackend(options.RuntimeUiBackend)
             .UseDeterministicMode();
         if (options.Headless)

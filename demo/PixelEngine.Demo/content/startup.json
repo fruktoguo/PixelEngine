@@ -1,3 +1,4 @@
 {
-  "startScene": "scenes/lava-mine.scene"
+  "startScene": "scenes/lava-mine.scene",
+  "runtimeUiBackend": "RmlUi"
 }

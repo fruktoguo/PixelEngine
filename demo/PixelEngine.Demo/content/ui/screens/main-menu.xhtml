@@ -1,24 +1,31 @@
-<rml title="PixelEngine 主菜单" data-screen="main-menu" data-contract="demo.webfirst.main-menu/v1" style="left: 392px; top: 24px; width: 300px; height: 238px">
+<rml title="PixelEngine 主菜单" data-screen="main-menu" data-contract="demo.webfirst.main-menu/v1" style="left: 392px; top: 24px; width: 320px; height: 274px">
   <head>
     <style>
-      body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(8, 12, 16, 210); }
-      button { width: 180px; height: 28px; margin-top: 6px; color: #ffffff; background-color: #2f7dd1; }
-      #start_game { position: absolute; left: 28px; top: 104px; }
-      #open_settings { position: absolute; left: 28px; top: 138px; }
-      #open_inventory { position: absolute; left: 28px; top: 172px; }
-      #open_dialog { position: absolute; left: 28px; top: 206px; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #e8edf2; background-color: transparent; }
+      #main_panel { position: absolute; left: 392px; top: 24px; width: 288px; height: 242px; padding: 16px; background-color: rgba(8, 12, 18, 228); border-width: 1px; border-color: #334155; }
+      #main_title { color: #f8fafc; font-size: 22px; }
+      #main_hint { color: #f4c95d; }
+      #main_route, #main_goal, #main_hazard { color: #aeb9c7; }
+      button { width: 232px; height: 30px; margin-top: 6px; color: #ffffff; background-color: #2563a6; border-width: 1px; border-color: #4b91d1; }
+      button:hover { background-color: #347fc4; }
+      #start_game { position: absolute; left: 28px; top: 112px; background-color: #b7791f; border-color: #e3ac49; }
+      #open_settings { position: absolute; left: 28px; top: 148px; }
+      #open_inventory { position: absolute; left: 28px; top: 184px; }
+      #open_dialog { position: absolute; left: 28px; top: 220px; }
       p { margin: 4px 0px; }
     </style>
   </head>
   <body>
-    <p id="main_title">PixelEngine 熔岩矿洞</p>
-    <p id="main_hint">横向逃生：左起点到右出口。</p>
-    <p id="main_route">跳过熔岩坑，拆除路障。</p>
-    <p id="main_goal">出口进度就是到右侧出口的距离。</p>
-    <p id="main_hazard">熔岩只在坑内，接触会受伤。</p>
-    <button id="start_game" data-event-click="start_game">开始游戏</button>
-    <button id="open_settings" data-event-click="open_settings">设置</button>
-    <button id="open_inventory" data-event-click="open_inventory">背包</button>
-    <button id="open_dialog" data-event-click="open_dialog">对话</button>
+    <div id="main_panel">
+      <p id="main_title">PixelEngine 熔岩矿洞</p>
+      <p id="main_hint">横向逃生：左起点到右出口。</p>
+      <p id="main_route">跳过熔岩坑，拆除路障。</p>
+      <p id="main_goal">出口进度就是到右侧出口的距离。</p>
+      <p id="main_hazard">熔岩只在坑内，接触会受伤。</p>
+      <button id="start_game" data-event-click="start_game">开始游戏</button>
+      <button id="open_settings" data-event-click="open_settings">设置</button>
+      <button id="open_inventory" data-event-click="open_inventory">背包</button>
+      <button id="open_dialog" data-event-click="open_dialog">对话</button>
+    </div>
   </body>
 </rml>

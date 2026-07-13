@@ -138,7 +138,7 @@ public sealed class GoalTrigger : Behaviour
     /// <inheritdoc />
     protected override void OnGui(IGuiContext gui)
     {
-        if (!Reached)
+        if (!Reached || !LegacyGuiFallback.IsRequired(Context.GameUi))
         {
             return;
         }

@@ -1,19 +1,25 @@
-<rml title="背包" data-screen="inventory" data-contract="demo.webfirst.inventory/v1" style="left: 344px; top: 164px; width: 294px; height: 252px">
+<rml title="背包" data-screen="inventory" data-contract="demo.webfirst.inventory/v1" style="left: 344px; top: 114px; width: 340px; height: 286px">
   <head>
     <style>
-      body { font-family: "Noto Sans SC"; color: #edf4ff; background-color: rgba(17, 22, 18, 226); }
-      button { width: 124px; height: 26px; margin-top: 8px; background-color: #3f7048; color: #ffffff; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #edf4ff; background-color: transparent; }
+      #inventory_panel { position: absolute; left: 344px; top: 114px; width: 308px; height: 254px; padding: 16px; background-color: rgba(17, 24, 20, 236); border-width: 1px; border-color: #4e7058; }
+      #inventory_title { color: #9ee7c5; font-size: 21px; }
+      #inventory_slot_1, #inventory_slot_2, #inventory_slot_3, #inventory_slot_4, #inventory_slot_5, #inventory_slot_6 { color: #c8d6ce; }
+      button { width: 124px; height: 28px; margin-top: 10px; background-color: #3f7048; color: #ffffff; border-width: 1px; border-color: #679270; }
+      button:hover { background-color: #52845c; }
       p { margin: 4px 0px; }
     </style>
   </head>
   <body>
-    <p id="inventory_title">背包</p>
-    <p id="inventory_slot_1">1 Pistol：开路与触发坍塌</p>
-    <p id="inventory_slot_2">2 Laser Cannon：熔切金属 / 木桥</p>
-    <p id="inventory_slot_3">3 Grenade：拆除厚石路障</p>
-    <p id="inventory_slot_4">4 Bomb：大范围爆破</p>
-    <p id="inventory_slot_5">5 Excavator：挖掘通道</p>
-    <p id="inventory_slot_6">6 Builder：临时搭桥</p>
-    <button id="inventory_back" data-event-click="back_main">返回</button>
+    <div id="inventory_panel">
+      <p id="inventory_title">背包</p>
+      <p id="inventory_slot_1">1 Pistol：开路与触发坍塌</p>
+      <p id="inventory_slot_2">2 Laser Cannon：熔切金属 / 木桥</p>
+      <p id="inventory_slot_3">3 Grenade：拆除厚石路障</p>
+      <p id="inventory_slot_4">4 Bomb：大范围爆破</p>
+      <p id="inventory_slot_5">5 Excavator：挖掘通道</p>
+      <p id="inventory_slot_6">6 Builder：临时搭桥</p>
+      <button id="inventory_back" data-event-click="back_main">返回</button>
+    </div>
   </body>
 </rml>

@@ -1,27 +1,38 @@
 <rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v2" style="left: 14px; top: 14px; width: 316px; height: 250px">
   <head>
     <style>
-      body { font-family: "Noto Sans SC"; color: #e8edf2; background-color: rgba(4, 6, 9, 168); }
-      progress { width: 248px; height: 14px; margin-top: 3px; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #e8edf2; background-color: transparent; }
+      #hud_panel { position: absolute; left: 14px; top: 14px; width: 284px; height: 218px; padding: 16px; background-color: rgba(4, 7, 12, 202); border-width: 1px; border-color: #35465c; }
+      #hud_title { color: #f5c451; font-size: 17px; }
+      #hud_route { color: #aeb9c7; }
+      progress { position: relative; display: block; width: 252px; height: 14px; margin-top: 3px; background-color: #202b38; border-width: 1px; border-color: #405066; }
+      progress fill { background-color: #d2a642; }
+      progress .meter_label { position: absolute; left: 6px; top: -1px; height: 14px; line-height: 14px; color: #f8fafc; font-size: 11px; }
+      #hud_health fill { background-color: #42ad72; }
+      #hud_heat fill, #hud_hazard fill { background-color: #d85d4a; }
+      #hud_cooldown fill, #hud_reload fill { background-color: #4d86bd; }
       p { margin: 3px 0px; }
-      button { width: 116px; height: 28px; background-color: #315f8d; color: #ffffff; }
-      #hud_pause { position: absolute; left: 12px; top: 210px; }
-      #hud_telemetry { position: absolute; left: 134px; top: 210px; }
+      button { width: 116px; height: 28px; background-color: #294f74; color: #ffffff; border-width: 1px; border-color: #4e7295; }
+      button:hover { background-color: #38688f; }
+      #hud_pause { position: absolute; left: 16px; top: 206px; }
+      #hud_telemetry { position: absolute; left: 142px; top: 206px; }
     </style>
   </head>
   <body>
-    <p id="hud_title">目标：左起点到右出口，拆路障，避熔岩坑</p>
-    <p id="hud_route">出口进度表示到右侧出口的距离</p>
-    <progress id="hud_health" path="hud.health" value="1.0" text="生命" />
-    <progress id="hud_ammo" path="hud.ammo" value="0.0" text="弹药" />
-    <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="冷却" />
-    <progress id="hud_heat" path="hud.heat" value="0.0" text="热量" />
-    <progress id="hud_reload" path="hud.reload" value="0.0" text="换弹" />
-    <progress id="hud_crystals" path="hud.crystals" value="0.0" text="出口进度" />
-    <progress id="hud_time" path="hud.time" value="1.0" text="路线余量" />
-    <progress id="hud_hazard" path="hud.hazard" value="0.0" text="熔岩接触危险" />
-    <progress id="hud_score" path="hud.score" value="0.0" text="分数" />
-    <button id="hud_pause" data-event-click="pause_game">暂停</button>
-    <button id="hud_telemetry" data-event-click="toggle_telemetry">诊断</button>
+    <div id="hud_panel">
+      <p id="hud_title">目标：左起点到右出口，拆路障，避熔岩坑</p>
+      <p id="hud_route">出口进度表示到右侧出口的距离</p>
+      <progress id="hud_health" path="hud.health" value="1.0" text="生命"><div class="meter_label">生命</div></progress>
+      <progress id="hud_ammo" path="hud.ammo" value="0.0" text="弹药"><div class="meter_label">弹药</div></progress>
+      <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="冷却"><div class="meter_label">冷却</div></progress>
+      <progress id="hud_heat" path="hud.heat" value="0.0" text="热量"><div class="meter_label">热量</div></progress>
+      <progress id="hud_reload" path="hud.reload" value="0.0" text="换弹"><div class="meter_label">换弹</div></progress>
+      <progress id="hud_crystals" path="hud.crystals" value="0.0" text="出口进度"><div class="meter_label">出口进度</div></progress>
+      <progress id="hud_time" path="hud.time" value="1.0" text="路线余量"><div class="meter_label">路线余量</div></progress>
+      <progress id="hud_hazard" path="hud.hazard" value="0.0" text="熔岩接触危险"><div class="meter_label">熔岩接触危险</div></progress>
+      <progress id="hud_score" path="hud.score" value="0.0" text="分数"><div class="meter_label">分数</div></progress>
+      <button id="hud_pause" data-event-click="pause_game">暂停</button>
+      <button id="hud_telemetry" data-event-click="toggle_telemetry">诊断</button>
+    </div>
   </body>
 </rml>

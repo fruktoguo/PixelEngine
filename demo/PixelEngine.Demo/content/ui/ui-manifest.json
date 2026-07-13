@@ -6,6 +6,8 @@
     { "id": "dialog", "path": "screens/dialog.xhtml", "preload": true },
     { "id": "hud", "path": "screens/hud.xhtml", "preload": true },
     { "id": "telemetry", "path": "screens/telemetry.xhtml", "preload": true },
+    { "id": "pixel-overlay", "path": "screens/pixel-overlay.xhtml", "preload": true },
+    { "id": "physical-overlay", "path": "screens/physical-overlay.xhtml", "preload": true },
     { "id": "pause", "path": "screens/pause.xhtml", "preload": true },
     { "id": "result", "path": "screens/result.xhtml", "preload": true }
   ]

@@ -4,6 +4,7 @@ using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using Silk.NET.OpenGL;
+using RuntimeUi = PixelEngine.UI;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
 namespace PixelEngine.Hosting;
@@ -27,6 +28,8 @@ public sealed class EngineProbeApi
     private ScriptLightingApi? LightingApi { get; set; }
     private ScriptCameraSynchronizer? CameraSync { get; set; }
     private ScriptLightingSynchronizer? LightingSync { get; set; }
+    private GameUiCanvasRegistry? GameUiRegistry { get; set; }
+    private GameUiBackendSelection? GameUiSelection { get; set; }
 
     internal EngineProbeApi(
         CellGrid grid,
@@ -106,6 +109,24 @@ public sealed class EngineProbeApi
     /// 当前 GPU frame timer 是否可用；未接入 Rendering 时返回 false。
     /// </summary>
     public bool GpuFrameTimerAvailable => RenderPipeline?.GpuFrameTimerAvailable ?? false;
+
+    /// <summary>
+    /// 捕获当前游戏 Web Canvas 数量与 UI 后端选择；窗口 UI 尚未接入时返回未附加快照。
+    /// </summary>
+    /// <returns>不暴露 Canvas registry 或 backend 实例的稳定诊断快照。</returns>
+    public GameUiProbeSnapshot CaptureGameUi()
+    {
+        GameUiCanvasRegistry? registry = GameUiRegistry;
+        GameUiBackendSelection? selection = GameUiSelection;
+        return registry is null || selection is null
+            ? default
+            : new GameUiProbeSnapshot(
+                IsAttached: true,
+                CanvasCount: registry.Count,
+                RequestedBackend: selection.Value.RequestedBackend,
+                ActiveBackend: selection.Value.ActiveBackend,
+                UsedFallback: selection.Value.UsedFallback);
+    }
 
     /// <summary>
     /// 捕获当前 Hosting/Scripting 诊断快照。
@@ -321,6 +342,14 @@ public sealed class EngineProbeApi
         LightingSync = synchronizer ?? throw new ArgumentNullException(nameof(synchronizer));
     }
 
+    internal void AttachGameUi(
+        GameUiCanvasRegistry registry,
+        in GameUiBackendSelection selection)
+    {
+        GameUiRegistry = registry ?? throw new ArgumentNullException(nameof(registry));
+        GameUiSelection = selection;
+    }
+
     private IScriptContext RequireScriptContext()
     {
         return ScriptContext ?? throw MissingBinding("IScriptContext");
@@ -367,3 +396,18 @@ public readonly record struct ParticleRenderProbeResult(
     ParticleRenderMode Requested,
     ParticleRenderMode Effective,
     bool GpuAvailable);
+
+/// <summary>
+/// 游戏 Web Canvas probe 的稳定快照，不向 Demo 暴露 Hosting registry 或具体 UI backend。
+/// </summary>
+/// <param name="IsAttached">窗口 UI runtime 是否已经附加。</param>
+/// <param name="CanvasCount">当前场景已物化的 Canvas 数量。</param>
+/// <param name="RequestedBackend">启动配置请求的后端。</param>
+/// <param name="ActiveBackend">primary Canvas 实际使用的后端。</param>
+/// <param name="UsedFallback">请求后端是否发生显式降级。</param>
+public readonly record struct GameUiProbeSnapshot(
+    bool IsAttached,
+    int CanvasCount,
+    RuntimeUi.UiBackendKind RequestedBackend,
+    RuntimeUi.UiBackendKind ActiveBackend,
+    bool UsedFallback);

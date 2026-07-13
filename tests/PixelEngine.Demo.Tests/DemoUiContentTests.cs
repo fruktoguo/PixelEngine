@@ -11,6 +11,7 @@ using Xunit;
 using ScriptGameUiService = PixelEngine.Scripting.IGameUiService;
 using ScriptIUiModel = PixelEngine.Scripting.IUiModel;
 using ScriptUiActionId = PixelEngine.Scripting.UiActionId;
+using ScriptUiCanvasHandle = PixelEngine.Scripting.UiCanvasHandle;
 using RuntimeUiEvent = PixelEngine.UI.UiEvent;
 using ScriptUiEvent = PixelEngine.Scripting.UiEvent;
 using ScriptUiModelName = PixelEngine.Scripting.UiModelName;
@@ -28,23 +29,25 @@ namespace PixelEngine.Demo.Tests;
 public sealed class DemoUiContentTests
 {
     /// <summary>
-    /// 验证 Demo UI manifest 声明八类可玩屏幕，且真实可见中文文本落在共享 CJK 字形范围内。
+    /// 验证 Demo UI manifest 声明十类可玩/缩放 dogfood 屏幕，且真实可见中文文本落在共享 CJK 字形范围内。
     /// </summary>
     [Fact]
-    public void DemoUiManifestDeclaresSevenPlayableScreensAndCjkTextIsCovered()
+    public void DemoUiManifestDeclaresTenPlayableAndScalerDogfoodScreensWithCjkCoverage()
     {
         // Arrange：准备输入与初始状态
         string uiRoot = DemoUiRoot();
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(uiRoot);
 
         // Assert：验证预期结果
-        Assert.Equal(8, manifest.ScreenCount);
+        Assert.Equal(10, manifest.ScreenCount);
         AssertScreen(manifest, "main-menu");
         AssertScreen(manifest, "settings");
         AssertScreen(manifest, "inventory");
         AssertScreen(manifest, "dialog");
         AssertScreen(manifest, "hud");
         AssertScreen(manifest, "telemetry");
+        AssertScreen(manifest, "pixel-overlay");
+        AssertScreen(manifest, "physical-overlay");
         AssertScreen(manifest, "pause");
         AssertScreen(manifest, "result");
 
@@ -57,7 +60,38 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证 Demo 八类 Web-first 屏幕显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
+    /// 验证默认 Demo 场景真实 dogfood .scene v3、多 Canvas 与三种 CanvasScaler，而不是依赖旧 implicit Canvas。
+    /// </summary>
+    [Fact]
+    public void DemoLavaMineSceneUsesExplicitMultiCanvasAndAllScalerModes()
+    {
+        string scenePath = Path.Combine(
+            FindRepositoryRoot(),
+            "demo",
+            "PixelEngine.Demo",
+            "content",
+            "scenes",
+            "lava-mine.scene");
+
+        EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
+        EngineSceneCanvasSet resolved = EngineSceneCanvasResolver.Resolve(document);
+        EngineSceneCanvasDefinition[] canvases = resolved.Canvases.ToArray();
+
+        Assert.Equal(EngineSceneDocumentLoader.CurrentFormatVersion, document.FormatVersion);
+        Assert.True(resolved.HasExplicitCanvases);
+        Assert.Equal(3, canvases.Length);
+        Assert.Equal(GameUiCanvasIdentity.FromStableId(4), resolved.PrimaryId);
+        Assert.Equal([0, 100, 200], canvases.Select(static canvas => canvas.SortingOrder));
+        Assert.Equal(
+            [UiScaleMode.ScaleWithScreenSize, UiScaleMode.ConstantPixelSize, UiScaleMode.ConstantPhysicalSize],
+            canvases.Select(static canvas => canvas.ScalerSettings.ScaleMode));
+        Assert.Equal(GameUiDemoController.PixelOverlayScreen, canvases[1].InitialScreenId);
+        Assert.Equal(GameUiDemoController.PhysicalOverlayScreen, canvases[2].InitialScreenId);
+        Assert.True(resolved.Diagnostics.IsEmpty);
+    }
+
+    /// <summary>
+    /// 验证 Demo 十类 Web-first 屏幕显式声明 headless / ManagedFallback 可消费的屏幕数据契约。
     /// </summary>
     [Fact]
     public void DemoUiScreensDeclareHeadlessManagedFallbackContracts()
@@ -100,6 +134,18 @@ public sealed class DemoUiContentTests
             "demo.webfirst.telemetry/v1",
             GameUiDemoController.TelemetryModelPathNames.ToArray(),
             ["toggle_telemetry"]);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.PixelOverlayScreen,
+            "demo.webfirst.pixel-overlay/v1",
+            [],
+            []);
+        AssertScreenContract(
+            manifest,
+            GameUiDemoController.PhysicalOverlayScreen,
+            "demo.webfirst.physical-overlay/v1",
+            [],
+            []);
         AssertScreenContract(
             manifest,
             GameUiDemoController.PauseScreen,
@@ -473,6 +519,36 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.lights");
         AssertHudPathWritten(ui, "hud.bodies");
         AssertHudPathWritten(ui, "hud.fx");
+    }
+
+    /// <summary>
+    /// 验证 Demo 脚本通过公开零分配 CopyCanvases API 发现 primary 与两个排序后的 overlay Canvas。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerDiscoversExplicitSceneCanvasesThroughPublicApi()
+    {
+        GameUiDemoController controller = new();
+        FakeGameUiService ui = new()
+        {
+            PrimaryCanvas = new ScriptUiCanvasHandle(11),
+            Canvases =
+            [
+                new ScriptUiCanvasHandle(11),
+                new ScriptUiCanvasHandle(12),
+                new ScriptUiCanvasHandle(13),
+            ],
+        };
+
+        controller.StartForService(ui);
+
+        Assert.Equal(3, controller.CanvasCount);
+        Assert.Equal(new ScriptUiCanvasHandle(12), controller.PixelOverlayCanvas);
+        Assert.Equal(new ScriptUiCanvasHandle(13), controller.PhysicalOverlayCanvas);
+
+        controller.StopForService();
+        Assert.Equal(0, controller.CanvasCount);
+        Assert.Equal(default, controller.PixelOverlayCanvas);
+        Assert.Equal(default, controller.PhysicalOverlayCanvas);
     }
 
     /// <summary>
@@ -1504,9 +1580,10 @@ public sealed class DemoUiContentTests
         using RmlUiBackend backend = new(window);
         backend.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, window.Width, window.Height, 1f), UiBackendKind.RmlUi));
 
-        Span<UiScreenStackEntry> stack = stackalloc UiScreenStackEntry[7];
+        Span<UiScreenStackEntry> stack = stackalloc UiScreenStackEntry[16];
         int index = 0;
         int hudIndex = -1;
+        int telemetryIndex = -1;
         int mainIndex = -1;
         foreach (UiManifestScreen screen in manifest.Screens)
         {
@@ -1522,16 +1599,23 @@ public sealed class DemoUiContentTests
                 hudIndex = index;
             }
 
+            if (screen.Id == "telemetry")
+            {
+                telemetryIndex = index;
+            }
+
             index++;
         }
 
         // Assert：验证预期结果
         Assert.True(mainIndex >= 0);
         Assert.True(hudIndex >= 0);
+        Assert.True(telemetryIndex >= 0);
+        Assert.Equal(manifest.ScreenCount, index);
         backend.SetScreenStack(stack.Slice(mainIndex, 1));
         backend.Update(1f / 60f);
-        // main-menu 的 start_game/open_settings 行相隔 34px；选择 settings 行验证真实事件映射。
-        backend.FeedPointerMove(48f, 152f);
+        // main_panel 位于 (392,24)，设置按钮位于面板内 (28,148)；点击中心验证真实布局命中与事件映射。
+        backend.FeedPointerMove(536f, 187f);
         backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
         backend.FeedPointerButton(UiPointerButton.Left, isDown: false);
         backend.Update(1f / 60f);
@@ -1539,11 +1623,16 @@ public sealed class DemoUiContentTests
         int eventCount = backend.DrainEvents(events);
         Assert.Contains(events[..eventCount].ToArray(), e => e.Action == new UI.UiActionId(UiStableId.Hash("open_settings")));
 
-        backend.SetScreenStack(stack);
+        backend.SetScreenStack(stack[..index]);
         backend.Update(1f / 60f);
-        foreach (string path in HudPaths())
+        foreach (string path in GameUiDemoController.HudModelPathNames)
         {
             backend.SetModelValue(stack[hudIndex].Document, new UI.UiPathId(UiStableId.Hash(path)), new UI.UiValue(path == "hud.cooldown" ? 1.0 : 0.25));
+        }
+
+        foreach (string path in GameUiDemoController.TelemetryModelPathNames)
+        {
+            backend.SetModelValue(stack[telemetryIndex].Document, new UI.UiPathId(UiStableId.Hash(path)), new UI.UiValue(0.25));
         }
 
         Assert.True(backend.InvokeAction(stack[0].Document, new UI.UiActionId(UiStableId.Hash("open_settings")), UI.UiValue.FromBoolean(true)));
@@ -1965,6 +2054,17 @@ public sealed class DemoUiContentTests
         public List<ScriptUiPathId> WrittenPaths { get; } = [];
 
         public Dictionary<ScriptUiPathId, ScriptUiValue> Values { get; } = [];
+
+        public ScriptUiCanvasHandle PrimaryCanvas { get; set; }
+
+        public ScriptUiCanvasHandle[] Canvases { get; set; } = [];
+
+        public int CopyCanvases(Span<ScriptUiCanvasHandle> destination)
+        {
+            int count = Math.Min(destination.Length, Canvases.Length);
+            Canvases.AsSpan(0, count).CopyTo(destination);
+            return count;
+        }
 
         public ScriptUiScreenHandle ShowScreen(string screenId)
         {

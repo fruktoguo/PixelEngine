@@ -559,8 +559,8 @@ public sealed class EditorAssetBrowserDualRootTests
         Assert.Contains("音频 Cue 映射：13", cues.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("运行时音效", audio.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("预加载", uiManifest.Descriptor?.Purpose, StringComparison.Ordinal);
-        Assert.Contains("8 个 Screen", uiManifest.PreviewSummary, StringComparison.Ordinal);
-        Assert.Contains("8 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("10 个 Screen", uiManifest.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("10 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("Web-first", uiScreen.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("id=main-menu", uiScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("demo.webfirst.main-menu/v1", uiScreen.PreviewSummary, StringComparison.Ordinal);

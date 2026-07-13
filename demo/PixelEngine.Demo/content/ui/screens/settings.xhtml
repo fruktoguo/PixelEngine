@@ -1,17 +1,24 @@
-<rml title="设置" data-screen="settings" data-contract="demo.webfirst.settings/v1" style="left: 344px; top: 34px; width: 304px; height: 204px">
+<rml title="设置" data-screen="settings" data-contract="demo.webfirst.settings/v1" style="left: 344px; top: 82px; width: 336px; height: 224px">
   <head>
     <style>
-      body { font-family: "Noto Sans SC"; color: #edf4ff; background-color: rgba(13, 20, 28, 226); }
-      button { width: 124px; height: 26px; margin-top: 8px; background-color: #315f8d; color: #ffffff; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #edf4ff; background-color: transparent; }
+      #settings_panel { position: absolute; left: 344px; top: 82px; width: 304px; height: 192px; padding: 16px; background-color: rgba(13, 20, 28, 236); border-width: 1px; border-color: #46627d; }
+      #settings_title { color: #f5c451; font-size: 21px; }
+      #settings_audio_hint, #settings_vsync_hint { color: #b8c5d2; }
+      checkbox { margin-top: 8px; }
+      button { width: 124px; height: 28px; margin-top: 10px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
+      button:hover { background-color: #4076a5; }
       p { margin: 4px 0px; }
     </style>
   </head>
   <body>
-    <p id="settings_title">设置</p>
-    <p id="settings_audio_hint">音频总开关会改写运行时 AudioSystem。</p>
-    <p id="settings_vsync_hint">Present VSync 会改写当前窗口交换策略。</p>
-    <checkbox id="settings_vsync" path="settings.vsync" text="Present VSync" checked="true" data-event-change="toggle_vsync" />
-    <checkbox id="settings_audio" path="settings.audio" text="音频总开关" checked="true" data-event-change="toggle_audio" />
-    <button id="settings_back" data-event-click="back_main">返回</button>
+    <div id="settings_panel">
+      <p id="settings_title">设置</p>
+      <p id="settings_audio_hint">音频总开关会改写运行时 AudioSystem。</p>
+      <p id="settings_vsync_hint">Present VSync 会改写当前窗口交换策略。</p>
+      <checkbox id="settings_vsync" path="settings.vsync" text="Present VSync" checked="true" data-event-change="toggle_vsync" />
+      <checkbox id="settings_audio" path="settings.audio" text="音频总开关" checked="true" data-event-change="toggle_audio" />
+      <button id="settings_back" data-event-click="back_main">返回</button>
+    </div>
   </body>
 </rml>

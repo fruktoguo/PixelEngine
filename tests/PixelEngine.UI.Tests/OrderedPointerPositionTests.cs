@@ -63,6 +63,80 @@ public sealed class OrderedPointerPositionTests
     }
 
     [Fact]
+    public void DearImGuiTricklesCompleteClickSequenceAcrossFrames()
+    {
+        ImGuiContextPtr context = ImGui.CreateContext();
+        try
+        {
+            ImGui.SetCurrentContext(context);
+            ImGuiIOPtr io = ImGui.GetIO();
+            io.DisplaySize = new Vector2(800f, 600f);
+            io.DeltaTime = 1f / 60f;
+            io.BackendFlags |= ImGuiBackendFlags.RendererHasTextures;
+
+            ImGui.NewFrame();
+            ImGui.SetNextWindowPos(Vector2.Zero);
+            ImGui.SetNextWindowSize(new Vector2(800f, 600f));
+            _ = ImGui.Begin("Click surface", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove);
+            ImGui.SetCursorPos(new Vector2(20f, 20f));
+            _ = ImGui.Button("Start", new Vector2(120f, 48f));
+            ImGui.End();
+            ImGui.EndFrame();
+
+            ImGui.AddMousePosEvent(io, 50f, 50f);
+            ImGui.NewFrame();
+            ImGui.SetNextWindowPos(Vector2.Zero);
+            ImGui.SetNextWindowSize(new Vector2(800f, 600f));
+            _ = ImGui.Begin("Click surface", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove);
+            ImGui.SetCursorPos(new Vector2(20f, 20f));
+            _ = ImGui.Button("Start", new Vector2(120f, 48f));
+            ImGui.End();
+            ImGui.EndFrame();
+
+            ImGui.AddMouseButtonEvent(io, 0, true);
+            ImGui.AddMouseButtonEvent(io, 0, false);
+
+            ImGui.NewFrame();
+            ImGui.SetNextWindowPos(Vector2.Zero);
+            ImGui.SetNextWindowSize(new Vector2(800f, 600f));
+            _ = ImGui.Begin("Click surface", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove);
+            ImGui.SetCursorPos(new Vector2(20f, 20f));
+            bool clickedOnPressFrame = ImGui.Button("Start", new Vector2(120f, 48f));
+            bool hoveredOnPressFrame = ImGui.IsItemHovered();
+            bool activeOnPressFrame = ImGui.IsItemActive();
+            bool downOnPressFrame = ImGui.IsMouseDown(ImGuiMouseButton.Left);
+            Vector2 mouseOnPressFrame = io.MousePos;
+            Vector2 rectMinOnPressFrame = ImGui.GetItemRectMin();
+            Vector2 rectMaxOnPressFrame = ImGui.GetItemRectMax();
+            ImGui.End();
+            ImGui.EndFrame();
+
+            ImGui.NewFrame();
+            ImGui.SetNextWindowPos(Vector2.Zero);
+            ImGui.SetNextWindowSize(new Vector2(800f, 600f));
+            _ = ImGui.Begin("Click surface", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove);
+            ImGui.SetCursorPos(new Vector2(20f, 20f));
+            bool clickedOnReleaseFrame = ImGui.Button("Start", new Vector2(120f, 48f));
+            bool hoveredOnReleaseFrame = ImGui.IsItemHovered();
+            bool activeOnReleaseFrame = ImGui.IsItemActive();
+            bool releasedOnReleaseFrame = ImGui.IsMouseReleased(ImGuiMouseButton.Left);
+            ImGui.End();
+            ImGui.EndFrame();
+
+            Assert.False(clickedOnPressFrame);
+            Assert.True(
+                clickedOnReleaseFrame,
+                $"press: mouse={mouseOnPressFrame}, rect={rectMinOnPressFrame}..{rectMaxOnPressFrame}, " +
+                $"hovered={hoveredOnPressFrame}, active={activeOnPressFrame}, down={downOnPressFrame}; " +
+                $"release: hovered={hoveredOnReleaseFrame}, active={activeOnReleaseFrame}, released={releasedOnReleaseFrame}");
+        }
+        finally
+        {
+            ImGui.DestroyContext(context);
+        }
+    }
+
+    [Fact]
     public void ButtonBeforeAnyMoveFallsBackToCurrentDevicePosition()
     {
         OrderedPointerPosition tracker = new();

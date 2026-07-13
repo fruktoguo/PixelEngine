@@ -111,6 +111,51 @@ public sealed class ManagedFallbackBackendTests
         Assert.False(host.NeedsComposite);
     }
 
+    /// <summary>
+    /// 多 Canvas 共用同一 ImGui context 时，本地 screen handle 即使相同也必须生成不同窗口 id。
+    /// </summary>
+    [Fact]
+    public void ManagedFallbackNamespacesWindowIdsAcrossBackendsSharingGuiContext()
+    {
+        string firstPath = WriteUi("""
+            <ui title="First" style="left: 12px; top: 20px; width: 120px; height: 48px">
+              <text id="first">First canvas</text>
+            </ui>
+            """);
+        string secondPath = WriteUi("""
+            <ui title="Second" style="left: 180px; top: 80px; width: 140px; height: 48px">
+              <text id="second">Second canvas</text>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend firstBackend = new(gui);
+        using ManagedFallbackBackend secondBackend = new(gui);
+        using GameUiHost firstHost = new(firstBackend);
+        using GameUiHost secondHost = new(secondBackend);
+        UiBackendInitializeInfo initialize = new(
+            new UiViewport(0, 0, 320, 240, 1f),
+            UiBackendKind.ManagedFallback);
+        firstHost.Initialize(in initialize);
+        secondHost.Initialize(in initialize);
+
+        UiScreenHandle firstScreen = firstHost.ShowScreen(
+            new UiScreenId(1),
+            UiDocumentSource.Asset(firstPath, 1));
+        UiScreenHandle secondScreen = secondHost.ShowScreen(
+            new UiScreenId(2),
+            UiDocumentSource.Asset(secondPath, 2));
+        firstHost.DrawGui(gui.Context);
+        secondHost.DrawGui(gui.Context);
+
+        Assert.Equal(1, firstScreen.Value);
+        Assert.Equal(1, secondScreen.Value);
+        Assert.Equal(2, gui.Context.WindowIds.Count);
+        Assert.Equal(2, gui.Context.WindowIds.Distinct(StringComparer.Ordinal).Count());
+        Assert.All(gui.Context.WindowIds, static id => Assert.EndsWith("_1", id, StringComparison.Ordinal));
+        Assert.Contains("First canvas", gui.Context.Texts);
+        Assert.Contains("Second canvas", gui.Context.Texts);
+    }
+
 
     /// <summary>
     /// 验证托管回退Checkbox Updates Model Value And Raises Event。
@@ -481,6 +526,8 @@ public sealed class ManagedFallbackBackendTests
 
         public List<float> CanvasScales { get; } = [];
 
+        public List<string> WindowIds { get; } = [];
+
         public int CanvasScalePopCount { get; private set; }
 
         public int CanvasScaleDepth { get; private set; }
@@ -511,6 +558,7 @@ public sealed class ManagedFallbackBackendTests
 
         public bool BeginWindow(string id, string title, GuiDrawWindowFlags flags = GuiDrawWindowFlags.None)
         {
+            WindowIds.Add(id);
             LastWindowFlags = flags;
             return true;
         }

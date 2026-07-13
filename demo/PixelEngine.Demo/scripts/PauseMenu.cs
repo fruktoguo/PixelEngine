@@ -35,12 +35,22 @@ public sealed class PauseMenu : Behaviour
     protected override void OnUpdate(float dt)
     {
         _ = dt;
+        if (!UseLegacyFallback())
+        {
+            return;
+        }
+
         ToggleFromEscape();
     }
 
     /// <inheritdoc />
     protected override void OnGui(IGuiContext gui)
     {
+        if (!UseLegacyFallback())
+        {
+            return;
+        }
+
         ToggleFromEscape();
         if (!IsOpen)
         {
@@ -67,6 +77,24 @@ public sealed class PauseMenu : Behaviour
         }
 
         gui.EndWindow();
+    }
+
+    private bool UseLegacyFallback()
+    {
+        if (LegacyGuiFallback.IsRequired(Context.GameUi))
+        {
+            return true;
+        }
+
+        // UI 服务可能晚于脚本装配；若旧菜单曾主动暂停，则在交棒给 Web Canvas 时恢复一次。
+        if (IsOpen)
+        {
+            Context.Runtime.ResumeSimulation();
+            IsOpen = false;
+            _status = string.Empty;
+        }
+
+        return false;
     }
 
     private void DrawControls(IGuiContext gui)

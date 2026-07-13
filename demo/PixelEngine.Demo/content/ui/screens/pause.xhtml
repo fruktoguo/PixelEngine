@@ -1,17 +1,23 @@
-<rml title="暂停" data-screen="pause" data-contract="demo.webfirst.pause/v1" style="left: 332px; top: 52px; width: 286px; height: 188px">
+<rml title="暂停" data-screen="pause" data-contract="demo.webfirst.pause/v1" style="left: 366px; top: 116px; width: 300px; height: 250px">
   <head>
     <style>
-      body { font-family: "Noto Sans SC"; color: #f2f6ff; background-color: rgba(10, 14, 22, 232); }
-      button { width: 148px; height: 28px; margin-top: 7px; background-color: #315f8d; color: #ffffff; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #f2f6ff; background-color: transparent; }
+      #pause_panel { position: absolute; left: 366px; top: 116px; width: 268px; height: 218px; padding: 16px; background-color: rgba(10, 14, 22, 240); border-width: 1px; border-color: #53657d; }
+      #pause_title { color: #f5c451; font-size: 23px; }
+      #pause_hint { color: #b7c3d3; }
+      button { width: 220px; height: 30px; margin-top: 8px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
+      button:hover { background-color: #4076a5; }
       p { margin: 4px 0px; }
     </style>
   </head>
   <body>
-    <p id="pause_title">暂停</p>
-    <p id="pause_hint">模拟已暂停，UI 与输入仍保持响应。</p>
-    <button id="pause_resume" data-event-click="resume_game">继续</button>
-    <button id="pause_settings" data-event-click="open_settings">设置</button>
-    <button id="pause_restart" data-event-click="restart_game">重开</button>
-    <button id="pause_quit" data-event-click="quit_game">退出</button>
+    <div id="pause_panel">
+      <p id="pause_title">暂停</p>
+      <p id="pause_hint">模拟已暂停，UI 与输入仍保持响应。</p>
+      <button id="pause_resume" data-event-click="resume_game">继续</button>
+      <button id="pause_settings" data-event-click="open_settings">设置</button>
+      <button id="pause_restart" data-event-click="restart_game">重开</button>
+      <button id="pause_quit" data-event-click="quit_game">退出</button>
+    </div>
   </body>
 </rml>

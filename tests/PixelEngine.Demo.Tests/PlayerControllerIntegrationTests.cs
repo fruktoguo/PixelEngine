@@ -183,6 +183,60 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证场景存在 Web Canvas 时旧脚本 GUI 完全退场，Esc 只由 Web UI 暂停页处理且暂停态仍可再次 Esc 恢复。
+    /// </summary>
+    [Fact]
+    public void WebCanvasSuppressesLegacyGuiAndOwnsEscapePauseFlow()
+    {
+        ActiveCanvasGameUiService ui = new();
+        using Engine engine = CreateManualScriptEngine(
+            out ScriptInputApi input,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoMaterials(),
+            gameUi: ui);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<DemoHud>();
+        _ = entity.AddComponent<PlayableHud>();
+        _ = entity.AddComponent<PauseMenu>();
+        GameUiDemoController controller = entity.AddComponent<GameUiDemoController>();
+
+        engine.RunHeadlessTicks(1);
+        IScriptRuntime scripts = engine.Context.GetService<IScriptRuntime>();
+        RecordingGuiContext initialGui = new();
+        scripts.DrawGui(initialGui);
+
+        Assert.DoesNotContain(initialGui.Drawn, line => line.StartsWith("begin:demo-hud:", StringComparison.Ordinal));
+        Assert.DoesNotContain(initialGui.Drawn, line => line.StartsWith("begin:playable-hud:", StringComparison.Ordinal));
+        Assert.DoesNotContain(initialGui.Drawn, line => line.StartsWith("begin:demo-pause-menu:", StringComparison.Ordinal));
+        Assert.Equal(1, controller.CanvasCount);
+
+        input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+
+        IRuntimeControlApi runtime = engine.Context.GetService<IRuntimeControlApi>();
+        UiScreenHandle pauseScreen = controller.ModalScreen;
+        Assert.False(runtime.Capture().IsPlaying);
+        Assert.NotEqual(default, pauseScreen);
+        Assert.Equal([GameUiDemoController.PauseScreen], ui.PushedScreens);
+
+        RecordingGuiContext pausedGui = new();
+        scripts.DrawGui(pausedGui);
+        Assert.DoesNotContain(pausedGui.Drawn, line => line.StartsWith("begin:demo-pause-menu:", StringComparison.Ordinal));
+
+        input.Update([], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        input.Update([Key.Escape], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(1);
+        scripts.DrawGui(new RecordingGuiContext());
+
+        Assert.True(runtime.Capture().IsPlaying);
+        Assert.Equal(default, controller.ModalScreen);
+        Assert.Contains(pauseScreen, ui.HiddenScreens);
+    }
+
+    /// <summary>
     /// 验证暂停菜单按钮会经公开 Runtime/Diagnostics API 触发重开与调试叠层控制。
     /// </summary>
     [Fact]
@@ -2887,7 +2941,8 @@ public sealed class PlayerControllerIntegrationTests
         IAudioApi? audio = null,
         string? contentRoot = null,
         int worldWidthCells = TestWorldWidth,
-        int worldHeightCells = TestWorldHeight)
+        int worldHeightCells = TestWorldHeight,
+        IGameUiService? gameUi = null)
     {
         Engine engine = CreateBaseEngine(
             out input,
@@ -2900,6 +2955,11 @@ public sealed class PlayerControllerIntegrationTests
             worldHeightCells: worldHeightCells);
         scene = new ScriptScene();
         engine.Context.RegisterService(scene);
+        if (gameUi is not null)
+        {
+            engine.Context.RegisterService<IGameUiService>(gameUi);
+        }
+
         _ = engine.AttachScriptingFromServices();
         return engine;
     }
@@ -3478,6 +3538,86 @@ public sealed class PlayerControllerIntegrationTests
             LastCue = cue;
             LastX = x;
             LastY = y;
+        }
+    }
+
+    private sealed class ActiveCanvasGameUiService : IGameUiService
+    {
+        private int _nextScreenHandle = 1;
+
+        public event Action<UiEvent>? UiEventRaised
+        {
+            add => _ = value;
+            remove => _ = value;
+        }
+
+        public UiCanvasHandle PrimaryCanvas { get; } = new(41);
+
+        public List<string> PushedScreens { get; } = [];
+
+        public List<UiScreenHandle> HiddenScreens { get; } = [];
+
+        public int CopyCanvases(Span<UiCanvasHandle> destination)
+        {
+            if (destination.IsEmpty)
+            {
+                return 0;
+            }
+
+            destination[0] = PrimaryCanvas;
+            return 1;
+        }
+
+        public UiScreenHandle ShowScreen(string screenId)
+        {
+            _ = screenId;
+            return new UiScreenHandle(_nextScreenHandle++);
+        }
+
+        public void HideScreen(UiScreenHandle screen)
+        {
+            HiddenScreens.Add(screen);
+        }
+
+        public UiScreenHandle PushModal(string screenId)
+        {
+            PushedScreens.Add(screenId);
+            return new UiScreenHandle(_nextScreenHandle++);
+        }
+
+        public void BindModel(UiScreenHandle screen, UiModelName modelName, IUiModel model)
+        {
+            _ = screen;
+            _ = modelName;
+            _ = model;
+        }
+
+        public UiStringHandle InternString(string value)
+        {
+            _ = value;
+            return default;
+        }
+
+        public void SetValue(UiScreenHandle screen, UiPathId path, in UiValue value)
+        {
+            _ = screen;
+            _ = path;
+            _ = value;
+        }
+
+        public bool TryGetValue(UiScreenHandle screen, UiPathId path, out UiValue value)
+        {
+            _ = screen;
+            _ = path;
+            value = default;
+            return false;
+        }
+
+        public void Invoke(UiScreenHandle screen, UiActionId action, in UiValue payload)
+        {
+            _ = screen;
+            _ = action;
+            _ = payload;
         }
     }
 

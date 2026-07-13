@@ -1,5 +1,6 @@
 using PixelEngine.Gui;
 using PixelEngine.Rendering;
+using System.Globalization;
 using System.Text;
 
 namespace PixelEngine.UI;
@@ -11,12 +12,16 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 {
     private const int CompositionOverlayTextCapacity = 256;
     private const uint CompositionOverlayTextColorBgra = 0xFF_FF_D4_4D;
+    private static long s_nextWindowNamespace;
 
     private readonly IManagedFallbackGuiHost _gui;
     private readonly ManagedUiDocument?[] _documents;
     private readonly UiScreenStackEntry[] _visibleScreens;
+    private readonly string?[] _visibleWindowIds;
     private readonly UiEvent[] _events;
     private readonly Action<IGuiDrawContext> _drawCallback;
+    private readonly long _windowNamespace;
+    private readonly string _compositionWindowId;
     private UiViewport _viewport;
     private int _documentCount;
     private int _nextDocumentHandle = 1;
@@ -38,8 +43,13 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         Options = options.Normalize();
         _documents = new ManagedUiDocument[Options.MaxDocuments];
         _visibleScreens = new UiScreenStackEntry[Options.MaxVisibleScreens];
+        _visibleWindowIds = new string[Options.MaxVisibleScreens];
         _events = new UiEvent[Options.EventCapacity];
         _drawCallback = DrawVisibleScreens;
+        _windowNamespace = Interlocked.Increment(ref s_nextWindowNamespace);
+        _compositionWindowId = string.Create(
+            CultureInfo.InvariantCulture,
+            $"ui_{_windowNamespace}_ime_composition");
     }
 
     private ManagedFallbackBackendOptions Options { get; }
@@ -175,7 +185,25 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             throw new InvalidOperationException("ManagedFallbackBackend 可见屏栈容量不足。");
         }
 
+        int previousCount = _visibleScreenCount;
+        for (int i = 0; i < stack.Length; i++)
+        {
+            UiScreenStackEntry screen = stack[i];
+            if (i >= previousCount || _visibleScreens[i].Handle != screen.Handle)
+            {
+                _visibleWindowIds[i] = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"ui_{_windowNamespace}_{screen.Handle.Value}");
+            }
+        }
+
         stack.CopyTo(_visibleScreens);
+        for (int i = stack.Length; i < previousCount; i++)
+        {
+            _visibleScreens[i] = default;
+            _visibleWindowIds[i] = null;
+        }
+
         _visibleScreenCount = stack.Length;
         Dirty = true;
     }
@@ -515,13 +543,19 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                 continue;
             }
 
-            DrawDocument(gui, _visibleScreens[i], document);
+            string windowId = _visibleWindowIds[i] ??
+                throw new InvalidOperationException("ManagedFallbackBackend 可见屏幕缺少窗口命名空间。");
+            DrawDocument(gui, _visibleScreens[i], document, windowId);
         }
 
         DrawCompositionOverlay(gui);
     }
 
-    private void DrawDocument(IGuiDrawContext gui, UiScreenStackEntry screen, ManagedUiDocument document)
+    private void DrawDocument(
+        IGuiDrawContext gui,
+        UiScreenStackEntry screen,
+        ManagedUiDocument document,
+        string windowId)
     {
         // Game UI 是 runtime viewport 的无 chrome overlay，不得退化成可移动的 Editor/ImGui 工具窗口。
         GuiDrawWindowFlags flags =
@@ -548,7 +582,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         bool beganWindow = false;
         try
         {
-            bool visible = gui.BeginWindow($"ui_{screen.Handle.Value}", document.Title, flags);
+            bool visible = gui.BeginWindow(windowId, document.Title, flags);
             beganWindow = true;
             if (!visible)
             {
@@ -676,7 +710,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         bool beganWindow = false;
         try
         {
-            bool visible = gui.BeginWindow("ui_ime_composition", "IME composition", flags);
+            bool visible = gui.BeginWindow(_compositionWindowId, "IME composition", flags);
             beganWindow = true;
             if (!visible)
             {
