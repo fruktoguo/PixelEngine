@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-14",
-  "generatedFromCommit": "d5f9ae1be2e77d6634581ce706ce55c21545df76",
+  "generatedFromCommit": "8a700d2083bf1b806169e83101380d60803dc711",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -688,6 +688,19 @@
       "reportPath": "docs/evidence-2026-07-14-ui-004-gameview-responsive-toolbar.md",
       "sha256": "1ac35b8aecfb9c404aa090d62c68e3c809bfc425d6f6ec13016dd5b6ef0425c9",
       "notes": "A real 360x720 desktop-GL Editor reproduces the old clipped toolbar and verifies the responsive fix keeps preset plus overflow within exactly 174px; hidden resolution, scale and maximize actions move into the menu and popup-open state blocks gameplay. Physical menu clicks, different-DPI/cross-screen and reviewer remain, so UI-004 stays active."
+    },
+    {
+      "entryId": "ui-004-game-ui-product-flow-20260714",
+      "taskIds": ["UI-004"],
+      "evidenceState": "local_game_ui_product_flow_complete_external_physical_input_dpi_pending",
+      "commit": "8a700d2083bf1b806169e83101380d60803dc711",
+      "runSessionId": "local-20260714-ui004-game-ui-product-flow",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT driver 32.0.31021.5001; active desktop 1024x768 at 96 DPI; .NET SDK 10.0.108; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1; full UI/Hosting/Rendering/Editor/Demo Release tests; two real desktop-GL RmlUi Player runs for static menu and scripted gameplay with framebuffer capture; Computer Use window discovery, passive snapshot and activation recovery attempt; task/evidence catalog validation",
+      "reportPath": "docs/evidence-2026-07-14-ui-004-game-ui-product-flow.md",
+      "sha256": "6c80f1ed394801e57541ea1e41309cfb2231d19625a5f4827a7a3289d0dbaa79",
+      "notes": "Default main menu, gameplay HUD, telemetry and two CanvasScaler diagnostic overlays now form mutually exclusive product states; a real RmlUi path-contract crash is fixed and fake tests reject cross-document paths. Commit-bound menu/gameplay framebuffers and five full test projects pass. Computer Use can discover and snapshot the Player but repeated fresh-window activation fails, so physical clicks, different-DPI/cross-screen and reviewer remain and UI-004 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
