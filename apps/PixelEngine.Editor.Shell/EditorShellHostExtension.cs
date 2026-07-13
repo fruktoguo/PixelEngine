@@ -19,7 +19,9 @@ internal sealed class EditorShellHostExtension :
     IEditorInputCaptureSource,
     IGameUiInputSourceFactory,
     IGameplayViewportInputMapper,
-    IUiPresentTargetProvider
+    IUiPresentTargetProvider,
+    IGamePresentationOverride,
+    IGameUiCompositionPolicy
 {
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
@@ -114,6 +116,7 @@ internal sealed class EditorShellHostExtension :
         }
 
         _lastPreparedMode = mode;
+        _gameViewPanel?.PrepareFrame(mode);
         _gameObjectInspectorPanel?.PrepareFrame(_editor.Selection.GameObjectStableId);
         // Scene View 关闭后 EditorApp 不再 Draw 面板；gizmo 事务仍须响应 selection/mode/scene 生命周期。
         _sceneViewPanel?.PrepareFrame(_editor.Selection.GameObjectStableId, mode);
@@ -312,7 +315,7 @@ internal sealed class EditorShellHostExtension :
         EditorMode mode = CapturePlayMode();
         if (mode is not (EditorMode.Play or EditorMode.Paused) ||
             _gameViewPanel is not { Visible: true, PointerHovered: true } gameView ||
-            !gameView.LastViewportSnapshot.TryMapPanelToViewport(gameView.LastPointerPanelPoint, out System.Numerics.Vector2 viewportPoint))
+            !gameView.LastViewportSnapshot.TryMapPanelToWorld(gameView.LastPointerPanelPoint, out System.Numerics.Vector2 viewportPoint))
         {
             return false;
         }
@@ -336,7 +339,7 @@ internal sealed class EditorShellHostExtension :
         viewportY = 0f;
         if (CapturePlayMode() is not (EditorMode.Play or EditorMode.Paused) ||
             _gameViewPanel is not { Visible: true } gameView ||
-            !gameView.LastViewportSnapshot.TryMapFramebufferToViewport(
+            !gameView.LastViewportSnapshot.TryMapFramebufferToWorld(
                 new System.Numerics.Vector2(framebufferX, framebufferY),
                 gameView.LastPanelOriginFramebuffer,
                 gameView.LastFramebufferScale,
@@ -369,6 +372,19 @@ internal sealed class EditorShellHostExtension :
     {
         return _gameUiPresentTargetProvider.TryGetPresentTarget(out target);
     }
+
+    public bool TryGetPendingPresentation(out GamePresentationOverride request)
+    {
+        if (_gameViewPanel is not null)
+        {
+            return _gameViewPanel.TryGetPendingPresentation(out request);
+        }
+
+        request = default;
+        return false;
+    }
+
+    public bool AllowsGameUiComposition => CapturePlayMode() is EditorMode.Play or EditorMode.Paused;
 
     private EditorMode CapturePlayMode()
     {
@@ -491,7 +507,17 @@ internal sealed class EditorShellHostExtension :
             _sceneWebCanvasPreview);
         _undoStack.BeforeOperation = FlushPendingAuthoringEdits;
         _editor.AddPanel(_sceneViewPanel);
-        _gameViewPanel = new GameViewPanel(() => pipeline.CurrentViewportTexture);
+        _playerSettingsPanel = new PlayerSettingsPanel(_project, () => _app.UiScale);
+        GamePresentationCoordinator presentation = engine.Context.GetService<GamePresentationCoordinator>();
+        _gameViewPanel = new GameViewPanel(
+            () => pipeline.CurrentViewportTexture,
+            () => presentation.Current,
+            () => (
+                _playerSettingsPanel.AppliedSettings.WindowWidth,
+                _playerSettingsPanel.AppliedSettings.WindowHeight),
+            pipeline.MaximumTextureSize,
+            _app.Workspace,
+            _project.ProjectRoot);
         _editor.AddPanel(_gameViewPanel);
         _assetBrowserPanel = new AssetBrowserPanel(
             assetBrowserDataSource,
@@ -517,7 +543,6 @@ internal sealed class EditorShellHostExtension :
         }
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project, () => _app.UiScale);
-        _playerSettingsPanel = new PlayerSettingsPanel(_project, () => _app.UiScale);
         _buildSettingsPanel = new BuildSettingsPanel(_project, console: _app.ConsoleStore);
         AddHiddenPanel(_projectSettingsPanel);
         AddHiddenPanel(_playerSettingsPanel);

@@ -4,6 +4,7 @@ using PixelEngine.Core.Events;
 using PixelEngine.Core.Threading;
 using PixelEngine.Core.Time;
 using PixelEngine.UI;
+using PixelEngine.Rendering;
 
 namespace PixelEngine.Hosting;
 
@@ -28,6 +29,7 @@ public sealed class EngineBuilder
     private bool _enableGameUi;
     private UiBackendKind _gameUiBackend = UiBackendKind.ManagedFallback;
     private bool _vSync = true;
+    private PlayerWindowMode _windowMode = PlayerWindowMode.Windowed;
     private string _contentRoot = "content";
     private string? _startScene;
     private double _simHz = EngineConstants.DefaultSimHz;
@@ -199,6 +201,21 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 配置独立 Player 的初始平台窗口模式；不影响 Editor Game View 面板最大化。
+    /// </summary>
+    /// <param name="mode">Windowed、MaximizedWindow 或 BorderlessFullscreen。</param>
+    public EngineBuilder WithWindowMode(PlayerWindowMode mode)
+    {
+        if (!Enum.IsDefined(mode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知 Player window mode。");
+        }
+
+        _windowMode = mode;
+        return this;
+    }
+
+    /// <summary>
     /// 配置内容根目录。
     /// </summary>
     public EngineBuilder WithContentRoot(string contentRoot)
@@ -349,7 +366,8 @@ public sealed class EngineBuilder
             _simHz,
             _eventCapacityPerChannel,
             _noGcRegionBudgetBytes,
-            _overload);
+            _overload,
+            _windowMode);
         EngineGcCoordinator.ApplyLatencyMode(options.GcMode.ToLatencyMode());
         // 2) 创建 Core 运行时服务：JobSystem、帧时钟、事件总线、计数器与过载控制器。
         JobSystem jobs = new(options.WorkerCount);
@@ -385,6 +403,8 @@ public sealed class EngineBuilder
         context.RegisterService(editorHostExtensions);
         bool gameUiInputSourceRegistered = false;
         bool gameplayViewportMapperRegistered = false;
+        bool gamePresentationOverrideRegistered = false;
+        bool gameUiCompositionPolicyRegistered = false;
         for (int i = 0; i < editorHostExtensions.Count; i++)
         {
             IEditorHostExtension extension = editorHostExtensions[i];
@@ -398,6 +418,18 @@ public sealed class EngineBuilder
             {
                 context.RegisterService(gameplayViewportMapper);
                 gameplayViewportMapperRegistered = true;
+            }
+
+            if (!gamePresentationOverrideRegistered && extension is IGamePresentationOverride presentationOverride)
+            {
+                context.RegisterService(presentationOverride);
+                gamePresentationOverrideRegistered = true;
+            }
+
+            if (!gameUiCompositionPolicyRegistered && extension is IGameUiCompositionPolicy compositionPolicy)
+            {
+                context.RegisterService(compositionPolicy);
+                gameUiCompositionPolicyRegistered = true;
             }
         }
 

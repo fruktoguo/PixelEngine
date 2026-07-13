@@ -106,6 +106,7 @@ public sealed class DemoStartupOptionsTests
                   "windowTitle": "Player Settings Runtime",
                   "windowWidth": 1440,
                   "windowHeight": 810,
+                  "windowMode": "MaximizedWindow",
                   "vSync": false,
                   "runtimeUiBackend": "Ultralight",
                   "releaseChannel": "Production"
@@ -113,6 +114,8 @@ public sealed class DemoStartupOptionsTests
                 """);
 
             DemoStartupOptions options = DemoStartupOptions.Parse(["--content", temp]);
+            DemoStartupOptions explicitMode = DemoStartupOptions.Parse(
+                ["--window-mode", "BorderlessFullscreen", "--content", temp]);
             EngineProject project = DemoProgram.BuildProject(options);
             using Engine engine = DemoProgram.BuildEngine(options, project);
 
@@ -121,12 +124,15 @@ public sealed class DemoStartupOptionsTests
             Assert.Equal("Player Settings Runtime", options.WindowTitle);
             Assert.Equal(1440, options.WindowWidth);
             Assert.Equal(810, options.WindowHeight);
+            Assert.Equal(PlayerWindowMode.MaximizedWindow, options.WindowMode);
+            Assert.Equal(PlayerWindowMode.BorderlessFullscreen, explicitMode.WindowMode);
             Assert.False(options.VSync);
             Assert.Equal(UiBackendKind.Ultralight, options.RuntimeUiBackend);
             Assert.Equal(PlayerReleaseChannel.Production, options.ReleaseChannel);
             Assert.Equal("Player Settings Runtime", engine.Context.Options.WindowTitle);
             Assert.Equal(1440, engine.Context.Options.WindowWidth);
             Assert.Equal(810, engine.Context.Options.WindowHeight);
+            Assert.Equal(PlayerWindowMode.MaximizedWindow, engine.Context.Options.WindowMode);
             Assert.False(engine.Context.Options.VSync);
             Assert.Equal(UiBackendKind.Ultralight, engine.Context.Options.GameUiBackend);
         }

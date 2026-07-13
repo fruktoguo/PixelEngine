@@ -10,6 +10,7 @@ namespace PixelEngine.Hosting;
 public sealed class RenderPipelineFrameSink : IRenderFrameSink
 {
     private readonly RenderPipeline _pipeline;
+    private readonly GamePresentationCoordinator? _presentation;
 
 #pragma warning disable IDE0290 // 普通构造器保留独立 XML 文档，供公开 API 文档纪律测试识别。
     /// <summary>
@@ -17,8 +18,19 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
     /// </summary>
     /// <param name="pipeline">真实 Rendering 管线。</param>
     public RenderPipelineFrameSink(RenderPipeline pipeline)
+        : this(pipeline, presentation: null)
+    {
+    }
+
+    /// <summary>
+    /// 创建带帧边界 presentation 协调器的真实渲染管线帧提交器。
+    /// </summary>
+    /// <param name="pipeline">真实 Rendering 管线。</param>
+    /// <param name="presentation">Hosting 三层分辨率协调器。</param>
+    public RenderPipelineFrameSink(RenderPipeline pipeline, GamePresentationCoordinator? presentation)
     {
         _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
+        _presentation = presentation;
     }
 #pragma warning restore IDE0290
 
@@ -54,6 +66,13 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
         FogOfWarBuffer? fogOfWar,
         Core.Diagnostics.FrameProfiler? profiler)
     {
+        if (_presentation is not null)
+        {
+            GamePresentationDescriptor descriptor = _presentation.CommitFrameBoundary();
+            RenderPresentationDescriptor renderDescriptor = descriptor.ToRenderDescriptor();
+            _pipeline.CommitPresentation(in renderDescriptor);
+        }
+
         _pipeline.RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, pointLights, particles, materials, fogOfWar, profiler);
     }
 }

@@ -9,7 +9,7 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed record EditorWorkspaceDocument
 {
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
 
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 
@@ -45,6 +45,43 @@ internal sealed record EditorProjectWorkspaceState
     public string LastScenePath { get; init; } = string.Empty;
 
     public DateTimeOffset LastOpenedUtc { get; init; }
+
+    public EditorGameViewWorkspaceState GameView { get; init; } = new();
+}
+
+/// <summary>
+/// 单工程的 Game View 用户状态；只进入用户 workspace，不进入 scene、Player Settings 或玩家包。
+/// </summary>
+internal sealed record EditorGameViewWorkspaceState
+{
+    public const string DefaultPresetId = "player-default";
+
+    public string PresetId { get; init; } = DefaultPresetId;
+
+    /// <summary>0 表示 Fit；其余值是 presentation pixel 到 framebuffer pixel 的百分比。</summary>
+    public float ScalePercent { get; init; }
+
+    /// <summary>以 presentation 像素表示的裁剪中心平移。</summary>
+    public float PanX { get; init; }
+
+    /// <summary>以 presentation 像素表示的裁剪中心平移。</summary>
+    public float PanY { get; init; }
+
+    public bool MaximizeOnPlay { get; init; }
+
+    public EditorGameViewCustomPreset[] CustomPresets { get; init; } = [];
+}
+
+/// <summary>用户创建的固定 Game View presentation preset。</summary>
+internal sealed record EditorGameViewCustomPreset
+{
+    public string Id { get; init; } = string.Empty;
+
+    public string Name { get; init; } = string.Empty;
+
+    public int Width { get; init; } = 1280;
+
+    public int Height { get; init; } = 720;
 }
 
 /// <summary>
@@ -179,6 +216,44 @@ internal sealed class EditorWorkspaceStore
                 : null;
     }
 
+    public bool TryGetGameViewState(string projectPath, out EditorGameViewWorkspaceState state)
+    {
+        if (TryGetProject(projectPath, out EditorProjectWorkspaceState? project))
+        {
+            state = project.GameView;
+            return true;
+        }
+
+        state = new EditorGameViewWorkspaceState();
+        return false;
+    }
+
+    public bool TrySetGameViewState(
+        string projectPath,
+        EditorGameViewWorkspaceState state,
+        out string diagnostic)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
+        ArgumentNullException.ThrowIfNull(state);
+        if (!TryGetFullPath(projectPath, out string? normalizedPath) || normalizedPath is null)
+        {
+            diagnostic = "Game View workspace 的工程路径无效。";
+            return false;
+        }
+
+        EditorProjectWorkspaceState entry = TryGetProject(normalizedPath, out EditorProjectWorkspaceState? existing)
+            ? existing with { GameView = state }
+            : new EditorProjectWorkspaceState
+            {
+                ProjectPath = normalizedPath,
+                LastOpenedUtc = DateTimeOffset.UtcNow,
+                GameView = state,
+            };
+        return TryUpdate(
+            Current with { Projects = [entry, .. Current.Projects ?? []] },
+            out diagnostic);
+    }
+
     public bool TryRecordProjectOpened(
         string projectPath,
         string? lastScenePath,
@@ -186,11 +261,17 @@ internal sealed class EditorWorkspaceStore
         out string diagnostic)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(projectPath);
+        EditorGameViewWorkspaceState gameView = TryGetProject(
+            projectPath,
+            out EditorProjectWorkspaceState? existing)
+                ? existing.GameView
+                : new EditorGameViewWorkspaceState();
         EditorProjectWorkspaceState entry = new()
         {
             ProjectPath = projectPath,
             LastScenePath = lastScenePath ?? string.Empty,
             LastOpenedUtc = openedUtc,
+            GameView = gameView,
         };
         return TryUpdate(
             Current with
@@ -225,7 +306,7 @@ internal sealed class EditorWorkspaceStore
         out EditorWorkspaceDocument normalized,
         out string diagnostic)
     {
-        if (document.FormatVersion != EditorWorkspaceDocument.CurrentFormatVersion)
+        if (document.FormatVersion is not 1 and not EditorWorkspaceDocument.CurrentFormatVersion)
         {
             normalized = new EditorWorkspaceDocument();
             diagnostic = $"不支持的 Editor workspace 版本：{document.FormatVersion}。";
@@ -268,6 +349,7 @@ internal sealed class EditorWorkspaceStore
                 ProjectPath = projectPath,
                 LastScenePath = scenePath,
                 LastOpenedUtc = source.LastOpenedUtc,
+                GameView = NormalizeGameView(source.GameView),
             };
             if (!projectsByPath.TryGetValue(projectPath, out EditorProjectWorkspaceState? existing) ||
                 candidate.LastOpenedUtc > existing.LastOpenedUtc)
@@ -308,6 +390,81 @@ internal sealed class EditorWorkspaceStore
         };
         diagnostic = string.Join(' ', warnings);
         return true;
+    }
+
+    private static EditorGameViewWorkspaceState NormalizeGameView(EditorGameViewWorkspaceState? source)
+    {
+        source ??= new EditorGameViewWorkspaceState();
+        string presetId = string.IsNullOrWhiteSpace(source.PresetId)
+            ? EditorGameViewWorkspaceState.DefaultPresetId
+            : source.PresetId.Trim();
+        float scalePercent = float.IsFinite(source.ScalePercent) &&
+            source.ScalePercent is >= 0f and <= 2000f
+                ? source.ScalePercent
+                : 0f;
+        float panX = float.IsFinite(source.PanX) ? source.PanX : 0f;
+        float panY = float.IsFinite(source.PanY) ? source.PanY : 0f;
+        EditorGameViewCustomPreset[] custom = source.CustomPresets ?? [];
+        List<EditorGameViewCustomPreset> normalized = new(Math.Min(custom.Length, 32));
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        for (int i = 0; i < custom.Length && normalized.Count < 32; i++)
+        {
+            EditorGameViewCustomPreset? item = custom[i];
+            if (item is null ||
+                string.IsNullOrWhiteSpace(item.Id) ||
+                string.IsNullOrWhiteSpace(item.Name) ||
+                item.Width <= 0 ||
+                item.Height <= 0 ||
+                item.Width > MaximumWindowDimension ||
+                item.Height > MaximumWindowDimension)
+            {
+                continue;
+            }
+
+            string id = item.Id.Trim();
+            if (!ids.Add(id))
+            {
+                continue;
+            }
+
+            normalized.Add(item with
+            {
+                Id = id,
+                Name = item.Name.Trim(),
+            });
+        }
+
+        if (!IsBuiltInGameViewPreset(presetId) && !ids.Contains(presetId))
+        {
+            presetId = EditorGameViewWorkspaceState.DefaultPresetId;
+        }
+
+        return new EditorGameViewWorkspaceState
+        {
+            PresetId = presetId,
+            ScalePercent = scalePercent,
+            PanX = panX,
+            PanY = panY,
+            MaximizeOnPlay = source.MaximizeOnPlay,
+            CustomPresets = [.. normalized],
+        };
+    }
+
+    private static bool IsBuiltInGameViewPreset(string id)
+    {
+        return id is
+            "player-default" or
+            "free-aspect" or
+            "aspect-16-9" or
+            "aspect-16-10" or
+            "aspect-4-3" or
+            "aspect-5-4" or
+            "aspect-3-2" or
+            "aspect-9-16" or
+            "resolution-640-360" or
+            "resolution-1280-720" or
+            "resolution-1920-1080" or
+            "resolution-2560-1440";
     }
 
     private static int NormalizeWindowDimension(int value, int fallback)

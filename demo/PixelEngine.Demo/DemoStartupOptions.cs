@@ -56,6 +56,11 @@ public sealed class DemoStartupOptions
     public int WindowHeight { get; init; } = DefaultWindowHeight;
 
     /// <summary>
+    /// 独立 Player 在首帧前应用的平台窗口模式。
+    /// </summary>
+    public PlayerWindowMode WindowMode { get; init; } = PlayerWindowMode.Windowed;
+
+    /// <summary>
     /// 游戏 UI 后端。
     /// </summary>
     public UiBackendKind RuntimeUiBackend { get; init; } = UiBackendKind.ManagedFallback;
@@ -151,6 +156,8 @@ public sealed class DemoStartupOptions
         string windowTitle = startupSettings.WindowTitle;
         int windowWidth = startupSettings.WindowWidth;
         int windowHeight = startupSettings.WindowHeight;
+        PlayerWindowMode windowMode = startupSettings.WindowMode;
+        bool windowModeExplicitlySet = false;
         UiBackendKind runtimeUiBackend = startupSettings.RuntimeUiBackend;
         PlayerReleaseChannel releaseChannel = startupSettings.ReleaseChannel;
         bool headless = false;
@@ -201,6 +208,11 @@ public sealed class DemoStartupOptions
                     windowTitle = startupSettings.WindowTitle;
                     windowWidth = startupSettings.WindowWidth;
                     windowHeight = startupSettings.WindowHeight;
+                    if (!windowModeExplicitlySet)
+                    {
+                        windowMode = startupSettings.WindowMode;
+                    }
+
                     runtimeUiBackend = startupSettings.RuntimeUiBackend;
                     releaseChannel = startupSettings.ReleaseChannel;
                     if (!vSyncExplicitlySet)
@@ -213,6 +225,10 @@ public sealed class DemoStartupOptions
                         scene = startupSettings.StartScene;
                     }
 
+                    break;
+                case "--window-mode":
+                    windowMode = ParseWindowMode(ReadValue(args, ref i, "--window-mode"));
+                    windowModeExplicitlySet = true;
                     break;
                 case "--ticks":
                     {
@@ -292,6 +308,7 @@ public sealed class DemoStartupOptions
             WindowTitle = windowTitle,
             WindowWidth = windowWidth,
             WindowHeight = windowHeight,
+            WindowMode = windowMode,
             RuntimeUiBackend = runtimeUiBackend,
             ReleaseChannel = releaseChannel,
             Headless = headless,
@@ -319,6 +336,7 @@ public sealed class DemoStartupOptions
             WindowTitle = EngineOptions.DefaultWindowTitle,
             WindowWidth = DefaultWindowWidth,
             WindowHeight = DefaultWindowHeight,
+            WindowMode = PlayerWindowMode.Windowed,
             VSync = true,
             RuntimeUiBackend = UiBackendKind.ManagedFallback,
             ReleaseChannel = PlayerReleaseChannel.Development,
@@ -380,6 +398,13 @@ public sealed class DemoStartupOptions
             "gpu" or "gpu-point-sprite" => Rendering.ParticleRenderMode.GpuPointSprite,
             _ => throw new ArgumentException("--particle-render-mode 仅支持 cpu 或 gpu。", nameof(value)),
         };
+    }
+
+    private static PlayerWindowMode ParseWindowMode(string value)
+    {
+        return Enum.TryParse(value, ignoreCase: true, out PlayerWindowMode mode) && Enum.IsDefined(mode)
+            ? mode
+            : throw new ArgumentException($"未知 --window-mode：{value}。", nameof(value));
     }
 
     /// <summary>

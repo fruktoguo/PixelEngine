@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--window-width <pixels>] [--window-height <pixels>] [--vsync <true|false>] [--runtime-ui-backend <backend>] [--release-channel <Development|Production>] [--include-scene <scene>] [--include-symbols]
+Usage: tools/package.sh --rid <RID> --channel <r2r|aot> [--version <semver>] [--publish-dir <dir>] [--output-root <dir>] [--player-output-dir <dir>] [--content-root <dir>] [--product-name <name>] [--start-scene <scene>] [--window-width <pixels>] [--window-height <pixels>] [--window-mode <Windowed|MaximizedWindow|BorderlessFullscreen>] [--vsync <true|false>] [--runtime-ui-backend <backend>] [--release-channel <Development|Production>] [--include-scene <scene>] [--include-symbols]
 EOF
 }
 
@@ -62,6 +62,7 @@ product_name=""
 start_scene=""
 window_width="1280"
 window_height="720"
+window_mode="Windowed"
 vsync="true"
 runtime_ui_backend="ManagedFallback"
 release_channel="Development"
@@ -125,6 +126,11 @@ while [[ $# -gt 0 ]]; do
       window_height="$2"
       shift 2
       ;;
+    --window-mode)
+      require_value "$1" "${2:-}"
+      window_mode="$2"
+      shift 2
+      ;;
     --vsync)
       require_value "$1" "${2:-}"
       vsync="$2"
@@ -184,6 +190,14 @@ case "$release_channel" in
     ;;
   *)
     fail_usage "Unsupported release channel: $release_channel"
+    ;;
+esac
+
+case "$window_mode" in
+  Windowed|MaximizedWindow|BorderlessFullscreen)
+    ;;
+  *)
+    fail_usage "Unsupported window mode: $window_mode"
     ;;
 esac
 
@@ -328,6 +342,7 @@ copy_filtered_content() {
   "windowTitle": "$(json_escape "$launcher_base")",
   "windowWidth": $window_width,
   "windowHeight": $window_height,
+  "windowMode": "$(json_escape "$window_mode")",
   "vSync": $vsync_json,
   "runtimeUiBackend": "$(json_escape "$runtime_ui_backend")",
   "releaseChannel": "$(json_escape "$release_channel")"

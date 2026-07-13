@@ -23,6 +23,8 @@ param(
   [string]$StartScene = 'scenes/playable-world.scene',
   [int]$WindowWidth = 1280,
   [int]$WindowHeight = 720,
+  [ValidateSet('Windowed', 'MaximizedWindow', 'BorderlessFullscreen')]
+  [string]$WindowMode = 'Windowed',
   [string]$VSync = 'true',
   [string]$RuntimeUiBackend = 'ManagedFallback',
   [ValidateSet('Development', 'Production')]
@@ -175,6 +177,7 @@ function Write-BuildResult([bool]$Ok, [int]$ExitCode, [string]$ErrorMessage) {
     releaseChannel = $ReleaseChannel
     configuration = $Configuration
     runtimeUiBackend = $RuntimeUiBackend
+    windowMode = $WindowMode
     version = $resolvedVersion
     informationalVersion = $resolvedInformationalVersion
     packageArchive = if ($archive) { $archive.FullName } else { $null }
@@ -324,6 +327,7 @@ try {
     StartScene = $StartScene
     WindowWidth = $WindowWidth
     WindowHeight = $WindowHeight
+    WindowMode = $WindowMode
     VSync = $VSync
     RuntimeUiBackend = $RuntimeUiBackend
     ReleaseChannel = $ReleaseChannel

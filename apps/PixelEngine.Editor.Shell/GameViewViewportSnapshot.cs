@@ -25,59 +25,185 @@ internal readonly record struct GameViewRect(float X, float Y, float Width, floa
             point.X < Right &&
             point.Y < Bottom;
     }
+
+    public static GameViewRect Intersect(in GameViewRect left, in GameViewRect right)
+    {
+        float x = MathF.Max(left.X, right.X);
+        float y = MathF.Max(left.Y, right.Y);
+        float farX = MathF.Min(left.Right, right.Right);
+        float farY = MathF.Min(left.Bottom, right.Bottom);
+        return new GameViewRect(x, y, MathF.Max(0f, farX - x), MathF.Max(0f, farY - y));
+    }
 }
 
 /// <summary>
-/// Game View 视口快照：纹理尺寸、面板内图像区域与 panel↔viewport 坐标映射。
+/// Game View 原子快照：presentation texture/revision、完整 image rect、可见 crop、pan、display scale 与 world content rect。
 /// </summary>
 internal readonly record struct GameViewViewportSnapshot(
     bool IsValid,
     int TextureWidth,
     int TextureHeight,
+    long PresentationRevision,
+    GameViewRect DisplayAreaRect,
     GameViewRect ImageRect,
+    GameViewRect VisiblePanelRect,
     GameViewRect VisibleViewportRect,
-    float FitScale)
+    Vector2 DisplayScale,
+    Vector2 Pan,
+    PresentationViewport WorldContentRect)
 {
     public static readonly GameViewViewportSnapshot Empty = new(
         IsValid: false,
         TextureWidth: 0,
         TextureHeight: 0,
+        PresentationRevision: 0,
+        DisplayAreaRect: default,
         ImageRect: default,
+        VisiblePanelRect: default,
         VisibleViewportRect: default,
-        FitScale: 0f);
+        DisplayScale: default,
+        Pan: default,
+        WorldContentRect: default);
 
+    /// <summary>旧 FitScale 兼容别名；非等 DPI 时取两轴较小值。</summary>
+    public float FitScale => MathF.Min(DisplayScale.X, DisplayScale.Y);
+
+    /// <summary>
+    /// 创建旧式 Fit 快照；world content 等于整张 texture，revision 为 0。
+    /// </summary>
     public static GameViewViewportSnapshot Create(
         int textureWidth,
         int textureHeight,
         Vector2 imageMinPanel,
         Vector2 availablePanelSize)
     {
-        if (textureWidth <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(textureWidth), "纹理宽度必须为正数。");
-        }
-
-        if (textureHeight <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(textureHeight), "纹理高度必须为正数。");
-        }
-
-        Vector2 imageSize = ViewportPanel.FitTexture(textureWidth, textureHeight, availablePanelSize);
-        float fitScale = MathF.Min(imageSize.X / textureWidth, imageSize.Y / textureHeight);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(textureWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(textureHeight);
+        float availableWidth = MathF.Max(1f, availablePanelSize.X);
+        float availableHeight = MathF.Max(1f, availablePanelSize.Y);
+        float fitScale = MathF.Max(
+            float.Epsilon,
+            MathF.Min(availableWidth / textureWidth, availableHeight / textureHeight));
+        GameViewRect displayArea = new(imageMinPanel.X, imageMinPanel.Y, availableWidth, availableHeight);
+        GameViewRect imageRect = new(
+            imageMinPanel.X,
+            imageMinPanel.Y,
+            textureWidth * fitScale,
+            textureHeight * fitScale);
+        GameViewRect visiblePanel = GameViewRect.Intersect(in displayArea, in imageRect);
+        GameViewRect visibleViewport = new(
+            0f,
+            0f,
+            MathF.Min(textureWidth, visiblePanel.Width / fitScale),
+            MathF.Min(textureHeight, visiblePanel.Height / fitScale));
         return new GameViewViewportSnapshot(
-            IsValid: true,
-            TextureWidth: textureWidth,
-            TextureHeight: textureHeight,
-            ImageRect: new GameViewRect(imageMinPanel.X, imageMinPanel.Y, imageSize.X, imageSize.Y),
-            VisibleViewportRect: new GameViewRect(0f, 0f, textureWidth, textureHeight),
-            FitScale: fitScale);
+            visiblePanel.IsValid,
+            textureWidth,
+            textureHeight,
+            0,
+            displayArea,
+            imageRect,
+            visiblePanel,
+            visibleViewport,
+            new Vector2(fitScale),
+            Vector2.Zero,
+            PresentationViewport.Fit(textureWidth, textureHeight, textureWidth, textureHeight));
+    }
+
+    /// <summary>
+    /// 按 Fit 或物理像素百分比创建 snapshot。scalePercent=0 表示 Fit；100 表示一个 presentation pixel
+    /// 对应一个 framebuffer pixel。图像超出面板时 pan 以 presentation pixel clamp。
+    /// </summary>
+    public static GameViewViewportSnapshot Create(
+        int textureWidth,
+        int textureHeight,
+        long presentationRevision,
+        in PresentationViewport worldContentRect,
+        Vector2 imageMinPanel,
+        Vector2 availablePanelSize,
+        Vector2 framebufferScale,
+        float scalePercent,
+        Vector2 requestedPan)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(textureWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(textureHeight);
+        if (presentationRevision < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(presentationRevision));
+        }
+
+        float availableWidth = MathF.Max(1f, availablePanelSize.X);
+        float availableHeight = MathF.Max(1f, availablePanelSize.Y);
+        float framebufferScaleX = NormalizeScale(framebufferScale.X);
+        float framebufferScaleY = NormalizeScale(framebufferScale.Y);
+        float scaleX;
+        float scaleY;
+        if (float.IsFinite(scalePercent) && scalePercent > 0f)
+        {
+            float physicalScale = scalePercent / 100f;
+            scaleX = physicalScale / framebufferScaleX;
+            scaleY = physicalScale / framebufferScaleY;
+        }
+        else
+        {
+            float fitScale = MathF.Min(availableWidth / textureWidth, availableHeight / textureHeight);
+            scaleX = fitScale;
+            scaleY = fitScale;
+        }
+
+        scaleX = MathF.Max(float.Epsilon, scaleX);
+        scaleY = MathF.Max(float.Epsilon, scaleY);
+        float imageWidth = textureWidth * scaleX;
+        float imageHeight = textureHeight * scaleY;
+        float visiblePresentationWidth = MathF.Min(textureWidth, availableWidth / scaleX);
+        float visiblePresentationHeight = MathF.Min(textureHeight, availableHeight / scaleY);
+        float maximumPanX = MathF.Max(0f, (textureWidth - visiblePresentationWidth) * 0.5f);
+        float maximumPanY = MathF.Max(0f, (textureHeight - visiblePresentationHeight) * 0.5f);
+        Vector2 pan = new(
+            Math.Clamp(NormalizeFinite(requestedPan.X), -maximumPanX, maximumPanX),
+            Math.Clamp(NormalizeFinite(requestedPan.Y), -maximumPanY, maximumPanY));
+        if (imageWidth <= availableWidth)
+        {
+            pan.X = 0f;
+        }
+
+        if (imageHeight <= availableHeight)
+        {
+            pan.Y = 0f;
+        }
+
+        GameViewRect displayArea = new(imageMinPanel.X, imageMinPanel.Y, availableWidth, availableHeight);
+        GameViewRect imageRect = new(
+            imageMinPanel.X + ((availableWidth - imageWidth) * 0.5f) - (pan.X * scaleX),
+            imageMinPanel.Y + ((availableHeight - imageHeight) * 0.5f) - (pan.Y * scaleY),
+            imageWidth,
+            imageHeight);
+        GameViewRect visiblePanel = GameViewRect.Intersect(in displayArea, in imageRect);
+        GameViewRect visibleViewport = new(
+            MathF.Max(0f, (visiblePanel.X - imageRect.X) / scaleX),
+            MathF.Max(0f, (visiblePanel.Y - imageRect.Y) / scaleY),
+            MathF.Min(textureWidth, visiblePanel.Width / scaleX),
+            MathF.Min(textureHeight, visiblePanel.Height / scaleY));
+        return new GameViewViewportSnapshot(
+            IsValid: visiblePanel.IsValid,
+            textureWidth,
+            textureHeight,
+            presentationRevision,
+            displayArea,
+            imageRect,
+            visiblePanel,
+            visibleViewport,
+            new Vector2(scaleX, scaleY),
+            pan,
+            worldContentRect);
     }
 
     public bool ContainsPanelPoint(Vector2 panelPoint)
     {
-        return IsValid && ImageRect.Contains(panelPoint);
+        return IsValid && VisiblePanelRect.Contains(panelPoint);
     }
 
+    /// <summary>将 panel-local 可见图像点映射到完整 presentation texture。</summary>
     public bool TryMapPanelToViewport(Vector2 panelPoint, out Vector2 viewportPoint)
     {
         if (!ContainsPanelPoint(panelPoint))
@@ -86,82 +212,84 @@ internal readonly record struct GameViewViewportSnapshot(
             return false;
         }
 
-        float normalizedX = (panelPoint.X - ImageRect.X) / MathF.Max(1f, ImageRect.Width);
-        float normalizedY = (panelPoint.Y - ImageRect.Y) / MathF.Max(1f, ImageRect.Height);
         viewportPoint = new Vector2(
-            VisibleViewportRect.X + (normalizedX * VisibleViewportRect.Width),
-            VisibleViewportRect.Y + (normalizedY * VisibleViewportRect.Height));
-        return true;
+            (panelPoint.X - ImageRect.X) / ImageRect.Width * TextureWidth,
+            (panelPoint.Y - ImageRect.Y) / ImageRect.Height * TextureHeight);
+        return float.IsFinite(viewportPoint.X) && float.IsFinite(viewportPoint.Y);
+    }
+
+    /// <summary>将 panel-local 点映射到固定内部 world；presentation letterbox 返回 false。</summary>
+    public bool TryMapPanelToWorld(Vector2 panelPoint, out Vector2 worldPoint)
+    {
+        if (!TryMapPanelToViewport(panelPoint, out Vector2 presentationPoint))
+        {
+            worldPoint = default;
+            return false;
+        }
+
+        return TryMapPresentationToWorld(presentationPoint, out worldPoint);
     }
 
     /// <summary>
-    /// 将窗口 framebuffer 指针按 panel origin、DPI 与 Game View letterbox 映射到 runtime viewport。
+    /// 将窗口 framebuffer 指针按 panel origin、DPI 与 Game View display/crop 映射到 presentation。
     /// </summary>
-    /// <param name="framebufferPoint">窗口 framebuffer 指针坐标。</param>
-    /// <param name="panelOriginFramebuffer">面板原点的窗口 framebuffer 坐标。</param>
-    /// <param name="framebufferScale">面板逻辑坐标到 framebuffer 的 DPI 缩放。</param>
-    /// <param name="viewportPoint">映射后的 runtime viewport 坐标。</param>
-    /// <returns>输入有限且位于实际 Game View 图像矩形内时返回 true。</returns>
     public bool TryMapFramebufferToViewport(
         Vector2 framebufferPoint,
         Vector2 panelOriginFramebuffer,
         Vector2 framebufferScale,
         out Vector2 viewportPoint)
     {
-        viewportPoint = default;
-        if (!float.IsFinite(framebufferPoint.X) ||
-            !float.IsFinite(framebufferPoint.Y) ||
-            !float.IsFinite(panelOriginFramebuffer.X) ||
-            !float.IsFinite(panelOriginFramebuffer.Y))
+        if (!TryMapFramebufferToPanel(
+                framebufferPoint,
+                panelOriginFramebuffer,
+                framebufferScale,
+                out Vector2 panelPoint))
         {
+            viewportPoint = default;
             return false;
         }
 
-        float scaleX = NormalizeScale(framebufferScale.X);
-        float scaleY = NormalizeScale(framebufferScale.Y);
-        Vector2 panelPoint = new(
-            (framebufferPoint.X - panelOriginFramebuffer.X) / scaleX,
-            (framebufferPoint.Y - panelOriginFramebuffer.Y) / scaleY);
         return TryMapPanelToViewport(panelPoint, out viewportPoint);
     }
 
-    /// <summary>
-    /// 将 viewport 纹理坐标映射回 Game View 面板局部坐标。
-    /// </summary>
-    /// <param name="viewportPoint">viewport 纹理像素坐标。</param>
-    /// <param name="panelPoint">面板局部坐标。</param>
-    /// <returns>映射成功时返回 true。</returns>
-    public bool TryMapViewportToPanel(Vector2 viewportPoint, out Vector2 panelPoint)
+    /// <summary>将窗口 framebuffer 指针映射到固定内部 world；letterbox 与裁剪外区域返回 false。</summary>
+    public bool TryMapFramebufferToWorld(
+        Vector2 framebufferPoint,
+        Vector2 panelOriginFramebuffer,
+        Vector2 framebufferScale,
+        out Vector2 worldPoint)
     {
-        if (!IsValid || !ImageRect.IsValid || VisibleViewportRect.Width <= 0f || VisibleViewportRect.Height <= 0f)
+        if (!TryMapFramebufferToPanel(
+                framebufferPoint,
+                panelOriginFramebuffer,
+                framebufferScale,
+                out Vector2 panelPoint))
         {
-            panelPoint = default;
+            worldPoint = default;
             return false;
         }
 
-        float normalizedX = (viewportPoint.X - VisibleViewportRect.X) / VisibleViewportRect.Width;
-        float normalizedY = (viewportPoint.Y - VisibleViewportRect.Y) / VisibleViewportRect.Height;
-        if (!float.IsFinite(normalizedX) || !float.IsFinite(normalizedY))
+        return TryMapPanelToWorld(panelPoint, out worldPoint);
+    }
+
+    /// <summary>将 presentation texture 坐标映射回 panel-local；被 crop 的点返回 false。</summary>
+    public bool TryMapViewportToPanel(Vector2 viewportPoint, out Vector2 panelPoint)
+    {
+        if (!IsValid || !VisibleViewportRect.Contains(viewportPoint))
         {
             panelPoint = default;
             return false;
         }
 
         panelPoint = new Vector2(
-            ImageRect.X + (normalizedX * ImageRect.Width),
-            ImageRect.Y + (normalizedY * ImageRect.Height));
+            ImageRect.X + (viewportPoint.X / TextureWidth * ImageRect.Width),
+            ImageRect.Y + (viewportPoint.Y / TextureHeight * ImageRect.Height));
         return true;
     }
 
     /// <summary>
-    /// 将 viewport 纹理坐标中的 IME caret/候选锚点映射到窗口 client / framebuffer 坐标，
-    /// 与 <see cref="TryCreateUiPresentTarget"/> 使用同一 panel origin + DPI 约定，供 IMM32 定位。
+    /// 将 presentation 中的 IME caret/候选锚点映射到窗口 client；被 crop 的几何会被明确清除。
     /// </summary>
-    /// <param name="viewportGeometry">viewport 纹理像素空间中的 IME 几何。</param>
-    /// <param name="panelOriginFramebuffer">Game View 面板原点在 framebuffer/client 空间的位置（已含 DPI 缩放）。</param>
-    /// <param name="framebufferScale">逻辑面板坐标 → framebuffer 的缩放。</param>
-    /// <param name="windowGeometry">映射后的窗口 client 坐标几何。</param>
-    /// <returns>snapshot 有效且输入几何有效时返回 true。</returns>
     public bool TryMapViewportImeGeometryToWindowClient(
         in UiImeGeometry viewportGeometry,
         Vector2 panelOriginFramebuffer,
@@ -169,26 +297,14 @@ internal readonly record struct GameViewViewportSnapshot(
         out UiImeGeometry windowGeometry)
     {
         windowGeometry = UiImeGeometry.None;
-        if (!viewportGeometry.HasAny ||
-            !IsValid ||
-            !ImageRect.IsValid ||
-            VisibleViewportRect.Width <= 0f ||
-            VisibleViewportRect.Height <= 0f)
+        if (!viewportGeometry.HasAny || !IsValid || !ImeGeometryIsVisible(in viewportGeometry))
         {
             return false;
         }
 
-        float fitScaleX = ImageRect.Width / VisibleViewportRect.Width;
-        float fitScaleY = ImageRect.Height / VisibleViewportRect.Height;
-        if (!float.IsFinite(fitScaleX) || !float.IsFinite(fitScaleY) || fitScaleX <= 0f || fitScaleY <= 0f)
-        {
-            return false;
-        }
-
-        float panelOffsetX = ImageRect.X - (VisibleViewportRect.X * fitScaleX);
-        float panelOffsetY = ImageRect.Y - (VisibleViewportRect.Y * fitScaleY);
-        // 先 viewport → panel-local，再 panel-local → window client（与 present target 同源）。
-        UiImeGeometry panelLocal = viewportGeometry.Transform(panelOffsetX, panelOffsetY, fitScaleX, fitScaleY);
+        float scaleX = ImageRect.Width / TextureWidth;
+        float scaleY = ImageRect.Height / TextureHeight;
+        UiImeGeometry panelLocal = viewportGeometry.Transform(ImageRect.X, ImageRect.Y, scaleX, scaleY);
         float dpiX = NormalizeScale(framebufferScale.X);
         float dpiY = NormalizeScale(framebufferScale.Y);
         float originX = float.IsFinite(panelOriginFramebuffer.X) ? panelOriginFramebuffer.X : 0f;
@@ -222,11 +338,7 @@ internal readonly record struct GameViewViewportSnapshot(
         return true;
     }
 
-    /// <summary>
-    /// 创建 runtime viewport 离屏表面的全尺寸 UI 目标。
-    /// </summary>
-    /// <param name="target">以 runtime texture 左上角为原点的目标。</param>
-    /// <returns>snapshot 有效且纹理尺寸为正时返回 true。</returns>
+    /// <summary>创建 presentation texture 内的全尺寸 runtime UI 目标。</summary>
     public bool TryCreateRuntimeUiPresentTarget(out UiPresentTarget target)
     {
         if (!IsValid || TextureWidth <= 0 || TextureHeight <= 0)
@@ -239,8 +351,64 @@ internal readonly record struct GameViewViewportSnapshot(
         return true;
     }
 
+    private bool TryMapPresentationToWorld(Vector2 point, out Vector2 worldPoint)
+    {
+        worldPoint = default;
+        if (WorldContentRect.SourceWidth <= 0 || WorldContentRect.SourceHeight <= 0)
+        {
+            return false;
+        }
+
+        float top = WorldContentRect.TargetHeight - WorldContentRect.Y - WorldContentRect.Height;
+        if (point.X < WorldContentRect.X ||
+            point.Y < top ||
+            point.X >= WorldContentRect.X + WorldContentRect.Width ||
+            point.Y >= top + WorldContentRect.Height)
+        {
+            return false;
+        }
+
+        (float x, float y) = WorldContentRect.MapFramebufferToSource(point.X, point.Y);
+        worldPoint = new Vector2(x, y);
+        return true;
+    }
+
+    private bool ImeGeometryIsVisible(in UiImeGeometry geometry)
+    {
+        return (!geometry.HasCaretRect ||
+                VisibleViewportRect.Contains(new Vector2(geometry.CaretX, geometry.CaretY))) &&
+            (!geometry.HasCandidateAnchor ||
+                VisibleViewportRect.Contains(new Vector2(geometry.CandidateAnchorX, geometry.CandidateAnchorY)));
+    }
+
+    private static bool TryMapFramebufferToPanel(
+        Vector2 framebufferPoint,
+        Vector2 panelOriginFramebuffer,
+        Vector2 framebufferScale,
+        out Vector2 panelPoint)
+    {
+        panelPoint = default;
+        if (!float.IsFinite(framebufferPoint.X) ||
+            !float.IsFinite(framebufferPoint.Y) ||
+            !float.IsFinite(panelOriginFramebuffer.X) ||
+            !float.IsFinite(panelOriginFramebuffer.Y))
+        {
+            return false;
+        }
+
+        panelPoint = new Vector2(
+            (framebufferPoint.X - panelOriginFramebuffer.X) / NormalizeScale(framebufferScale.X),
+            (framebufferPoint.Y - panelOriginFramebuffer.Y) / NormalizeScale(framebufferScale.Y));
+        return true;
+    }
+
     private static float NormalizeScale(float scale)
     {
         return float.IsFinite(scale) && scale > 0f ? scale : 1f;
+    }
+
+    private static float NormalizeFinite(float value)
+    {
+        return float.IsFinite(value) ? value : 0f;
     }
 }

@@ -12,6 +12,18 @@ public readonly struct RenderViewportTexture
     /// <param name="width">纹理宽度。</param>
     /// <param name="height">纹理高度。</param>
     public RenderViewportTexture(uint handle, int width, int height)
+        : this(handle, width, height, revision: 0)
+    {
+    }
+
+    /// <summary>
+    /// 创建带 presentation revision 的最终画面纹理快照。
+    /// </summary>
+    /// <param name="handle">OpenGL 2D 纹理句柄。</param>
+    /// <param name="width">纹理宽度。</param>
+    /// <param name="height">纹理高度。</param>
+    /// <param name="revision">与本纹理内容、输入和 UI 度量一致的 presentation revision。</param>
+    public RenderViewportTexture(uint handle, int width, int height, long revision)
     {
         if (handle == 0)
         {
@@ -28,9 +40,15 @@ public readonly struct RenderViewportTexture
             throw new ArgumentOutOfRangeException(nameof(height), "纹理高度必须为正数。");
         }
 
+        if (revision < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(revision), "Presentation revision 不能为负数。");
+        }
+
         Handle = handle;
         Width = width;
         Height = height;
+        Revision = revision;
     }
 
     /// <summary>
@@ -47,6 +65,11 @@ public readonly struct RenderViewportTexture
     /// 纹理高度。
     /// </summary>
     public int Height { get; }
+
+    /// <summary>
+    /// 产生该纹理内容的 presentation revision。旧三参数构造路径为 0。
+    /// </summary>
+    public long Revision { get; }
 
     /// <summary>
     /// 快照是否指向有效纹理。

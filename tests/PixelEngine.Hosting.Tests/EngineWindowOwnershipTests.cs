@@ -60,10 +60,12 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("bool gameUiNeedsPresentation = gameUi is not null;", body, StringComparison.Ordinal);
         Assert.Contains("UiLayerCompositor.Attach(", body, StringComparison.Ordinal);
         Assert.Contains("UiPresentSurface.RuntimeViewport", body, StringComparison.Ordinal);
-        Assert.Contains("ResolveGameUiPresentTargetProvider(registeredExtensions)", body, StringComparison.Ordinal);
+        Assert.Contains("targetProvider: null", body, StringComparison.Ordinal);
+        Assert.Contains("gameUiCompositionPolicy?.AllowsGameUiComposition ?? true", body, StringComparison.Ordinal);
         Assert.Contains("GuiRenderBridge.AttachIfEnabled", body, StringComparison.Ordinal);
         Assert.Contains("UiPresentSurface.RuntimeViewport", body, StringComparison.Ordinal);
-        Assert.Contains("Action<IGuiDrawContext>? managedGui = gameUiNeedsPresentation ? gameUi!.DrawGui : null;", body, StringComparison.Ordinal);
+        Assert.Contains("Action<IGuiDrawContext>? managedGui = null;", body, StringComparison.Ordinal);
+        Assert.Contains("managedGui = gui =>", body, StringComparison.Ordinal);
         Assert.Contains("slot.Host.BackendKind != RuntimeUi.UiBackendKind.ManagedFallback", registry, StringComparison.Ordinal);
         Assert.Contains("slot.Host.BackendKind == RuntimeUi.UiBackendKind.ManagedFallback", registry, StringComparison.Ordinal);
         Assert.Contains("new GameplayViewportGuiInputRoute(gameplayViewportMapper)", body, StringComparison.Ordinal);
@@ -71,21 +73,21 @@ public sealed class EngineWindowOwnershipTests
     }
 
     /// <summary>
-    /// 验证独立 Player 未注册 viewport mapper 时仍使用 GuiWindowInputConnector 的原始整窗路径。
+    /// 验证独立 Player 的 Game UI 使用完整 presentation，而 gameplay 只映射 world content rect。
     /// </summary>
     [Fact]
-    public void StandaloneRuntimeGuiKeepsLegacyWholeWindowInputPathBySourceContract()
+    public void StandaloneRuntimeSeparatesPresentationUiFromWorldGameplayBySourceContract()
     {
         string engine = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
-        string connector = ReadRepositoryFile("src", "PixelEngine.Gui", "GuiWindowInputConnector.cs");
+        string presentationInput = ReadRepositoryFile("src", "PixelEngine.Hosting", "GamePresentationInput.cs");
 
+        Assert.Contains("new GamePresentationViewportInputMapper(window, presentation)", engine, StringComparison.Ordinal);
+        Assert.Contains("new GamePresentationUiInputSource(inputSource, window, presentation)", engine, StringComparison.Ordinal);
         Assert.Contains("Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)", engine, StringComparison.Ordinal);
         Assert.Contains("? new GameplayViewportGuiInputRoute(gameplayViewportMapper)", engine, StringComparison.Ordinal);
-        Assert.Contains(": null;", engine, StringComparison.Ordinal);
-        Assert.Contains(": this(window, input, viewportRoute: null)", connector, StringComparison.Ordinal);
-        Assert.Contains("if (route is null)", connector, StringComparison.Ordinal);
-        Assert.Contains("viewportX = framebufferX;", connector, StringComparison.Ordinal);
-        Assert.Contains("viewportY = framebufferY;", connector, StringComparison.Ordinal);
+        Assert.Contains("TryMapFramebufferToPresentation", presentationInput, StringComparison.Ordinal);
+        Assert.Contains("GamePresentationInputMapping.Resolve", presentationInput, StringComparison.Ordinal);
+        Assert.Contains("if (!mapping.IsInsideWorldContent)", presentationInput, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -113,6 +115,8 @@ public sealed class EngineWindowOwnershipTests
         Assert.Contains("RegisterService<IEditorInputCaptureSource>(this)", extension, StringComparison.Ordinal);
         Assert.Contains("IUiPresentTargetProvider", extension, StringComparison.Ordinal);
         Assert.Contains("GameViewUiPresentTargetProvider", extension, StringComparison.Ordinal);
+        Assert.Contains("IGamePresentationOverride", extension, StringComparison.Ordinal);
+        Assert.Contains("IGameUiCompositionPolicy", extension, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -16,6 +16,8 @@ param(
   [string]$StartScene,
   [int]$WindowWidth = 1280,
   [int]$WindowHeight = 720,
+  [ValidateSet('Windowed', 'MaximizedWindow', 'BorderlessFullscreen')]
+  [string]$WindowMode = 'Windowed',
   [string]$VSync = 'true',
   [string]$RuntimeUiBackend = 'ManagedFallback',
   [ValidateSet('Development', 'Production')]
@@ -164,6 +166,7 @@ function Copy-FilteredContent(
   [string]$StartupWindowTitle,
   [int]$StartupWindowWidth,
   [int]$StartupWindowHeight,
+  [string]$StartupWindowMode,
   [string]$StartupVSync,
   [string]$StartupRuntimeUiBackend,
   [string]$StartupReleaseChannel) {
@@ -183,6 +186,7 @@ function Copy-FilteredContent(
       windowTitle = $StartupWindowTitle
       windowWidth = $StartupWindowWidth
       windowHeight = $StartupWindowHeight
+      windowMode = $StartupWindowMode
       vSync = Resolve-JsonBool $StartupVSync 'VSync'
       runtimeUiBackend = $StartupRuntimeUiBackend
       releaseChannel = $StartupReleaseChannel
@@ -256,7 +260,7 @@ Get-ChildItem -LiteralPath $PublishDir -Force | ForEach-Object {
 }
 Remove-PlayerPackageNoise $appDir $IncludeSymbols.IsPresent
 Remove-Item -LiteralPath $stagedContent -Recurse -Force -ErrorAction SilentlyContinue
-Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene $ProductName $WindowWidth $WindowHeight $VSync $RuntimeUiBackend $ReleaseChannel
+Copy-FilteredContent $ContentRoot $stagedContent $IncludeScene $StartScene $ProductName $WindowWidth $WindowHeight $WindowMode $VSync $RuntimeUiBackend $ReleaseChannel
 Copy-PackagedScripts $ContentRoot $stagedContent
 
 if ($Rid.StartsWith('win-')) {

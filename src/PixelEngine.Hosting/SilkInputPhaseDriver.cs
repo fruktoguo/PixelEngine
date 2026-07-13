@@ -68,8 +68,9 @@ public sealed class SilkInputPhaseDriver(
         _window.DoEvents();
         ScriptInputRoute route = _routeProvider(context);
         int keyCount = route.AllowKeyboard ? CaptureKeys(_keyBuffer) : 0;
-        int buttonCount = route.AllowMouse ? CaptureMouseButtons(_mouseBuffer) : 0;
-        (float x, float y, float wheelY) = CaptureMouseState(route.AllowMouse);
+        (float x, float y, float wheelY, bool pointerMapped) = CaptureMouseState(route.AllowMouse);
+        bool allowMouse = route.AllowMouse && pointerMapped;
+        int buttonCount = allowMouse ? CaptureMouseButtons(_mouseBuffer) : 0;
         ScriptInputSnapshotBuilder.Update(
             _input,
             _keyBuffer.AsSpan(0, keyCount),
@@ -78,7 +79,7 @@ public sealed class SilkInputPhaseDriver(
             y,
             wheelY,
             route.AllowKeyboard,
-            route.AllowMouse);
+            allowMouse);
     }
 
     private int CaptureKeys(Span<ScriptKey> destination)
@@ -129,11 +130,11 @@ public sealed class SilkInputPhaseDriver(
         return count;
     }
 
-    private (float X, float Y, float WheelY) CaptureMouseState(bool allowMouse)
+    private (float X, float Y, float WheelY, bool PointerMapped) CaptureMouseState(bool allowMouse)
     {
         if (_window.Input.Mice.Count == 0)
         {
-            return (0f, 0f, 0f);
+            return (0f, 0f, 0f, _gameplayViewportMapper is null);
         }
 
         IMouse mouse = _window.Input.Mice[0];
@@ -142,7 +143,7 @@ public sealed class SilkInputPhaseDriver(
         _lastWheelY = currentWheelY;
         if (!allowMouse)
         {
-            return (0f, 0f, 0f);
+            return (0f, 0f, 0f, false);
         }
 
         float framebufferX = mouse.Position.X * _window.FramebufferScaleX;
@@ -157,8 +158,8 @@ public sealed class SilkInputPhaseDriver(
                     framebufferY,
                     out float viewportX,
                     out float viewportY)
-                    ? (viewportX, viewportY, wheelDelta)
-                    : (0f, 0f, 0f);
+                    ? (viewportX, viewportY, wheelDelta, true)
+                    : (0f, 0f, 0f, false);
         }
 
         // 逻辑视口与帧缓冲不一致时，将鼠标坐标映射回 sim 内部分辨率空间。
@@ -169,14 +170,37 @@ public sealed class SilkInputPhaseDriver(
                 _logicalViewportHeight,
                 _window.Width,
                 _window.Height);
+            if (!ContainsFramebufferPoint(in viewport, framebufferX, framebufferY))
+            {
+                return (0f, 0f, 0f, false);
+            }
+
             (float sourceX, float sourceY) = viewport.MapFramebufferToSource(framebufferX, framebufferY);
-            return (sourceX, sourceY, wheelDelta);
+            return (sourceX, sourceY, wheelDelta, true);
         }
 
         return (
             framebufferX,
             framebufferY,
-            wheelDelta);
+            wheelDelta,
+            true);
+    }
+
+    internal static bool ContainsFramebufferPoint(
+        in PresentationViewport viewport,
+        float framebufferX,
+        float framebufferY)
+    {
+        if (!float.IsFinite(framebufferX) || !float.IsFinite(framebufferY))
+        {
+            return false;
+        }
+
+        float top = viewport.TargetHeight - viewport.Y - viewport.Height;
+        return framebufferX >= viewport.X &&
+            framebufferY >= top &&
+            framebufferX < viewport.X + viewport.Width &&
+            framebufferY < top + viewport.Height;
     }
 
     internal static bool TryMapGameplayViewportPointer(

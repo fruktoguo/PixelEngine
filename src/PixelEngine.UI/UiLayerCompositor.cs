@@ -12,6 +12,7 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     private readonly IGameUiPresentationTarget _host;
     private readonly IUiPresentTargetProvider? _targetProvider;
     private readonly IDisplayMetricsSource? _displayMetricsSource;
+    private readonly Func<bool>? _compositionAllowed;
     private readonly IDisposable _registration;
     private UiPresentTarget _lastPresentTarget;
     private bool _hasPresentTarget;
@@ -22,12 +23,14 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         UiPresentSurface surface,
         IGameUiPresentationTarget host,
         IUiPresentTargetProvider? targetProvider,
-        IDisplayMetricsSource? displayMetricsSource)
+        IDisplayMetricsSource? displayMetricsSource,
+        Func<bool>? compositionAllowed = null)
     {
         ArgumentNullException.ThrowIfNull(pipeline);
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _targetProvider = targetProvider;
         _displayMetricsSource = displayMetricsSource;
+        _compositionAllowed = compositionAllowed;
         _registration = pipeline.RegisterUiLayer(surface, UiPresentLayerOrders.Game, this);
     }
 
@@ -146,6 +149,36 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     }
 
     /// <summary>
+    /// 在显式 surface 注册多 Canvas 合成，并用宿主策略明确门控 Edit/Play 可见性。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="surface">目标 present surface。</param>
+    /// <param name="target">单 Canvas host 或多 Canvas registry。</param>
+    /// <param name="targetProvider">可选目标区域提供者。</param>
+    /// <param name="displayMetricsSource">帧边界 display metrics 来源。</param>
+    /// <param name="compositionAllowed">每帧无分配的显式合成策略。</param>
+    /// <returns>已注册合成层。</returns>
+    public static UiLayerCompositor Attach(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        IGameUiPresentationTarget target,
+        IUiPresentTargetProvider? targetProvider,
+        IDisplayMetricsSource displayMetricsSource,
+        Func<bool> compositionAllowed)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(displayMetricsSource);
+        ArgumentNullException.ThrowIfNull(compositionAllowed);
+        return new UiLayerCompositor(
+            pipeline,
+            surface,
+            target,
+            targetProvider,
+            displayMetricsSource,
+            compositionAllowed);
+    }
+
+    /// <summary>
     /// present 层被调用的帧数。
     /// </summary>
     public long FrameIndex { get; private set; }
@@ -158,6 +191,11 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentNullException.ThrowIfNull(context.Gl);
+        if (_compositionAllowed is not null && !_compositionAllowed())
+        {
+            return;
+        }
+
         long started = Stopwatch.GetTimestamp();
         // 可选 target 覆盖：GameView 等宿主可把 UI 合成到子视口而非全屏 framebuffer。
         UiPresentContext presentContext = _targetProvider is not null &&

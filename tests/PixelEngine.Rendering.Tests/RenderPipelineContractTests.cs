@@ -1,4 +1,5 @@
 using PixelEngine.Rendering.Compute;
+using Silk.NET.Windowing;
 using Xunit;
 
 namespace PixelEngine.Rendering.Tests;
@@ -8,6 +9,39 @@ namespace PixelEngine.Rendering.Tests;
 /// </summary>
 public sealed class RenderPipelineContractTests
 {
+    /// <summary>验证三种 Player window mode 在创建窗口前映射到明确 Silk 状态。</summary>
+    [Theory]
+    [InlineData(PlayerWindowMode.Windowed, WindowState.Normal, WindowBorder.Resizable)]
+    [InlineData(PlayerWindowMode.MaximizedWindow, WindowState.Maximized, WindowBorder.Resizable)]
+    [InlineData(PlayerWindowMode.BorderlessFullscreen, WindowState.Fullscreen, WindowBorder.Hidden)]
+    public void PlayerWindowModeMapsBeforeSilkWindowCreation(
+        PlayerWindowMode mode,
+        WindowState expectedState,
+        WindowBorder expectedBorder)
+    {
+        WindowOptions options = RenderBackendSelector.CreateWindowOptions(
+            new RenderWindowOptions { WindowMode = mode },
+            RenderBackend.DesktopGl33);
+
+        Assert.Equal(expectedState, options.WindowState);
+        Assert.Equal(expectedBorder, options.WindowBorder);
+    }
+
+    /// <summary>验证 presentation 描述不改变固定 world 几何并携带纹理 revision。</summary>
+    [Fact]
+    public void RenderPresentationDescriptorKeepsWorldAndPresentationGeometryDistinct()
+    {
+        PresentationViewport world = PresentationViewport.Fit(640, 360, 800, 800);
+        RenderPresentationDescriptor descriptor = new(800, 800, world, 4, 7);
+        descriptor.Validate(640, 360);
+        RenderViewportTexture texture = new(3, 800, 800, descriptor.Revision);
+
+        Assert.Equal(7, texture.Revision);
+        Assert.Equal(new PresentationViewport(0, 175, 800, 450, 640, 360, 800, 800), descriptor.WorldViewport);
+        AssertThrows<ArgumentException>(() => descriptor.Validate(320, 180));
+        AssertThrows<ArgumentOutOfRangeException>(() => new RenderViewportTexture(3, 800, 800, -1));
+    }
+
     /// <summary>
     /// 验证Render Pipeline Settings Validate Rejects Invalid Values行为符合预期。
     /// </summary>

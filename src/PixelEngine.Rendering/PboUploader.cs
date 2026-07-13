@@ -160,23 +160,31 @@ public sealed unsafe class PboUploader : IDisposable
             return;
         }
 
-        if (Mode == PboUploadMode.PersistentMapped)
+        _gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int previousUnpackBuffer);
+        try
         {
-            foreach (PboSlot slot in _slots)
+            if (Mode == PboUploadMode.PersistentMapped)
             {
-                RecreatePersistentSlot(slot, requiredBytes);
+                foreach (PboSlot slot in _slots)
+                {
+                    RecreatePersistentSlot(slot, requiredBytes);
+                }
             }
-        }
-        else
-        {
-            foreach (PboSlot slot in _slots)
+            else
             {
-                slot.Buffer.Bind();
-                slot.Buffer.Allocate((nuint)requiredBytes, BufferUsageARB.StreamDraw);
+                foreach (PboSlot slot in _slots)
+                {
+                    slot.Buffer.Bind();
+                    slot.Buffer.Allocate((nuint)requiredBytes, BufferUsageARB.StreamDraw);
+                }
             }
-        }
 
-        CapacityBytes = requiredBytes;
+            CapacityBytes = requiredBytes;
+        }
+        finally
+        {
+            _gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, (uint)previousUnpackBuffer);
+        }
     }
 
     /// <inheritdoc />

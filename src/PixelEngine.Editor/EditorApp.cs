@@ -337,11 +337,14 @@ public sealed class EditorApp : IDisposable
 
     private void DrawPanels(in EditorContext context, bool chromeOnly)
     {
+        IEditorPanel? maximizedPanel = chromeOnly ? null : ResolveMaximizedPanel();
         for (int i = 0; i < _panels.Count; i++)
         {
             IEditorPanel panel = _panels[i];
             bool isChrome = panel is IEditorChromePanel;
-            if (panel.Visible && isChrome == chromeOnly)
+            if (panel.Visible &&
+                isChrome == chromeOnly &&
+                (maximizedPanel is null || ReferenceEquals(panel, maximizedPanel)))
             {
                 if (string.Equals(PendingPanelFocusTitle, panel.Title, StringComparison.Ordinal))
                 {
@@ -352,6 +355,20 @@ public sealed class EditorApp : IDisposable
                 panel.Draw(in context);
             }
         }
+    }
+
+    private IEditorPanel? ResolveMaximizedPanel()
+    {
+        for (int i = 0; i < _panels.Count; i++)
+        {
+            IEditorPanel panel = _panels[i];
+            if (panel.Visible && panel is IEditorMaximizedPanel { IsMaximized: true })
+            {
+                return panel;
+            }
+        }
+
+        return null;
     }
 
     /// <inheritdoc />

@@ -1,4 +1,5 @@
 using PixelEngine.Core;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 
 namespace PixelEngine.Hosting;
@@ -85,6 +86,60 @@ public sealed class EngineOptions
         int eventCapacityPerChannel,
         long noGcRegionBudgetBytes,
         EngineOverloadOptions overload)
+        : this(
+            windowWidth,
+            windowHeight,
+            windowTitle,
+            internalWidth,
+            internalHeight,
+            workerCount,
+            gcMode,
+            enableEditor,
+            headless,
+            deterministicMode,
+            enableGpu,
+            preferComputeSharpBackend,
+            enableGuiRuntime,
+            enableGameUi,
+            gameUiBackend,
+            vSync,
+            contentRoot,
+            startScene,
+            simHz,
+            eventCapacityPerChannel,
+            noGcRegionBudgetBytes,
+            overload,
+            PlayerWindowMode.Windowed)
+    {
+    }
+
+    /// <summary>
+    /// 创建带独立 Player 平台窗口模式的引擎运行配置。
+    /// </summary>
+    public EngineOptions(
+        int windowWidth,
+        int windowHeight,
+        string windowTitle,
+        int internalWidth,
+        int internalHeight,
+        int workerCount,
+        EngineGcMode gcMode,
+        bool enableEditor,
+        bool headless,
+        bool deterministicMode,
+        bool enableGpu,
+        bool preferComputeSharpBackend,
+        bool enableGuiRuntime,
+        bool enableGameUi,
+        UiBackendKind gameUiBackend,
+        bool vSync,
+        string contentRoot,
+        string? startScene,
+        double simHz,
+        int eventCapacityPerChannel,
+        long noGcRegionBudgetBytes,
+        EngineOverloadOptions overload,
+        PlayerWindowMode windowMode)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowHeight);
@@ -105,6 +160,11 @@ public sealed class EngineOptions
 
         ArgumentOutOfRangeException.ThrowIfNegative(noGcRegionBudgetBytes);
         ArgumentNullException.ThrowIfNull(overload);
+        if (!Enum.IsDefined(windowMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(windowMode), windowMode, "未知 Player window mode。");
+        }
+
         WindowWidth = windowWidth;
         WindowHeight = windowHeight;
         WindowTitle = windowTitle.Trim();
@@ -121,6 +181,7 @@ public sealed class EngineOptions
         EnableGameUi = enableGameUi && enableGuiRuntime && !headless;
         GameUiBackend = gameUiBackend;
         VSync = vSync;
+        WindowMode = windowMode;
         ContentRoot = contentRoot;
         StartScene = startScene;
         SimHz = simHz;
@@ -238,6 +299,11 @@ public sealed class EngineOptions
     /// 窗口模式是否启用垂直同步。
     /// </summary>
     public bool VSync { get; }
+
+    /// <summary>
+    /// 独立 Player 在首帧前应用的平台窗口模式；Editor 外部窗口不消费该值。
+    /// </summary>
+    public PlayerWindowMode WindowMode { get; }
 
     /// <summary>
     /// 内容根目录。

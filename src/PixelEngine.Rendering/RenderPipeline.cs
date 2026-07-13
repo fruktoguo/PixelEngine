@@ -30,6 +30,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     private readonly DitherPass _dither;
     private readonly GammaPass _gamma;
     private readonly CrtPass _crt;
+    private readonly PresentationComposePass _presentationCompose;
     private readonly PresentPass _present;
     private readonly UiPrimitiveRenderer _uiPrimitives;
     private readonly WorldTexture _worldTexture;
@@ -41,6 +42,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     private readonly ColorRenderTarget _lit;
     private readonly ColorRenderTarget _postA;
     private readonly ColorRenderTarget _postB;
+    private readonly ColorRenderTarget _presentation;
     private byte[] _visibilityMask;
     private UiLayerEntry[] _uiLayers = [];
     private int _nextUiLayerSequence;
@@ -93,6 +95,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _dither = new DitherPass(_gl, profile);
         _gamma = new GammaPass(_gl, profile);
         _crt = new CrtPass(_gl, profile);
+        _presentationCompose = new PresentationComposePass(_gl, profile);
         _present = new PresentPass(window, profile);
         _uiPrimitives = new UiPrimitiveRenderer(_gl, profile);
         _worldTexture = new WorldTexture(_gl, width, height);
@@ -104,6 +107,9 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _lit = new ColorRenderTarget(_gl, width, height);
         _postA = new ColorRenderTarget(_gl, width, height);
         _postB = new ColorRenderTarget(_gl, width, height);
+        _presentation = new ColorRenderTarget(_gl, width, height);
+        CurrentPresentation = RenderPresentationDescriptor.CreateInitial(width, height);
+        MaximumTextureSize = QueryMaximumTextureSize(_gl);
         _visibilityMask = GC.AllocateArray<byte>(checked(width * height), pinned: true);
         _visibilityMask.AsSpan().Fill(byte.MaxValue);
         _visibility.Upload(_visibilityMask);
@@ -156,7 +162,17 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     public int Height => _worldTexture.Height;
 
     /// <summary>
-    /// 最近一帧 post-process 与 gameplay/debug overlay 合成后、present 前的最终 runtime 画面纹理；供 Editor 视口只读采样。
+    /// 当前 OpenGL context 允许的二维纹理最大边长；Game View 自定义分辨率必须遵守该上限。
+    /// </summary>
+    public int MaximumTextureSize { get; }
+
+    /// <summary>
+    /// 当前已在 render 帧边界提交的 world→presentation 描述。
+    /// </summary>
+    public RenderPresentationDescriptor CurrentPresentation { get; private set; }
+
+    /// <summary>
+    /// 最近一帧 world、gameplay overlay 与全部 game Canvas 合成后的完整 presentation 纹理；供 Editor 只读采样。
     /// </summary>
     public RenderViewportTexture CurrentViewportTexture { get; private set; }
 
@@ -172,6 +188,36 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     /// 已注册 UI present 层数量。
     /// </summary>
     public int UiLayerCount { get; private set; }
+
+    /// <summary>
+    /// 在 render 前帧边界提交下一份 presentation 描述。相同 revision 只能重复提交完全相同的描述。
+    /// </summary>
+    /// <param name="descriptor">已由 Hosting 统一解析的 presentation 描述。</param>
+    public void CommitPresentation(in RenderPresentationDescriptor descriptor)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        descriptor.Validate(Width, Height);
+        if (descriptor.PresentationWidth > MaximumTextureSize || descriptor.PresentationHeight > MaximumTextureSize)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(descriptor),
+                $"Presentation {descriptor.PresentationWidth}×{descriptor.PresentationHeight} 超过 renderer 上限 {MaximumTextureSize}。");
+        }
+
+        if (descriptor.Revision < CurrentPresentation.Revision)
+        {
+            throw new InvalidOperationException(
+                $"Presentation revision 不能倒退：current={CurrentPresentation.Revision}, requested={descriptor.Revision}。");
+        }
+
+        if (descriptor.Revision == CurrentPresentation.Revision && descriptor != CurrentPresentation)
+        {
+            throw new InvalidOperationException("同一 presentation revision 不能对应不同几何或 display metrics。");
+        }
+
+        _presentation.Resize(descriptor.PresentationWidth, descriptor.PresentationHeight);
+        CurrentPresentation = descriptor;
+    }
 
     /// <summary>
     /// 注册一个窗口 framebuffer UI 层。该兼容 overload 保留既有 CLR 签名与窗口绘制语义。
@@ -301,6 +347,14 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _lit.Resize(width, height);
         _postA.Resize(width, height);
         _postB.Resize(width, height);
+        CurrentPresentation = CurrentPresentation with
+        {
+            WorldViewport = PresentationViewport.Fit(
+                width,
+                height,
+                CurrentPresentation.PresentationWidth,
+                CurrentPresentation.PresentationHeight),
+        };
         _visibilityMask = GC.AllocateArray<byte>(checked(width * height), pinned: true);
         _visibilityMask.AsSpan().Fill(byte.MaxValue);
         _visibility.Upload(_visibilityMask);
@@ -495,27 +549,43 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         CurrentViewportOverlayCount = overlays.Length;
         RecordSub(profiler, FrameSubPhase.PostProcess, started);
 
-        // --- Present 阶段：Game UI 离屏合成 → 发布 viewport → 窗口缩放 → Editor UI ---
+        // --- Present 阶段：固定 world → presentation letterbox → Game UI → OS framebuffer → Editor UI ---
         started = Stopwatch.GetTimestamp();
-        PresentationViewport runtimeViewport = PresentationViewport.Fit(Width, Height, Width, Height);
-        current.BindFramebuffer();
+        _presentationCompose.Render(current, _presentation, CurrentPresentation.WorldViewport, _quad);
+        _presentation.BindFramebuffer();
+        UiPresentTarget runtimeUiTarget = new(
+            0,
+            0,
+            CurrentPresentation.PresentationWidth,
+            CurrentPresentation.PresentationHeight,
+            1f);
         PresentUiLayers(
             new UiPresentContext(
                 _gl,
-                current.Width,
-                current.Height,
-                current.Width,
-                current.Height,
-                runtimeViewport,
+                CurrentPresentation.PresentationWidth,
+                CurrentPresentation.PresentationHeight,
+                CurrentPresentation.PresentationWidth,
+                CurrentPresentation.PresentationHeight,
+                CurrentPresentation.WorldViewport,
+                runtimeUiTarget,
+                runtimeUiTarget.Scissor,
                 _uiPrimitives,
                 profiler),
             UiPresentSurface.RuntimeViewport);
 
-        // CurrentViewportTexture 是 runtime world + gameplay overlay + Game UI 的完整权威表面。
+        // CurrentViewportTexture 是 letterbox 后 world + gameplay overlay + Game UI 的完整权威 presentation。
         // Editor Game View 只采样该纹理；Editor chrome/modal 在后续默认 framebuffer 阶段绘制，绝不进入它。
-        CurrentViewportTexture = new RenderViewportTexture(current.Handle, current.Width, current.Height);
-        PresentationViewport presentation = PresentationViewport.Fit(Width, Height, _window.Width, _window.Height);
-        _present.Render(current, presentation, _quad);
+        CurrentViewportTexture = new RenderViewportTexture(
+            _presentation.Handle,
+            _presentation.Width,
+            _presentation.Height,
+            CurrentPresentation.Revision);
+        PresentationViewport presentation = PresentationViewport.Fit(
+            CurrentPresentation.PresentationWidth,
+            CurrentPresentation.PresentationHeight,
+            _window.Width,
+            _window.Height);
+        _present.Render(_presentation, presentation, _quad);
         _gl.Viewport(0, 0, (uint)_window.Width, (uint)_window.Height);
         UiPresentTarget windowUiTarget = new(0, 0, _window.Width, _window.Height, 1f);
         PresentUiLayers(
@@ -581,6 +651,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
             return;
         }
 
+        _presentation.Dispose();
         _postB.Dispose();
         _postA.Dispose();
         _lit.Dispose();
@@ -592,6 +663,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _worldTexture.Dispose();
         _uiPrimitives.Dispose();
         _present.Dispose();
+        _presentationCompose.Dispose();
         _crt.Dispose();
         _gamma.Dispose();
         _dither.Dispose();
@@ -607,6 +679,20 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _worldBlit.Dispose();
         _quad.Dispose();
         _disposed = true;
+    }
+
+    private static int QueryMaximumTextureSize(GL gl)
+    {
+        try
+        {
+            gl.GetInteger(GLEnum.MaxTextureSize, out int maximum);
+            return Math.Max(1, maximum);
+        }
+        catch (Exception)
+        {
+            // GL 3.3 / ES 3.0 最低要求远高于默认 presentation；查询异常时保持保守且可执行的上限。
+            return 2048;
+        }
     }
 
     private void UploadWorld(RenderBuffer renderBuffer, ReadOnlySpan<PixelUploadRect> dirtyRects)

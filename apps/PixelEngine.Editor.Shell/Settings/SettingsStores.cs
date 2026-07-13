@@ -1,6 +1,7 @@
 using System.Text.Json;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Hosting;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Settings;
@@ -154,6 +155,7 @@ internal static class PlayerSettingsEditorAdapter
         _ = builder
             .WithWindow(normalized.WindowWidth, normalized.WindowHeight)
             .WithWindowTitle(normalized.WindowTitle)
+            .WithWindowMode(normalized.WindowMode)
             .UseVSync(normalized.VSync)
             .UseGuiRuntime()
             .EnableGameUi()
@@ -180,6 +182,7 @@ internal static class PlayerSettingsEditorAdapter
             IncludedScenes = includedScenes,
             PlayerWindowWidth = normalized.WindowWidth,
             PlayerWindowHeight = normalized.WindowHeight,
+            PlayerWindowMode = normalized.WindowMode,
             PlayerVSync = normalized.VSync,
             RuntimeUiBackend = normalized.RuntimeUiBackend,
             ReleaseChannel = normalized.ReleaseChannel,
@@ -193,6 +196,7 @@ internal static class PlayerSettingsEditorAdapter
             normalized.WindowTitle,
             normalized.WindowWidth,
             normalized.WindowHeight,
+            normalized.WindowMode,
             normalized.VSync,
             normalized.StartupScene,
             normalized.RuntimeUiBackend,
@@ -220,6 +224,7 @@ internal sealed record PlayerSettingsRuntimeProjectionSnapshot(
     string WindowTitle,
     int WindowWidth,
     int WindowHeight,
+    PlayerWindowMode WindowMode,
     bool VSync,
     string StartupScene,
     UiBackendKind RuntimeUiBackend,

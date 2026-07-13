@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 using static PixelEngine.Hosting.EngineProjectSettingsValidation;
 
@@ -215,6 +216,11 @@ public sealed record EngineProjectStartupSettings
     public int WindowHeight { get; init; } = EngineOptions.DefaultWindowHeight;
 
     /// <summary>
+    /// 独立 Player 在首帧前应用的平台窗口模式。
+    /// </summary>
+    public PlayerWindowMode WindowMode { get; init; } = PlayerWindowMode.Windowed;
+
+    /// <summary>
     /// 是否启用垂直同步。
     /// </summary>
     public bool VSync { get; init; } = true;
@@ -251,6 +257,7 @@ public sealed record EngineProjectStartupSettings
             WindowTitle = normalized.WindowTitle,
             WindowWidth = normalized.WindowWidth,
             WindowHeight = normalized.WindowHeight,
+            WindowMode = normalized.WindowMode,
             VSync = normalized.VSync,
             RuntimeUiBackend = normalized.RuntimeUiBackend,
             ReleaseChannel = normalized.ReleaseChannel,
@@ -266,6 +273,8 @@ public sealed record EngineProjectStartupSettings
             ? throw new InvalidOperationException("窗口标题不能为空。")
             : WindowWidth <= 0 || WindowHeight <= 0
             ? throw new InvalidOperationException("窗口尺寸必须大于 0。")
+            : !Enum.IsDefined(WindowMode)
+            ? throw new InvalidOperationException($"未知 Player window mode：{WindowMode}。")
             : this with
             {
                 StartScene = NormalizeRelativePath(StartScene, nameof(StartScene), allowEmpty: false),
@@ -298,7 +307,7 @@ public sealed record PlayerSettingsDto
     /// <summary>
     /// 当前 Player Settings schema 版本。
     /// </summary>
-    public const int CurrentFormatVersion = 1;
+    public const int CurrentFormatVersion = 2;
 
     /// <summary>
     /// Player Settings 文件版本。
@@ -319,6 +328,11 @@ public sealed record PlayerSettingsDto
     /// 玩家窗口默认高度。
     /// </summary>
     public int WindowHeight { get; init; } = 720;
+
+    /// <summary>
+    /// 独立 Player 平台窗口模式；旧 v1 文件缺字段时按 enum 默认值迁移为 Windowed。
+    /// </summary>
+    public PlayerWindowMode WindowMode { get; init; } = PlayerWindowMode.Windowed;
 
     /// <summary>
     /// 是否启用垂直同步。
@@ -372,7 +386,7 @@ public sealed record PlayerSettingsDto
     /// </summary>
     public bool TryNormalize(out string error)
     {
-        if (FormatVersion != CurrentFormatVersion)
+        if (FormatVersion is not 1 and not CurrentFormatVersion)
         {
             error = $"不支持的 Player Settings 版本：{FormatVersion}。";
             return false;
@@ -387,6 +401,12 @@ public sealed record PlayerSettingsDto
         if (WindowWidth <= 0 || WindowHeight <= 0)
         {
             error = "窗口尺寸必须大于 0。";
+            return false;
+        }
+
+        if (!Enum.IsDefined(WindowMode))
+        {
+            error = $"未知 Player window mode：{WindowMode}。";
             return false;
         }
 
@@ -418,6 +438,7 @@ public sealed record PlayerSettingsDto
         return TryNormalize(out string error)
             ? this with
             {
+                FormatVersion = CurrentFormatVersion,
                 WindowTitle = WindowTitle.Trim(),
                 Version = Version.Trim(),
                 StartupScene = NormalizeRelativePath(StartupScene, nameof(StartupScene), allowEmpty: false),
@@ -825,6 +846,7 @@ public static class EngineProjectSettingsStore
         string windowTitle = ReadOptionalString(root, "windowTitle", defaults.WindowTitle);
         int windowWidth = ReadPositiveInt(root, "windowWidth", defaults.WindowWidth);
         int windowHeight = ReadPositiveInt(root, "windowHeight", defaults.WindowHeight);
+        PlayerWindowMode windowMode = ReadOptionalEnum(root, "windowMode", defaults.WindowMode);
         bool vSync = ReadOptionalBool(root, "vSync", defaults.VSync);
         UiBackendKind runtimeUiBackend = ReadOptionalEnum(root, "runtimeUiBackend", defaults.RuntimeUiBackend);
         PlayerReleaseChannel releaseChannel = ReadOptionalEnum(root, "releaseChannel", defaults.ReleaseChannel);
@@ -835,6 +857,7 @@ public static class EngineProjectSettingsStore
             WindowTitle = windowTitle,
             WindowWidth = windowWidth,
             WindowHeight = windowHeight,
+            WindowMode = windowMode,
             VSync = vSync,
             RuntimeUiBackend = runtimeUiBackend,
             ReleaseChannel = releaseChannel,

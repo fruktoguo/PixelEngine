@@ -38,12 +38,25 @@ public sealed unsafe class GlTexture : IDisposable
         Height = height;
         Handle = gl.GenTexture();
         GlResourceTracker.TrackCreated(GlResourceKind.Texture, Handle);
-        gl.BindTexture(TextureTarget.Texture2D, Handle);
-        gl.TexImage2D(TextureTarget.Texture2D, 0, internalFormat, (uint)width, (uint)height, 0, pixelFormat, pixelType, null);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.Nearest);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Nearest);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)GLEnum.ClampToEdge);
-        gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)GLEnum.ClampToEdge);
+        gl.GetInteger(GLEnum.TextureBinding2D, out int previousTexture);
+        gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int previousUnpackBuffer);
+        try
+        {
+            // TexImage2D 的 null 在绑定 PBO 时表示 buffer offset 0，而不是“不上传数据”。
+            // render target 尺寸大于残留 PBO 容量时会让纹理存储分配失败并产生 incomplete FBO。
+            gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, 0);
+            gl.BindTexture(TextureTarget.Texture2D, Handle);
+            gl.TexImage2D(TextureTarget.Texture2D, 0, internalFormat, (uint)width, (uint)height, 0, pixelFormat, pixelType, null);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)GLEnum.Nearest);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)GLEnum.Nearest);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)GLEnum.ClampToEdge);
+            gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)GLEnum.ClampToEdge);
+        }
+        finally
+        {
+            gl.BindTexture(TextureTarget.Texture2D, (uint)previousTexture);
+            gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, (uint)previousUnpackBuffer);
+        }
     }
 
     /// <summary>

@@ -815,6 +815,7 @@ public static class DemoProgram
         EngineBuilder builder = new EngineBuilder()
             .WithProject(project)
             .WithWindow(options.WindowWidth, options.WindowHeight)
+            .WithWindowMode(options.WindowMode)
             .WithWindowTitle(options.WindowTitle)
             .WithInternalResolution(PlayableInternalWidth, PlayableInternalHeight)
             .WithOverloadPolicy(PlayableOverloadFrameBudgetMs, PlayableOverloadSustainWindow)

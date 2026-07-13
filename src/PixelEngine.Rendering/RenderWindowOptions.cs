@@ -21,6 +21,11 @@ public sealed record RenderWindowOptions
     public int Height { get; init; } = 720;
 
     /// <summary>
+    /// 独立 Player 的初始平台窗口模式；必须在窗口初始化及首帧之前生效。
+    /// </summary>
+    public PlayerWindowMode WindowMode { get; init; } = PlayerWindowMode.Windowed;
+
+    /// <summary>
     /// 后端选择偏好。
     /// </summary>
     public RenderBackendPreference BackendPreference { get; init; } = RenderBackendPreference.Auto;

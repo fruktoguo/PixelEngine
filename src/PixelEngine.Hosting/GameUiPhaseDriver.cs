@@ -14,6 +14,7 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     private readonly GameUiCanvasRegistry? _registry;
     private readonly IGameUiEventSink? _eventSink;
     private readonly IGameUiModelPusher? _modelPusher;
+    private readonly IGameUiCompositionPolicy? _runtimePolicy;
     private readonly UiEvent[] _eventBuffer;
 
     /// <summary>
@@ -23,16 +24,19 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     /// <param name="eventCapacity">单帧事件 drain 缓冲容量。</param>
     /// <param name="eventSink">可选事件接收器。</param>
     /// <param name="modelPusher">可选模型推送器。</param>
+    /// <param name="runtimePolicy">可选 Edit/Play runtime UI 更新与合成策略。</param>
     public GameUiPhaseDriver(
         GameUiHost host,
         int eventCapacity = 128,
         IGameUiEventSink? eventSink = null,
-        IGameUiModelPusher? modelPusher = null)
+        IGameUiModelPusher? modelPusher = null,
+        IGameUiCompositionPolicy? runtimePolicy = null)
     {
         _host = host ?? throw new ArgumentNullException(nameof(host));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
         _eventSink = eventSink;
         _modelPusher = modelPusher;
+        _runtimePolicy = runtimePolicy;
         _eventBuffer = new UiEvent[eventCapacity];
     }
 
@@ -43,16 +47,19 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     /// <param name="eventCapacity">单 Canvas 单次事件 drain 缓冲容量。</param>
     /// <param name="eventSink">可选事件接收器。</param>
     /// <param name="modelPusher">可选模型推送器。</param>
+    /// <param name="runtimePolicy">可选 Edit/Play runtime UI 更新与合成策略。</param>
     public GameUiPhaseDriver(
         GameUiCanvasRegistry registry,
         int eventCapacity = 128,
         IGameUiEventSink? eventSink = null,
-        IGameUiModelPusher? modelPusher = null)
+        IGameUiModelPusher? modelPusher = null,
+        IGameUiCompositionPolicy? runtimePolicy = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(eventCapacity);
         _eventSink = eventSink;
         _modelPusher = modelPusher;
+        _runtimePolicy = runtimePolicy;
         _eventBuffer = new UiEvent[eventCapacity];
     }
 
@@ -83,6 +90,13 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
 
     private void RunUi(EngineTickContext context)
     {
+        if (_runtimePolicy is not null && !_runtimePolicy.AllowsGameUiComposition)
+        {
+            LastDeltaSeconds = 0f;
+            LastDrainedEventCount = 0;
+            return;
+        }
+
         // 游戏 UI 使用渲染帧 dt（非 sim tick dt），与动画/交互节奏对齐墙钟帧率。
         float deltaSeconds = ResolveRenderDeltaSeconds(context);
         LastDeltaSeconds = deltaSeconds;

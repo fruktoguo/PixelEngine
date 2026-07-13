@@ -5625,6 +5625,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 packageRoot,
                 "-PlayerOutputDir",
                 playerOutput,
+                "-StartScene",
+                "scenes/lava-mine.scene",
+                "-WindowMode",
+                "BorderlessFullscreen",
                 "-ContentRoot",
                 content);
             // Assert：验证不变式与预期结果
@@ -5641,6 +5645,9 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine Demo.exe")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.dll")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "materials.json")));
+            JsonNode startup = JsonNode.Parse(
+                File.ReadAllText(Path.Combine(expandedPackageDir, "content", "startup.json")))!;
+            Assert.Equal("BorderlessFullscreen", startup["windowMode"]!.GetValue<string>());
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "weapons.json")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "textures", "17_gravel.png")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "textures", "18_boundary_stone.png")));

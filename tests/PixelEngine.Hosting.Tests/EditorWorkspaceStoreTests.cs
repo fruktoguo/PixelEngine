@@ -9,6 +9,62 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class EditorWorkspaceStoreTests
 {
+    /// <summary>验证 v1 workspace 无损迁移到 v2，并持久化 Game View preset/scale/pan。</summary>
+    [Fact]
+    public void WorkspaceV1MigratesAndGameViewStateRoundTripsInV2()
+    {
+        using TempDirectory temp = new();
+        string storagePath = Path.Combine(temp.Path, "editor-workspace.json");
+        string projectRoot = Path.Combine(temp.Path, "Project");
+        File.WriteAllText(storagePath, $$"""
+        {
+          "formatVersion": 1,
+          "lastCleanShutdown": true,
+          "projects": [
+            {
+              "projectPath": {{System.Text.Json.JsonSerializer.Serialize(projectRoot)}},
+              "lastScenePath": "scenes/main.scene",
+              "lastOpenedUtc": "2026-07-13T00:00:00+00:00"
+            }
+          ]
+        }
+        """);
+        EditorWorkspaceStore store = EditorWorkspaceStore.Load(storagePath);
+
+        Assert.Equal(EditorWorkspaceDocument.CurrentFormatVersion, store.Current.FormatVersion);
+        Assert.True(store.TryGetGameViewState(projectRoot, out EditorGameViewWorkspaceState migrated));
+        Assert.Equal(EditorGameViewWorkspaceState.DefaultPresetId, migrated.PresetId);
+        EditorGameViewWorkspaceState next = new()
+        {
+            PresetId = "custom-wide",
+            ScalePercent = 100f,
+            PanX = 12.5f,
+            PanY = -8f,
+            MaximizeOnPlay = true,
+            CustomPresets =
+            [
+                new EditorGameViewCustomPreset
+                {
+                    Id = "custom-wide",
+                    Name = "Wide QA",
+                    Width = 1600,
+                    Height = 700,
+                },
+            ],
+        };
+
+        Assert.True(store.TrySetGameViewState(projectRoot, next, out string diagnostic), diagnostic);
+        EditorWorkspaceStore reloaded = EditorWorkspaceStore.Load(storagePath);
+        Assert.True(reloaded.TryGetGameViewState(projectRoot, out EditorGameViewWorkspaceState actual));
+        Assert.Equal("custom-wide", actual.PresetId);
+        Assert.Equal(100f, actual.ScalePercent);
+        Assert.Equal(12.5f, actual.PanX);
+        Assert.Equal(-8f, actual.PanY);
+        Assert.True(actual.MaximizeOnPlay);
+        EditorGameViewCustomPreset custom = Assert.Single(actual.CustomPresets);
+        Assert.Equal((1600, 700), (custom.Width, custom.Height));
+    }
+
     /// <summary>
     /// 验证 workspace 往返会规范路径、合并重复工程并保存窗口尺寸。
     /// </summary>

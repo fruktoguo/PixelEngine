@@ -473,6 +473,7 @@ public sealed class Engine : IDisposable
             Title = Context.Options.WindowTitle,
             Width = Context.Options.WindowWidth,
             Height = Context.Options.WindowHeight,
+            WindowMode = Context.Options.WindowMode,
             VSync = Context.Options.VSync,
         });
         return AttachWindowRuntime(window, takeOwnership: true);
@@ -512,9 +513,9 @@ public sealed class Engine : IDisposable
 
         Context.RegisterService(window);
         Context.Counters.VSyncEnabled = window.VSyncEnabled;
-        _ = AttachWindowInput(window, _ => ResolveGuiInputRoute());
         _ = AttachCameraSynchronization(window);
         _ = AttachRendering(window);
+        _ = AttachWindowInput(window, _ => ResolveGuiInputRoute());
         if (!_windowRuntimeAttached)
         {
             Phases.Register(EnginePhase.InputAndTime, _ =>
@@ -603,8 +604,25 @@ public sealed class Engine : IDisposable
             Math.Max(1, Context.Options.InternalHeight),
             computeFeatures,
             renderSettings);
+        IDisplayMetricsSource displayMetricsSource = ResolveDisplayMetricsSource(window);
+        GamePresentationCoordinator presentation = new(
+            Context.Options.InternalWidth,
+            Context.Options.InternalHeight,
+            Context.Options.WindowWidth,
+            Context.Options.WindowHeight,
+            pipeline.MaximumTextureSize,
+            displayMetricsSource,
+            Context.TryGetService(out IGamePresentationOverride presentationOverride)
+                ? presentationOverride
+                : null);
+        if (!Context.TryGetService(out IGameplayViewportInputMapper _))
+        {
+            Context.RegisterService<IGameplayViewportInputMapper>(
+                new GamePresentationViewportInputMapper(window, presentation));
+        }
+
         Context.Counters.FrameGpuTimerAvailable = pipeline.GpuFrameTimerAvailable;
-        RenderPipelineFrameSink sink = new(pipeline);
+        RenderPipelineFrameSink sink = new(pipeline, presentation);
         RenderPhaseDriver driver = new(
             Context.GetService<IChunkSource>(),
             simulation.Materials,
@@ -619,6 +637,7 @@ public sealed class Engine : IDisposable
             scriptOverlays: Context.TryGetService(out ScriptOverlayApi overlays) ? overlays : null,
             debugOverlays: ResolveDebugOverlayController());
         Context.RegisterService(pipeline);
+        Context.RegisterService(presentation);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
         Context.RegisterService<IRenderPresentationControl>(pipeline);
         Context.RegisterService(driver.RenderStyleQuality);
@@ -661,7 +680,10 @@ public sealed class Engine : IDisposable
         bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
         bool hasUiLayerCompositor = Context.TryGetService(out UiLayerCompositor _);
         IReadOnlyList<IEditorHostExtension>? extensions = null;
-        IUiPresentTargetProvider? gameUiPresentTargetProvider = null;
+        IGameUiCompositionPolicy? gameUiCompositionPolicy =
+            Context.TryGetService(out IGameUiCompositionPolicy registeredCompositionPolicy)
+                ? registeredCompositionPolicy
+                : null;
         bool hasEditorHostExtensions = false;
         if (!_editorHostExtensionsAttached &&
             Context.TryGetService(out IReadOnlyList<IEditorHostExtension> registeredExtensions) &&
@@ -669,7 +691,6 @@ public sealed class Engine : IDisposable
         {
             extensions = registeredExtensions;
             hasEditorHostExtensions = true;
-            gameUiPresentTargetProvider = ResolveGameUiPresentTargetProvider(registeredExtensions);
         }
 
         // 注册表可能同时包含 native Canvas 与 ManagedFallback Canvas，也可能在后续场景切换时改变组合；
@@ -691,8 +712,9 @@ public sealed class Engine : IDisposable
                 pipeline,
                 UiPresentSurface.RuntimeViewport,
                 gameUi!,
-                gameUiPresentTargetProvider,
-                displayMetricsSource!);
+                targetProvider: null,
+                displayMetricsSource!,
+                () => gameUiCompositionPolicy?.AllowsGameUiComposition ?? true);
             Context.RegisterService(compositor);
             _ownedRuntimeResources.Add(compositor);
         }
@@ -707,7 +729,18 @@ public sealed class Engine : IDisposable
                     ? new GameplayViewportGuiInputRoute(gameplayViewportMapper)
                     : null;
             input = new GuiWindowInputConnector(window, gui.Input, viewportInputRoute);
-            Action<IGuiDrawContext>? managedGui = gameUiNeedsPresentation ? gameUi!.DrawGui : null;
+            Action<IGuiDrawContext>? managedGui = null;
+            if (gameUiNeedsPresentation)
+            {
+                managedGui = gui =>
+                {
+                    if (gameUiCompositionPolicy?.AllowsGameUiComposition ?? true)
+                    {
+                        gameUi!.DrawGui(gui);
+                    }
+                };
+            }
+
             Action<UiPresentTarget>? gameUiTargetFrame = gameUiNeedsPresentation
                 ? target => ResizeGameUiAtFrameBoundary(gameUi!, target, displayMetricsSource!)
                 : null;
@@ -763,19 +796,6 @@ public sealed class Engine : IDisposable
         }
 
         _editorHostExtensionsAttached = true;
-    }
-
-    private static IUiPresentTargetProvider? ResolveGameUiPresentTargetProvider(IReadOnlyList<IEditorHostExtension> extensions)
-    {
-        for (int i = 0; i < extensions.Count; i++)
-        {
-            if (extensions[i] is IUiPresentTargetProvider provider)
-            {
-                return provider;
-            }
-        }
-
-        return null;
     }
 
     private GuiApp ResolveGuiApp(RenderWindow window)
@@ -894,6 +914,10 @@ public sealed class Engine : IDisposable
         {
             inputSource = inputSourceFactory.CreateGameUiInputSource(window, inputSource);
         }
+        else if (Context.TryGetService(out GamePresentationCoordinator presentation))
+        {
+            inputSource = new GamePresentationUiInputSource(inputSource, window, presentation);
+        }
 
         UiInputRouter inputRouter = new(registry, inputSource);
         inputRouter.TextCompositionCapabilities.Validate();
@@ -913,7 +937,13 @@ public sealed class Engine : IDisposable
             }
         }
 
-        GameUiPhaseDriver driver = new(registry, eventSink: service, modelPusher: service);
+        GameUiPhaseDriver driver = new(
+            registry,
+            eventSink: service,
+            modelPusher: service,
+            runtimePolicy: Context.TryGetService(out IGameUiCompositionPolicy runtimePolicy)
+                ? runtimePolicy
+                : null);
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(registry);

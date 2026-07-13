@@ -33,6 +33,13 @@ public static class RenderBackendSelector
         windowOptions.FramesPerSecond = options.FramesPerSecond;
         windowOptions.UpdatesPerSecond = options.UpdatesPerSecond;
         windowOptions.ShouldSwapAutomatically = false;
+        (windowOptions.WindowState, windowOptions.WindowBorder) = options.WindowMode switch
+        {
+            PlayerWindowMode.Windowed => (WindowState.Normal, WindowBorder.Resizable),
+            PlayerWindowMode.MaximizedWindow => (WindowState.Maximized, WindowBorder.Resizable),
+            PlayerWindowMode.BorderlessFullscreen => (WindowState.Fullscreen, WindowBorder.Hidden),
+            _ => throw new ArgumentOutOfRangeException(nameof(options), options.WindowMode, "未知 Player window mode。"),
+        };
         return windowOptions;
     }
 

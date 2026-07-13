@@ -16,6 +16,7 @@ Options:
   --start-scene <scene>
   --window-width <pixels>
   --window-height <pixels>
+  --window-mode <Windowed|MaximizedWindow|BorderlessFullscreen>
   --vsync <true|false>
   --runtime-ui-backend <backend>
   --release-channel <Development|Production>
@@ -193,6 +194,7 @@ include_symbols=0
 start_scene="scenes/playable-world.scene"
 window_width="1280"
 window_height="720"
+window_mode="Windowed"
 vsync="true"
 runtime_ui_backend="ManagedFallback"
 release_channel="Development"
@@ -266,6 +268,11 @@ while [[ $# -gt 0 ]]; do
       window_height="$2"
       shift 2
       ;;
+    --window-mode|-WindowMode)
+      require_value "$1" "${2:-}"
+      window_mode="$2"
+      shift 2
+      ;;
     --vsync|-VSync)
       require_value "$1" "${2:-}"
       vsync="$2"
@@ -305,6 +312,7 @@ done
 [[ -n "$output" ]] || fail_usage "Missing required argument: --output."
 case "$channel" in r2r|aot) ;; *) fail_usage "Unsupported channel: $channel" ;; esac
 case "$release_channel" in Development|Production) ;; *) fail_usage "Unsupported release channel: $release_channel" ;; esac
+case "$window_mode" in Windowed|MaximizedWindow|BorderlessFullscreen) ;; *) fail_usage "Unsupported window mode: $window_mode" ;; esac
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 current_host_rid="$(host_rid)"
@@ -376,6 +384,7 @@ write_result() {
     printf '  "releaseChannel": "%s",\n' "$(json_escape "$release_channel")"
     printf '  "configuration": "%s",\n' "$(json_escape "$configuration")"
     printf '  "runtimeUiBackend": "%s",\n' "$(json_escape "$runtime_ui_backend")"
+    printf '  "windowMode": "%s",\n' "$(json_escape "$window_mode")"
     printf '  "version": "%s",\n' "$(json_escape "$version")"
     printf '  "informationalVersion": "%s",\n' "$(json_escape "$informational_version")"
     printf '  "packageArchive": %s,\n' "$(if [[ -n "$archive" ]]; then printf '"%s"' "$(json_escape "$archive")"; else printf 'null'; fi)"
@@ -426,7 +435,7 @@ if [[ -z "$error_message" ]]; then
   run_phase "verify" 45 60 bash "$repo_root/tools/verify-publish.sh" "${verify_args[@]}" || error_message="verify phase failed"
 fi
 if [[ -z "$error_message" ]]; then
-  package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene" --window-width "$window_width" --window-height "$window_height" --vsync "$vsync" --runtime-ui-backend "$runtime_ui_backend" --release-channel "$release_channel")
+  package_args=(--rid "$rid" --channel "$channel" --version "$version" --publish-dir "$publish_dir" --output-root "$package_root" --player-output-dir "$player_dir" --product-name "$product_name" --start-scene "$start_scene" --window-width "$window_width" --window-height "$window_height" --window-mode "$window_mode" --vsync "$vsync" --runtime-ui-backend "$runtime_ui_backend" --release-channel "$release_channel")
   if [[ -n "$content_root" ]]; then package_args+=(--content-root "$content_root"); fi
   for scene in "${include_scenes[@]}"; do package_args+=(--include-scene "$scene"); done
   if (( include_symbols || dev_layout )); then package_args+=(--include-symbols); fi

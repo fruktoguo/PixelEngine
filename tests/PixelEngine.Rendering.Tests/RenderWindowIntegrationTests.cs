@@ -190,7 +190,12 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
         buffer.Pixels.Fill(0xFF204060u);
 
         using WorldTexture texture = new(window.Gl, buffer.Width, buffer.Height);
+        uint callerPbo = window.Gl.GenBuffer();
+        window.Gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, callerPbo);
         using PboUploader uploader = new(window.Gl, buffer.ByteLength);
+        window.Gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int bindingAfterConstruction);
+        window.Gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, 0);
+        window.Gl.DeleteBuffer(callerPbo);
 
         uploader.UploadFull(texture, buffer);
         buffer.Pixels[0] = 0xFFFFFFFFu;
@@ -209,7 +214,36 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
 
         window.SwapBuffers();
 
+        Assert.Equal((int)callerPbo, bindingAfterConstruction);
         Assert.True(uploader.CapacityBytes >= buffer.ByteLength);
+    }
+
+    /// <summary>
+    /// render target 分配/resize 不得把已绑定 PBO 误当作 TexImage2D 数据源，并须恢复调用方 GL 状态。
+    /// </summary>
+    [NativeSmokeFact]
+    public void ColorRenderTargetResizeIgnoresAndRestoresCallerPixelUnpackBuffer()
+    {
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine render target resize state smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.Auto,
+            EnableDebugContext = true,
+        });
+        using GlBuffer callerBuffer = new(window.Gl, BufferTargetARB.PixelUnpackBuffer);
+        callerBuffer.Bind();
+        callerBuffer.Allocate(4, BufferUsageARB.StreamDraw);
+
+        using ColorRenderTarget target = new(window.Gl, 8, 8);
+        target.Resize(16, 16);
+        window.Gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int restoredPbo);
+        window.Gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, 0);
+
+        Assert.Equal((16, 16), (target.Width, target.Height));
+        Assert.Equal((int)callerBuffer.Handle, restoredPbo);
+        Assert.Equal(GLEnum.NoError, window.Gl.GetError());
     }
 
     /// <summary>
@@ -528,6 +562,47 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
         Assert.True(
             player[0] > 230 && player[1] > 190 && player[2] is > 70 and < 120 && player[3] > 240,
             $"runtime viewport 中应读回玩家黄色 overlay，actual rgba=({player[0]},{player[1]},{player[2]},{player[3]})");
+    }
+
+    /// <summary>
+    /// 固定 world 会先 letterbox 到独立 presentation，Game UI 随后仍可覆盖整张 presentation，纹理 revision 同帧发布。
+    /// </summary>
+    [NativeSmokeFact]
+    public void RenderPipelineComposesWorldLetterboxAndFullPresentationUiAtomically()
+    {
+        using RenderWindow window = CreateSmokeWindow("PixelEngine presentation compose smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 16, 9);
+        RenderPresentationDescriptor descriptor = new(
+            16,
+            16,
+            PresentationViewport.Fit(16, 9, 16, 16),
+            DisplayMetricsRevision: 3,
+            Revision: 11);
+        pipeline.CommitPresentation(in descriptor);
+        RenderBuffer buffer = new(16, 9);
+        RenderAuxBuffers aux = new(16, 9);
+        buffer.Pixels.Fill(0xFFE06020u);
+        SolidUiProbeLayer topBarUi = new(0xFF00FF00u, left: 1f, top: 1f, size: 3f);
+        using IDisposable registration = pipeline.RegisterUiLayer(
+            UiPresentSurface.RuntimeViewport,
+            UiPresentLayerOrders.Game,
+            topBarUi);
+        pipeline.Settings.QualityLevel = LightingQualityLevel.BloomDisabled;
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.Gamma = 1f;
+
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, 16, 9));
+
+        RenderViewportTexture texture = pipeline.CurrentViewportTexture;
+        byte[] pixels = ReadTextureRgba(window.Gl, texture.Handle, texture.Width, texture.Height);
+        byte[] untouchedTopBar = PixelAtTopLeftOrigin(pixels, texture.Width, x: 8, y: 1);
+        byte[] uiInTopBar = PixelAtTopLeftOrigin(pixels, texture.Width, x: 2, y: 2);
+        byte[] worldCenter = PixelAtTopLeftOrigin(pixels, texture.Width, x: 8, y: 8);
+        Assert.Equal((16, 16, 11L), (texture.Width, texture.Height, texture.Revision));
+        Assert.True(MaxRgb(untouchedTopBar) < 8, PixelMessage("presentation top letterbox", untouchedTopBar));
+        Assert.True(uiInTopBar[1] > 240 && uiInTopBar[0] < 20, PixelMessage("UI across presentation", uiInTopBar));
+        Assert.True(MaxRgb(worldCenter) > 80, PixelMessage("fixed world center", worldCenter));
+        Assert.Equal(GLEnum.NoError, topBarUi.GlError);
     }
 
     /// <summary>

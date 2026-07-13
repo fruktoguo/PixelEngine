@@ -26,7 +26,8 @@ public sealed class RenderWindow : IDisposable
         RenderBackend backend,
         GlCapabilities capabilities,
         GlDebugMessenger? debugMessenger,
-        WindowsDxgiGlPresenter? dxgiPresenter)
+        WindowsDxgiGlPresenter? dxgiPresenter,
+        PlayerWindowMode initialWindowMode)
     {
         _window = window;
         Input = input;
@@ -36,6 +37,7 @@ public sealed class RenderWindow : IDisposable
         Capabilities = capabilities;
         _debugMessenger = debugMessenger;
         _dxgiPresenter = dxgiPresenter;
+        InitialWindowMode = initialWindowMode;
     }
 
     /// <summary>
@@ -57,6 +59,11 @@ public sealed class RenderWindow : IDisposable
     /// 输入上下文。
     /// </summary>
     public IInputContext Input { get; }
+
+    /// <summary>
+    /// 创建窗口时在首帧之前应用的平台模式。该值不随用户后续手工 resize/maximize 改写。
+    /// </summary>
+    public PlayerWindowMode InitialWindowMode { get; }
 
     /// <summary>
     /// 平台窗口焦点变化。GUI 平台桥用它向 ImGui 注入 focus event，避免 Alt-Tab 后残留按键或文本焦点。
@@ -394,7 +401,16 @@ public sealed class RenderWindow : IDisposable
                     Math.Max(1, window.FramebufferSize.Y));
             }
 
-            return new RenderWindow(window, input, gl, nativeContext, backend, capabilities, debugMessenger, dxgiPresenter);
+            return new RenderWindow(
+                window,
+                input,
+                gl,
+                nativeContext,
+                backend,
+                capabilities,
+                debugMessenger,
+                dxgiPresenter,
+                options.WindowMode);
         }
         catch
         {

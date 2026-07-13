@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using PixelEngine.Hosting;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Build;
@@ -259,6 +260,8 @@ internal sealed record BuildRequest
 
     public int PlayerWindowHeight { get; init; } = EngineOptions.DefaultWindowHeight;
 
+    public PlayerWindowMode PlayerWindowMode { get; init; } = PlayerWindowMode.Windowed;
+
     public bool PlayerVSync { get; init; } = true;
 
     public UiBackendKind RuntimeUiBackend { get; init; } = UiBackendKind.ManagedFallback;
@@ -289,6 +292,8 @@ internal sealed record BuildResult
     public string Channel { get; init; } = string.Empty;
 
     public string ReleaseChannel { get; init; } = string.Empty;
+
+    public string WindowMode { get; init; } = string.Empty;
 
     public string Configuration { get; init; } = string.Empty;
 

@@ -323,6 +323,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AppendPowerShellArgument(command, "-StartScene", request.StartScene);
         AppendPowerShellArgument(command, "-WindowWidth", request.PlayerWindowWidth.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AppendPowerShellArgument(command, "-WindowHeight", request.PlayerWindowHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AppendPowerShellArgument(command, "-WindowMode", request.PlayerWindowMode.ToString());
         AppendPowerShellArgument(command, "-VSync", request.PlayerVSync ? "true" : "false");
         AppendPowerShellArgument(command, "-RuntimeUiBackend", request.RuntimeUiBackend.ToString());
         AppendPowerShellArgument(command, "-ReleaseChannel", request.ReleaseChannel.ToString());
@@ -387,6 +388,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         AddArgument(startInfo, "-StartScene", request.StartScene);
         AddArgument(startInfo, "-WindowWidth", request.PlayerWindowWidth.ToString(System.Globalization.CultureInfo.InvariantCulture));
         AddArgument(startInfo, "-WindowHeight", request.PlayerWindowHeight.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        AddArgument(startInfo, "-WindowMode", request.PlayerWindowMode.ToString());
         AddArgument(startInfo, "-VSync", request.PlayerVSync ? "true" : "false");
         AddArgument(startInfo, "-RuntimeUiBackend", request.RuntimeUiBackend.ToString());
         AddArgument(startInfo, "-ReleaseChannel", request.ReleaseChannel.ToString());
@@ -522,6 +524,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             Rid = request.Rid,
             Channel = request.Channel == BuildProfileChannel.Aot ? "aot" : "r2r",
             ReleaseChannel = request.ReleaseChannel.ToString(),
+            WindowMode = request.PlayerWindowMode.ToString(),
             Configuration = request.Configuration,
             Version = request.Version,
             InformationalVersion = request.InformationalVersion,

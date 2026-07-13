@@ -7,6 +7,7 @@ using System.Text;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 using Xunit;
 
@@ -286,6 +287,7 @@ public sealed class EditorShellBuildTests
             WindowTitle = " Demo Player ",
             WindowWidth = 1600,
             WindowHeight = 900,
+            WindowMode = PlayerWindowMode.MaximizedWindow,
             VSync = false,
             IconPath = "icons\\game.ico",
             Version = "1.2.3",
@@ -298,6 +300,7 @@ public sealed class EditorShellBuildTests
         Assert.Equal("Demo Player", loadedPlayer.WindowTitle);
         Assert.Equal(1600, loadedPlayer.WindowWidth);
         Assert.Equal(900, loadedPlayer.WindowHeight);
+        Assert.Equal(PlayerWindowMode.MaximizedWindow, loadedPlayer.WindowMode);
         Assert.False(loadedPlayer.VSync);
         Assert.Equal("icons/game.ico", loadedPlayer.IconPath);
         Assert.Equal("scenes/lava-mine.scene", loadedPlayer.StartupScene);
@@ -404,6 +407,8 @@ public sealed class EditorShellBuildTests
         Assert.Equal(string.Empty, project.EditorPreferences.ExternalScriptEditor);
         Assert.True(player.InputDefaults.EnableKeyboardMouse);
         Assert.True(player.InputDefaults.EnableGamepad);
+        Assert.Equal(PlayerSettingsDto.CurrentFormatVersion, player.FormatVersion);
+        Assert.Equal(PlayerWindowMode.Windowed, player.WindowMode);
         Assert.Contains("场景条目不能为空", buildError.Message, StringComparison.Ordinal);
     }
 
@@ -535,6 +540,7 @@ public sealed class EditorShellBuildTests
         Assert.Equal(playerSnapshot.WindowTitle, reloadedPlayer.WindowTitle);
         Assert.Equal(1600, reloadedPlayer.WindowWidth);
         Assert.Equal(900, reloadedPlayer.WindowHeight);
+        Assert.Equal(PlayerWindowMode.MaximizedWindow, reloadedPlayer.WindowMode);
         Assert.False(reloadedPlayer.VSync);
         Assert.Equal("icons/player-probe.ico", reloadedPlayer.IconPath);
         Assert.Equal("4.5.6", reloadedPlayer.Version);
@@ -733,6 +739,7 @@ public sealed class EditorShellBuildTests
             WindowTitle = "Player Projection",
             WindowWidth = 1440,
             WindowHeight = 810,
+            WindowMode = PlayerWindowMode.BorderlessFullscreen,
             VSync = false,
             IconPath = "icons/player.ico",
             Version = "2.3.4",
@@ -751,12 +758,14 @@ public sealed class EditorShellBuildTests
         Assert.Equal(["scenes/extra.scene", "scenes/player.scene"], projected.IncludedScenes);
         Assert.Equal(1440, projected.PlayerWindowWidth);
         Assert.Equal(810, projected.PlayerWindowHeight);
+        Assert.Equal(PlayerWindowMode.BorderlessFullscreen, projected.PlayerWindowMode);
         Assert.False(projected.PlayerVSync);
         Assert.Equal(UiBackendKind.Ultralight, projected.RuntimeUiBackend);
         Assert.Equal(PlayerReleaseChannel.Production, projected.ReleaseChannel);
 
         PlayerSettingsRuntimeProjectionSnapshot snapshot = PlayerSettingsEditorAdapter.CaptureRuntimeProjection(settings);
         Assert.Equal("Player Projection", snapshot.WindowTitle);
+        Assert.Equal(PlayerWindowMode.BorderlessFullscreen, snapshot.WindowMode);
         Assert.Equal(UiBackendKind.Ultralight, snapshot.RuntimeUiBackend);
 
         using Engine engine = new EngineBuilder()
@@ -766,6 +775,7 @@ public sealed class EditorShellBuildTests
         Assert.Equal("Player Projection", engine.Context.Options.WindowTitle);
         Assert.Equal(1440, engine.Context.Options.WindowWidth);
         Assert.Equal(810, engine.Context.Options.WindowHeight);
+        Assert.Equal(PlayerWindowMode.BorderlessFullscreen, engine.Context.Options.WindowMode);
         Assert.False(engine.Context.Options.VSync);
         Assert.Equal("scenes/player.scene", engine.Context.Options.StartScene);
         Assert.True(engine.Context.Options.EnableGuiRuntime);
@@ -789,6 +799,7 @@ public sealed class EditorShellBuildTests
               contentRoot = $ContentRoot
               windowWidth = $WindowWidth
               windowHeight = $WindowHeight
+              windowMode = $WindowMode
               vSync = $VSync
               runtimeUiBackend = $RuntimeUiBackend
               releaseChannel = $ReleaseChannel
@@ -799,6 +810,7 @@ public sealed class EditorShellBuildTests
               ok = $true
               rid = $Rid
               channel = $Channel
+              windowMode = $WindowMode
               configuration = $Configuration
               version = $Version
               informationalVersion = ''
@@ -825,6 +837,7 @@ public sealed class EditorShellBuildTests
             IncludedScenes = ["scenes/player.scene", "scenes/extra.scene"],
             PlayerWindowWidth = 1440,
             PlayerWindowHeight = 810,
+            PlayerWindowMode = PlayerWindowMode.BorderlessFullscreen,
             PlayerVSync = false,
             RuntimeUiBackend = UiBackendKind.Ultralight,
             ReleaseChannel = PlayerReleaseChannel.Production,
@@ -835,12 +848,14 @@ public sealed class EditorShellBuildTests
 
         // Assert：验证不变式与预期结果
         Assert.True(result.Ok, result.Error);
+        Assert.Equal(PlayerWindowMode.BorderlessFullscreen.ToString(), result.WindowMode);
         string received = File.ReadAllText(Path.Combine(output, "received-args.json"));
         Assert.Contains("\"startScene\": \"scenes/player.scene\"", received, StringComparison.Ordinal);
         Assert.Contains("\"contentRoot\":", received, StringComparison.Ordinal);
         Assert.Contains("project-content", received, StringComparison.Ordinal);
         Assert.Contains("\"windowWidth\": 1440", received, StringComparison.Ordinal);
         Assert.Contains("\"windowHeight\": 810", received, StringComparison.Ordinal);
+        Assert.Contains("\"windowMode\": \"BorderlessFullscreen\"", received, StringComparison.Ordinal);
         Assert.Contains("\"vSync\": \"false\"", received, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"runtimeUiBackend\": \"Ultralight\"", received, StringComparison.Ordinal);
         Assert.Contains("\"releaseChannel\": \"Production\"", received, StringComparison.Ordinal);
@@ -934,6 +949,7 @@ public sealed class EditorShellBuildTests
           [string]$StartScene,
           [int]$WindowWidth,
           [int]$WindowHeight,
+          [string]$WindowMode,
           [string]$VSync,
           [string]$RuntimeUiBackend,
           [string]$ReleaseChannel,

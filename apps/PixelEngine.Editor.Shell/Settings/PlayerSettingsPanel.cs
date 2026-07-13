@@ -1,6 +1,7 @@
 using System.Numerics;
 using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell.Settings;
@@ -15,9 +16,20 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     private static readonly string[] UiBackendLabels = [.. UiBackendOptions.Select(UltralightOptionalProfileGate.GetDisplayLabel)];
     private static readonly PlayerReleaseChannel[] ReleaseOptions = [PlayerReleaseChannel.Development, PlayerReleaseChannel.Production];
     private static readonly string[] ReleaseLabels = ["Development", "Production"];
+    private static readonly PlayerWindowMode[] WindowModeOptions =
+    [
+        PlayerWindowMode.Windowed,
+        PlayerWindowMode.MaximizedWindow,
+        PlayerWindowMode.BorderlessFullscreen,
+    ];
+    private static readonly string[] WindowModeLabels =
+    [
+        "Windowed",
+        "Maximized Window",
+        "Borderless Fullscreen",
+    ];
     private readonly PlayerSettingsStore _store;
     private readonly Func<float> _uiScaleProvider;
-    private PlayerSettingsDto _settings;
     private string _persistentDiagnostic = string.Empty;
     private bool _draftIsValid = true;
     private float _lastWindowScale = float.NaN;
@@ -27,9 +39,9 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ArgumentNullException.ThrowIfNull(project);
         _store = new PlayerSettingsStore(project);
         _uiScaleProvider = uiScaleProvider ?? (static () => EditorUiScale.Default);
-        _settings = _store.LoadRecoverable(out _persistentDiagnostic);
+        AppliedSettings = _store.LoadRecoverable(out _persistentDiagnostic);
         RequiresRepair = !string.IsNullOrWhiteSpace(_persistentDiagnostic);
-        DraftSettings = _settings;
+        DraftSettings = AppliedSettings;
         RefreshDraftState();
     }
 
@@ -47,17 +59,20 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
 
     internal PlayerSettingsDto DraftSettings { get; private set; }
 
+    internal PlayerSettingsDto AppliedSettings { get; private set; }
+
     internal Vector2 LastWindowPosition { get; private set; }
 
     internal Vector2 LastWindowSize { get; private set; }
 
     public ScriptedPlayerSettingsProbeSnapshot ApplyScriptedPlayerSettingsProbe()
     {
-        PlayerSettingsDto next = _settings with
+        PlayerSettingsDto next = AppliedSettings with
         {
             WindowTitle = "PixelEngine Player Settings Probe",
             WindowWidth = 1600,
             WindowHeight = 900,
+            WindowMode = PlayerWindowMode.MaximizedWindow,
             VSync = false,
             IconPath = "icons/player-probe.ico",
             Version = "4.5.6",
@@ -79,17 +94,18 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     {
         return new ScriptedPlayerSettingsProbeSnapshot
         {
-            WindowTitle = _settings.WindowTitle,
-            WindowWidth = _settings.WindowWidth,
-            WindowHeight = _settings.WindowHeight,
-            VSync = _settings.VSync,
-            IconPath = _settings.IconPath ?? string.Empty,
-            Version = _settings.Version,
-            StartupScene = _settings.StartupScene,
-            EnableKeyboardMouse = _settings.InputDefaults.EnableKeyboardMouse,
-            EnableGamepad = _settings.InputDefaults.EnableGamepad,
-            RuntimeUiBackend = _settings.RuntimeUiBackend,
-            ReleaseChannel = _settings.ReleaseChannel,
+            WindowTitle = AppliedSettings.WindowTitle,
+            WindowWidth = AppliedSettings.WindowWidth,
+            WindowHeight = AppliedSettings.WindowHeight,
+            WindowMode = AppliedSettings.WindowMode,
+            VSync = AppliedSettings.VSync,
+            IconPath = AppliedSettings.IconPath ?? string.Empty,
+            Version = AppliedSettings.Version,
+            StartupScene = AppliedSettings.StartupScene,
+            EnableKeyboardMouse = AppliedSettings.InputDefaults.EnableKeyboardMouse,
+            EnableGamepad = AppliedSettings.InputDefaults.EnableGamepad,
+            RuntimeUiBackend = AppliedSettings.RuntimeUiBackend,
+            ReleaseChannel = AppliedSettings.ReleaseChannel,
             Diagnostic = ValidationMessage,
         };
     }
@@ -117,7 +133,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
             return false;
         }
 
-        _settings = normalized;
+        AppliedSettings = normalized;
         DraftSettings = normalized;
         _persistentDiagnostic = string.Empty;
         RequiresRepair = false;
@@ -143,7 +159,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
 
     internal void RevertDraft()
     {
-        DraftSettings = _settings;
+        DraftSettings = AppliedSettings;
         RefreshDraftState();
     }
 
@@ -225,6 +241,13 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         if (ImGui.InputInt("##player-window-height", ref height))
         {
             UpdateDraft(DraftSettings with { WindowHeight = height });
+        }
+
+        int windowMode = IndexOf(WindowModeOptions, DraftSettings.WindowMode);
+        NextProperty("窗口模式");
+        if (ImGui.Combo("##player-window-mode", ref windowMode, WindowModeLabels, WindowModeLabels.Length) && windowMode >= 0)
+        {
+            UpdateDraft(DraftSettings with { WindowMode = WindowModeOptions[windowMode] });
         }
 
         bool vSync = DraftSettings.VSync;
@@ -356,6 +379,19 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         return 0;
     }
 
+    private static int IndexOf(PlayerWindowMode[] values, PlayerWindowMode value)
+    {
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (values[i] == value)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
     private void UpdateDraft(PlayerSettingsDto next)
     {
         DraftSettings = next;
@@ -366,7 +402,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     {
         _draftIsValid = DraftSettings.TryNormalize(out string diagnostic);
         ValidationMessage = _draftIsValid ? _persistentDiagnostic : diagnostic;
-        HasDraftChanges = !AreEquivalent(_settings, DraftSettings);
+        HasDraftChanges = !AreEquivalent(AppliedSettings, DraftSettings);
         HasPendingChanges = RequiresRepair || HasDraftChanges;
     }
 
@@ -376,6 +412,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
             string.Equals(left.WindowTitle, right.WindowTitle, StringComparison.Ordinal) &&
             left.WindowWidth == right.WindowWidth &&
             left.WindowHeight == right.WindowHeight &&
+            left.WindowMode == right.WindowMode &&
             left.VSync == right.VSync &&
             string.Equals(left.IconPath, right.IconPath, StringComparison.Ordinal) &&
             string.Equals(left.Version, right.Version, StringComparison.Ordinal) &&
@@ -407,6 +444,8 @@ internal sealed record ScriptedPlayerSettingsProbeSnapshot
     public int WindowWidth { get; init; }
 
     public int WindowHeight { get; init; }
+
+    public PlayerWindowMode WindowMode { get; init; }
 
     public bool VSync { get; init; }
 

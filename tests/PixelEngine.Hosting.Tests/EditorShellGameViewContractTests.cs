@@ -580,7 +580,7 @@ public sealed class EditorShellGameViewContractTests
         Assert.Contains("KeyboardFocused: true", extension, StringComparison.Ordinal);
         Assert.Contains("public bool TryMapFramebufferPointerToViewport(", extension, StringComparison.Ordinal);
         Assert.Contains("PointerHovered: true", extension, StringComparison.Ordinal);
-        Assert.Contains("LastViewportSnapshot.TryMapFramebufferToViewport(", extension, StringComparison.Ordinal);
+        Assert.Contains("LastViewportSnapshot.TryMapFramebufferToWorld(", extension, StringComparison.Ordinal);
         Assert.Contains("LastPanelOriginFramebuffer", extension, StringComparison.Ordinal);
         Assert.Contains("LastFramebufferScale", extension, StringComparison.Ordinal);
     }

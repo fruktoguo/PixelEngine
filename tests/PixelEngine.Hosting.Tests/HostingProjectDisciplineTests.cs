@@ -1542,6 +1542,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("SkipDemoContentAudit", buildPlayerPs1, StringComparison.Ordinal);
         Assert.Contains("--skip-publish-content-audit", buildPlayerSh, StringComparison.Ordinal);
         Assert.Contains("--skip-demo-content-audit", buildPlayerSh, StringComparison.Ordinal);
+        Assert.Contains("[string]$WindowMode = 'Windowed'", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("--window-mode", buildPlayerSh, StringComparison.Ordinal);
+        Assert.Contains("windowMode = $WindowMode", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("\"windowMode\"", buildPlayerSh, StringComparison.Ordinal);
 
         foreach (string script in new[] { packagePs1, packageSh })
         {
@@ -1550,6 +1554,7 @@ public sealed class HostingProjectDisciplineTests
             Assert.Contains("start", lower, StringComparison.Ordinal);
             Assert.Contains("include", lower, StringComparison.Ordinal);
             Assert.Contains("startup.json", script, StringComparison.Ordinal);
+            Assert.Contains("windowMode", script, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("Debug symbols", script, StringComparison.Ordinal);
         }
 

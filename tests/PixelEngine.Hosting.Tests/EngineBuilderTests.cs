@@ -33,6 +33,7 @@ public sealed class EngineBuilderTests
             .WithContentRoot("content-test")
             .WithStartScene("scenes/start.scene")
             .WithEventCapacityPerChannel(64)
+            .WithWindowMode(PlayerWindowMode.MaximizedWindow)
             .UseVSync(false)
             .Build();
 
@@ -47,6 +48,7 @@ public sealed class EngineBuilderTests
         Assert.Equal("content-test", context.Options.ContentRoot);
         Assert.Equal("scenes/start.scene", context.Options.StartScene);
         Assert.False(context.Options.VSync);
+        Assert.Equal(PlayerWindowMode.MaximizedWindow, context.Options.WindowMode);
         Assert.True(context.Options.EnableGuiRuntime);
         Assert.False(context.Options.EnableGameUi);
         Assert.False(context.Options.PreferComputeSharpBackend);
