@@ -1603,6 +1603,11 @@ internal sealed class EditorShellApp
             $"image_rect={FormatGameViewRect(presentation.ImageRect)}, " +
             $"visible_viewport={FormatGameViewRect(presentation.VisibleViewportRect)}, " +
             $"framebuffer_scale={presentation.FramebufferScale.X.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}x{presentation.FramebufferScale.Y.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"toolbar_density={presentation.ToolbarDensity}, " +
+            $"toolbar_fits={presentation.ToolbarFits}, " +
+            $"toolbar_available={presentation.ToolbarAvailableWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"toolbar_occupied={presentation.ToolbarOccupiedWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"toolbar_overflow_visible={presentation.ToolbarOverflowVisible}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 

@@ -41,6 +41,8 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private string _customPresetName = "Custom";
     private int _customPresetWidth = 1280;
     private int _customPresetHeight = 720;
+    private GameViewToolbarLayout _lastToolbarLayout;
+    private float _lastToolbarAvailableWidth;
     private EditorMode _preparedMode = EditorMode.Edit;
     private EditorMode _lastPreparedMode = EditorMode.Edit;
 
@@ -161,7 +163,9 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             IsMaximized,
             in descriptor,
             in viewport,
-            LastFramebufferScale);
+            LastFramebufferScale,
+            _lastToolbarAvailableWidth,
+            in _lastToolbarLayout);
     }
 
     public EditorViewportContract CaptureContract(EditorMode mode)
@@ -238,8 +242,8 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
 
         HandleMaximizeShortcut();
-        DrawToolbar();
-        ToolbarCapturesInput = ImGui.IsAnyItemActive();
+        bool toolbarPopupOpen = DrawToolbar();
+        ToolbarCapturesInput = ImGui.IsAnyItemActive() || toolbarPopupOpen;
 
         Vector2 displayMinScreen = ImGui.GetCursorScreenPos();
         Vector2 available = ImGui.GetContentRegionAvail();
@@ -394,82 +398,254 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
-    private void DrawToolbar()
+    private bool DrawToolbar()
     {
         float available = ImGui.GetContentRegionAvail().X;
-        bool compact = available < 560f;
+        ImGuiStylePtr style = ImGui.GetStyle();
+        float horizontalFramePadding = style.FramePadding.X * 2f;
+        float comboArrowWidth = ImGui.GetFrameHeight();
+        float widestScaleLabel = 0f;
+        for (int i = 0; i < ScaleLabels.Length; i++)
+        {
+            widestScaleLabel = MathF.Max(widestScaleLabel, ImGui.CalcTextSize(ScaleLabels[i]).X);
+        }
+
+        float measuredScaleWidth = widestScaleLabel + comboArrowWidth + horizontalFramePadding;
+        float compactScaleWidth = MathF.Max(72f, measuredScaleWidth);
+        float fullScaleWidth = MathF.Max(88f, measuredScaleWidth);
+        string fullMaximizeLabel = IsMaximized ? "Restore" : "Maximize";
+        string compactMaximizeLabel = IsMaximized ? "Restore" : "Max";
+        float fullMaximizeWidth = ImGui.CalcTextSize(fullMaximizeLabel).X + horizontalFramePadding;
+        float compactMaximizeWidth = ImGui.CalcTextSize(compactMaximizeLabel).X + horizontalFramePadding;
+        float overflowWidth = MathF.Max(
+            ImGui.GetFrameHeight(),
+            ImGui.CalcTextSize("...").X + horizontalFramePadding);
+        float maximizeOnPlayWidth = ImGui.GetFrameHeight() +
+            style.ItemInnerSpacing.X +
+            ImGui.CalcTextSize("Maximize On Play").X;
+        float minimumPresetWidth = MathF.Max(
+            96f,
+            ImGui.CalcTextSize("Free Aspect").X + comboArrowWidth + horizontalFramePadding);
+        float fullPresetMinimumWidth = MathF.Max(140f, minimumPresetWidth);
+        GameViewToolbarMetrics metrics = new(
+            style.ItemSpacing.X,
+            overflowWidth,
+            compactScaleWidth,
+            fullScaleWidth,
+            compactMaximizeWidth,
+            fullMaximizeWidth,
+            maximizeOnPlayWidth,
+            minimumPresetWidth,
+            fullPresetMinimumWidth,
+            MathF.Max(260f, fullPresetMinimumWidth));
+        GameViewToolbarLayout layout = ResolveToolbarLayout(available, in metrics);
+        _lastToolbarAvailableWidth = available;
+        _lastToolbarLayout = layout;
         _ = GameViewPresentationPreset.TryResolve(SelectedPresetId, _customPresets, out GameViewPresentationPreset selected);
+        bool popupOpen = false;
+        bool drewControl = false;
 
-        ImGui.SetNextItemWidth(Math.Clamp(available * 0.38f, compact ? 96f : 140f, 260f));
-        if (ImGui.BeginCombo("##game-view-preset", selected.Label))
+        if (layout.ShowPreset)
         {
-            DrawPresetChoices(GameViewPresentationPreset.BuiltIns);
-            if (_customPresets.Length != 0)
+            ImGui.SetNextItemWidth(layout.PresetWidth);
+            if (ImGui.BeginCombo("##game-view-preset", selected.Label))
             {
-                ImGui.Separator();
-                for (int i = 0; i < _customPresets.Length; i++)
+                popupOpen = true;
+                DrawPresetChoices(GameViewPresentationPreset.BuiltIns);
+                if (_customPresets.Length != 0)
                 {
-                    EditorGameViewCustomPreset custom = _customPresets[i];
-                    DrawPresetChoice(new GameViewPresentationPreset(
-                        custom.Id,
-                        custom.Name,
-                        GameViewPresentationPresetKind.FixedResolution,
-                        custom.Width,
-                        custom.Height));
+                    ImGui.Separator();
+                    for (int i = 0; i < _customPresets.Length; i++)
+                    {
+                        EditorGameViewCustomPreset custom = _customPresets[i];
+                        DrawPresetChoice(new GameViewPresentationPreset(
+                            custom.Id,
+                            custom.Name,
+                            GameViewPresentationPresetKind.FixedResolution,
+                            custom.Width,
+                            custom.Height));
+                    }
                 }
+
+                ImGui.EndCombo();
             }
 
-            ImGui.EndCombo();
+            drewControl = true;
         }
 
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(compact ? 72f : 88f);
-        if (ImGui.BeginCombo("##game-view-scale", FormatScale(ScalePercent)))
+        if (layout.ShowScale)
         {
-            for (int i = 0; i < ScaleValues.Length; i++)
+            DrawNextToolbarControl(drewControl);
+            ImGui.SetNextItemWidth(layout.ScaleWidth);
+            if (ImGui.BeginCombo("##game-view-scale", FormatScale(ScalePercent)))
             {
-                bool selectedScale = MathF.Abs(ScalePercent - ScaleValues[i]) < 0.001f;
-                if (ImGui.Selectable(ScaleLabels[i], selectedScale))
+                popupOpen = true;
+                for (int i = 0; i < ScaleValues.Length; i++)
                 {
-                    SetScalePercent(ScaleValues[i]);
+                    bool selectedScale = MathF.Abs(ScalePercent - ScaleValues[i]) < 0.001f;
+                    if (ImGui.Selectable(ScaleLabels[i], selectedScale))
+                    {
+                        SetScalePercent(ScaleValues[i]);
+                    }
+
+                    if (selectedScale)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
                 }
 
-                if (selectedScale)
-                {
-                    ImGui.SetItemDefaultFocus();
-                }
+                ImGui.EndCombo();
             }
 
-            ImGui.EndCombo();
+            drewControl = true;
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button(IsMaximized ? "Restore##game-view-maximize" : compact
-                ? "Max##game-view-maximize"
-                : "Maximize##game-view-maximize"))
+        if (layout.ShowMaximize)
         {
-            ToggleMaximized();
+            DrawNextToolbarControl(drewControl);
+            string label = layout.Density == GameViewToolbarDensity.Full
+                ? fullMaximizeLabel
+                : compactMaximizeLabel;
+            if (ImGui.Button($"{label}##game-view-maximize", new Vector2(layout.MaximizeWidth, 0f)))
+            {
+                ToggleMaximized();
+            }
+
+            drewControl = true;
         }
 
-        if (!compact)
+        if (layout.ShowMaximizeOnPlay)
         {
-            ImGui.SameLine();
+            DrawNextToolbarControl(drewControl);
             bool maximizeOnPlay = MaximizeOnPlay;
             if (ImGui.Checkbox("Maximize On Play##game-view-max-on-play", ref maximizeOnPlay))
             {
                 SetMaximizeOnPlay(maximizeOnPlay);
             }
+
+            drewControl = true;
         }
 
-        ImGui.SameLine();
-        if (ImGui.Button("...##game-view-overflow-button"))
+        DrawNextToolbarControl(drewControl);
+        if (ImGui.Button("...##game-view-overflow-button", new Vector2(layout.OverflowWidth, 0f)))
         {
             ImGui.OpenPopup(OverflowPopupName);
         }
 
-        DrawOverflowPopup(compact, in selected);
-        DrawCustomPresetPopup();
+        popupOpen |= DrawOverflowPopup(in layout, in selected);
+        popupOpen |= DrawCustomPresetPopup();
         ImGui.Separator();
+        return popupOpen;
+    }
+
+    private static void DrawNextToolbarControl(bool hasPreviousControl)
+    {
+        if (hasPreviousControl)
+        {
+            ImGui.SameLine();
+        }
+    }
+
+    /// <summary>
+    /// 按当前字体与 ImGui spacing 的实测尺寸选择工具栏密度；任何降级都先保留 overflow，
+    /// 避免窄 dock 把最后一个入口裁掉后令隐藏功能无法访问。
+    /// </summary>
+    internal static GameViewToolbarLayout ResolveToolbarLayout(
+        float availableWidth,
+        in GameViewToolbarMetrics metrics)
+    {
+        if (!metrics.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(metrics), "Game View toolbar 尺寸必须是有限正值、spacing 非负且 preset 宽度范围有效。");
+        }
+
+        float available = float.IsFinite(availableWidth) && availableWidth > 0f
+            ? availableWidth
+            : 1f;
+        float fullRequired = metrics.FullPresetMinimumWidth +
+            metrics.FullScaleWidth +
+            metrics.FullMaximizeWidth +
+            metrics.MaximizeOnPlayWidth +
+            metrics.OverflowWidth +
+            (metrics.ItemSpacing * 4f);
+        if (available >= fullRequired)
+        {
+            float presetWidth = Math.Clamp(
+                available - fullRequired + metrics.FullPresetMinimumWidth,
+                metrics.FullPresetMinimumWidth,
+                metrics.MaximumPresetWidth);
+            return new GameViewToolbarLayout(
+                GameViewToolbarDensity.Full,
+                ShowPreset: true,
+                ShowScale: true,
+                ShowMaximize: true,
+                ShowMaximizeOnPlay: true,
+                presetWidth,
+                metrics.FullScaleWidth,
+                metrics.FullMaximizeWidth,
+                metrics.MaximizeOnPlayWidth,
+                metrics.OverflowWidth,
+                metrics.ItemSpacing);
+        }
+
+        float compactRequired = metrics.MinimumPresetWidth +
+            metrics.CompactScaleWidth +
+            metrics.CompactMaximizeWidth +
+            metrics.OverflowWidth +
+            (metrics.ItemSpacing * 3f);
+        if (available >= compactRequired)
+        {
+            float presetWidth = Math.Clamp(
+                available - compactRequired + metrics.MinimumPresetWidth,
+                metrics.MinimumPresetWidth,
+                metrics.MaximumPresetWidth);
+            return new GameViewToolbarLayout(
+                GameViewToolbarDensity.Compact,
+                ShowPreset: true,
+                ShowScale: true,
+                ShowMaximize: true,
+                ShowMaximizeOnPlay: false,
+                presetWidth,
+                metrics.CompactScaleWidth,
+                metrics.CompactMaximizeWidth,
+                MaximizeOnPlayWidth: 0f,
+                metrics.OverflowWidth,
+                metrics.ItemSpacing);
+        }
+
+        float narrowRequired = metrics.MinimumPresetWidth + metrics.OverflowWidth + metrics.ItemSpacing;
+        if (available >= narrowRequired)
+        {
+            float presetWidth = Math.Clamp(
+                available - metrics.OverflowWidth - metrics.ItemSpacing,
+                metrics.MinimumPresetWidth,
+                metrics.MaximumPresetWidth);
+            return new GameViewToolbarLayout(
+                GameViewToolbarDensity.Narrow,
+                ShowPreset: true,
+                ShowScale: false,
+                ShowMaximize: false,
+                ShowMaximizeOnPlay: false,
+                presetWidth,
+                ScaleWidth: 0f,
+                MaximizeWidth: 0f,
+                MaximizeOnPlayWidth: 0f,
+                metrics.OverflowWidth,
+                metrics.ItemSpacing);
+        }
+
+        return new GameViewToolbarLayout(
+            GameViewToolbarDensity.OverflowOnly,
+            ShowPreset: false,
+            ShowScale: false,
+            ShowMaximize: false,
+            ShowMaximizeOnPlay: false,
+            PresetWidth: 0f,
+            ScaleWidth: 0f,
+            MaximizeWidth: 0f,
+            MaximizeOnPlayWidth: 0f,
+            OverflowWidth: MathF.Min(metrics.OverflowWidth, available),
+            metrics.ItemSpacing);
     }
 
     private void DrawPresetChoices(ReadOnlySpan<GameViewPresentationPreset> presets)
@@ -494,21 +670,80 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
-    private void DrawOverflowPopup(bool compact, in GameViewPresentationPreset selected)
+    private bool DrawOverflowPopup(
+        in GameViewToolbarLayout layout,
+        in GameViewPresentationPreset selected)
     {
         if (!ImGui.BeginPopup(OverflowPopupName))
         {
-            return;
+            return false;
         }
 
-        if (compact)
+        bool hasResponsiveActions = false;
+        if (!layout.ShowPreset)
         {
+            hasResponsiveActions = true;
+            if (ImGui.BeginMenu($"Resolution: {selected.Label}"))
+            {
+                DrawPresetMenuChoices(GameViewPresentationPreset.BuiltIns);
+                if (_customPresets.Length != 0)
+                {
+                    ImGui.Separator();
+                    for (int i = 0; i < _customPresets.Length; i++)
+                    {
+                        EditorGameViewCustomPreset custom = _customPresets[i];
+                        DrawPresetMenuChoice(new GameViewPresentationPreset(
+                            custom.Id,
+                            custom.Name,
+                            GameViewPresentationPresetKind.FixedResolution,
+                            custom.Width,
+                            custom.Height));
+                    }
+                }
+
+                ImGui.EndMenu();
+            }
+        }
+
+        if (!layout.ShowScale)
+        {
+            hasResponsiveActions = true;
+            if (ImGui.BeginMenu($"Scale: {FormatScale(ScalePercent)}"))
+            {
+                for (int i = 0; i < ScaleValues.Length; i++)
+                {
+                    bool selectedScale = MathF.Abs(ScalePercent - ScaleValues[i]) < 0.001f;
+                    if (ImGui.MenuItem(ScaleLabels[i], string.Empty, selectedScale, enabled: true))
+                    {
+                        SetScalePercent(ScaleValues[i]);
+                    }
+                }
+
+                ImGui.EndMenu();
+            }
+        }
+
+        if (!layout.ShowMaximize)
+        {
+            hasResponsiveActions = true;
+            if (ImGui.MenuItem(IsMaximized ? "Restore Game View" : "Maximize Game View"))
+            {
+                ToggleMaximized();
+            }
+        }
+
+        if (!layout.ShowMaximizeOnPlay)
+        {
+            hasResponsiveActions = true;
             bool maximizeOnPlay = MaximizeOnPlay;
             if (ImGui.MenuItem("Maximize On Play", string.Empty, ref maximizeOnPlay))
             {
                 SetMaximizeOnPlay(maximizeOnPlay);
             }
+        }
 
+        if (hasResponsiveActions)
+        {
             ImGui.Separator();
         }
 
@@ -543,6 +778,24 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
 
         ImGui.EndPopup();
+        return true;
+    }
+
+    private void DrawPresetMenuChoices(ReadOnlySpan<GameViewPresentationPreset> presets)
+    {
+        for (int i = 0; i < presets.Length; i++)
+        {
+            DrawPresetMenuChoice(presets[i]);
+        }
+    }
+
+    private void DrawPresetMenuChoice(in GameViewPresentationPreset preset)
+    {
+        bool selected = string.Equals(SelectedPresetId, preset.Id, StringComparison.Ordinal);
+        if (ImGui.MenuItem(preset.Label, string.Empty, selected, enabled: true))
+        {
+            SelectPreset(preset.Id);
+        }
     }
 
     private void BeginCustomPresetEdit(string? presetId)
@@ -573,7 +826,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         _customPopupRequested = true;
     }
 
-    private void DrawCustomPresetPopup()
+    private bool DrawCustomPresetPopup()
     {
         if (_customPopupRequested)
         {
@@ -583,7 +836,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
 
         if (!ImGui.BeginPopup(CustomPresetPopupName))
         {
-            return;
+            return false;
         }
 
         ImGui.TextUnformatted(_editingExistingCustomPreset ? "Edit Custom Resolution" : "Add Custom Resolution");
@@ -620,6 +873,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
 
         ImGui.EndPopup();
+        return true;
     }
 
     private void SaveCustomPreset()
@@ -918,6 +1172,8 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         LastPanelOriginFramebuffer = default;
         LastFramebufferScale = Vector2.One;
         LastViewportSnapshot = GameViewViewportSnapshot.Empty;
+        _lastToolbarAvailableWidth = 0f;
+        _lastToolbarLayout = default;
     }
 
     private static string FormatScale(float scalePercent)
@@ -930,6 +1186,103 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private static float NormalizeScale(float scale)
     {
         return float.IsFinite(scale) && scale > 0f ? scale : 1f;
+    }
+}
+
+/// <summary>Game View 工具栏响应式密度。</summary>
+internal enum GameViewToolbarDensity
+{
+    Full,
+    Compact,
+    Narrow,
+    OverflowOnly,
+}
+
+/// <summary>由当前 ImGui 字体、padding 与 spacing 计算的工具栏控件尺寸。</summary>
+internal readonly record struct GameViewToolbarMetrics(
+    float ItemSpacing,
+    float OverflowWidth,
+    float CompactScaleWidth,
+    float FullScaleWidth,
+    float CompactMaximizeWidth,
+    float FullMaximizeWidth,
+    float MaximizeOnPlayWidth,
+    float MinimumPresetWidth,
+    float FullPresetMinimumWidth,
+    float MaximumPresetWidth)
+{
+    internal bool IsValid =>
+        IsFiniteNonNegative(ItemSpacing) &&
+        IsFinitePositive(OverflowWidth) &&
+        IsFinitePositive(CompactScaleWidth) &&
+        IsFinitePositive(FullScaleWidth) &&
+        IsFinitePositive(CompactMaximizeWidth) &&
+        IsFinitePositive(FullMaximizeWidth) &&
+        IsFinitePositive(MaximizeOnPlayWidth) &&
+        IsFinitePositive(MinimumPresetWidth) &&
+        IsFinitePositive(FullPresetMinimumWidth) &&
+        IsFinitePositive(MaximumPresetWidth) &&
+        CompactScaleWidth <= FullScaleWidth &&
+        MinimumPresetWidth <= FullPresetMinimumWidth &&
+        FullPresetMinimumWidth <= MaximumPresetWidth;
+
+    private static bool IsFinitePositive(float value)
+    {
+        return float.IsFinite(value) && value > 0f;
+    }
+
+    private static bool IsFiniteNonNegative(float value)
+    {
+        return float.IsFinite(value) && value >= 0f;
+    }
+}
+
+/// <summary>单帧 Game View 工具栏布局；<see cref="OccupiedWidth"/> 不得超过可用宽度。</summary>
+internal readonly record struct GameViewToolbarLayout(
+    GameViewToolbarDensity Density,
+    bool ShowPreset,
+    bool ShowScale,
+    bool ShowMaximize,
+    bool ShowMaximizeOnPlay,
+    float PresetWidth,
+    float ScaleWidth,
+    float MaximizeWidth,
+    float MaximizeOnPlayWidth,
+    float OverflowWidth,
+    float ItemSpacing)
+{
+    internal float OccupiedWidth
+    {
+        get
+        {
+            int controlCount = 1;
+            float width = OverflowWidth;
+            if (ShowPreset)
+            {
+                controlCount++;
+                width += PresetWidth;
+            }
+
+            if (ShowScale)
+            {
+                controlCount++;
+                width += ScaleWidth;
+            }
+
+            if (ShowMaximize)
+            {
+                controlCount++;
+                width += MaximizeWidth;
+            }
+
+            if (ShowMaximizeOnPlay)
+            {
+                controlCount++;
+                width += MaximizeOnPlayWidth;
+            }
+
+            return width + (ItemSpacing * (controlCount - 1));
+        }
     }
 }
 
@@ -950,7 +1303,12 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
     GameViewRect DisplayAreaRect,
     GameViewRect ImageRect,
     GameViewRect VisibleViewportRect,
-    Vector2 FramebufferScale)
+    Vector2 FramebufferScale,
+    GameViewToolbarDensity ToolbarDensity,
+    bool ToolbarFits,
+    float ToolbarAvailableWidth,
+    float ToolbarOccupiedWidth,
+    bool ToolbarOverflowVisible)
 {
     public static ScriptedGameViewPresentationSnapshot Missing => new(
         IsSynchronized: false,
@@ -966,7 +1324,12 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
         DisplayAreaRect: default,
         ImageRect: default,
         VisibleViewportRect: default,
-        FramebufferScale: Vector2.One);
+        FramebufferScale: Vector2.One,
+        ToolbarDensity: GameViewToolbarDensity.OverflowOnly,
+        ToolbarFits: false,
+        ToolbarAvailableWidth: 0f,
+        ToolbarOccupiedWidth: 0f,
+        ToolbarOverflowVisible: false);
 
     public static ScriptedGameViewPresentationSnapshot Create(
         string presetId,
@@ -977,12 +1340,42 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
         in GameViewViewportSnapshot viewport,
         Vector2 framebufferScale)
     {
+        GameViewToolbarLayout toolbarLayout = default;
+        return Create(
+            presetId,
+            scalePercent,
+            maximizeOnPlay,
+            isMaximized,
+            in descriptor,
+            in viewport,
+            framebufferScale,
+            toolbarAvailableWidth: 0f,
+            in toolbarLayout);
+    }
+
+    public static ScriptedGameViewPresentationSnapshot Create(
+        string presetId,
+        float scalePercent,
+        bool maximizeOnPlay,
+        bool isMaximized,
+        in GamePresentationDescriptor descriptor,
+        in GameViewViewportSnapshot viewport,
+        Vector2 framebufferScale,
+        float toolbarAvailableWidth,
+        in GameViewToolbarLayout toolbarLayout)
+    {
         bool synchronized = descriptor.IsValid &&
             viewport.IsValid &&
             viewport.TextureWidth == descriptor.PresentationWidth &&
             viewport.TextureHeight == descriptor.PresentationHeight &&
             viewport.PresentationRevision == descriptor.PresentationRevision &&
             viewport.WorldContentRect == descriptor.WorldContentRect;
+        float toolbarOccupiedWidth = toolbarLayout.OccupiedWidth;
+        bool toolbarOverflowVisible = toolbarLayout.OverflowWidth > 0f;
+        bool toolbarFits = float.IsFinite(toolbarAvailableWidth) &&
+            toolbarAvailableWidth > 0f &&
+            toolbarOverflowVisible &&
+            toolbarOccupiedWidth <= toolbarAvailableWidth + 0.01f;
         return new ScriptedGameViewPresentationSnapshot(
             synchronized,
             presetId,
@@ -997,6 +1390,11 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
             viewport.DisplayAreaRect,
             viewport.ImageRect,
             viewport.VisibleViewportRect,
-            framebufferScale);
+            framebufferScale,
+            toolbarLayout.Density,
+            toolbarFits,
+            toolbarAvailableWidth,
+            toolbarOccupiedWidth,
+            toolbarOverflowVisible);
     }
 }

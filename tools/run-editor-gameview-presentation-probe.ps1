@@ -271,11 +271,13 @@ function Get-BmpEvidence([string]$Path, [bool]$ExpectDockChrome) {
 
 function Write-IsolatedWorkspace([string]$StateRoot, [Collections.IDictionary]$Scenario) {
   New-Item -ItemType Directory -Path $StateRoot | Out-Null
+  $windowWidth = if ($Scenario.Contains('WindowWidth')) { [int]$Scenario.WindowWidth } else { 1024 }
+  $windowHeight = if ($Scenario.Contains('WindowHeight')) { [int]$Scenario.WindowHeight } else { 720 }
   $workspace = [ordered]@{
     formatVersion = 2
     lastCleanShutdown = $true
     lastSuccessfulProjectPath = $projectRootFull
-    window = [ordered]@{ width = 1024; height = 720 }
+    window = [ordered]@{ width = $windowWidth; height = $windowHeight }
     projects = @(
       [ordered]@{
         projectPath = $projectRootFull
@@ -301,7 +303,8 @@ $scenarios = @(
   [ordered]@{ Name = 'aspect-4-3'; PresetId = 'aspect-4-3'; ExpectedSource = 'EditorAspectRatio'; RatioA = 4; RatioB = 3; MaximizeOnPlay = $false },
   [ordered]@{ Name = 'aspect-9-16'; PresetId = 'aspect-9-16'; ExpectedSource = 'EditorAspectRatio'; RatioA = 9; RatioB = 16; MaximizeOnPlay = $false },
   [ordered]@{ Name = 'resolution-1920-1080'; PresetId = 'resolution-1920-1080'; ExpectedSource = 'EditorFixedResolution'; ExpectedWidth = 1920; ExpectedHeight = 1080; MaximizeOnPlay = $false },
-  [ordered]@{ Name = 'maximize-on-play'; PresetId = 'player-default'; ExpectedSource = 'PlayerDefault'; MaximizeOnPlay = $true }
+  [ordered]@{ Name = 'maximize-on-play'; PresetId = 'player-default'; ExpectedSource = 'PlayerDefault'; MaximizeOnPlay = $true },
+  [ordered]@{ Name = 'narrow-toolbar'; PresetId = 'aspect-16-9'; ExpectedSource = 'EditorAspectRatio'; RatioA = 16; RatioB = 9; MaximizeOnPlay = $false; WindowWidth = 360; WindowHeight = 720; ExpectedToolbarDensity = 'Narrow'; ExpectDockChrome = $false }
 )
 $scenarioResults = [Collections.Generic.List[object]]::new()
 
@@ -347,6 +350,16 @@ foreach ($scenario in $scenarios) {
   Assert-SummaryValue $summary.Values 'presentation_source' ([string]$scenario.ExpectedSource) "$name Game View probe"
   Assert-SummaryValue $summary.Values 'maximize_on_play' ([bool]$scenario.MaximizeOnPlay).ToString() "$name Game View probe"
   Assert-SummaryValue $summary.Values 'maximized' ([bool]$scenario.MaximizeOnPlay).ToString() "$name Game View probe"
+  Assert-SummaryValue $summary.Values 'toolbar_fits' 'True' "$name Game View probe"
+  Assert-SummaryValue $summary.Values 'toolbar_overflow_visible' 'True' "$name Game View probe"
+  if ($scenario.Contains('ExpectedToolbarDensity')) {
+    Assert-SummaryValue $summary.Values 'toolbar_density' ([string]$scenario.ExpectedToolbarDensity) "$name Game View probe"
+  }
+  $toolbarAvailable = [double]::Parse([string]$summary.Values['toolbar_available'], [Globalization.CultureInfo]::InvariantCulture)
+  $toolbarOccupied = [double]::Parse([string]$summary.Values['toolbar_occupied'], [Globalization.CultureInfo]::InvariantCulture)
+  if ($toolbarAvailable -le 0 -or $toolbarOccupied -le 0 -or $toolbarOccupied -gt $toolbarAvailable + 0.01) {
+    throw "$name toolbar 越界：occupied=$toolbarOccupied available=$toolbarAvailable"
+  }
   Assert-PositiveProbeRect ([string]$summary.Values['display_area']) "$name display_area"
   Assert-PositiveProbeRect ([string]$summary.Values['image_rect']) "$name image_rect"
   Assert-PositiveProbeRect ([string]$summary.Values['visible_viewport']) "$name visible_viewport"
@@ -374,14 +387,22 @@ foreach ($scenario in $scenarios) {
     throw "$name world content 未在 presentation 中居中 letterbox：$($summary.Values['world_content'])"
   }
 
+  $expectDockChrome = if ($scenario.Contains('ExpectDockChrome')) {
+    [bool]$scenario.ExpectDockChrome
+  } else {
+    -not [bool]$scenario.MaximizeOnPlay
+  }
+  $windowWidth = if ($scenario.Contains('WindowWidth')) { [int]$scenario.WindowWidth } else { 1024 }
+  $windowHeight = if ($scenario.Contains('WindowHeight')) { [int]$scenario.WindowHeight } else { 720 }
   $scenarioResults.Add([ordered]@{
     name = $name
     presetId = [string]$scenario.PresetId
     maximizeOnPlay = [bool]$scenario.MaximizeOnPlay
+    window = [ordered]@{ width = $windowWidth; height = $windowHeight }
     presentation = [ordered]@{ width = $presentation.Width; height = $presentation.Height; source = [string]$summary.Values['presentation_source'] }
     worldContent = $world
     summary = $summary.Values
-    framebuffer = Get-BmpEvidence $capturePath (-not [bool]$scenario.MaximizeOnPlay)
+    framebuffer = Get-BmpEvidence $capturePath $expectDockChrome
     stdout = [IO.Path]::GetRelativePath($outputRootFull, $stdoutPath).Replace('\', '/')
     stderr = [IO.Path]::GetRelativePath($outputRootFull, $stderrPath).Replace('\', '/')
   })

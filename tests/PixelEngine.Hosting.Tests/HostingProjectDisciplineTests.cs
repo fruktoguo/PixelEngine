@@ -199,7 +199,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("pixelengine.player-window-mode-probe/v1", script, StringComparison.Ordinal);
     }
 
-    /// <summary>验证 Game View 矩阵从隔离 workspace 驱动真实 preset/maximize，并要求原子 presentation 与非空 framebuffer。</summary>
+    /// <summary>验证 Game View 矩阵从隔离 workspace 驱动真实 preset/maximize/窄工具栏，并要求原子 presentation 与非空 framebuffer。</summary>
     [Fact]
     public void EditorGameViewPresentationProbeRequiresRealCommittedMatrix()
     {
@@ -211,9 +211,13 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("aspect-4-3", script, StringComparison.Ordinal);
         Assert.Contains("aspect-9-16", script, StringComparison.Ordinal);
         Assert.Contains("resolution-1920-1080", script, StringComparison.Ordinal);
+        Assert.Contains("narrow-toolbar", script, StringComparison.Ordinal);
+        Assert.Contains("ExpectedToolbarDensity = 'Narrow'", script, StringComparison.Ordinal);
         Assert.Contains("MaximizeOnPlay", script, StringComparison.Ordinal);
         Assert.Contains("editor-workspace.json", script, StringComparison.Ordinal);
         Assert.Contains("presentation_synchronized", script, StringComparison.Ordinal);
+        Assert.Contains("toolbar_fits", script, StringComparison.Ordinal);
+        Assert.Contains("toolbar_overflow_visible", script, StringComparison.Ordinal);
         Assert.Contains("world_content", script, StringComparison.Ordinal);
         Assert.Contains("Get-BmpEvidence", script, StringComparison.Ordinal);
         Assert.Contains("chromeSampledUniqueColors", script, StringComparison.Ordinal);

@@ -202,6 +202,50 @@ public sealed class GamePresentationTests
         Assert.True(restored.MaximizeOnPlay);
     }
 
+    /// <summary>
+    /// 验证 Game View 工具栏按真实控件预算逐级转入 overflow，且任何合法宽度都不会把最后的菜单入口裁出面板。
+    /// </summary>
+    [Fact]
+    public void GameViewToolbarMovesLowFrequencyControlsIntoOverflowBeforeClipping()
+    {
+        GameViewToolbarMetrics metrics = new(
+            ItemSpacing: 8f,
+            OverflowWidth: 30f,
+            CompactScaleWidth: 72f,
+            FullScaleWidth: 88f,
+            CompactMaximizeWidth: 40f,
+            FullMaximizeWidth: 72f,
+            MaximizeOnPlayWidth: 136f,
+            MinimumPresetWidth: 96f,
+            FullPresetMinimumWidth: 140f,
+            MaximumPresetWidth: 260f);
+
+        GameViewToolbarLayout full = GameViewPanel.ResolveToolbarLayout(640f, in metrics);
+        GameViewToolbarLayout compact = GameViewPanel.ResolveToolbarLayout(360f, in metrics);
+        GameViewToolbarLayout narrow = GameViewPanel.ResolveToolbarLayout(200f, in metrics);
+        GameViewToolbarLayout overflowOnly = GameViewPanel.ResolveToolbarLayout(120f, in metrics);
+        GameViewToolbarLayout invalidWidth = GameViewPanel.ResolveToolbarLayout(float.NaN, in metrics);
+
+        Assert.Equal(GameViewToolbarDensity.Full, full.Density);
+        Assert.True(full.ShowPreset && full.ShowScale && full.ShowMaximize && full.ShowMaximizeOnPlay);
+        Assert.InRange(full.OccupiedWidth, 1f, 640f);
+
+        Assert.Equal(GameViewToolbarDensity.Compact, compact.Density);
+        Assert.True(compact.ShowPreset && compact.ShowScale && compact.ShowMaximize);
+        Assert.False(compact.ShowMaximizeOnPlay);
+        Assert.InRange(compact.OccupiedWidth, 1f, 360f);
+
+        Assert.Equal(GameViewToolbarDensity.Narrow, narrow.Density);
+        Assert.True(narrow.ShowPreset);
+        Assert.False(narrow.ShowScale || narrow.ShowMaximize || narrow.ShowMaximizeOnPlay);
+        Assert.Equal(200f, narrow.OccupiedWidth, precision: 3);
+
+        Assert.Equal(GameViewToolbarDensity.OverflowOnly, overflowOnly.Density);
+        Assert.False(overflowOnly.ShowPreset || overflowOnly.ShowScale || overflowOnly.ShowMaximize || overflowOnly.ShowMaximizeOnPlay);
+        Assert.Equal(30f, overflowOnly.OccupiedWidth, precision: 3);
+        Assert.Equal(1f, invalidWidth.OccupiedWidth, precision: 3);
+    }
+
     /// <summary>验证真实窗口探针只在 Hosting commit 与面板 texture/revision/world rect 完全一致时通过。</summary>
     [Fact]
     public void ScriptedPresentationSnapshotRejectsMixedRevisionOrGeometry()
