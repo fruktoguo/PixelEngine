@@ -651,6 +651,19 @@
       "notes": "RmlUi Windows Unicode font-path failure was reproduced only after moving the Player into the Chinese final-output directory. A UTF-8-aware FileInterface fixed the fallback, release probes now require a non-ASCII content path and actual RmlUi without fallback, and detached-clean plus promoted root final output both pass 341 checksums and live Player probes. Real input, physical-DPI/cross-screen, three Player window modes and external reviewer remain pending, so UI-004 stays active."
     },
     {
+      "entryId": "ui-004-player-window-modes-play-reentry-20260714",
+      "taskIds": ["UI-004"],
+      "evidenceState": "local_window_modes_and_play_reentry_complete_external_dpi_input_pending",
+      "commit": "3b5499e1b5720b1d77020bb3ab56d1a01a4f42fe",
+      "runSessionId": "local-20260714-ui004-player-window-modes-play-reentry",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT driver 32.0.31021.5001; Parsec/Meta/Oray virtual display adapters installed; active desktop 1024x768 at 96 DPI; .NET SDK 10.0.108; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore; full Rendering native-GL/Hosting/Demo tests; tools/build-player.ps1 win-x64 r2r RmlUi; tools/run-player-window-mode-probe.ps1 over three Chinese-path startup.json variants; Release Editor.Shell --scripted-gameview-probe --capture-frame; framebuffer visual review; task catalog and evidence index validation",
+      "reportPath": "docs/evidence-2026-07-14-ui-004-player-window-modes-play-reentry.md",
+      "sha256": "ec2a1486bd751bd410ad895477b5f1f9e31613b29d474f6b8bb3cf893e636d6e",
+      "notes": "BorderlessFullscreen no longer uses GLFW exclusive fullscreen; a real HWND/style/monitor probe and three packaged Chinese-path RmlUi runs verify Windowed, MaximizedWindow and BorderlessFullscreen without display-mode change. A real desktop-GL Editor run verifies first Play movement, Stop UI stack zero and second Play controller/UI/visual restoration. Physical input, larger-monitor 1080p, different-DPI/cross-screen and independent reviewer remain, so UI-004 stays active."
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
