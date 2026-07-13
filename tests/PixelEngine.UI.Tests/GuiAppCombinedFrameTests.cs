@@ -77,6 +77,49 @@ public sealed class GuiAppCombinedFrameTests
     }
 
     /// <summary>
+    /// 完整 Canvas scale 作用域同时缩放字体与布局 token，并在弹栈后恢复全局 Editor 样式。
+    /// </summary>
+    [Fact]
+    public void ScriptGuiContextCanvasScaleRestoresFontAndStyleState()
+    {
+        ImGuiContextPtr context = ImGui.CreateContext();
+        try
+        {
+            ImGui.SetCurrentContext(context);
+            ImGuiIOPtr io = ImGui.GetIO();
+            io.DisplaySize = new System.Numerics.Vector2(800f, 600f);
+            io.DeltaTime = 1f / 60f;
+            io.BackendFlags |= ImGuiBackendFlags.RendererHasTextures;
+            ImGui.NewFrame();
+            ScriptGuiContext gui = new(800, 600, 1f / 60f, default);
+            ImGuiStylePtr style = ImGui.GetStyle();
+            float originalFontSize = ImGui.GetFontSize();
+            System.Numerics.Vector2 originalWindowPadding = style.WindowPadding;
+            System.Numerics.Vector2 originalFramePadding = style.FramePadding;
+            float originalScrollbarSize = style.ScrollbarSize;
+
+            gui.PushCanvasScale(2f);
+
+            Assert.Equal(originalFontSize * 2f, ImGui.GetFontSize());
+            Assert.Equal(originalWindowPadding * 2f, style.WindowPadding);
+            Assert.Equal(originalFramePadding * 2f, style.FramePadding);
+            Assert.Equal(originalScrollbarSize * 2f, style.ScrollbarSize);
+
+            gui.PopCanvasScale();
+
+            Assert.Equal(originalFontSize, ImGui.GetFontSize());
+            Assert.Equal(originalWindowPadding, style.WindowPadding);
+            Assert.Equal(originalFramePadding, style.FramePadding);
+            Assert.Equal(originalScrollbarSize, style.ScrollbarSize);
+            ImGui.EndFrame();
+        }
+        finally
+        {
+            ImGui.DestroyContext(context);
+        }
+    }
+
+    /// <summary>
     /// 验证Gui Input Bridge Publishes Modifier Keys For Clipboard Shortcuts。
     /// </summary>
     [Fact]

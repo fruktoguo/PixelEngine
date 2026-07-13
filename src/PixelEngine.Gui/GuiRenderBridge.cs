@@ -15,6 +15,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
     private readonly Action<IGuiContext>? _scriptGui;
     private readonly Action<IGuiDrawContext>? _managedGui;
     private readonly Action<UiPresentTarget>? _presentTargetChanged;
+    private readonly Action<UiPresentTarget>? _presentTargetFrame;
     private readonly IDisposable _registration;
     private readonly Stopwatch _clock = Stopwatch.StartNew();
     private double _previousSeconds;
@@ -28,13 +29,15 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
         GuiApp gui,
         IScriptRuntime? scriptRuntime,
         Action<IGuiDrawContext>? managedGui,
-        Action<UiPresentTarget>? presentTargetChanged)
+        Action<UiPresentTarget>? presentTargetChanged,
+        Action<UiPresentTarget>? presentTargetFrame)
     {
         _pipeline = pipeline;
         _gui = gui;
         _scriptGui = scriptRuntime is null ? null : scriptRuntime.DrawGui;
         _managedGui = managedGui;
         _presentTargetChanged = presentTargetChanged;
+        _presentTargetFrame = presentTargetFrame;
         _previousSeconds = _clock.Elapsed.TotalSeconds;
         _registration = _pipeline.RegisterUiLayer(surface, UiPresentLayerOrders.Game, this);
     }
@@ -81,7 +84,8 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
             gui,
             scriptRuntime,
             managedGui,
-            presentTargetChanged);
+            presentTargetChanged,
+            presentTargetFrame: null);
     }
 
     /// <summary>
@@ -102,10 +106,47 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
         Action<IGuiDrawContext>? managedGui,
         Action<UiPresentTarget>? presentTargetChanged)
     {
+        return AttachIfEnabled(
+            pipeline,
+            surface,
+            gui,
+            scriptRuntime,
+            managedGui,
+            presentTargetChanged,
+            presentTargetFrame: null);
+    }
+
+    /// <summary>
+    /// 若 GUI host 启用，则绑定到显式 present surface，并在每个 render 帧开始时发布当前 target。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="surface">目标 present surface。</param>
+    /// <param name="gui">GUI 宿主。</param>
+    /// <param name="scriptRuntime">可选脚本运行时。</param>
+    /// <param name="managedGui">可选 Managed UI 绘制回调。</param>
+    /// <param name="presentTargetChanged">present target 首次出现或变化通知。</param>
+    /// <param name="presentTargetFrame">每帧 render 前通知；用于提交 display-metrics revision。</param>
+    /// <returns>已绑定桥接器；GUI 禁用时返回 null。</returns>
+    public static GuiRenderBridge? AttachIfEnabled(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        GuiApp gui,
+        IScriptRuntime? scriptRuntime,
+        Action<IGuiDrawContext>? managedGui,
+        Action<UiPresentTarget>? presentTargetChanged,
+        Action<UiPresentTarget>? presentTargetFrame)
+    {
         ArgumentNullException.ThrowIfNull(pipeline);
         ArgumentNullException.ThrowIfNull(gui);
         return gui.Options.Enabled
-            ? new GuiRenderBridge(pipeline, surface, gui, scriptRuntime, managedGui, presentTargetChanged)
+            ? new GuiRenderBridge(
+                pipeline,
+                surface,
+                gui,
+                scriptRuntime,
+                managedGui,
+                presentTargetChanged,
+                presentTargetFrame)
             : null;
     }
 
@@ -137,6 +178,7 @@ public sealed class GuiRenderBridge : IUiPresentLayer, IDisposable
             _gui.Initialize();
         }
 
+        _presentTargetFrame?.Invoke(context.Target);
         if (!_hasPresentTarget || context.Target != _lastPresentTarget)
         {
             _presentTargetChanged?.Invoke(context.Target);

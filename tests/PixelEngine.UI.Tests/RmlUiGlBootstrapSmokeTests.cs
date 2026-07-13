@@ -69,11 +69,18 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("target.Height", source, StringComparison.Ordinal);
         Assert.Contains("context.FramebufferHeight", source, StringComparison.Ordinal);
         Assert.Contains("framebufferHeight - target.Y - target.Height", source, StringComparison.Ordinal);
-        Assert.Contains("RmlUiNative.RendererSetViewportRegion(_renderer, x, y, frameWidth, frameHeight)", source, StringComparison.Ordinal);
+        Assert.Contains("RmlUiNative.RendererSetCanvasMetrics", source, StringComparison.Ordinal);
+        Assert.Contains("CanvasMetrics.LayoutWidth", source, StringComparison.Ordinal);
+        Assert.Contains("CanvasMetrics.LayoutHeight", source, StringComparison.Ordinal);
         Assert.DoesNotContain("context.FramebufferWidth, context.FramebufferHeight", source, StringComparison.Ordinal);
+        Assert.Contains("peui_native_renderer_set_canvas_metrics", nativeBinding, StringComparison.Ordinal);
+        Assert.Contains("peui_native_renderer_set_canvas_metrics", nativeShim, StringComparison.Ordinal);
         Assert.Contains("peui_native_renderer_set_viewport_region", nativeBinding, StringComparison.Ordinal);
         Assert.Contains("peui_native_renderer_set_viewport_region", nativeShim, StringComparison.Ordinal);
         Assert.Contains("renderer->renderer->SetViewport(width, height, x, y)", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->context->SetDimensions(Rml::Vector2i(layout_width, layout_height))", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->renderer->SetViewport(renderer->layoutWidth, renderer->layoutHeight)", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->outputWidth", nativeShim, StringComparison.Ordinal);
         Assert.Contains("glViewport(viewport_offset_x, viewport_offset_y, viewport_width, viewport_height)", gl3Renderer, StringComparison.Ordinal);
     }
 
@@ -253,6 +260,73 @@ public sealed class RmlUiGlBootstrapSmokeTests
         RunDocumentLoadRenderHitTestSmoke(
             window,
             expectedProfileId: RmlUiNativeProfileGate.NativeProfileDesktopGl3);
+    }
+
+    /// <summary>
+    /// 验证 CanvasScaler logical viewport、presentation raster 与输入映射在真实 RmlUi GL 路径保持一致。
+    /// </summary>
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
+    public void RmlUiCanvasScalerSeparatesLogicalLayoutFromPresentationRasterWhenGlSmokeIsEnabled()
+    {
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine RmlUi CanvasScaler smoke",
+            Width = 128,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
+            EnableDebugContext = true,
+        });
+        RmlUiBackend backend = new(window);
+        using GameUiHost host = new(backend);
+        UiDisplayMetrics display = new(window.Width, window.Height, 1f, 1f, 96f, 1, 1);
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default with { ScaleFactor = 2f };
+        UiBackendInitializeInfo info = new(display, settings, UiBackendKind.RmlUi);
+        host.Initialize(in info);
+
+        string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-canvas-{Guid.NewGuid():N}.rml");
+        try
+        {
+            File.WriteAllText(
+                documentPath,
+                """
+                <rml>
+                  <head>
+                    <style>
+                      body { margin: 0px; background-color: transparent; pointer-events: none; }
+                      #panel { position: absolute; left: 0px; top: 0px; width: 64px; height: 32px; background-color: #ff2020; pointer-events: auto; }
+                    </style>
+                  </head>
+                  <body><div id="panel" data-event-click="scaled_panel"></div></body>
+                </rml>
+                """);
+            _ = host.ShowScreen(new UiScreenId(1), UiDocumentSource.Asset(documentPath, 1));
+            host.Update(1f / 60f);
+
+            Assert.Equal(
+                (window.Width / 2f, window.Height / 2f),
+                (backend.DebugCanvasMetrics.LogicalWidth, backend.DebugCanvasMetrics.LogicalHeight));
+            Assert.True(host.HitTest(120f, 60f).WantsMouse);
+            Assert.False(backend.HitTest(120f, 60f).WantsMouse);
+
+            GL gl = window.Gl;
+            window.BindPresentationFramebuffer();
+            gl.Viewport(0, 0, (uint)window.Width, (uint)window.Height);
+            gl.ClearColor(0f, 0f, 0f, 1f);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+            UiPresentContext context = default;
+            host.Composite(in context);
+            gl.Finish();
+            byte[] pixel = new byte[4];
+            gl.ReadPixels(120, 4, 1, 1, GLEnum.Rgba, GLEnum.UnsignedByte, out pixel[0]);
+
+            Assert.True(pixel[0] > 128, $"scaled raster 右侧像素未被 Canvas 覆盖: rgba=({pixel[0]},{pixel[1]},{pixel[2]},{pixel[3]})");
+            Assert.True(pixel[0] > pixel[1] * 2, "scaled raster 应保持红色面板颜色。 ");
+        }
+        finally
+        {
+            File.Delete(documentPath);
+        }
     }
 
     /// <summary>

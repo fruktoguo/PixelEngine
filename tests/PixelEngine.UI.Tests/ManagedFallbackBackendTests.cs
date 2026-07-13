@@ -241,6 +241,36 @@ public sealed class ManagedFallbackBackendTests
     }
 
     /// <summary>
+    /// CanvasScaler 必须按同一比例缩放窗口、显式控件布局和 GUI 样式作用域，并在绘制后恢复作用域。
+    /// </summary>
+    [Fact]
+    public void ManagedFallbackAppliesAndBalancesCompleteCanvasScaleScope()
+    {
+        string path = WriteUi("""
+            <rml title="Scaled" style="left: 12px; top: 20px; width: 240px; height: 96px">
+              <head><style>button { width: 100px; height: 20px; margin-top: 6px; }</style></head>
+              <body><button id="scaled">Scaled</button></body>
+            </rml>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        UiDisplayMetrics display = new(640, 480, 1f, 1f, 96f, 1, 1);
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default with { ScaleFactor = 2f };
+        host.Initialize(new UiBackendInitializeInfo(display, settings, UiBackendKind.ManagedFallback));
+
+        _ = host.ShowScreen(new UiScreenId(12), UiDocumentSource.Asset(path, 12));
+        host.Composite(default);
+
+        Assert.Equal((24f, 40f, 480f, 192f), gui.Context.LastWindow);
+        Assert.Equal(("Scaled", 200f, 40f), Assert.Single(gui.Context.SizedButtons));
+        Assert.Contains(12f, gui.Context.VerticalSpacings);
+        Assert.Equal([2f], gui.Context.CanvasScales);
+        Assert.Equal(1, gui.Context.CanvasScalePopCount);
+        Assert.Equal(0, gui.Context.CanvasScaleDepth);
+    }
+
+    /// <summary>
     /// 验证托管回退Consumes Tag Class Rules In Source Order。
     /// </summary>
     [Fact]
@@ -449,6 +479,12 @@ public sealed class ManagedFallbackBackendTests
 
         public List<(float Value, string? Label, float Width, float Height)> SizedProgressBars { get; } = [];
 
+        public List<float> CanvasScales { get; } = [];
+
+        public int CanvasScalePopCount { get; private set; }
+
+        public int CanvasScaleDepth { get; private set; }
+
         public HashSet<string> ClickedButtons { get; } = [];
 
         public HashSet<string> ToggledCheckboxes { get; } = [];
@@ -477,6 +513,18 @@ public sealed class ManagedFallbackBackendTests
         {
             LastWindowFlags = flags;
             return true;
+        }
+
+        public void PushCanvasScale(float scale)
+        {
+            CanvasScales.Add(scale);
+            CanvasScaleDepth++;
+        }
+
+        public void PopCanvasScale()
+        {
+            CanvasScalePopCount++;
+            CanvasScaleDepth--;
         }
 
         public void EndWindow()

@@ -11,6 +11,7 @@ namespace PixelEngine.Gui;
 public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
 {
     private const int InitialUtf8Capacity = 4096;
+    private const int CanvasStyleVariableCount = 22;
     private byte[] _utf8Buffer = GC.AllocateUninitializedArray<byte>(InitialUtf8Capacity);
 
     /// <summary>
@@ -97,6 +98,47 @@ public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
         ArgumentNullException.ThrowIfNull(title);
         bool visible = true;
         return ImGui.Begin(EncodeCompositeNullTerminated(title, "##", id), ref visible, flags);
+    }
+
+    /// <inheritdoc />
+    public void PushCanvasScale(float scale)
+    {
+        if (!float.IsFinite(scale) || scale <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(scale), "Canvas scale 必须是有限正数。");
+        }
+
+        ImGuiStylePtr style = ImGui.GetStyle();
+        ImGui.PushFont(ImGui.GetFont(), ImGui.GetFontSize() * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, style.WindowPadding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, style.WindowRounding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, style.WindowBorderSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.WindowMinSize, style.WindowMinSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, style.ChildRounding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ChildBorderSize, style.ChildBorderSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.PopupRounding, style.PopupRounding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.PopupBorderSize, style.PopupBorderSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, style.FramePadding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameRounding, style.FrameRounding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.FrameBorderSize, style.FrameBorderSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, style.ItemSpacing * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ItemInnerSpacing, style.ItemInnerSpacing * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.IndentSpacing, style.IndentSpacing * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.CellPadding, style.CellPadding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ScrollbarSize, style.ScrollbarSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.ScrollbarRounding, style.ScrollbarRounding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.GrabMinSize, style.GrabMinSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.GrabRounding, style.GrabRounding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.SeparatorTextBorderSize, style.SeparatorTextBorderSize * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.SeparatorTextPadding, style.SeparatorTextPadding * scale);
+        ImGui.PushStyleVar(ImGuiStyleVar.DockingSeparatorSize, style.DockingSeparatorSize * scale);
+    }
+
+    /// <inheritdoc />
+    public void PopCanvasScale()
+    {
+        ImGui.PopStyleVar(CanvasStyleVariableCount);
+        ImGui.PopFont();
     }
 
     /// <inheritdoc />

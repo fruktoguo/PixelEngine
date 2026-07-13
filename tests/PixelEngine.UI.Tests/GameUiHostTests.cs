@@ -204,6 +204,61 @@ public sealed class GameUiHostTests
         Assert.True(host.LastPaintMilliseconds >= 0);
     }
 
+    /// <summary>
+    /// presentation 输入、滚轮与 IME 通过同一 Canvas metrics 双向映射，后端只接收 logical 坐标。
+    /// </summary>
+    [Fact]
+    public void CanvasMetricsDriveBackendResizeInputHitTestAndImeMapping()
+    {
+        FakeBackend backend = new()
+        {
+            HitResult = new UiHitResult(true, false, true, true),
+            ImeGeometry = UiImeGeometry.FromCaretRect(10f, 20f, 2f, 8f),
+        };
+        using GameUiHost host = new(backend);
+        UiDisplayMetrics display = new(800, 600, 1.5f, 1.5f, 144f, 4, 11);
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default with { ScaleFactor = 2f };
+        UiBackendInitializeInfo info = new(display, settings, UiBackendKind.ManagedFallback);
+        host.Initialize(in info);
+
+        UiHitResult hit = host.HitTest(400f, 300f);
+        host.FeedPointerMove(200f, 100f);
+        host.FeedScroll(20f, -10f);
+
+        Assert.Equal(backend.HitResult, hit);
+        Assert.Equal((200f, 150f), (backend.LastHitX, backend.LastHitY));
+        Assert.Equal((100f, 50f), (backend.LastPointerX, backend.LastPointerY));
+        Assert.Equal((10f, -5f), (backend.LastScrollX, backend.LastScrollY));
+        Assert.True(host.TryGetImeGeometry(out UiImeGeometry ime));
+        Assert.Equal((20f, 40f, 4f, 16f), (ime.CaretX, ime.CaretY, ime.CaretWidth, ime.CaretHeight));
+        Assert.Equal(11, host.CanvasMetrics.DisplayMetricsRevision);
+
+        int hitCount = backend.HitCount;
+        Assert.Equal(UiHitResult.None, host.HitTest(800f, 10f));
+        Assert.Equal(hitCount, backend.HitCount);
+
+        UiCanvasScalerSettings resizedSettings = settings with { ScaleFactor = 4f };
+        host.SetCanvasScaler(in resizedSettings);
+        Assert.Equal(1, backend.CanvasResizeCount);
+        Assert.Equal(4f, backend.LastCanvasMetrics.ScaleFactor);
+        Assert.Equal(200f, backend.LastCanvasMetrics.LogicalWidth);
+    }
+
+    /// <summary>
+    /// CanvasScaler runtime mutation needs an initialized display snapshot instead of failing through an invalid default metric.
+    /// </summary>
+    [Fact]
+    public void SetCanvasScalerBeforeInitializationReportsLifecycleError()
+    {
+        using GameUiHost host = new(new FakeBackend());
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default with { ScaleFactor = 2f };
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(
+            () => host.SetCanvasScaler(in settings));
+
+        Assert.Contains("初始化", error.Message, StringComparison.Ordinal);
+    }
+
     private sealed class FakeBackend : IGameUiBackend, IGameUiImagePreloader
     {
         private int _nextDocument = 1;
@@ -215,6 +270,28 @@ public sealed class GameUiHostTests
         public bool IsAnimating => IsAnimatingOverride;
 
         public bool IsAnimatingOverride { get; set; }
+
+        public UiHitResult HitResult { get; init; }
+
+        public UiImeGeometry ImeGeometry { get; init; }
+
+        public float LastHitX { get; private set; }
+
+        public float LastHitY { get; private set; }
+
+        public int HitCount { get; private set; }
+
+        public float LastPointerX { get; private set; }
+
+        public float LastPointerY { get; private set; }
+
+        public float LastScrollX { get; private set; }
+
+        public float LastScrollY { get; private set; }
+
+        public int CanvasResizeCount { get; private set; }
+
+        public UiCanvasMetrics LastCanvasMetrics { get; private set; }
 
         public bool Initialized { get; private set; }
 
@@ -256,6 +333,12 @@ public sealed class GameUiHostTests
             viewport.Validate();
         }
 
+        public void Resize(in UiCanvasMetrics metrics)
+        {
+            LastCanvasMetrics = metrics;
+            CanvasResizeCount++;
+        }
+
         public UiDocumentHandle LoadDocument(in UiDocumentSource source)
         {
             LoadCount++;
@@ -278,6 +361,8 @@ public sealed class GameUiHostTests
 
         public void FeedPointerMove(float x, float y)
         {
+            LastPointerX = x;
+            LastPointerY = y;
         }
 
         public void FeedPointerButton(UiPointerButton button, bool isDown)
@@ -286,6 +371,8 @@ public sealed class GameUiHostTests
 
         public void FeedScroll(float deltaX, float deltaY)
         {
+            LastScrollX = deltaX;
+            LastScrollY = deltaY;
         }
 
         public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
@@ -298,7 +385,16 @@ public sealed class GameUiHostTests
 
         public UiHitResult HitTest(float x, float y)
         {
-            return UiHitResult.None;
+            LastHitX = x;
+            LastHitY = y;
+            HitCount++;
+            return HitResult;
+        }
+
+        public bool TryGetImeGeometry(out UiImeGeometry geometry)
+        {
+            geometry = ImeGeometry;
+            return geometry.HasAny;
         }
 
         public void SetModelValue(UiDocumentHandle document, UiPathId path, in UiValue value)

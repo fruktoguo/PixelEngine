@@ -35,6 +35,17 @@ public interface IGameUiBackend : IDisposable
     void Resize(in UiViewport viewport);
 
     /// <summary>
+    /// 使用分离的 Canvas logical 与 presentation render 度量调整后端。
+    /// 旧第三方后端未覆盖此方法时，会安全退回物理 <see cref="UiViewport" /> 入口。
+    /// </summary>
+    /// <param name="metrics">layout、raster 与 input 共用的 Canvas 度量。</param>
+    void Resize(in UiCanvasMetrics metrics)
+    {
+        UiViewport viewport = metrics.PresentationViewport;
+        Resize(in viewport);
+    }
+
+    /// <summary>
     /// 载入 UI 文档。
     /// </summary>
     /// <param name="source">文档来源。</param>

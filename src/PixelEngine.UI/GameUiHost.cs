@@ -11,6 +11,7 @@ public sealed class GameUiHost : IDisposable
 {
     private readonly IGameUiBackend _backend;
     private readonly UiScreenStackEntry[] _screenStackBuffer;
+    private UiDisplayMetrics _displayMetrics;
     private bool _initialized;
 
     /// <summary>
@@ -40,6 +41,16 @@ public sealed class GameUiHost : IDisposable
     /// 当前宿主使用的 UI 后端类型。
     /// </summary>
     public UiBackendKind BackendKind => _backend.Kind;
+
+    /// <summary>
+    /// 当前 primary Canvas 的 CanvasScaler 设置。
+    /// </summary>
+    public UiCanvasScalerSettings CanvasScalerSettings { get; private set; } = UiCanvasScalerSettings.Default;
+
+    /// <summary>
+    /// 当前 layout、raster、input 与 IME 共用的解析后 Canvas 度量。
+    /// </summary>
+    public UiCanvasMetrics CanvasMetrics { get; private set; }
 
     /// <summary>
     /// 当前后端是否有 layout/raster invalidation 或动画更新。
@@ -78,6 +89,10 @@ public sealed class GameUiHost : IDisposable
             return;
         }
 
+        info.DisplayMetrics.Validate();
+        _displayMetrics = info.DisplayMetrics;
+        CanvasScalerSettings = info.CanvasScalerSettings;
+        CanvasMetrics = info.CanvasMetrics;
         _backend.Initialize(in info);
         _initialized = true;
     }
@@ -89,9 +104,56 @@ public sealed class GameUiHost : IDisposable
     public void Resize(in UiViewport viewport)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized)
+        viewport.Validate();
+        long revision = _initialized
+            ? checked(_displayMetrics.MetricsRevision + 1)
+            : 0;
+        UiDisplayMetrics displayMetrics = UiDisplayMetrics.FromViewport(
+            in viewport,
+            _initialized ? _displayMetrics.ActualPhysicalDpi : null,
+            _initialized ? _displayMetrics.MonitorId : 0,
+            revision);
+        Resize(in displayMetrics);
+    }
+
+    /// <summary>
+    /// 使用 Rendering 在帧边界提交的分层显示度量调整 Canvas。
+    /// </summary>
+    /// <param name="displayMetrics">presentation、framebuffer scale 与 raw physical DPI。</param>
+    public void Resize(in UiDisplayMetrics displayMetrics)
+    {
+        ThrowIfDisposed();
+        displayMetrics.Validate();
+        UiCanvasScalerSettings settings = CanvasScalerSettings;
+        UiCanvasMetrics metrics = UiCanvasScaleResolver.Resolve(in settings, in displayMetrics);
+        bool changed = !_initialized || metrics != CanvasMetrics;
+        _displayMetrics = displayMetrics;
+        CanvasMetrics = metrics;
+        if (changed && Options.Enabled && _initialized)
         {
-            _backend.Resize(in viewport);
+            _backend.Resize(in metrics);
+        }
+    }
+
+    /// <summary>
+    /// 原子应用新的 CanvasScaler 设置，并立即以最近一次 display metrics 重算后端。
+    /// </summary>
+    /// <param name="settings">新的完整 CanvasScaler 设置。</param>
+    public void SetCanvasScaler(in UiCanvasScalerSettings settings)
+    {
+        ThrowIfDisposed();
+        if (!_initialized)
+        {
+            throw new InvalidOperationException("Game UI 初始化后才能修改 CanvasScaler。");
+        }
+
+        UiCanvasMetrics metrics = UiCanvasScaleResolver.Resolve(in settings, in _displayMetrics);
+        bool changed = settings != CanvasScalerSettings || metrics != CanvasMetrics;
+        CanvasScalerSettings = settings;
+        CanvasMetrics = metrics;
+        if (changed && Options.Enabled && _initialized)
+        {
+            _backend.Resize(in metrics);
         }
     }
 
@@ -358,9 +420,11 @@ public sealed class GameUiHost : IDisposable
     public void FeedPointerMove(float x, float y)
     {
         ThrowIfDisposed();
-        if (Options.Enabled && _initialized)
+        if (Options.Enabled &&
+            _initialized &&
+            CanvasMetrics.TryMapPresentationToLogical(x, y, out float logicalX, out float logicalY))
         {
-            _backend.FeedPointerMove(x, y);
+            _backend.FeedPointerMove(logicalX, logicalY);
         }
     }
 
@@ -388,7 +452,9 @@ public sealed class GameUiHost : IDisposable
         ThrowIfDisposed();
         if (Options.Enabled && _initialized)
         {
-            _backend.FeedScroll(deltaX, deltaY);
+            _backend.FeedScroll(
+                CanvasMetrics.MapPresentationDeltaToLogical(deltaX),
+                CanvasMetrics.MapPresentationDeltaToLogical(deltaY));
         }
     }
 
@@ -444,7 +510,11 @@ public sealed class GameUiHost : IDisposable
         ThrowIfDisposed();
         if (Options.Enabled && _initialized)
         {
-            return _backend.TryGetImeGeometry(out geometry);
+            if (_backend.TryGetImeGeometry(out UiImeGeometry logicalGeometry))
+            {
+                geometry = CanvasMetrics.MapLogicalImeGeometryToPresentation(in logicalGeometry);
+                return geometry.HasAny;
+            }
         }
 
         geometry = UiImeGeometry.None;
@@ -460,7 +530,11 @@ public sealed class GameUiHost : IDisposable
     public UiHitResult HitTest(float x, float y)
     {
         ThrowIfDisposed();
-        return Options.Enabled && _initialized ? _backend.HitTest(x, y) : UiHitResult.None;
+        return Options.Enabled &&
+            _initialized &&
+            CanvasMetrics.TryMapPresentationToLogical(x, y, out float logicalX, out float logicalY)
+                ? _backend.HitTest(logicalX, logicalY)
+                : UiHitResult.None;
     }
 
     /// <summary>

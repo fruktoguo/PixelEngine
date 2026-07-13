@@ -23,7 +23,7 @@
 
 namespace
 {
-constexpr int32_t ApiVersion = 1;
+constexpr int32_t ApiVersion = 2;
 constexpr int32_t EventCapacity = 256;
 constexpr int32_t MaxTrackedTextureUnits = 32;
 
@@ -103,6 +103,12 @@ struct PeUiRenderer
 {
     std::unique_ptr<RenderInterface_GL3> renderer;
     Rml::Context* context = nullptr;
+    int32_t layoutWidth = 1;
+    int32_t layoutHeight = 1;
+    int32_t outputX = 0;
+    int32_t outputY = 0;
+    int32_t outputWidth = 1;
+    int32_t outputHeight = 1;
     std::string contextName;
     std::vector<PeUiDocumentModel> documentModels;
     std::vector<PeUiModelBinding> modelBindings;
@@ -1190,6 +1196,10 @@ PE_UI_NATIVE_API PeUiRenderer* peui_native_create_renderer(int32_t width, int32_
     }
 
     instance->renderer->SetViewport(width, height);
+    instance->layoutWidth = width;
+    instance->layoutHeight = height;
+    instance->outputWidth = width;
+    instance->outputHeight = height;
     if (!g_rmlInitialised)
     {
         Rml::SetSystemInterface(&g_systemInterface);
@@ -1370,6 +1380,12 @@ PE_UI_NATIVE_API void peui_native_renderer_set_viewport(PeUiRenderer* renderer, 
     }
 
     renderer->renderer->SetViewport(width, height);
+    renderer->layoutWidth = width;
+    renderer->layoutHeight = height;
+    renderer->outputX = 0;
+    renderer->outputY = 0;
+    renderer->outputWidth = width;
+    renderer->outputHeight = height;
     if (renderer->context != nullptr)
     {
         renderer->context->SetDimensions(Rml::Vector2i(width, height));
@@ -1384,9 +1400,44 @@ PE_UI_NATIVE_API void peui_native_renderer_set_viewport_region(PeUiRenderer* ren
     }
 
     renderer->renderer->SetViewport(width, height, x, y);
+    renderer->layoutWidth = width;
+    renderer->layoutHeight = height;
+    renderer->outputX = x;
+    renderer->outputY = y;
+    renderer->outputWidth = width;
+    renderer->outputHeight = height;
     if (renderer->context != nullptr)
     {
         renderer->context->SetDimensions(Rml::Vector2i(width, height));
+    }
+}
+
+// 分离 CSS layout viewport 与 presentation raster 区域。layout 先渲染到内部 surface，EndFrame 再拉伸到输出区域。
+PE_UI_NATIVE_API void peui_native_renderer_set_canvas_metrics(
+    PeUiRenderer* renderer,
+    int32_t x,
+    int32_t y,
+    int32_t render_width,
+    int32_t render_height,
+    int32_t layout_width,
+    int32_t layout_height)
+{
+    if (renderer == nullptr || renderer->renderer == nullptr ||
+        render_width <= 0 || render_height <= 0 || layout_width <= 0 || layout_height <= 0)
+    {
+        return;
+    }
+
+    renderer->layoutWidth = layout_width;
+    renderer->layoutHeight = layout_height;
+    renderer->outputX = x;
+    renderer->outputY = y;
+    renderer->outputWidth = render_width;
+    renderer->outputHeight = render_height;
+    renderer->renderer->SetViewport(layout_width, layout_height);
+    if (renderer->context != nullptr)
+    {
+        renderer->context->SetDimensions(Rml::Vector2i(layout_width, layout_height));
     }
 }
 
@@ -1492,8 +1543,16 @@ PE_UI_NATIVE_API void peui_native_render(PeUiRenderer* renderer)
     }
 
     PeUiGlStateGuard state;
+    // CanvasScaler：RmlUi 以 logical viewport layout；完成内部 surface 后再把同一帧拉伸到 presentation raster 区域。
+    renderer->renderer->SetViewport(renderer->layoutWidth, renderer->layoutHeight);
+    renderer->renderer->SetTransform(nullptr);
     renderer->renderer->BeginFrame();
     renderer->context->Render();
+    renderer->renderer->SetViewport(
+        renderer->outputWidth,
+        renderer->outputHeight,
+        renderer->outputX,
+        renderer->outputY);
     renderer->renderer->EndFrame();
 }
 

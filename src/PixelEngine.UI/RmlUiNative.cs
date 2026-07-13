@@ -100,6 +100,26 @@ internal static unsafe partial class RmlUiNative
     internal static partial void RendererSetViewportRegion(IntPtr renderer, int x, int y, int width, int height);
 
     /// <summary>
+    /// 分别更新 RmlUi logical layout viewport 与默认 framebuffer 输出区域。
+    /// </summary>
+    /// <param name="renderer">renderer 句柄。</param>
+    /// <param name="x">默认 framebuffer 左下角原点下的 X 偏移。</param>
+    /// <param name="y">默认 framebuffer 左下角原点下的 Y 偏移。</param>
+    /// <param name="renderWidth">presentation 输出像素宽度。</param>
+    /// <param name="renderHeight">presentation 输出像素高度。</param>
+    /// <param name="layoutWidth">RmlUi CSS layout 宽度。</param>
+    /// <param name="layoutHeight">RmlUi CSS layout 高度。</param>
+    [LibraryImport(RmlUiNativeLibrary.Name, EntryPoint = "peui_native_renderer_set_canvas_metrics")]
+    internal static partial void RendererSetCanvasMetrics(
+        IntPtr renderer,
+        int x,
+        int y,
+        int renderWidth,
+        int renderHeight,
+        int layoutWidth,
+        int layoutHeight);
+
+    /// <summary>
     /// 向 RmlUi FontEngine 注册字体文件。
     /// </summary>
     /// <param name="renderer">renderer 句柄。</param>

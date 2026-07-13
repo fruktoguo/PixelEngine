@@ -25,7 +25,7 @@ public sealed class RmlUiNativeInfoTests
 
         if (available)
         {
-            Assert.Equal(1, probe.ApiVersion);
+            Assert.Equal(2, probe.ApiVersion);
             Assert.False(string.IsNullOrWhiteSpace(probe.RmlUiVersion));
             Assert.Null(probe.Error);
         }

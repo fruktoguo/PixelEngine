@@ -60,6 +60,10 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
 
     internal UiImeGeometry DebugCompositionImeGeometry => CompositionImeGeometry;
 
+    internal UiCanvasMetrics DebugCanvasMetrics => CanvasMetrics;
+
+    private UiCanvasMetrics CanvasMetrics { get; set; }
+
     /// <summary>
     /// 后端类型，固定为纯托管回退后端。
     /// </summary>
@@ -83,7 +87,8 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     {
         ThrowIfDisposed();
         info.Viewport.Validate();
-        _viewport = info.Viewport;
+        UiCanvasMetrics metrics = info.CanvasMetrics;
+        ApplyCanvasMetrics(in metrics);
         _initialized = true;
     }
 
@@ -95,7 +100,21 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     {
         ThrowIfDisposed();
         viewport.Validate();
-        _viewport = viewport;
+        UiDisplayMetrics displayMetrics = UiDisplayMetrics.FromViewport(in viewport);
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default;
+        UiCanvasMetrics metrics = UiCanvasScaleResolver.Resolve(in settings, in displayMetrics);
+        ApplyCanvasMetrics(in metrics);
+        Dirty = true;
+    }
+
+    /// <summary>
+    /// 同步分离后的 Canvas logical layout 与 presentation render 度量。
+    /// </summary>
+    /// <param name="metrics">统一 Canvas 度量。</param>
+    public void Resize(in UiCanvasMetrics metrics)
+    {
+        ThrowIfDisposed();
+        ApplyCanvasMetrics(in metrics);
         Dirty = true;
     }
 
@@ -512,10 +531,10 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         if (document.RootBox.HasPositionAndSize)
         {
             gui.SetNextWindow(
-                document.RootBox.X!.Value,
-                document.RootBox.Y!.Value,
-                document.RootBox.Width!.Value,
-                document.RootBox.Height!.Value,
+                Scale(document.RootBox.X!.Value),
+                Scale(document.RootBox.Y!.Value),
+                Scale(document.RootBox.Width!.Value),
+                Scale(document.RootBox.Height!.Value),
                 GuiDrawCondition.Always);
             flags |= GuiDrawWindowFlags.NoResize | GuiDrawWindowFlags.NoMove;
         }
@@ -525,18 +544,31 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
             flags |= GuiDrawWindowFlags.AlwaysAutoResize;
         }
 
-        if (!gui.BeginWindow($"ui_{screen.Handle.Value}", document.Title, flags))
+        gui.PushCanvasScale(CanvasMetrics.ScaleFactor);
+        bool beganWindow = false;
+        try
         {
-            gui.EndWindow();
-            return;
-        }
+            bool visible = gui.BeginWindow($"ui_{screen.Handle.Value}", document.Title, flags);
+            beganWindow = true;
+            if (!visible)
+            {
+                return;
+            }
 
-        for (int i = 0; i < document.Controls.Length; i++)
+            for (int i = 0; i < document.Controls.Length; i++)
+            {
+                DrawControl(gui, screen, document.Controls[i]);
+            }
+        }
+        finally
         {
-            DrawControl(gui, screen, document.Controls[i]);
-        }
+            if (beganWindow)
+            {
+                gui.EndWindow();
+            }
 
-        gui.EndWindow();
+            gui.PopCanvasScale();
+        }
     }
 
     private void DrawControl(IGuiDrawContext gui, UiScreenStackEntry screen, ManagedUiControl control)
@@ -550,7 +582,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                 break;
             case ManagedUiControlKind.Button:
                 bool clicked = style.HasSize
-                    ? gui.Button(control.Text, style.Width!.Value, style.Height!.Value)
+                    ? gui.Button(control.Text, Scale(style.Width!.Value), Scale(style.Height!.Value))
                     : gui.Button(control.Text);
                 if (clicked)
                 {
@@ -575,8 +607,8 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                     gui.ProgressBar(
                         (float)Math.Clamp(progress, 0.0, 1.0),
                         label,
-                        style.Width!.Value,
-                        style.Height!.Value);
+                        Scale(style.Width!.Value),
+                        Scale(style.Height!.Value));
                 }
                 else
                 {
@@ -592,25 +624,25 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                     image.TextureHandle,
                     image.Width,
                     image.Height,
-                    control.DisplayWidth > 0f ? control.DisplayWidth : image.Width,
-                    control.DisplayHeight > 0f ? control.DisplayHeight : image.Height);
+                    Scale(control.DisplayWidth > 0f ? control.DisplayWidth : image.Width),
+                    Scale(control.DisplayHeight > 0f ? control.DisplayHeight : image.Height));
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(control), control.Kind, "未知 Managed UI 控件类型。");
         }
     }
 
-    private static void ApplyControlLayout(IGuiDrawContext gui, in ManagedUiStyle style)
+    private void ApplyControlLayout(IGuiDrawContext gui, in ManagedUiStyle style)
     {
         if (style.HasPosition)
         {
-            gui.SetCursor(style.X!.Value, style.Y!.Value);
+            gui.SetCursor(Scale(style.X!.Value), Scale(style.Y!.Value));
             return;
         }
 
         if (style.MarginTop is float marginTop && marginTop > 0f)
         {
-            gui.AddVerticalSpacing(marginTop);
+            gui.AddVerticalSpacing(Scale(marginTop));
         }
     }
 
@@ -622,27 +654,69 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         }
 
         int preeditLength = Math.Max(CompositionTextLength, 1);
-        float width = Math.Min(
+        float logicalWidth = Math.Min(
             Math.Max(UiImeGeometryLayout.MinOverlayWidth, (preeditLength * UiImeGeometryLayout.CharWidth) + 32f),
             Math.Max(UiImeGeometryLayout.MinOverlayWidth, _viewport.Width - (UiImeGeometryLayout.OverlayMargin * 2f)));
-        float height = UiImeGeometryLayout.OverlayHeight;
-        float x = _viewport.X + UiImeGeometryLayout.OverlayMargin;
-        float y = Math.Max(_viewport.Y, _viewport.Y + _viewport.Height - height - UiImeGeometryLayout.OverlayMargin);
-        gui.SetNextWindow(x, y, width, height, GuiDrawCondition.Always);
+        float logicalY = Math.Max(
+            _viewport.Y,
+            _viewport.Y + _viewport.Height - UiImeGeometryLayout.OverlayHeight - UiImeGeometryLayout.OverlayMargin);
+        gui.SetNextWindow(
+            Scale(_viewport.X + UiImeGeometryLayout.OverlayMargin),
+            Scale(logicalY),
+            Scale(logicalWidth),
+            Scale(UiImeGeometryLayout.OverlayHeight),
+            GuiDrawCondition.Always);
         GuiDrawWindowFlags flags =
             GuiDrawWindowFlags.NoSavedSettings |
             GuiDrawWindowFlags.NoResize |
             GuiDrawWindowFlags.NoMove |
             GuiDrawWindowFlags.NoScrollbar |
             GuiDrawWindowFlags.AlwaysAutoResize;
-        if (!gui.BeginWindow("ui_ime_composition", "IME composition", flags))
+        gui.PushCanvasScale(CanvasMetrics.ScaleFactor);
+        bool beganWindow = false;
+        try
         {
-            gui.EndWindow();
-            return;
+            bool visible = gui.BeginWindow("ui_ime_composition", "IME composition", flags);
+            beganWindow = true;
+            if (!visible)
+            {
+                return;
+            }
+
+            gui.TextColored(CompositionOverlayText, CompositionOverlayTextColorBgra);
+        }
+        finally
+        {
+            if (beganWindow)
+            {
+                gui.EndWindow();
+            }
+
+            gui.PopCanvasScale();
+        }
+    }
+
+    private void ApplyCanvasMetrics(in UiCanvasMetrics metrics)
+    {
+        if (metrics.PresentationWidth <= 0 ||
+            metrics.PresentationHeight <= 0 ||
+            !float.IsFinite(metrics.LogicalWidth) ||
+            !float.IsFinite(metrics.LogicalHeight) ||
+            !float.IsFinite(metrics.ScaleFactor) ||
+            metrics.LogicalWidth <= 0f ||
+            metrics.LogicalHeight <= 0f ||
+            metrics.ScaleFactor <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(metrics), "ManagedFallback Canvas metrics 无效。");
         }
 
-        gui.TextColored(CompositionOverlayText, CompositionOverlayTextColorBgra);
-        gui.EndWindow();
+        CanvasMetrics = metrics;
+        _viewport = new UiViewport(0, 0, metrics.LayoutWidth, metrics.LayoutHeight, 1f);
+    }
+
+    private float Scale(float logicalValue)
+    {
+        return logicalValue * CanvasMetrics.ScaleFactor;
     }
 
     private bool HasCompositionOverlay => CompositionOverlayState.IsActive && !string.IsNullOrEmpty(CompositionOverlayText);

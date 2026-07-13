@@ -11,6 +11,7 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
 {
     private readonly GameUiHost _host;
     private readonly IUiPresentTargetProvider? _targetProvider;
+    private readonly IDisplayMetricsSource? _displayMetricsSource;
     private readonly IDisposable _registration;
     private UiPresentTarget _lastPresentTarget;
     private bool _hasPresentTarget;
@@ -20,11 +21,13 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         RenderPipeline pipeline,
         UiPresentSurface surface,
         GameUiHost host,
-        IUiPresentTargetProvider? targetProvider)
+        IUiPresentTargetProvider? targetProvider,
+        IDisplayMetricsSource? displayMetricsSource)
     {
         ArgumentNullException.ThrowIfNull(pipeline);
         _host = host ?? throw new ArgumentNullException(nameof(host));
         _targetProvider = targetProvider;
+        _displayMetricsSource = displayMetricsSource;
         _registration = pipeline.RegisterUiLayer(surface, UiPresentLayerOrders.Game, this);
     }
 
@@ -40,7 +43,8 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
             pipeline,
             UiPresentSurface.WindowFramebuffer,
             host,
-            targetProvider: null);
+            targetProvider: null,
+            displayMetricsSource: null);
     }
 
     /// <summary>
@@ -59,7 +63,8 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
             pipeline,
             UiPresentSurface.WindowFramebuffer,
             host,
-            targetProvider);
+            targetProvider,
+            displayMetricsSource: null);
     }
 
     /// <summary>
@@ -74,7 +79,12 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         UiPresentSurface surface,
         GameUiHost host)
     {
-        return new UiLayerCompositor(pipeline, surface, host, targetProvider: null);
+        return new UiLayerCompositor(
+            pipeline,
+            surface,
+            host,
+            targetProvider: null,
+            displayMetricsSource: null);
     }
 
     /// <summary>
@@ -91,7 +101,27 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
         GameUiHost host,
         IUiPresentTargetProvider? targetProvider)
     {
-        return new UiLayerCompositor(pipeline, surface, host, targetProvider);
+        return new UiLayerCompositor(pipeline, surface, host, targetProvider, displayMetricsSource: null);
+    }
+
+    /// <summary>
+    /// 在显式 present surface 注册游戏 UI，并让 Rendering-owned display metrics 在每帧 render 前统一提交。
+    /// </summary>
+    /// <param name="pipeline">目标渲染管线。</param>
+    /// <param name="surface">目标 present surface。</param>
+    /// <param name="host">游戏 UI 宿主。</param>
+    /// <param name="targetProvider">可选目标区域提供者。</param>
+    /// <param name="displayMetricsSource">monitor、framebuffer scale 与 raw physical DPI 的唯一来源。</param>
+    /// <returns>已注册的合成层。</returns>
+    public static UiLayerCompositor Attach(
+        RenderPipeline pipeline,
+        UiPresentSurface surface,
+        GameUiHost host,
+        IUiPresentTargetProvider? targetProvider,
+        IDisplayMetricsSource displayMetricsSource)
+    {
+        ArgumentNullException.ThrowIfNull(displayMetricsSource);
+        return new UiLayerCompositor(pipeline, surface, host, targetProvider, displayMetricsSource);
     }
 
     /// <summary>
@@ -113,7 +143,18 @@ public sealed class UiLayerCompositor : IUiPresentLayer, IDisposable
             _targetProvider.TryGetPresentTarget(out UiPresentTarget target)
                 ? context.WithTarget(target)
                 : context;
-        if (!_hasPresentTarget || presentContext.Target != _lastPresentTarget)
+        if (_displayMetricsSource is not null)
+        {
+            DisplayMetricsSnapshot snapshot = _displayMetricsSource.CommitFrameBoundary();
+            UiDisplayMetrics displayMetrics = UiDisplayMetrics.FromRendering(
+                presentContext.Target.Width,
+                presentContext.Target.Height,
+                in snapshot);
+            _host.Resize(in displayMetrics);
+            _lastPresentTarget = presentContext.Target;
+            _hasPresentTarget = true;
+        }
+        else if (!_hasPresentTarget || presentContext.Target != _lastPresentTarget)
         {
             UiPresentTarget presentTarget = presentContext.Target;
             _host.Resize(new UiViewport(0, 0, presentTarget.Width, presentTarget.Height, presentTarget.DpiScale));

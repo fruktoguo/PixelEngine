@@ -53,6 +53,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     private int _appliedViewportY;
     private int _appliedViewportWidth;
     private int _appliedViewportHeight;
+    private int _appliedLayoutWidth;
+    private int _appliedLayoutHeight;
     private bool _disposed;
 
     /// <summary>
@@ -113,6 +115,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
     internal UiImeGeometry DebugCompositionImeGeometry => CompositionImeGeometry;
 
+    internal UiCanvasMetrics DebugCanvasMetrics => CanvasMetrics;
+
+    private UiCanvasMetrics CanvasMetrics { get; set; }
+
     /// <summary>
     /// 初始化 RmlUi renderer、GL 函数表与字体。
     /// </summary>
@@ -127,18 +133,30 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             throw new InvalidOperationException("RmlUi native GL 函数表初始化失败。");
         }
 
-        _renderer = RmlUiNative.CreateRenderer(info.Viewport.Width, info.Viewport.Height);
+        UiCanvasMetrics metrics = info.CanvasMetrics;
+        _renderer = RmlUiNative.CreateRenderer(metrics.LayoutWidth, metrics.LayoutHeight);
         if (_renderer == IntPtr.Zero)
         {
             throw new InvalidOperationException("RmlUi native renderer 创建失败。");
         }
 
-        _baseViewportWidth = info.Viewport.Width;
-        _baseViewportHeight = info.Viewport.Height;
+        CanvasMetrics = metrics;
+        _baseViewportWidth = metrics.PresentationWidth;
+        _baseViewportHeight = metrics.PresentationHeight;
         _appliedViewportX = 0;
         _appliedViewportY = 0;
-        _appliedViewportWidth = info.Viewport.Width;
-        _appliedViewportHeight = info.Viewport.Height;
+        _appliedViewportWidth = metrics.PresentationWidth;
+        _appliedViewportHeight = metrics.PresentationHeight;
+        _appliedLayoutWidth = metrics.LayoutWidth;
+        _appliedLayoutHeight = metrics.LayoutHeight;
+        RmlUiNative.RendererSetCanvasMetrics(
+            _renderer,
+            0,
+            0,
+            metrics.PresentationWidth,
+            metrics.PresentationHeight,
+            metrics.LayoutWidth,
+            metrics.LayoutHeight);
         // 阶段 2：注册字体并标记首帧需重绘。
         RegisterFontFace(info.FontSelection);
 
@@ -154,13 +172,38 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         ThrowIfDisposed();
         EnsureInitialized();
         viewport.Validate();
-        RmlUiNative.RendererSetViewport(_renderer, viewport.Width, viewport.Height);
-        _baseViewportWidth = viewport.Width;
-        _baseViewportHeight = viewport.Height;
+        UiDisplayMetrics displayMetrics = UiDisplayMetrics.FromViewport(in viewport);
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default;
+        UiCanvasMetrics metrics = UiCanvasScaleResolver.Resolve(in settings, in displayMetrics);
+        Resize(in metrics);
+    }
+
+    /// <summary>
+    /// 分别更新 RmlUi CSS layout viewport 与 native presentation render region。
+    /// </summary>
+    /// <param name="metrics">统一 Canvas 度量。</param>
+    public void Resize(in UiCanvasMetrics metrics)
+    {
+        ThrowIfDisposed();
+        EnsureInitialized();
+        ValidateCanvasMetrics(in metrics);
+        RmlUiNative.RendererSetCanvasMetrics(
+            _renderer,
+            0,
+            0,
+            metrics.PresentationWidth,
+            metrics.PresentationHeight,
+            metrics.LayoutWidth,
+            metrics.LayoutHeight);
+        CanvasMetrics = metrics;
+        _baseViewportWidth = metrics.PresentationWidth;
+        _baseViewportHeight = metrics.PresentationHeight;
         _appliedViewportX = 0;
         _appliedViewportY = 0;
-        _appliedViewportWidth = viewport.Width;
-        _appliedViewportHeight = viewport.Height;
+        _appliedViewportWidth = metrics.PresentationWidth;
+        _appliedViewportHeight = metrics.PresentationHeight;
+        _appliedLayoutWidth = metrics.LayoutWidth;
+        _appliedLayoutHeight = metrics.LayoutHeight;
         Dirty = true;
     }
 
@@ -420,7 +463,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         // IME 预编辑桥接：规范化状态后计算 overlay 几何，再推送到 native TextInputContext。
         UiTextComposition normalized = NormalizeTextComposition(text, in composition);
         int textLength = normalized.IsActive ? text.Length : 0;
-        UiViewport geometryViewport = new(0, 0, _baseViewportWidth, _baseViewportHeight, 1f);
+        UiViewport geometryViewport = new(0, 0, CanvasMetrics.LayoutWidth, CanvasMetrics.LayoutHeight, 1f);
         UiImeGeometry geometry = normalized.IsActive
             ? UiImeGeometryLayout.ComputePreeditOverlayGeometry(
                 in geometryViewport,
@@ -798,13 +841,24 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         if (x != _appliedViewportX ||
             y != _appliedViewportY ||
             frameWidth != _appliedViewportWidth ||
-            frameHeight != _appliedViewportHeight)
+            frameHeight != _appliedViewportHeight ||
+            CanvasMetrics.LayoutWidth != _appliedLayoutWidth ||
+            CanvasMetrics.LayoutHeight != _appliedLayoutHeight)
         {
-            RmlUiNative.RendererSetViewportRegion(_renderer, x, y, frameWidth, frameHeight);
+            RmlUiNative.RendererSetCanvasMetrics(
+                _renderer,
+                x,
+                y,
+                frameWidth,
+                frameHeight,
+                CanvasMetrics.LayoutWidth,
+                CanvasMetrics.LayoutHeight);
             _appliedViewportX = x;
             _appliedViewportY = y;
             _appliedViewportWidth = frameWidth;
             _appliedViewportHeight = frameHeight;
+            _appliedLayoutWidth = CanvasMetrics.LayoutWidth;
+            _appliedLayoutHeight = CanvasMetrics.LayoutHeight;
             Dirty = true;
         }
 
@@ -846,6 +900,21 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         return composition.IsActive && text.Length > 0
             ? composition.ClampToTextLength(text.Length)
             : UiTextComposition.Inactive;
+    }
+
+    private static void ValidateCanvasMetrics(in UiCanvasMetrics metrics)
+    {
+        if (metrics.PresentationWidth <= 0 ||
+            metrics.PresentationHeight <= 0 ||
+            !float.IsFinite(metrics.LogicalWidth) ||
+            !float.IsFinite(metrics.LogicalHeight) ||
+            !float.IsFinite(metrics.ScaleFactor) ||
+            metrics.LogicalWidth <= 0f ||
+            metrics.LogicalHeight <= 0f ||
+            metrics.ScaleFactor <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(metrics), "RmlUi Canvas metrics 无效。");
+        }
     }
 
     private static bool CompositionEquals(in UiTextComposition left, in UiTextComposition right)

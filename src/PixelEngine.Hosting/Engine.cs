@@ -633,6 +633,11 @@ public sealed class Engine : IDisposable
             gameUi = ResolveGameUiHost(window);
         }
 
+        // 外部预注册 GameUiHost 时也必须补齐唯一 display-metrics source；不能依赖内部创建 host 的分支副作用。
+        IDisplayMetricsSource? displayMetricsSource = hasGameUi
+            ? ResolveDisplayMetricsSource(window)
+            : null;
+
         bool hasGuiBridge = Context.TryGetService(out GuiRenderBridge _);
         bool hasUiLayerCompositor = Context.TryGetService(out UiLayerCompositor _);
         IReadOnlyList<IEditorHostExtension>? extensions = null;
@@ -666,7 +671,8 @@ public sealed class Engine : IDisposable
                 pipeline,
                 UiPresentSurface.RuntimeViewport,
                 gameUi!,
-                gameUiPresentTargetProvider);
+                gameUiPresentTargetProvider,
+                displayMetricsSource!);
             Context.RegisterService(compositor);
             _ownedRuntimeResources.Add(compositor);
         }
@@ -682,8 +688,8 @@ public sealed class Engine : IDisposable
                     : null;
             input = new GuiWindowInputConnector(window, gui.Input, viewportInputRoute);
             Action<IGuiDrawContext>? managedGui = gameUiNeedsGuiBridge ? gameUi!.DrawGui : null;
-            Action<UiPresentTarget>? gameUiTargetChanged = gameUiNeedsGuiBridge
-                ? target => gameUi!.Resize(new UiViewport(0, 0, target.Width, target.Height, target.DpiScale))
+            Action<UiPresentTarget>? gameUiTargetFrame = gameUiNeedsGuiBridge
+                ? target => ResizeGameUiAtFrameBoundary(gameUi!, target, displayMetricsSource!)
                 : null;
             GuiRenderBridge? bridge = GuiRenderBridge.AttachIfEnabled(
                 pipeline,
@@ -691,7 +697,8 @@ public sealed class Engine : IDisposable
                 gui,
                 scriptRuntime,
                 managedGui,
-                gameUiTargetChanged);
+                presentTargetChanged: null,
+                gameUiTargetFrame);
             if (bridge is not null)
             {
                 Context.RegisterService(bridge);
@@ -783,6 +790,7 @@ public sealed class Engine : IDisposable
         UiFontSelection fontSelection = fontEngine.Resolve();
         UiBackendKind requestedBackend = Context.Options.GameUiBackend;
         UiStringPool strings = new();
+        IDisplayMetricsSource displayMetricsSource = ResolveDisplayMetricsSource(window);
         IGameUiBackend backend = CreateGameUiBackend(
             window,
             requestedBackend,
@@ -792,7 +800,7 @@ public sealed class Engine : IDisposable
         GameUiHost host = new(backend);
         try
         {
-            InitializeGameUiHost(host, backend, window, fontSelection);
+            InitializeGameUiHost(host, backend, window, fontSelection, displayMetricsSource.Current);
         }
         // native 库缺失、入口点不匹配或 GL 初始化失败时降级到托管 UI 后端。
         catch (Exception ex) when (backend.Kind == UiBackendKind.RmlUi && IsRmlUiFallbackException(ex))
@@ -802,7 +810,7 @@ public sealed class Engine : IDisposable
             host.Dispose();
             backend = CreateManagedFallbackGameUiBackend(window);
             host = new GameUiHost(backend);
-            InitializeGameUiHost(host, backend, window, fontSelection);
+            InitializeGameUiHost(host, backend, window, fontSelection, displayMetricsSource.Current);
         }
 
         Context.RegisterService(fontEngine);
@@ -906,12 +914,43 @@ public sealed class Engine : IDisposable
         GameUiHost host,
         IGameUiBackend backend,
         RenderWindow window,
-        UiFontSelection fontSelection)
+        UiFontSelection fontSelection,
+        DisplayMetricsSnapshot displayMetrics)
     {
+        UiDisplayMetrics uiDisplayMetrics = UiDisplayMetrics.FromRendering(
+            Math.Max(1, window.Width),
+            Math.Max(1, window.Height),
+            in displayMetrics);
         host.Initialize(new UiBackendInitializeInfo(
-            new UiViewport(0, 0, Math.Max(1, window.Width), Math.Max(1, window.Height), 1f),
+            uiDisplayMetrics,
+            UiCanvasScalerSettings.Default,
             backend.Kind,
             fontSelection));
+    }
+
+    private IDisplayMetricsSource ResolveDisplayMetricsSource(RenderWindow window)
+    {
+        if (Context.TryGetService(out IDisplayMetricsSource existing))
+        {
+            return existing;
+        }
+
+        IDisplayMetricsSource source = new RenderWindowDisplayMetricsSource(window);
+        Context.RegisterService<IDisplayMetricsSource>(source);
+        return source;
+    }
+
+    private static void ResizeGameUiAtFrameBoundary(
+        GameUiHost host,
+        UiPresentTarget target,
+        IDisplayMetricsSource displayMetricsSource)
+    {
+        DisplayMetricsSnapshot snapshot = displayMetricsSource.CommitFrameBoundary();
+        UiDisplayMetrics displayMetrics = UiDisplayMetrics.FromRendering(
+            target.Width,
+            target.Height,
+            in snapshot);
+        host.Resize(in displayMetrics);
     }
 
     private static bool IsRmlUiFallbackException(Exception ex)

@@ -50,6 +50,22 @@ public interface IGuiDrawContext
     bool BeginWindow(string id, string title, GuiDrawWindowFlags flags = GuiDrawWindowFlags.None);
 
     /// <summary>
+    /// 压入当前窗口的完整 Canvas 相对缩放；字体、padding、spacing、圆角和控件度量必须使用同一比例。
+    /// 不支持的后端可忽略，但必须与 <see cref="PopCanvasScale" /> 成对。
+    /// </summary>
+    /// <param name="scale">有限正缩放。</param>
+    void PushCanvasScale(float scale)
+    {
+    }
+
+    /// <summary>
+    /// 结束最近一次 <see cref="PushCanvasScale" />；不支持的后端可忽略。
+    /// </summary>
+    void PopCanvasScale()
+    {
+    }
+
+    /// <summary>
     /// 结束当前 GUI 窗口。
     /// </summary>
     void EndWindow();
