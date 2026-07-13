@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
-  "generatedAt": "2026-07-12",
-  "generatedFromCommit": "06c6100f3f7d835ec02f1f7fb974a902f528ed6d",
+  "generatedAt": "2026-07-14",
+  "generatedFromCommit": "ebbc9d91a230893a151ac39d8694f45314dfecd5",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -623,6 +623,19 @@
       "reportPath": "docs/evidence-2026-07-13-editor-003-unity-parity-cycle-10.md",
       "sha256": "cf83652dc153b469e5b5ab6af9a23f3a0dbaf39ffc85562e11fd4a1de0ddc77a",
       "notes": "Scene clipping, W/E/R gizmos, Inspector drag and header hit regions, Play reentry and Game UI viewport confinement, Scene-owned Brush overlay, typed Project preview, panel focus, narrow Project layout and native dirty close are verified. Probe false-green, build child-pipe deadlock and telemetry preview drift were also fixed; different-DPI hardware, Explorer cross-window pointer drag and independent reviewer remain, so EDITOR-003 stays active."
+    },
+    {
+      "entryId": "ui-004-web-canvas-player-dogfood-20260714",
+      "taskIds": ["UI-004"],
+      "evidenceState": "local_player_dogfood_complete_external_window_matrix_pending",
+      "commit": "ebbc9d91a230893a151ac39d8694f45314dfecd5",
+      "runSessionId": "local-20260714-ui004-web-canvas-player",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8-Core Processor; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1; full UI/Hosting/Demo Release tests; PIXELENGINE_RENDERING_GL_SMOKE=1 UI RmlUi/Hosting/Demo native tests; dotnet run --project demo/PixelEngine.Demo/PixelEngine.Demo.csproj -c Release --no-build --no-restore -- --no-hot-reload --window-ticks 40 --scripted-window-demo --content demo/PixelEngine.Demo/content --scene scenes/lava-mine.scene --capture-frame artifacts/ui004-node6/player-rmlui-commit.bmp --log-dir artifacts/ui004-node6/player-rmlui-commit-logs; tools/validate-task-catalog.ps1; git diff --check",
+      "reportPath": "docs/evidence-2026-07-14-ui-004-web-canvas-player-dogfood.md",
+      "sha256": "c353d5950b2ad99dfab6d01cc9cfe32236f4e5e6ed5cf7ac948b86f7ae8f5708",
+      "notes": "Explicit scene v3 three-Canvas Demo dogfood, all CanvasScaler modes, RmlUi Player, legacy GUI exclusion, Escape pause automation, native desktop GL rendering and commit-bound framebuffer are verified. Windows control discovered the Player but could not activate the desktop GL window, so no real-input pass is claimed; DPI/window-mode matrix, reviewer and clean final output remain pending and UI-004 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
