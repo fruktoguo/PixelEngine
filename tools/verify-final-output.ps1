@@ -143,6 +143,10 @@ if ($null -eq $demoRuntimeUiBackendFallbackProperty -or $demoRuntimeUiBackendFal
 if ([bool]$demoRuntimeUiBackendFallbackProperty.Value -ne $expectedDemoRuntimeUiBackendFallback) {
   throw "manifest Demo UI fallback 与请求策略不一致。requested=$requestedDemoRuntimeUiBackend, expected=$expectedDemoRuntimeUiBackendFallback, actual=$($demoRuntimeUiBackendFallbackProperty.Value)"
 }
+$expectedDemoWindowMode = [string]$manifest.demoWindowMode
+if ($expectedDemoWindowMode -ne 'Windowed') {
+  throw "manifest demoWindowMode 必须是正式输出默认 Windowed：$expectedDemoWindowMode"
+}
 
 $head = (& git -C $repoRoot rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($head)) {
@@ -323,6 +327,10 @@ if ($validation.demoWindowProbe.completed -ne $true) {
 if ($validation.demoWindowProbe.unicodePath -ne $true) {
   throw 'Demo 窗口 probe 必须从含非 ASCII 字符的发布路径运行。'
 }
+if ($validation.demoWindowProbe.requestedMode -ne $expectedDemoWindowMode -or
+    $validation.demoWindowProbe.applied -ne $true) {
+  throw 'Demo 窗口 probe 的请求模式或实际应用状态不匹配。'
+}
 
 $validationPaths = @(
   [string]$validation.editorDefaultWorkbenchProbe.stdout,
@@ -348,6 +356,20 @@ Assert-SummaryValue $editorProbeStdout 'editor_default_workbench_probe ' 'build_
 $demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'window_frame_probe' 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'PixelEngine.Demo' 'Demo 窗口 probe stdout'
+Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'requested' $expectedDemoWindowMode 'Demo Player window probe stdout'
+Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'available' 'True' 'Demo Player window probe stdout'
+Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'applied' 'True' 'Demo Player window probe stdout'
+Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'reason' 'none' 'Demo Player window probe stdout'
+Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'visible' 'True' 'Demo Player window probe stdout'
+Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'presentation' '1080x720' 'Demo Player window probe stdout'
+$windowedClientMatches = ($demoProbeStdout -split "`r?`n" | Where-Object {
+  $_.StartsWith('player_window_probe ', [StringComparison]::Ordinal)
+} | Select-Object -Last 1)
+if (-not $windowedClientMatches -or
+    (-not $windowedClientMatches.Contains('client_matches_presentation=True', [StringComparison]::Ordinal) -and
+      -not $windowedClientMatches.Contains('presentation_fits_work=False', [StringComparison]::Ordinal))) {
+  throw 'Demo Player Windowed 客户区既未匹配 Presentation，也不是因 work area 不足而合法夹取。'
+}
 Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'attached' 'True' 'Demo 窗口 Game UI probe stdout'
 Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'canvases' '3' 'Demo 窗口 Game UI probe stdout'
 Assert-SummaryValue $demoProbeStdout 'game_ui_probe ' 'requested' $requestedDemoRuntimeUiBackend 'Demo 窗口 Game UI probe stdout'
@@ -363,6 +385,9 @@ if ($demoBuildResult.ok -ne $true) {
 
 if ($demoBuildResult.runtimeUiBackend -ne $requestedDemoRuntimeUiBackend) {
   throw "Demo UI backend 记录不一致。manifest=$requestedDemoRuntimeUiBackend, build-result=$($demoBuildResult.runtimeUiBackend)"
+}
+if ($demoBuildResult.windowMode -ne $expectedDemoWindowMode) {
+  throw "Demo WindowMode 记录不一致。manifest=$expectedDemoWindowMode, build-result=$($demoBuildResult.windowMode)"
 }
 
 $checksumLines = Get-Content -LiteralPath $checksumPath

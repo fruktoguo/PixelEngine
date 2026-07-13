@@ -284,6 +284,7 @@ public static class DemoProgram
             Console.WriteLine(windowFrameProbe.BuildSummary(
                 engine.Context.Counters.FrameGpuTimerAvailable,
                 engine.Context.Counters.VSyncEnabled));
+            WritePlayerWindowProbeSummary(window);
             WriteGameUiProbeSummary(engine, probe);
             if (scriptedInput is not null)
             {
@@ -513,6 +514,24 @@ public static class DemoProgram
             $"content_path_non_ascii={ContainsNonAscii(engine.Context.Options.ContentRoot)}, " +
             $"fallback_reason={NormalizeProbeValue(snapshot.FallbackReason)}, " +
             $"native_profile={NormalizeProbeValue(snapshot.ActiveNativeProfile)}");
+    }
+
+    private static void WritePlayerWindowProbeSummary(RenderWindow window)
+    {
+        PlayerWindowModeProbeSnapshot snapshot = PlayerWindowModeProbe.Capture(window);
+        PlayerWindowModeProbeEvaluation evaluation = PlayerWindowModeProbe.Evaluate(in snapshot);
+        Console.WriteLine(
+            $"player_window_probe requested={snapshot.RequestedMode}, available={snapshot.Available}, " +
+            $"applied={evaluation.Applied}, reason={evaluation.Reason}, visible={snapshot.IsVisible}, " +
+            $"zoomed={snapshot.IsZoomed}, popup={snapshot.IsPopup}, caption={snapshot.HasCaption}, " +
+            $"thick_frame={snapshot.HasThickFrame}, style=0x{snapshot.Style:X8}, " +
+            $"ex_style=0x{snapshot.ExtendedStyle:X8}, dpi={snapshot.Dpi}, " +
+            $"window={snapshot.WindowRect.ToProbeValue()}, client={snapshot.ClientRect.ToProbeValue()}, " +
+            $"monitor={snapshot.MonitorRect.ToProbeValue()}, work={snapshot.WorkRect.ToProbeValue()}, " +
+            $"presentation={snapshot.RequestedWidth}x{snapshot.RequestedHeight}, " +
+            $"client_matches_presentation={snapshot.ClientMatchesRequestedPresentation}, " +
+            $"presentation_fits_work={snapshot.RequestedWindowFitsWorkArea}, " +
+            $"logical={window.LogicalWidth}x{window.LogicalHeight}, framebuffer={window.Width}x{window.Height}");
     }
 
     private static bool ContainsNonAscii(string value)

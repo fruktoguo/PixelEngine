@@ -13,6 +13,7 @@ namespace PixelEngine.Rendering.Tests;
 /// RenderWindow 集成冒烟测试：需 PIXELENGINE_RENDERING_GL_SMOKE=1（ANGLE 用 PIXELENGINE_RENDERING_ANGLE_SMOKE=1），验证真实 GL 上下文与管线各阶段。
 /// </summary>
 [Trait("Category", "NativeSmoke")]
+[Collection(RenderWindowNativeCollection.Name)]
 public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
 {
     private readonly ITestOutputHelper _output = output;

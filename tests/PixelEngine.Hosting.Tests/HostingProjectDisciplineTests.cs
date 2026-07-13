@@ -169,12 +169,34 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("demoRuntimeUiBackendFallback = $expectedDemoRuntimeUiBackendFallback", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString()", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'-WindowMode', $expectedDemoWindowMode", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'player_window_probe ' 'applied' 'True'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("$demoBuildOutput = Join-Path $stagingRoot '游戏Demo构建'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'content_path_non_ascii' 'True'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("unicodePath = $true", finalOutputScript, StringComparison.Ordinal);
         Assert.DoesNotContain("'-RuntimeUiBackend', 'ManagedFallback'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("runtimeUiBackend = $RuntimeUiBackend", buildPlayerPs1, StringComparison.Ordinal);
         Assert.Contains("\"runtimeUiBackend\"", buildPlayerSh, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证三窗口模式证据从同一 Player 的 startup.json 驱动，且 fail-closed 检查真实 Win32/UI/framebuffer。
+    /// </summary>
+    [Fact]
+    public void PlayerWindowModeProbeStagesPackagedStartupAndRequiresActualState()
+    {
+        string root = FindRepositoryRoot();
+        string script = File.ReadAllText(Path.Combine(root, "tools", "run-player-window-mode-probe.ps1"));
+
+        Assert.Contains("@('Windowed', 'MaximizedWindow', 'BorderlessFullscreen')", script, StringComparison.Ordinal);
+        Assert.Contains("$startup.windowMode = $mode", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("'--window-mode'", script, StringComparison.Ordinal);
+        Assert.Contains("player_window_probe ", script, StringComparison.Ordinal);
+        Assert.Contains("game_ui_probe ", script, StringComparison.Ordinal);
+        Assert.Contains("content_path_non_ascii", script, StringComparison.Ordinal);
+        Assert.Contains("BorderlessFullscreen 改变了 monitor mode", script, StringComparison.Ordinal);
+        Assert.Contains("Get-BmpEvidence", script, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.player-window-mode-probe/v1", script, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -240,6 +262,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("window_frame_probe", verifier, StringComparison.Ordinal);
         Assert.Contains("PixelEngine.Demo", verifier, StringComparison.Ordinal);
         Assert.Contains("game_ui_probe ", verifier, StringComparison.Ordinal);
+        Assert.Contains("player_window_probe ", verifier, StringComparison.Ordinal);
+        Assert.Contains("demoWindowMode", verifier, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendActive", verifier, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendFallback", verifier, StringComparison.Ordinal);
         Assert.Contains("demoWindowProbe.unicodePath -ne $true", verifier, StringComparison.Ordinal);
@@ -461,6 +485,7 @@ public sealed class HostingProjectDisciplineTests
                 outputRoot,
                 "_验证记录/logs/demo-window.stdout.log",
                 "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                ValidPlayerWindowProbeLine() + Environment.NewLine +
                 "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=ManagedFallback, fallback=True, " +
                 "fallback_reason=RmlUi initialization failed; using ManagedFallback, native_profile=<none>");
             WriteFinalOutputChecksums(outputRoot);
@@ -470,6 +495,42 @@ public sealed class HostingProjectDisciplineTests
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("Demo 窗口 Game UI probe stdout 缺少成功摘要", result.CombinedOutput, StringComparison.Ordinal);
             Assert.Contains("active=RmlUi", result.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证请求 Windowed 但真实 Win32 状态未应用时，独立 verifier 必须 fail-closed。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsUnappliedPlayerWindowMode()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(
+                outputRoot,
+                "_验证记录/logs/demo-window.stdout.log",
+                "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                ValidPlayerWindowProbeLine().Replace("applied=True", "applied=False", StringComparison.Ordinal) + Environment.NewLine +
+                "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
+                "content_path_non_ascii=True, fallback_reason=<none>, native_profile=desktop-gl");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult result = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Demo Player window probe stdout 缺少成功摘要", result.CombinedOutput, StringComparison.Ordinal);
+            Assert.Contains("applied=True", result.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -496,6 +557,7 @@ public sealed class HostingProjectDisciplineTests
                 outputRoot,
                 "_验证记录/logs/demo-window.stdout.log",
                 "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                ValidPlayerWindowProbeLine() + Environment.NewLine +
                 "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
                 "content_path_non_ascii=False, fallback_reason=<none>, native_profile=desktop-gl");
             WriteFinalOutputChecksums(outputRoot);
@@ -2524,6 +2586,7 @@ public sealed class HostingProjectDisciplineTests
             outputRoot,
             "_验证记录/logs/demo-window.stdout.log",
             "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+            ValidPlayerWindowProbeLine() + Environment.NewLine +
             "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
             "content_path_non_ascii=True, fallback_reason=<none>, native_profile=desktop-gl");
         WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stderr.log", "");
@@ -2536,6 +2599,7 @@ public sealed class HostingProjectDisciplineTests
             {
                 ok = true,
                 runtimeUiBackend = "RmlUi",
+                windowMode = "Windowed",
             }));
         WriteTextFile(
             outputRoot,
@@ -2552,6 +2616,7 @@ public sealed class HostingProjectDisciplineTests
                 demoRuntimeUiBackendRequested = "RmlUi",
                 demoRuntimeUiBackendActive = "RmlUi",
                 demoRuntimeUiBackendFallback = false,
+                demoWindowMode = "Windowed",
                 editorSymbolsIncluded = false,
                 editorDeveloperMetadataPolicy = "runtime-pdb-and-xml-pruned",
                 editorScriptReferenceAssembliesPath = "编辑器/ScriptReferenceAssemblies",
@@ -2581,6 +2646,8 @@ public sealed class HostingProjectDisciplineTests
                     {
                         completed = true,
                         unicodePath = true,
+                        requestedMode = "Windowed",
+                        applied = true,
                         stdout = "_验证记录/logs/demo-window.stdout.log",
                         stderr = "_验证记录/logs/demo-window.stderr.log",
                         capture = "_验证记录/demo-window.bmp",
@@ -2589,6 +2656,15 @@ public sealed class HostingProjectDisciplineTests
                 },
             }));
         WriteFinalOutputChecksums(outputRoot);
+    }
+
+    private static string ValidPlayerWindowProbeLine()
+    {
+        return "player_window_probe requested=Windowed, available=True, applied=True, reason=none, visible=True, " +
+            "zoomed=False, popup=False, caption=True, thick_frame=True, style=0x16CF0000, ex_style=0x00040110, " +
+            "dpi=96, window=40:20:1096x759, client=0:0:1080x720, monitor=0:0:2560x1440, work=0:0:2560x1392, " +
+            "presentation=1080x720, client_matches_presentation=True, presentation_fits_work=True, " +
+            "logical=1080x720, framebuffer=1080x720";
     }
 
     private static void CopyManagedFixtureAssembly(string outputRoot, string relativePath, string sourcePath)

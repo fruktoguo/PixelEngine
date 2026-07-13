@@ -37,9 +37,12 @@ public static class RenderBackendSelector
         {
             PlayerWindowMode.Windowed => (WindowState.Normal, WindowBorder.Resizable),
             PlayerWindowMode.MaximizedWindow => (WindowState.Maximized, WindowBorder.Resizable),
-            PlayerWindowMode.BorderlessFullscreen => (WindowState.Fullscreen, WindowBorder.Hidden),
+            // Silk/GLFW 的 Fullscreen 会切换 monitor video mode，语义是 exclusive fullscreen。
+            // Borderless 必须保持 desktop mode：先隐藏创建普通无框窗口，再由 RenderWindow 在首帧前铺满 monitor。
+            PlayerWindowMode.BorderlessFullscreen => (WindowState.Normal, WindowBorder.Hidden),
             _ => throw new ArgumentOutOfRangeException(nameof(options), options.WindowMode, "未知 Player window mode。"),
         };
+        windowOptions.IsVisible = options.WindowMode != PlayerWindowMode.BorderlessFullscreen;
         return windowOptions;
     }
 

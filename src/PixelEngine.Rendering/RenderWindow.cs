@@ -27,6 +27,8 @@ public sealed class RenderWindow : IDisposable
         GlCapabilities capabilities,
         GlDebugMessenger? debugMessenger,
         WindowsDxgiGlPresenter? dxgiPresenter,
+        int initialWidth,
+        int initialHeight,
         PlayerWindowMode initialWindowMode)
     {
         _window = window;
@@ -37,6 +39,8 @@ public sealed class RenderWindow : IDisposable
         Capabilities = capabilities;
         _debugMessenger = debugMessenger;
         _dxgiPresenter = dxgiPresenter;
+        InitialWidth = initialWidth;
+        InitialHeight = initialHeight;
         InitialWindowMode = initialWindowMode;
     }
 
@@ -64,6 +68,16 @@ public sealed class RenderWindow : IDisposable
     /// 创建窗口时在首帧之前应用的平台模式。该值不随用户后续手工 resize/maximize 改写。
     /// </summary>
     public PlayerWindowMode InitialWindowMode { get; }
+
+    /// <summary>
+    /// 创建窗口时请求的 Windowed 客户区/Presentation 宽度；不随 maximize 或 fullscreen 改写。
+    /// </summary>
+    public int InitialWidth { get; }
+
+    /// <summary>
+    /// 创建窗口时请求的 Windowed 客户区/Presentation 高度；不随 maximize 或 fullscreen 改写。
+    /// </summary>
+    public int InitialHeight { get; }
 
     /// <summary>
     /// 平台窗口焦点变化。GUI 平台桥用它向 ImGui 注入 focus event，避免 Alt-Tab 后残留按键或文本焦点。
@@ -368,6 +382,7 @@ public sealed class RenderWindow : IDisposable
         try
         {
             window.Initialize();
+            ApplyInitialBorderlessFullscreen(window, options.WindowMode);
             input = window.CreateInput();
             // --- GL 上下文：查询能力快照并按后端校验最低版本 ---
             gl = GL.GetApi(window);
@@ -410,6 +425,8 @@ public sealed class RenderWindow : IDisposable
                 capabilities,
                 debugMessenger,
                 dxgiPresenter,
+                options.Width,
+                options.Height,
                 options.WindowMode);
         }
         catch
@@ -453,6 +470,44 @@ public sealed class RenderWindow : IDisposable
             default:
                 throw new ArgumentOutOfRangeException(nameof(backend), backend, "未知渲染后端。");
         }
+    }
+
+    private static void ApplyInitialBorderlessFullscreen(IWindow window, PlayerWindowMode mode)
+    {
+        if (mode != PlayerWindowMode.BorderlessFullscreen)
+        {
+            return;
+        }
+
+        IMonitor monitor = window.Monitor ??
+            throw new InvalidOperationException("BorderlessFullscreen 初始化失败：窗口平台未提供目标显示器。");
+
+        // 此时窗口以 IsVisible=false + Normal + Hidden 创建，monitor 仍保持 desktop video mode。
+        // 在任何引擎帧或 SwapBuffers 之前把无框客户区铺满 monitor，再一次性显示，避免小窗闪烁与独占模式切屏。
+        Rectangle<int> bounds = monitor.Bounds;
+        Vector2D<int> position = bounds.Origin;
+        Vector2D<int> size = monitor.VideoMode.Resolution ?? bounds.Size;
+        if (size.X <= 0 || size.Y <= 0)
+        {
+            size = bounds.Size;
+        }
+        if (window.Native?.Win32 is { } handles &&
+            PlayerWindowModeProbe.TryCaptureWindowsMonitorRect(handles.Hwnd, out PlatformPixelRect windowsMonitorRect))
+        {
+            // GLFW 的 IMonitor.Bounds 在 Windows 返回 work area；borderless fullscreen 必须使用 rcMonitor 而非 rcWork。
+            position = new Vector2D<int>(windowsMonitorRect.Left, windowsMonitorRect.Top);
+            size = new Vector2D<int>(windowsMonitorRect.Width, windowsMonitorRect.Height);
+        }
+
+        if (size.X <= 0 || size.Y <= 0)
+        {
+            throw new InvalidOperationException("BorderlessFullscreen 初始化失败：目标显示器 bounds 非法。");
+        }
+
+        window.Position = position;
+        window.Size = size;
+        window.IsVisible = true;
+        window.DoEvents();
     }
 
     private static bool IsAtLeast(GlCapabilities capabilities, int major, int minor)

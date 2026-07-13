@@ -11,13 +11,14 @@ public sealed class RenderPipelineContractTests
 {
     /// <summary>验证三种 Player window mode 在创建窗口前映射到明确 Silk 状态。</summary>
     [Theory]
-    [InlineData(PlayerWindowMode.Windowed, WindowState.Normal, WindowBorder.Resizable)]
-    [InlineData(PlayerWindowMode.MaximizedWindow, WindowState.Maximized, WindowBorder.Resizable)]
-    [InlineData(PlayerWindowMode.BorderlessFullscreen, WindowState.Fullscreen, WindowBorder.Hidden)]
+    [InlineData(PlayerWindowMode.Windowed, WindowState.Normal, WindowBorder.Resizable, true)]
+    [InlineData(PlayerWindowMode.MaximizedWindow, WindowState.Maximized, WindowBorder.Resizable, true)]
+    [InlineData(PlayerWindowMode.BorderlessFullscreen, WindowState.Normal, WindowBorder.Hidden, false)]
     public void PlayerWindowModeMapsBeforeSilkWindowCreation(
         PlayerWindowMode mode,
         WindowState expectedState,
-        WindowBorder expectedBorder)
+        WindowBorder expectedBorder,
+        bool expectedVisible)
     {
         WindowOptions options = RenderBackendSelector.CreateWindowOptions(
             new RenderWindowOptions { WindowMode = mode },
@@ -25,6 +26,7 @@ public sealed class RenderPipelineContractTests
 
         Assert.Equal(expectedState, options.WindowState);
         Assert.Equal(expectedBorder, options.WindowBorder);
+        Assert.Equal(expectedVisible, options.IsVisible);
     }
 
     /// <summary>验证 presentation 描述不改变固定 world 几何并携带纹理 revision。</summary>

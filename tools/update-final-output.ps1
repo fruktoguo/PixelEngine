@@ -52,6 +52,7 @@ $expectedDemoRuntimeUiBackendActive = switch ($DemoRuntimeUiBackend) {
   default { throw "未知 Demo Runtime UI backend：$DemoRuntimeUiBackend" }
 }
 $expectedDemoRuntimeUiBackendFallback = $DemoRuntimeUiBackend -eq 'Ultralight'
+$expectedDemoWindowMode = 'Windowed'
 
 function Assert-CleanTrackedWorktree {
   $statusLines = & git -C $repoRoot status --porcelain --untracked-files=no
@@ -385,6 +386,7 @@ $demoBuildResult = Invoke-ProcessChecked `
     '-StartScene', 'scenes/lava-mine.scene',
     '-WindowWidth', '1080',
     '-WindowHeight', '720',
+    '-WindowMode', $expectedDemoWindowMode,
     '-VSync', 'true',
     '-RuntimeUiBackend', $DemoRuntimeUiBackend,
     '-ReleaseChannel', 'Production'
@@ -422,6 +424,14 @@ $demoProbeResult = Invoke-ProcessChecked `
 $demoProbeOk =
   $demoProbeResult.Stdout.Contains('window_frame_probe', [StringComparison]::Ordinal) -and
   $demoProbeResult.Stdout.Contains('PixelEngine.Demo', [StringComparison]::Ordinal) -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'requested' $expectedDemoWindowMode) -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'available' 'True') -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'applied' 'True') -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'reason' 'none') -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'visible' 'True') -and
+  (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'presentation' '1080x720') -and
+  ((Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'client_matches_presentation' 'True') -or
+    (Test-SummaryValue $demoProbeResult.Stdout 'player_window_probe ' 'presentation_fits_work' 'False')) -and
   (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'attached' 'True') -and
   (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'canvases' '3') -and
   (Test-SummaryValue $demoProbeResult.Stdout 'game_ui_probe ' 'requested' $DemoRuntimeUiBackend) -and
@@ -462,6 +472,7 @@ $manifest = [ordered]@{
   demoRuntimeUiBackendRequested = $DemoRuntimeUiBackend
   demoRuntimeUiBackendActive = $expectedDemoRuntimeUiBackendActive
   demoRuntimeUiBackendFallback = $expectedDemoRuntimeUiBackendFallback
+  demoWindowMode = $expectedDemoWindowMode
   editorSymbolsIncluded = $IncludeEditorSymbols.IsPresent
   editorDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'runtime-pdb-and-xml-pruned' }
   editorScriptReferenceAssembliesPath = $scriptReferenceAssembliesRelative
@@ -485,6 +496,8 @@ $manifest = [ordered]@{
     demoWindowProbe = [ordered]@{
       completed = $true
       unicodePath = $true
+      requestedMode = $expectedDemoWindowMode
+      applied = $true
       windowTicks = $DemoWindowTicks
       stdout = '_验证记录/logs/demo-window.stdout.log'
       stderr = '_验证记录/logs/demo-window.stderr.log'
