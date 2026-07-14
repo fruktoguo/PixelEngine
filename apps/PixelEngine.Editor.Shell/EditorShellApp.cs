@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Build;
@@ -132,6 +133,7 @@ internal sealed class EditorShellApp
 
     public static int Execute(string[] args)
     {
+        Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         EditorShellOptions? options = null;
         try
         {
@@ -232,6 +234,7 @@ internal sealed class EditorShellApp
         ScriptedHierarchyProbeState scriptedHierarchy = new();
         ScriptedDefaultWorkbenchProbeState scriptedDefaultWorkbench = new();
         ScriptedGameViewProbeState scriptedGameView = new();
+        ScriptedRuntimeInspectorProbeState scriptedRuntimeInspector = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!_exitRequested)
@@ -317,6 +320,11 @@ internal sealed class EditorShellApp
                 if (_options.ScriptedGameViewProbe)
                 {
                     RunScriptedGameViewProbeActions(executed, scriptedGameView);
+                }
+
+                if (_options.ScriptedRuntimeInspectorProbe)
+                {
+                    RunScriptedRuntimeInspectorProbeActions(executed, scriptedRuntimeInspector);
                 }
 
                 if (_options.ScriptedProbe)
@@ -406,6 +414,11 @@ internal sealed class EditorShellApp
                 break;
             }
 
+            if (_options.ScriptedRuntimeInspectorProbe && scriptedRuntimeInspector.Finished)
+            {
+                break;
+            }
+
             if (!_options.ScriptedBuildCancelProbe && _options.ScriptedBuildProbe && scriptedBuildCompleted)
             {
                 break;
@@ -472,6 +485,11 @@ internal sealed class EditorShellApp
         if (_options.ScriptedGameViewProbe)
         {
             WriteScriptedGameViewProbeSummary(scriptedGameView);
+        }
+
+        if (_options.ScriptedRuntimeInspectorProbe)
+        {
+            WriteScriptedRuntimeInspectorProbeSummary(scriptedRuntimeInspector);
         }
 
         if (_options.ScriptedBuildSettingsProbe)
@@ -731,13 +749,13 @@ internal sealed class EditorShellApp
 
             if (!state.ScriptHotReloadRequested)
             {
-                Scripting.ScriptHotReloadController controller = CurrentSession.Engine.Context.GetService<Scripting.ScriptHotReloadController>();
+                ScriptHotReloadController controller = CurrentSession.Engine.Context.GetService<ScriptHotReloadController>();
                 controller.RequestReloadFromDirectory($"{CurrentSession.Project.Name}.EditorScripts", CurrentSession.Project.ScriptSourcePath);
                 state.ScriptHotReloadRequested = controller.HasPendingReload;
                 if (state.ScriptHotReloadRequested)
                 {
-                    Scripting.ScriptHotReloadApplyResult result = CurrentSession.Engine.ApplyPendingScriptHotReload();
-                    state.ScriptHotReloadApplied = result.Status == Scripting.ScriptHotReloadStatus.Reloaded;
+                    ScriptHotReloadApplyResult result = CurrentSession.Engine.ApplyPendingScriptHotReload();
+                    state.ScriptHotReloadApplied = result.Status == ScriptHotReloadStatus.Reloaded;
                 }
 
                 return;
@@ -1353,6 +1371,92 @@ internal sealed class EditorShellApp
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
+    private void RunScriptedRuntimeInspectorProbeActions(
+        int executedTicks,
+        ScriptedRuntimeInspectorProbeState state)
+    {
+        if (CurrentSession is null || state.Finished)
+        {
+            return;
+        }
+
+        Engine engine = CurrentSession.Engine;
+        if (!state.PlayEntered && executedTicks >= 4)
+        {
+            Hosting.EditorPlaySessionResult result = CurrentSession.EnterPlayTemporary();
+            state.PlayEntered = result.Succeeded && engine.Mode == EngineExecutionMode.Play;
+            state.Diagnostic = result.Message;
+            if (!state.PlayEntered)
+            {
+                state.Finished = true;
+            }
+
+            return;
+        }
+
+        if (state.PlayEntered && !state.EntitySelected && executedTicks >= 12)
+        {
+            state.SelectedAtRenderRevision = CurrentSession
+                .CaptureScriptedRuntimeInspectorProbe()
+                .RenderRevision;
+            state.EntitySelected = CurrentSession.TrySelectRuntimeInspectorEntity(
+                ".PlayerController",
+                out state.EntityHandle);
+            if (!state.EntitySelected)
+            {
+                state.Diagnostic = "Play 场景中未找到包含 PlayerController 的 runtime entity。";
+                state.Finished = true;
+            }
+
+            return;
+        }
+
+        // 选择发生后至少保留 20 个完整窗口帧，让首次 dock、Scene texture、Hierarchy 与
+        // Inspector focus 都稳定后再截取 framebuffer；仅凭第一个成功 Draw 会产出局部黑帧。
+        if (!state.EntitySelected || executedTicks < 32)
+        {
+            return;
+        }
+
+        state.Snapshot = CurrentSession.CaptureScriptedRuntimeInspectorProbe();
+        bool renderedAfterSelection = state.Snapshot.RenderRevision > state.SelectedAtRenderRevision;
+        if (!renderedAfterSelection && executedTicks < 46)
+        {
+            return;
+        }
+
+        state.RemainedInPlay = engine.Mode == EngineExecutionMode.Play;
+        state.Completed = state.RemainedInPlay &&
+            renderedAfterSelection &&
+            state.Snapshot.SatisfiesAcceptance(state.EntityHandle);
+        state.Diagnostic = state.Completed
+            ? "Play Mode runtime entity 已选中，Inspector 的 Transform 与组件 label/value 拖拽表格已完成真实窗口绘制。"
+            : $"Runtime Inspector 探针未满足验收：mode={engine.Mode}, selected={state.EntitySelected}, revision={state.Snapshot.RenderRevision}/{state.SelectedAtRenderRevision}, resolved={state.Snapshot.EntityResolved}, transform={state.Snapshot.TransformTableRendered}, component_tables={state.Snapshot.ComponentPropertyTableCount}, numeric_drags={state.Snapshot.ComponentNumericDragFieldCount}。";
+        state.Finished = true;
+    }
+
+    private static void WriteScriptedRuntimeInspectorProbeSummary(ScriptedRuntimeInspectorProbeState state)
+    {
+        ScriptedRuntimeInspectorProbeSnapshot snapshot = state.Snapshot;
+        Console.WriteLine(
+            "editor_runtime_inspector_probe " +
+            "schema=pixelengine.editor-runtime-inspector-probe/v1, " +
+            $"completed={state.Completed}, " +
+            $"play_entered={state.PlayEntered}, " +
+            $"remained_in_play={state.RemainedInPlay}, " +
+            $"entity_selected={state.EntitySelected}, " +
+            $"entity_handle={SanitizeSummaryValue(state.EntityHandle)}, " +
+            $"entity_resolved={snapshot.EntityResolved}, " +
+            $"transform_table_rendered={snapshot.TransformTableRendered}, " +
+            $"component_headers={snapshot.ComponentHeaderCount}, " +
+            $"component_property_tables={snapshot.ComponentPropertyTableCount}, " +
+            $"component_numeric_drag_fields={snapshot.ComponentNumericDragFieldCount}, " +
+            $"component_vector_drag_fields={snapshot.ComponentVectorDragFieldCount}, " +
+            $"component_decimal_fields={snapshot.ComponentDecimalFieldCount}, " +
+            $"render_revision={snapshot.RenderRevision}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
     private void RunScriptedGameViewProbeActions(int executedTicks, ScriptedGameViewProbeState state)
     {
         if (CurrentSession is null || state.Finished)
@@ -1480,7 +1584,7 @@ internal sealed class EditorShellApp
 
     private static int CaptureGameUiStackDepth(Engine engine)
     {
-        return engine.Context.TryGetService(out PixelEngine.UI.GameUiHost host)
+        return engine.Context.TryGetService(out UI.GameUiHost host)
             ? host.Documents.StackCount
             : -1;
     }
@@ -1494,7 +1598,7 @@ internal sealed class EditorShellApp
         enabled = false;
         faulted = false;
         exception = string.Empty;
-        PixelEngine.Scripting.Scene? scriptScene = engine.CurrentScene?.ScriptScene;
+        Scripting.Scene? scriptScene = engine.CurrentScene?.ScriptScene;
         if (scriptScene is null)
         {
             return false;
@@ -1526,7 +1630,7 @@ internal sealed class EditorShellApp
     {
         centerX = 0f;
         visualCommands = 0;
-        PixelEngine.Scripting.Scene? scriptScene = engine.CurrentScene?.ScriptScene;
+        Scripting.Scene? scriptScene = engine.CurrentScene?.ScriptScene;
         if (scriptScene is null)
         {
             return false;
@@ -2772,6 +2876,30 @@ internal sealed class ScriptedDefaultWorkbenchProbeState
     public string BuildPackageArchive = string.Empty;
     public string BuildError = string.Empty;
     public ScriptedBuildProbeSnapshot BuildSnapshot = new();
+    public string Diagnostic = string.Empty;
+}
+
+/// <summary>
+/// 真实窗口 Play Mode runtime entity 选择与 Inspector 绘制探针状态。
+/// </summary>
+internal sealed class ScriptedRuntimeInspectorProbeState
+{
+    public bool PlayEntered;
+
+    public bool EntitySelected;
+
+    public bool RemainedInPlay;
+
+    public bool Completed;
+
+    public bool Finished;
+
+    public string EntityHandle = string.Empty;
+
+    public long SelectedAtRenderRevision;
+
+    public ScriptedRuntimeInspectorProbeSnapshot Snapshot;
+
     public string Diagnostic = string.Empty;
 }
 

@@ -82,6 +82,20 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.CaptureScriptedGameViewPresentation();
     }
 
+    /// <summary>选择包含指定 Behaviour 的 Play Mode 实体，供真实窗口 Inspector 探针使用。</summary>
+    public bool TrySelectRuntimeInspectorEntity(string behaviourTypeSuffix, out string entityHandle)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySelectRuntimeInspectorEntity(behaviourTypeSuffix, out entityHandle);
+    }
+
+    /// <summary>捕获最后一次实际完成绘制的 Play Mode Inspector 快照。</summary>
+    public ScriptedRuntimeInspectorProbeSnapshot CaptureScriptedRuntimeInspectorProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedRuntimeInspectorProbe();
+    }
+
     internal void FlushPendingAuthoringEdits()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

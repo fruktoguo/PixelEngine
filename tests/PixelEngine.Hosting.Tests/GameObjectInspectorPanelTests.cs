@@ -259,6 +259,32 @@ public sealed class GameObjectInspectorPanelTests
     }
 
     /// <summary>
+    /// 验证真实窗口探针只有在目标实体、Transform 表格、组件属性表与至少一个组件数值拖拽
+    /// 都实际完成 Draw 后才允许通过，避免仅选择 entity 就发布假绿证据。
+    /// </summary>
+    [Fact]
+    public void RuntimeInspectorProbeRequiresRenderedLabelValueAndDragControls()
+    {
+        ScriptedRuntimeInspectorProbeSnapshot snapshot = new(
+            "script:42",
+            EntityResolved: true,
+            TransformTableRendered: true,
+            ComponentHeaderCount: 3,
+            ComponentPropertyTableCount: 2,
+            ComponentNumericDragFieldCount: 12,
+            ComponentVectorDragFieldCount: 1,
+            ComponentDecimalFieldCount: 1,
+            RenderRevision: 7);
+
+        Assert.True(snapshot.SatisfiesAcceptance("script:42"));
+        Assert.False((snapshot with { EntityHandle = "script:41" }).SatisfiesAcceptance("script:42"));
+        Assert.False((snapshot with { TransformTableRendered = false }).SatisfiesAcceptance("script:42"));
+        Assert.False((snapshot with { ComponentPropertyTableCount = 0 }).SatisfiesAcceptance("script:42"));
+        Assert.False((snapshot with { ComponentNumericDragFieldCount = 0 }).SatisfiesAcceptance("script:42"));
+        Assert.False((snapshot with { RenderRevision = 0 }).SatisfiesAcceptance("script:42"));
+    }
+
+    /// <summary>
     /// 验证整数 Range 的下界向上取整、上界向下取整，且不把无可表示区间写成范围外值。
     /// </summary>
     [Fact]
@@ -420,8 +446,8 @@ public sealed class GameObjectInspectorPanelTests
     public void InspectorAssetLayoutResolvesReadableBoundedColumns()
     {
         Assert.Equal(72f, GameObjectInspectorPanel.ResolveInspectorLabelWidth(120f));
-        Assert.Equal(108f, GameObjectInspectorPanel.ResolveInspectorLabelWidth(300f), precision: 3);
-        Assert.Equal(128f, GameObjectInspectorPanel.ResolveInspectorLabelWidth(600f));
+        Assert.Equal(132f, GameObjectInspectorPanel.ResolveInspectorLabelWidth(300f), precision: 3);
+        Assert.Equal(144f, GameObjectInspectorPanel.ResolveInspectorLabelWidth(600f));
         Assert.Equal(96f, GameObjectInspectorPanel.ResolveTextPreviewHeight(120f));
         Assert.Equal(180f, GameObjectInspectorPanel.ResolveTextPreviewHeight(400f));
         Assert.Equal(260f, GameObjectInspectorPanel.ResolveTextPreviewHeight(1000f));

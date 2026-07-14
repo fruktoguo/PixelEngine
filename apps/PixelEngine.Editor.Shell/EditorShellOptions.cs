@@ -40,6 +40,11 @@ internal sealed record EditorShellOptions(
     /// </summary>
     public bool ScriptedGameViewProbe { get; init; }
 
+    /// <summary>
+    /// 是否运行真实 Play Mode runtime entity 选择与 Inspector 绘制探针。
+    /// </summary>
+    public bool ScriptedRuntimeInspectorProbe { get; init; }
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -58,6 +63,7 @@ internal sealed record EditorShellOptions(
         bool scriptedDefaultWorkbenchProbe = false;
         bool scriptedPreferencesProbe = false;
         bool scriptedGameViewProbe = false;
+        bool scriptedRuntimeInspectorProbe = false;
         bool ephemeralUserState = false;
         bool reopenLastProject = true;
         string? userDataDirectory = null;
@@ -113,6 +119,9 @@ internal sealed record EditorShellOptions(
                 case "--scripted-gameview-probe":
                     scriptedGameViewProbe = true;
                     break;
+                case "--scripted-runtime-inspector-probe":
+                    scriptedRuntimeInspectorProbe = true;
+                    break;
                 case "--build-output":
                     buildOutputPath = RequireValue(args, ref i, arg);
                     break;
@@ -145,13 +154,15 @@ internal sealed record EditorShellOptions(
             scriptedHierarchyProbe ||
             scriptedDefaultWorkbenchProbe ||
             scriptedPreferencesProbe ||
-            scriptedGameViewProbe;
+            scriptedGameViewProbe ||
+            scriptedRuntimeInspectorProbe;
         return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory)
         {
             UserDataDirectory = string.IsNullOrWhiteSpace(userDataDirectory) ? null : userDataDirectory.Trim(),
             EphemeralUserState = ephemeralUserState || hasScriptedProbe,
             ReopenLastProject = reopenLastProject,
             ScriptedGameViewProbe = scriptedGameViewProbe,
+            ScriptedRuntimeInspectorProbe = scriptedRuntimeInspectorProbe,
         };
     }
 

@@ -81,6 +81,62 @@ internal sealed class EditorShellHostExtension :
             ScriptedGameViewPresentationSnapshot.Missing;
     }
 
+    /// <summary>在 Play/Paused 中选择包含指定 Behaviour 的 runtime entity，并把 Inspector 切到前台。</summary>
+    public bool TrySelectRuntimeInspectorEntity(string behaviourTypeSuffix, out string entityHandle)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(behaviourTypeSuffix);
+        entityHandle = string.Empty;
+        if (CapturePlayMode() == EditorMode.Edit ||
+            _runtimeHierarchy is null ||
+            _gameObjectInspectorPanel is null)
+        {
+            return false;
+        }
+
+        SceneHierarchySnapshot hierarchy = _runtimeHierarchy.Capture();
+        for (int i = 0; i < hierarchy.Entities.Count; i++)
+        {
+            SceneHierarchyEntityItem item = hierarchy.Entities[i];
+            if (!_runtimeHierarchy.TryGetEntity(item.Handle, out Scripting.ScriptEntityInspection entity))
+            {
+                continue;
+            }
+
+            bool matched = false;
+            for (int componentIndex = 0; componentIndex < entity.Components.Length; componentIndex++)
+            {
+                if (entity.Components[componentIndex].TypeName.EndsWith(
+                    behaviourTypeSuffix,
+                    StringComparison.Ordinal))
+                {
+                    matched = true;
+                    break;
+                }
+            }
+
+            if (!matched)
+            {
+                continue;
+            }
+
+            _sceneModel?.Select(null);
+            _editor.Selection.SelectEntity(item.Handle);
+            _ = _editor.TryShowPanel(EditorDockSpace.SceneHierarchyWindowTitle);
+            _ = _editor.TryShowPanel(EditorDockSpace.InspectorWindowTitle);
+            _gameObjectInspectorPanel.RequestFocus();
+            entityHandle = item.Handle;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>捕获最后一次实际完成 Draw 的 runtime Inspector 结构快照。</summary>
+    public ScriptedRuntimeInspectorProbeSnapshot CaptureScriptedRuntimeInspectorProbe()
+    {
+        return _gameObjectInspectorPanel?.CaptureScriptedRuntimeInspectorProbe() ?? default;
+    }
+
     public EditorRenderBridge? Bridge { get; private set; }
 
     public bool TryShowPanel(string title)

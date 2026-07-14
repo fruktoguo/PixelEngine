@@ -82,11 +82,18 @@ internal sealed class GameObjectInspectorPanel(
     private long _assetPreviewCacheModifiedTicks = -1;
     private AssetBrowserDetailedPreview? _assetPreviewCache;
     private AssetPreviewThumbnailLease? _assetPreviewThumbnail;
+    private ScriptedRuntimeInspectorProbeSnapshot _runtimeInspectorProbe;
+    private long _runtimeInspectorRenderRevision;
     private bool _disposed;
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
     internal string Status { get; private set; } = ReadyStatus;
+
+    internal ScriptedRuntimeInspectorProbeSnapshot CaptureScriptedRuntimeInspectorProbe()
+    {
+        return _runtimeInspectorProbe;
+    }
 
     public bool Visible
     {
@@ -651,14 +658,55 @@ internal sealed class GameObjectInspectorPanel(
     private static void DrawPropertyLabel(string label, bool disabled = false)
     {
         ImGui.TableSetBgColor(ImGuiTableBgTarget.CellBg, ImGui.GetColorU32(new Vector4(0.12f, 0.12f, 0.12f, 1f)));
+        string visibleLabel = ResolveVisiblePropertyLabel(label, ImGui.GetContentRegionAvail().X);
         if (disabled)
         {
-            ImGui.TextDisabled(label);
+            ImGui.TextDisabled(visibleLabel);
         }
         else
         {
-            ImGui.TextUnformatted(label);
+            ImGui.TextUnformatted(visibleLabel);
         }
+    }
+
+    private static string ResolveVisiblePropertyLabel(string label, float availableWidth)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        float width = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        if (label.Length == 0 || ImGui.CalcTextSize(label).X <= width)
+        {
+            return label;
+        }
+
+        const string Ellipsis = "…";
+        float ellipsisWidth = ImGui.CalcTextSize(Ellipsis).X;
+        if (ellipsisWidth >= width)
+        {
+            return Ellipsis;
+        }
+
+        int lower = 0;
+        int upper = label.Length;
+        while (lower < upper)
+        {
+            int candidate = lower + ((upper - lower + 1) / 2);
+            string prefix = label[..candidate];
+            if (ImGui.CalcTextSize(prefix).X + ellipsisWidth <= width)
+            {
+                lower = candidate;
+            }
+            else
+            {
+                upper = candidate - 1;
+            }
+        }
+
+        if (lower > 0 && char.IsHighSurrogate(label[lower - 1]))
+        {
+            lower--;
+        }
+
+        return string.Concat(label.AsSpan(0, lower), Ellipsis);
     }
 
     private static bool BeginInspectorPropertyTable(string id, int columns, ImGuiTableFlags extraFlags = ImGuiTableFlags.None)
@@ -699,7 +747,7 @@ internal sealed class GameObjectInspectorPanel(
     internal static float ResolveInspectorLabelWidth(float availableWidth)
     {
         float width = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
-        return Math.Clamp(width * 0.36f, 72f, 128f);
+        return Math.Clamp(width * 0.44f, 72f, 144f);
     }
 
     internal static float ResolveTextPreviewHeight(float availableHeight)
@@ -976,16 +1024,34 @@ internal sealed class GameObjectInspectorPanel(
         if (_runtimeSource is null || !_runtimeSource.TryGetEntity(handle, out ScriptEntityInspection entity))
         {
             _ = CommitPendingRuntimeDecimalFieldEdit();
+            _runtimeInspectorProbe = new ScriptedRuntimeInspectorProbeSnapshot(
+                handle,
+                EntityResolved: false,
+                TransformTableRendered: false,
+                ComponentHeaderCount: 0,
+                ComponentPropertyTableCount: 0,
+                ComponentNumericDragFieldCount: 0,
+                ComponentVectorDragFieldCount: 0,
+                ComponentDecimalFieldCount: 0,
+                RenderRevision: ++_runtimeInspectorRenderRevision);
             ImGui.TextUnformatted("Runtime entity is no longer available");
             return;
         }
 
-        ImGui.TextColored(new Vector4(0.45f, 0.72f, 1f, 1f), "Play Mode · changes are temporary");
+        bool transformTableRendered = false;
+        int componentHeaderCount = 0;
+        int componentPropertyTableCount = 0;
+        int componentNumericDragFieldCount = 0;
+        int componentVectorDragFieldCount = 0;
+        int componentDecimalFieldCount = 0;
+        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.45f, 0.72f, 1f, 1f));
+        ImGui.TextWrapped("Play Mode · changes are temporary");
+        ImGui.PopStyleColor();
         ImGui.TextUnformatted($"{entity.Handle} · Entity {entity.EntityId}");
         if (entity.Transform is not null)
         {
             ImGui.SeparatorText("Transform (Runtime)");
-            DrawRuntimeTransform(entity);
+            transformTableRendered = DrawRuntimeTransform(entity);
         }
 
         ImGui.SeparatorText("Components (Runtime)");
@@ -993,6 +1059,7 @@ internal sealed class GameObjectInspectorPanel(
         {
             ScriptComponentInspection component = entity.Components[i];
             string componentName = GetComponentDisplayName(component.TypeName);
+            componentHeaderCount++;
             if (!DrawInspectorComponentHeader(
                 $"{componentName}##runtime_component_{entity.EntityId}_{i}"))
             {
@@ -1016,17 +1083,51 @@ internal sealed class GameObjectInspectorPanel(
                 continue;
             }
 
+            componentPropertyTableCount++;
             SetupInspectorPropertyColumns(availableWidth);
             for (int fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
             {
-                DrawRuntimeField(entity.Handle, i, fields[fieldIndex]);
+                ScriptFieldDescriptor field = fields[fieldIndex];
+                if (field.CanWrite && field.Kind == ScriptFieldKind.Number)
+                {
+                    Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+                    if (target == typeof(decimal))
+                    {
+                        componentDecimalFieldCount++;
+                    }
+                    else if (HasValidNumericRange(field) &&
+                             field.Value is not null &&
+                             IsValidNumericSerializedValue(
+                                 target,
+                                 FormatRuntimeNumericValue(field.Value, target)))
+                    {
+                        componentNumericDragFieldCount++;
+                    }
+                }
+                else if (field.CanWrite && field.Kind == ScriptFieldKind.Vector)
+                {
+                    componentVectorDragFieldCount++;
+                }
+
+                DrawRuntimeField(entity.Handle, i, field);
             }
 
             EndInspectorPropertyTable();
         }
+
+        _runtimeInspectorProbe = new ScriptedRuntimeInspectorProbeSnapshot(
+            entity.Handle,
+            EntityResolved: true,
+            transformTableRendered,
+            componentHeaderCount,
+            componentPropertyTableCount,
+            componentNumericDragFieldCount,
+            componentVectorDragFieldCount,
+            componentDecimalFieldCount,
+            RenderRevision: ++_runtimeInspectorRenderRevision);
     }
 
-    private void DrawRuntimeTransform(ScriptEntityInspection entity)
+    private bool DrawRuntimeTransform(ScriptEntityInspection entity)
     {
         Transform transform = entity.Transform!;
         float availableWidth = ImGui.GetContentRegionAvail().X;
@@ -1037,7 +1138,7 @@ internal sealed class GameObjectInspectorPanel(
             inlineAxes ? "runtime-transform-fields-inline" : "runtime-transform-fields-stacked",
             columnCount))
         {
-            return;
+            return false;
         }
 
         float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
@@ -1063,7 +1164,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
         ImGui.SetNextItemWidth(-1f);
-        bool anyChanged = ImGui.DragFloat("##runtime-position-x", ref x, 0.25f);
+        bool anyChanged = ImGui.DragFloat("##runtime-position-x", ref x, 0.25f, "%g");
         DrawTransformDragTooltip();
 
         if (inlineAxes)
@@ -1079,7 +1180,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("Y", InspectorAxis.Y);
         _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
-        anyChanged |= ImGui.DragFloat("##runtime-position-y", ref y, 0.25f);
+        anyChanged |= ImGui.DragFloat("##runtime-position-y", ref y, 0.25f, "%g");
         DrawTransformDragTooltip();
 
         ImGui.TableNextRow();
@@ -1089,7 +1190,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("Z", InspectorAxis.Z);
         _ = ImGui.TableSetColumnIndex(2);
         ImGui.SetNextItemWidth(-1f);
-        anyChanged |= ImGui.DragFloat("##runtime-rotation-z", ref rotationDegrees, 0.5f);
+        anyChanged |= ImGui.DragFloat("##runtime-rotation-z", ref rotationDegrees, 0.5f, "%g");
         DrawTransformDragTooltip();
 
         ImGui.TableNextRow();
@@ -1099,7 +1200,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
         ImGui.SetNextItemWidth(-1f);
-        anyChanged |= ImGui.DragFloat("##runtime-scale-x", ref scaleX, 0.01f);
+        anyChanged |= ImGui.DragFloat("##runtime-scale-x", ref scaleX, 0.01f, "%g");
         DrawTransformDragTooltip();
 
         if (inlineAxes)
@@ -1115,7 +1216,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("Y", InspectorAxis.Y);
         _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
-        anyChanged |= ImGui.DragFloat("##runtime-scale-y", ref scaleY, 0.01f);
+        anyChanged |= ImGui.DragFloat("##runtime-scale-y", ref scaleY, 0.01f, "%g");
         DrawTransformDragTooltip();
         EndInspectorPropertyTable();
 
@@ -1129,6 +1230,8 @@ internal sealed class GameObjectInspectorPanel(
                 scaleX,
                 scaleY);
         }
+
+        return true;
     }
 
     private void DrawRuntimeField(string handle, int componentIndex, ScriptFieldDescriptor field)
@@ -1389,7 +1492,8 @@ internal sealed class GameObjectInspectorPanel(
             bool changed = ImGui.DragFloat(
                 $"##runtime-vector-{handle}-{componentIndex}-{field.Name}-{i}",
                 ref value,
-                0.1f);
+                0.1f,
+                "%g");
             if (changed && float.IsFinite(value))
             {
                 values[i] = value;
@@ -1741,7 +1845,7 @@ internal sealed class GameObjectInspectorPanel(
         float x = transform.X;
         float y = transform.Y;
         ImGui.SetNextItemWidth(-1f);
-        bool changed = ImGui.DragFloat("##position-x", ref x, 0.25f);
+        bool changed = ImGui.DragFloat("##position-x", ref x, 0.25f, "%g");
         if (changed)
         {
             transform.X = x;
@@ -1762,7 +1866,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("Y", InspectorAxis.Y);
         _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.DragFloat("##position-y", ref y, 0.25f);
+        changed = ImGui.DragFloat("##position-y", ref y, 0.25f, "%g");
         if (changed)
         {
             transform.Y = y;
@@ -1778,7 +1882,7 @@ internal sealed class GameObjectInspectorPanel(
         _ = ImGui.TableSetColumnIndex(2);
         float rotation = RadiansToDegrees(transform.RotationRadians);
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.DragFloat("##rotation-z", ref rotation, 0.5f);
+        changed = ImGui.DragFloat("##rotation-z", ref rotation, 0.5f, "%g");
         if (changed)
         {
             transform.RotationRadians = DegreesToRadians(rotation);
@@ -1795,7 +1899,7 @@ internal sealed class GameObjectInspectorPanel(
         float scaleX = transform.ScaleX;
         float scaleY = transform.ScaleY;
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.DragFloat("##scale-x", ref scaleX, 0.01f);
+        changed = ImGui.DragFloat("##scale-x", ref scaleX, 0.01f, "%g");
         if (changed)
         {
             transform.ScaleX = scaleX;
@@ -1816,7 +1920,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAxisLabel("Y", InspectorAxis.Y);
         _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
         ImGui.SetNextItemWidth(-1f);
-        changed = ImGui.DragFloat("##scale-y", ref scaleY, 0.01f);
+        changed = ImGui.DragFloat("##scale-y", ref scaleY, 0.01f, "%g");
         if (changed)
         {
             transform.ScaleY = scaleY;
@@ -2714,7 +2818,7 @@ internal sealed class GameObjectInspectorPanel(
         BeginPropertyRow(label);
         ImGui.SetNextItemWidth(-1f);
         float candidate = value;
-        bool changed = ImGui.DragFloat(id, ref candidate, speed);
+        bool changed = ImGui.DragFloat(id, ref candidate, speed, "%g");
         if (changed && float.IsFinite(candidate))
         {
             value = MathF.Max(0.0001f, candidate);
@@ -3588,7 +3692,7 @@ internal sealed class GameObjectInspectorPanel(
                     float value = float.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out float parsed) && float.IsFinite(parsed)
                         ? parsed
                         : 0f;
-                    if (!DragScalarValue(id, ImGuiDataType.Float, ref value, 0.1f) ||
+                    if (!DragScalarValue(id, ImGuiDataType.Float, ref value, 0.1f, "%g") ||
                         !float.IsFinite(value))
                     {
                         return false;
@@ -3604,7 +3708,7 @@ internal sealed class GameObjectInspectorPanel(
                     double value = double.TryParse(current, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) && double.IsFinite(parsed)
                         ? parsed
                         : 0d;
-                    if (!DragScalarValue(id, ImGuiDataType.Double, ref value, 0.1f) ||
+                    if (!DragScalarValue(id, ImGuiDataType.Double, ref value, 0.1f, "%g") ||
                         !double.IsFinite(value))
                     {
                         return false;
@@ -3634,12 +3738,15 @@ internal sealed class GameObjectInspectorPanel(
         string id,
         ImGuiDataType dataType,
         ref T value,
-        float speed)
+        float speed,
+        string? format = null)
         where T : unmanaged
     {
         fixed (T* valuePointer = &value)
         {
-            return ImGui.DragScalar(id, dataType, valuePointer, speed);
+            return format is null
+                ? ImGui.DragScalar(id, dataType, valuePointer, speed)
+                : ImGui.DragScalar(id, dataType, valuePointer, speed, format);
         }
     }
 
@@ -3934,7 +4041,8 @@ internal sealed class GameObjectInspectorPanel(
             bool changed = ImGui.DragFloat(
                 $"##vector-{stableId}-{componentIndex}-{fieldName}-{i}",
                 ref componentValue,
-                0.1f);
+                0.1f,
+                "%g");
             bool validChange = changed && float.IsFinite(componentValue);
             if (validChange)
             {
@@ -4178,6 +4286,32 @@ internal enum InspectorAxis
     Y,
     Z,
     W,
+}
+
+/// <summary>
+/// 真实窗口 runtime Inspector 探针快照；只在对应实体的 Inspector 窗口实际完成 Draw 时递增 revision。
+/// </summary>
+internal readonly record struct ScriptedRuntimeInspectorProbeSnapshot(
+    string EntityHandle,
+    bool EntityResolved,
+    bool TransformTableRendered,
+    int ComponentHeaderCount,
+    int ComponentPropertyTableCount,
+    int ComponentNumericDragFieldCount,
+    int ComponentVectorDragFieldCount,
+    int ComponentDecimalFieldCount,
+    long RenderRevision)
+{
+    public bool SatisfiesAcceptance(string expectedHandle)
+    {
+        return RenderRevision > 0 &&
+            EntityResolved &&
+            TransformTableRendered &&
+            ComponentHeaderCount > 0 &&
+            ComponentPropertyTableCount > 0 &&
+            ComponentNumericDragFieldCount > 0 &&
+            string.Equals(EntityHandle, expectedHandle, StringComparison.Ordinal);
+    }
 }
 
 internal sealed class RuntimeDecimalFieldTextEditState(

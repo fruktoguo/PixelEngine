@@ -54,11 +54,24 @@ public sealed class EditorShellOptionsTests
     [InlineData("--scripted-default-workbench-probe")]
     [InlineData("--scripted-preferences-probe")]
     [InlineData("--scripted-gameview-probe")]
+    [InlineData("--scripted-runtime-inspector-probe")]
     public void EveryScriptedProbeDefaultsToEphemeralUserState(string probeFlag)
     {
         EditorShellOptions options = EditorShellOptions.Parse([probeFlag]);
 
         Assert.True(options.EphemeralUserState);
+    }
+
+    /// <summary>
+    /// 验证 runtime Inspector 真实窗口探针使用独立开关，不会误启用 Game View 探针。
+    /// </summary>
+    [Fact]
+    public void ParseRecognizesRuntimeInspectorProbeIndependently()
+    {
+        EditorShellOptions options = EditorShellOptions.Parse(["--scripted-runtime-inspector-probe"]);
+
+        Assert.True(options.ScriptedRuntimeInspectorProbe);
+        Assert.False(options.ScriptedGameViewProbe);
     }
 
     /// <summary>
