@@ -744,15 +744,15 @@
     {
       "entryId": "ui-004-canvas-draft-build-settings-20260714",
       "taskIds": ["UI-004"],
-      "evidenceState": "local_canvas_draft_build_commit_complete_clean_final_output_pending",
+      "evidenceState": "clean_final_output_complete_external_input_dpi_review_pending",
       "commit": "1f9e5b6e1d63118dcf95314ceebfbdbf9cf30e52",
       "runSessionId": "local-20260714-ui004-canvas-draft-build-settings",
       "runIdentityStatus": "captured_commit_bound_local_run",
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; real 1024x720 desktop GL Editor framebuffer",
-      "command": "full PixelEngine.Hosting.Tests Release; focused EditorConsoleStoreTests and HostingProjectDisciplineTests; solution Release build; commit-bound Editor scripted build-player win-x64/r2r/Release package and audit; tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; pwsh -NoProfile -File tools/run-editor-build-settings-probe.ps1 -OutputRoot artifacts/editor-build-settings-probe/1f9e5b6e -MaxAttempts 3 -TimeoutSeconds 180; task and evidence catalog validation",
+      "command": "full PixelEngine.Hosting.Tests Release; focused EditorConsoleStoreTests and HostingProjectDisciplineTests; solution Release build; commit-bound Editor scripted build-player win-x64/r2r/Release package and audit; tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; tools/run-editor-build-settings-probe.ps1; detached clean worktree tools/update-final-output.ps1 win-x64/r2r/Release/RmlUi; clean and promoted root tools/verify-final-output.ps1; promoted root Player 80-frame run; task and evidence catalog validation",
       "reportPath": "docs/evidence-2026-07-14-ui-004-canvas-draft-build-settings.md",
-      "sha256": "a027edfbe488eda2c620a52ec8f8e62019f1e63e895b12835c285ab9d9edafa2",
-      "notes": "Invalid Canvas and CanvasScaler drafts now remain recoverable across Inspector, projection, Play, Save and scene/project open. Build and Build And Run flush, validate and save the current dirty scene before starting build-player, and a real R2R package passes audit. The narrow Build Settings panel uses a readable label/value table; an isolated 20-frame commit-bound runner verifies profile roundtrip and complete opaque framebuffer regions. Physical input, different-DPI/cross-screen, reviewer and clean final-output refresh remain, so UI-004 stays active."
+      "sha256": "3897d4e22b220d579e15ae30d3d45fec5eb7f2a25a1d19c31f128259c6440543",
+      "notes": "Invalid Canvas and CanvasScaler drafts now remain recoverable across Inspector, projection, Play, Save and scene/project open. Build and Build And Run flush, validate and save the current dirty scene before starting build-player, and a real R2R package passes audit. The narrow Build Settings panel uses a readable label/value table; an isolated 20-frame commit-bound runner verifies profile roundtrip and complete opaque framebuffer regions. A detached clean worktree and promoted root final output pass the packaged Editor matrix, Unicode-path RmlUi Player, 392 checksums and root 80-frame replay. Physical input, different-DPI/cross-screen and reviewer remain, so UI-004 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
