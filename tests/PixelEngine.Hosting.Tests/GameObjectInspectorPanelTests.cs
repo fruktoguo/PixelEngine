@@ -1309,6 +1309,43 @@ public sealed class GameObjectInspectorPanelTests
     }
 
     /// <summary>
+    /// 验证可由 Canvas authoring 草稿触发的路径与 scaler 校验失败会留在 Inspector 诊断中，
+    /// 而不是逃出 Draw 并终止整个 Editor frame。
+    /// </summary>
+    [Fact]
+    public void CanvasInspectorSurfacesRecoverableValidationFailures()
+    {
+        EditorSceneModel scene = EditorSceneModel.Empty("canvas-invalid-draft");
+        EditorGameObject canvas = scene.Create("Canvas");
+        canvas.WebCanvas = new EditorWebCanvasComponent
+        {
+            Primary = true,
+            ManifestPath = "../outside.json",
+        };
+        canvas.CanvasScaler = new EditorCanvasScalerComponent();
+        using GameObjectInspectorPanel panel = new(scene, new EditorUndoStack(), new ScriptAssemblyRegistry());
+
+        CanvasInspectorSnapshot invalidPath = panel.CaptureCanvasInspector(canvas.StableId);
+
+        Assert.True(invalidPath.HasConflict);
+        Assert.False(invalidPath.IsRuntimeEnabled);
+        Assert.Contains("不能逃逸", invalidPath.Diagnostic, StringComparison.Ordinal);
+
+        canvas.WebCanvas.ManifestPath = "ui/ui-manifest.json";
+        canvas.CanvasScaler.Settings = UiCanvasScalerSettings.Default with
+        {
+            ScaleMode = UiScaleMode.ScaleWithScreenSize,
+            ReferenceWidth = float.NaN,
+        };
+
+        CanvasInspectorSnapshot invalidScaler = panel.CaptureCanvasInspector(canvas.StableId);
+
+        Assert.True(invalidScaler.HasConflict);
+        Assert.False(invalidScaler.IsRuntimeEnabled);
+        Assert.Contains("有限正数", invalidScaler.Diagnostic, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 prefab 源没有内建 Canvas 时，scene instance 的结构 override 仍可在 baseline 刷新后保留。
     /// </summary>
     [Fact]
