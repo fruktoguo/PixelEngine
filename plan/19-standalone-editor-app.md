@@ -103,6 +103,8 @@ Game View 在 Edit 中可以显示世界 presentation 供构图，但 runtime We
 
 EditorShell 必须区分工程级 Settings 与用户级 Preferences：`Project Settings` / `Player Settings` / `Build Settings` 继续随工程入盘；`Edit > Preferences...` 独立保存在用户 AppData，且在 ProjectPicker 与工程工作台两种状态都可打开。Preferences 使用左侧类别导航，首批类别为 Appearance、General、External Tools 与 Shortcuts；只展示已经接入真实行为的选项，不提供无效的语言或快捷键编辑占位。
 
+Preferences 的可编辑项必须复用 Inspector / Settings 的 Unity-like 信息层级：标签固定在左列、输入值与解释文字固定在右列，并以行底色和纵向分界保证 label/value 在暗色主题下可快速扫描；label 列宽按可用宽度和 UI Scale 响应式收缩，窄窗口优先保留可编辑 value 区，不能退回 ImGui 默认的 value-before-label 布局。Appearance、General、External Tools 与 Shortcuts 中对用户可见的帮助、诊断和操作标题全部进入中英文语言包，切换语言后不得残留硬编码的另一种语言。
+
 `UI Scale` 是 Editor 视觉密度的单一权威值，范围 75%–200%，标准档包含 100%、125%、150%、175%、200%。它必须同时驱动启动时 CJK 字体 atlas 尺寸、当前 ImGui context 的字体显示比例、主题 padding/spacing 等 style metrics，以及 Shell 顶部工具栏等显式像素尺寸；不能只放大文字。偏好变更立即应用并原子持久化，重启后以目标字号重新构建字体 atlas，避免 4K 屏长期使用位图放大。`Save layout on exit` 与 `External script editor` 属于用户级设置；旧 `ProjectSettingsDto.EditorPreferences` 暂留为只读兼容来源并在首次加载全局偏好时迁移，不再出现在 Project Settings 面板，也不再由工程设置探针写入。
 
 实现状态：commit `8d8598fc` 已完成上述自动化切片，并把默认可见面板收敛为 Hierarchy、Scene / Game View、Inspector、Project / Console；其余窗口经分类 Window 菜单按需打开。稳定自动化报告见 [`docs/evidence-2026-07-10-editor-preferences-ui-scale.md`](../docs/evidence-2026-07-10-editor-preferences-ui-scale.md)。真实 4K 显示器人工操作、菜单点击与完整 author→play→edit→build→run reviewer 仍归 M15，不因 scripted framebuffer probe 关闭。

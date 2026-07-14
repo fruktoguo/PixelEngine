@@ -191,8 +191,8 @@ internal sealed class EditorPreferencesWindow(
         string diagnostic = string.IsNullOrWhiteSpace(_diagnostic) ? _store.LastDiagnostic : _diagnostic;
         if (!string.IsNullOrWhiteSpace(diagnostic))
         {
-            ImGui.SeparatorText("Diagnostic");
-            ImGui.TextWrapped(diagnostic);
+            ImGui.SeparatorText(EditorLocalization.Get("prefs.diagnostic", "Diagnostic"));
+            TextWrappedUnformatted(diagnostic);
         }
     }
 
@@ -220,10 +220,18 @@ internal sealed class EditorPreferencesWindow(
     private void DrawAppearance()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.appearance", "Appearance"));
+        float scale = EditorUiScale.Normalize(_store.Current.UiScale);
+        if (!BeginPreferenceFields("preferences_appearance_fields", scale))
+        {
+            return;
+        }
+
+        NextPreferenceField(EditorLocalization.Get("prefs.language", "Language"));
         DrawLanguageSelector();
+        NextPreferenceField(EditorLocalization.Get("prefs.uiScale", "UI Scale"));
         float percent = EditorUiScale.ToPercent(_store.Current.UiScale);
         if (ImGui.SliderFloat(
-            EditorLocalization.Get("prefs.uiScale", "UI Scale"),
+            "##preferences-ui-scale",
             ref percent,
             EditorUiScale.Minimum * 100f,
             EditorUiScale.Maximum * 100f,
@@ -233,12 +241,15 @@ internal sealed class EditorPreferencesWindow(
             _ = Update(_store.Current with { UiScale = nextScale });
         }
 
-        ImGui.TextWrapped("4K 显示器推荐 150%。字体、菜单、间距、滚动条和工具栏尺寸会一起缩放。");
-        ImGui.TextWrapped("缩放会立即应用；重启后字体 atlas 会按目标像素大小重建，以获得最清晰的文字。");
-        ImGui.Spacing();
-        ImGui.TextUnformatted(EditorLocalization.Get("prefs.theme", "Theme"));
-        ImGui.SameLine();
+        NextPreferenceHelp(EditorLocalization.Get(
+            "prefs.uiScaleHelp",
+            "150% is recommended for 4K displays. Fonts, menus, spacing, scrollbars, and toolbar sizes scale together."));
+        NextPreferenceHelp(EditorLocalization.Get(
+            "prefs.uiScaleRestartHelp",
+            "Scaling applies immediately. After restart, the font atlas is rebuilt at the target pixel size for the sharpest text."));
+        NextPreferenceField(EditorLocalization.Get("prefs.theme", "Theme"));
         ImGui.TextDisabled("Unity 6 Dark");
+        ImGui.EndTable();
     }
 
     private void DrawLanguageSelector()
@@ -254,7 +265,7 @@ internal sealed class EditorPreferencesWindow(
             }
         }
 
-        if (!ImGui.BeginCombo(EditorLocalization.Get("prefs.language", "Language"), currentDisplay))
+        if (!ImGui.BeginCombo("##preferences-language", currentDisplay))
         {
             return;
         }
@@ -281,40 +292,65 @@ internal sealed class EditorPreferencesWindow(
     private void DrawGeneral()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.general", "General"));
+        float scale = EditorUiScale.Normalize(_store.Current.UiScale);
+        if (!BeginPreferenceFields("preferences_general_fields", scale))
+        {
+            return;
+        }
+
+        NextPreferenceField(EditorLocalization.Get("prefs.saveLayout", "Save layout continuously"));
         bool saveLayout = _store.Current.SaveLayoutOnExit;
-        if (ImGui.Checkbox(EditorLocalization.Get("prefs.saveLayout", "Save layout continuously"), ref saveLayout))
+        if (ImGui.Checkbox("##preferences-save-layout", ref saveLayout))
         {
             _ = Update(_store.Current with { SaveLayoutOnExit = saveLayout });
         }
 
-        ImGui.TextWrapped("关闭时保存窗口停靠和尺寸；关闭此选项会保留上一次已保存的布局。");
+        NextPreferenceHelp(EditorLocalization.Get(
+            "prefs.saveLayoutHelp",
+            "Saves window docking and sizes continuously. When disabled, the last saved layout is preserved."));
+        NextPreferenceField(EditorLocalization.Get("prefs.reopenProject", "Reopen last project on startup"));
         bool reopenLastProject = _store.Current.ReopenLastProject;
-        if (ImGui.Checkbox(EditorLocalization.Get("prefs.reopenProject", "Reopen last project on startup"), ref reopenLastProject))
+        if (ImGui.Checkbox("##preferences-reopen-project", ref reopenLastProject))
         {
             _ = Update(_store.Current with { ReopenLastProject = reopenLastProject });
         }
 
-        ImGui.TextWrapped("无显式 --project 时恢复最后一次成功打开的工程；自动化和上次异常退出不会盲目重试。");
+        NextPreferenceHelp(EditorLocalization.Get(
+            "prefs.reopenProjectHelp",
+            "Without an explicit --project, reopens the last successfully opened project. Automation and the last abnormal shutdown are not retried blindly."));
+        NextPreferenceField(EditorLocalization.Get("prefs.restoreScene", "Restore last open scene"));
         bool restoreLastScene = _store.Current.RestoreLastScene;
-        if (ImGui.Checkbox(EditorLocalization.Get("prefs.restoreScene", "Restore last open scene"), ref restoreLastScene))
+        if (ImGui.Checkbox("##preferences-restore-scene", ref restoreLastScene))
         {
             _ = Update(_store.Current with { RestoreLastScene = restoreLastScene });
         }
 
-        ImGui.TextWrapped("当前编辑场景保存在用户 workspace，不会改写工程的 Start Scene。");
+        NextPreferenceHelp(EditorLocalization.Get(
+            "prefs.restoreSceneHelp",
+            "The current editing scene is stored in the user workspace and does not rewrite the project's Start Scene."));
+        NextPreferenceField(EditorLocalization.Get("prefs.layout", "Layout"));
         if (ImGui.Button(EditorLocalization.Get("prefs.resetLayout", "Reset to Default Layout")))
         {
             _resetLayout();
         }
+
+        ImGui.EndTable();
     }
 
     private void DrawExternalTools()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.externalTools", "External Tools"));
+        float scale = EditorUiScale.Normalize(_store.Current.UiScale);
+        if (!BeginPreferenceFields("preferences_external_tools_fields", scale))
+        {
+            return;
+        }
+
         string command = _store.Current.ExternalScriptEditor;
         ExternalCodeEditorKind currentKind = ExternalCodeEditorPreference.Classify(command);
         string preview = EditorDisplayName(currentKind);
-        if (ImGui.BeginCombo(EditorLocalization.Get("prefs.scriptEditor", "Script Editor"), preview))
+        NextPreferenceField(EditorLocalization.Get("prefs.scriptEditor", "Script Editor"));
+        if (ImGui.BeginCombo("##preferences-script-editor", preview))
         {
             DrawEditorPreset(ExternalCodeEditorKind.VsCode, ExternalCodeEditorPreference.VsCode, currentKind);
             DrawEditorPreset(ExternalCodeEditorKind.VisualStudio, ExternalCodeEditorPreference.VisualStudio, currentKind);
@@ -327,8 +363,9 @@ internal sealed class EditorPreferencesWindow(
         if (currentKind == ExternalCodeEditorKind.Custom)
         {
             SynchronizeCustomEditorDraft(command);
+            NextPreferenceField(EditorLocalization.Get("prefs.customEditorCommand", "Custom Command"));
             if (ImGui.InputText(
-                EditorLocalization.Get("prefs.customEditorCommand", "Custom Command"),
+                "##preferences-custom-editor-command",
                 ref _customEditorDraft,
                 1024))
             {
@@ -338,15 +375,19 @@ internal sealed class EditorPreferencesWindow(
                     StringComparison.Ordinal);
             }
 
-            ImGui.TextWrapped(EditorLocalization.Get(
+            NextPreferenceHelp(EditorLocalization.Get(
                 "prefs.customEditorHelp",
                 "Placeholders: {file}, {line}, {column}, {project}. Without {file}, the script path is appended."));
             bool valid = TryValidateCustomEditorCommand(_customEditorDraft, out string validationDiagnostic);
             if (!valid)
             {
-                ImGui.TextColored(new Vector4(1f, 0.55f, 0.25f, 1f), validationDiagnostic);
+                NextPreferenceValueRow();
+                ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(1f, 0.55f, 0.25f, 1f));
+                TextWrappedUnformatted(validationDiagnostic);
+                ImGui.PopStyleColor();
             }
 
+            NextPreferenceField(EditorLocalization.Get("prefs.actions", "Actions"));
             ImGui.BeginDisabled(!_customEditorDraftDirty || !valid);
             if (ImGui.Button(EditorLocalization.Get("prefs.apply", "Apply")) &&
                 Update(_store.Current with { ExternalScriptEditor = _customEditorDraft }))
@@ -368,9 +409,10 @@ internal sealed class EditorPreferencesWindow(
             ImGui.EndDisabled();
         }
 
-        ImGui.TextWrapped(EditorLocalization.Get(
+        NextPreferenceHelp(EditorLocalization.Get(
             "prefs.scriptEditorHelp",
             "VS Code is the default. Script assets reuse the project workspace and open at the requested line."));
+        ImGui.EndTable();
     }
 
     private void DrawEditorPreset(ExternalCodeEditorKind kind, string value, ExternalCodeEditorKind currentKind)
@@ -440,8 +482,16 @@ internal sealed class EditorPreferencesWindow(
     private static void DrawShortcuts()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.shortcuts", "Shortcuts"));
-        ImGui.TextWrapped("以下快捷键由菜单和全局命令调度共用；文本框正在编辑时由 ImGui 焦点路由优先处理。");
-        if (!ImGui.BeginTable("editor_shortcuts", 2, ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerH))
+        TextWrappedUnformatted(EditorLocalization.Get(
+            "prefs.shortcutsHelp",
+            "These bindings are shared by menus and global command routing. Active text fields keep keyboard priority through ImGui focus routing."));
+        if (!ImGui.BeginTable(
+            "editor_shortcuts",
+            2,
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.BordersInnerH |
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.NoSavedSettings))
         {
             return;
         }
@@ -460,6 +510,71 @@ internal sealed class EditorPreferencesWindow(
         }
 
         ImGui.EndTable();
+    }
+
+    private static bool BeginPreferenceFields(string id, float scale)
+    {
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        if (!ImGui.BeginTable(
+            id,
+            2,
+            ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.PadOuterX |
+            ImGuiTableFlags.BordersInnerH |
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.NoSavedSettings))
+        {
+            return false;
+        }
+
+        ImGui.TableSetupColumn(
+            "Property",
+            ImGuiTableColumnFlags.WidthFixed,
+            ResolvePreferenceLabelWidth(availableWidth, scale));
+        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        return true;
+    }
+
+    internal static float ResolvePreferenceLabelWidth(float availableWidth, float uiScale)
+    {
+        float available = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        float scale = EditorUiScale.Normalize(uiScale);
+        float minimum = EditorUiScale.Scale(120f, scale);
+        float maximum = EditorUiScale.Scale(220f, scale);
+        float minimumValueWidth = EditorUiScale.Scale(160f, scale);
+        float preferred = Math.Clamp(available * 0.34f, minimum, maximum);
+        return MathF.Min(preferred, MathF.Max(1f, available - minimumValueWidth));
+    }
+
+    private static void NextPreferenceField(string label)
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.AlignTextToFramePadding();
+        TextWrappedUnformatted(label);
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.SetNextItemWidth(-1f);
+    }
+
+    private static void NextPreferenceHelp(string text)
+    {
+        NextPreferenceValueRow();
+        TextWrappedUnformatted(text);
+    }
+
+    private static void NextPreferenceValueRow()
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(1);
+    }
+
+    private static void TextWrappedUnformatted(string text)
+    {
+        float contentWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
+        ImGui.TextUnformatted(text);
+        ImGui.PopTextWrapPos();
     }
 
     private bool Update(EditorPreferencesDocument next)

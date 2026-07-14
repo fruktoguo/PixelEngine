@@ -289,6 +289,18 @@ public sealed class EditorPreferencesTests
     }
 
     /// <summary>
+    /// 验证 Preferences 的 label/value 分栏在宽窗口、高 UI Scale 与窄值区之间保留响应式预算。
+    /// </summary>
+    [Fact]
+    public void PreferencesFieldLabelWidthPreservesReadableValueColumn()
+    {
+        Assert.Equal(220f, EditorPreferencesWindow.ResolvePreferenceLabelWidth(720f, 1f));
+        Assert.Equal(217.6f, EditorPreferencesWindow.ResolvePreferenceLabelWidth(640f, 1.5f), precision: 3);
+        Assert.Equal(160f, EditorPreferencesWindow.ResolvePreferenceLabelWidth(400f, 1.5f));
+        Assert.Equal(1f, EditorPreferencesWindow.ResolvePreferenceLabelWidth(float.NaN, 1f));
+    }
+
+    /// <summary>
     /// 验证自定义编辑器命令先作为可校验草稿存在：空值、未闭合引号和 executable 占位符
     /// 不可应用，合法带空格路径与定位参数可应用。
     /// </summary>

@@ -51,6 +51,57 @@ public sealed class EditorCodeWorkspaceMenuContractTests
         Assert.Contains(".sln", scriptHelp, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Preferences 双栏中的解释文字全部来自语言包，切换语言后不会残留中文或英文硬编码。
+    /// </summary>
+    [Theory]
+    [InlineData("en-US.json")]
+    [InlineData("zh-CN.json")]
+    public void LanguagePacksContainPreferenceFieldHelpStrings(string fileName)
+    {
+        string root = FindRepositoryRoot();
+        string path = Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Localization", fileName);
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(path));
+        JsonElement strings = document.RootElement.GetProperty("strings");
+        string[] requiredKeys =
+        [
+            "prefs.uiScaleHelp",
+            "prefs.uiScaleRestartHelp",
+            "prefs.saveLayoutHelp",
+            "prefs.reopenProjectHelp",
+            "prefs.restoreSceneHelp",
+            "prefs.layout",
+            "prefs.actions",
+            "prefs.diagnostic",
+            "prefs.shortcutsHelp",
+        ];
+
+        foreach (string key in requiredKeys)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(strings.GetProperty(key).GetString()), key);
+        }
+    }
+
+    /// <summary>
+    /// ImGui 的 TextWrapped 会把本地化字符串中的百分号当作 printf 格式符；Preferences 必须使用
+    /// TextUnformatted 配合显式 wrap，避免“150% is”读取随机 vararg 并污染画面。
+    /// </summary>
+    [Fact]
+    public void PreferencesLocalizedCopyUsesUnformattedWrappedText()
+    {
+        string root = FindRepositoryRoot();
+        string source = File.ReadAllText(Path.Combine(
+            root,
+            "apps",
+            "PixelEngine.Editor.Shell",
+            "Settings",
+            "EditorPreferencesWindow.cs"));
+
+        Assert.DoesNotContain("ImGui.TextWrapped(", source, StringComparison.Ordinal);
+        Assert.Contains("ImGui.PushTextWrapPos", source, StringComparison.Ordinal);
+        Assert.Contains("ImGui.TextUnformatted(text)", source, StringComparison.Ordinal);
+    }
+
     private static string FindRepositoryRoot()
     {
         DirectoryInfo? directory = new(AppContext.BaseDirectory);
