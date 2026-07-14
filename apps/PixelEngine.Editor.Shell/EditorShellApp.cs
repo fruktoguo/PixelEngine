@@ -2078,6 +2078,43 @@ internal sealed class EditorShellApp
         return CurrentSession.TryStartBuild(runAfterBuild, out diagnostic);
     }
 
+    internal BuildScenePreparationResult PrepareSceneForBuild()
+    {
+        if (CurrentSession is not { } session)
+        {
+            return new BuildScenePreparationResult(false, "当前没有打开的工程。");
+        }
+
+        if (session.Engine.Mode != EngineExecutionMode.Edit)
+        {
+            return new BuildScenePreparationResult(false, "请先退出 Play Mode，再执行 Build。");
+        }
+
+        session.FlushPendingAuthoringEdits();
+        return EditorProjectSession.TryValidateAuthoringScene(session.SceneModel, out string validationDiagnostic)
+            ? PrepareValidatedSceneForBuild(session)
+            : new BuildScenePreparationResult(
+                false,
+                $"当前场景草稿无效，构建未启动：{validationDiagnostic}");
+    }
+
+    private BuildScenePreparationResult PrepareValidatedSceneForBuild(EditorProjectSession session)
+    {
+        return session.SceneModel.IsDirty
+            ? SaveDirtySceneForBuild()
+            : new BuildScenePreparationResult(true, "当前场景已是已保存状态。");
+    }
+
+    private BuildScenePreparationResult SaveDirtySceneForBuild()
+    {
+        bool saved = SaveScene();
+        return new BuildScenePreparationResult(
+            saved,
+            saved
+                ? "已自动保存当前场景，开始构建。"
+                : LastProjectError ?? "当前场景保存失败，构建未启动。");
+    }
+
     public void ShowPreferences(EditorPreferencesCategory category = EditorPreferencesCategory.Appearance)
     {
         PreferencesWindow.Show(category);

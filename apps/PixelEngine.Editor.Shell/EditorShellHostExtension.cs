@@ -608,7 +608,10 @@ internal sealed class EditorShellHostExtension :
         }
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project, () => _app.UiScale);
-        _buildSettingsPanel = new BuildSettingsPanel(_project, console: _app.ConsoleStore);
+        _buildSettingsPanel = new BuildSettingsPanel(
+            _project,
+            console: _app.ConsoleStore,
+            prepareScene: _app.PrepareSceneForBuild);
         AddHiddenPanel(_projectSettingsPanel);
         AddHiddenPanel(_playerSettingsPanel);
         AddHiddenPanel(_buildSettingsPanel);

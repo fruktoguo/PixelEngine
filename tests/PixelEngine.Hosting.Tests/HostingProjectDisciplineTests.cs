@@ -1093,7 +1093,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("_gameObjectInspectorPanel?.RequestFocus()", host, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
         Assert.Contains("new UiManifestPanel(new EditorAssetManifestStore(_project))", host, StringComparison.Ordinal);
-        Assert.Contains("new BuildSettingsPanel(_project, console: _app.ConsoleStore)", host, StringComparison.Ordinal);
+        Assert.Contains("prepareScene: _app.PrepareSceneForBuild", host, StringComparison.Ordinal);
         string assetBrowserDataSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserDataSource.cs"));
         string assetBrowserPanel = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs"));
         string shellAssetBrowserDataSource = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorAssetBrowserDataSource.cs"));
@@ -1537,7 +1537,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("PackageWholeContent ? []", source, StringComparison.Ordinal);
         Assert.Contains("Version", source, StringComparison.Ordinal);
         Assert.Contains("InformationalVersion", source, StringComparison.Ordinal);
-        Assert.Contains("BuildSettingsPanel(_project, console: _app.ConsoleStore)", source, StringComparison.Ordinal);
+        Assert.Contains("prepareScene: _app.PrepareSceneForBuild", source, StringComparison.Ordinal);
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
         Assert.Contains("TryStartBuild", source, StringComparison.Ordinal);
         Assert.Contains("build_settings_body", source, StringComparison.Ordinal);

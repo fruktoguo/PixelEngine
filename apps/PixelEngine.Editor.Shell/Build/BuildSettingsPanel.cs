@@ -19,6 +19,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private readonly BuildSettingsStore _store;
     private readonly IPlayerBuildService _buildService;
     private readonly IEditorConsoleSink? _console;
+    private readonly Func<BuildScenePreparationResult> _prepareScene;
     private readonly ConcurrentQueue<BuildProgressEvent> _pendingEvents = new();
     private readonly BuildLog _log = new();
     private readonly BuildProfileDto _settings;
@@ -30,13 +31,18 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private string _persistentSettingsDiagnostic = string.Empty;
     private bool _autoScroll = true;
 
-    public BuildSettingsPanel(EditorProject project, IPlayerBuildService? buildService = null, IEditorConsoleSink? console = null)
+    public BuildSettingsPanel(
+        EditorProject project,
+        IPlayerBuildService? buildService = null,
+        IEditorConsoleSink? console = null,
+        Func<BuildScenePreparationResult>? prepareScene = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _project = project;
         _store = new BuildSettingsStore(project);
         _buildService = buildService ?? new PlayerBuildService();
         _console = console;
+        _prepareScene = prepareScene ?? (static () => new BuildScenePreparationResult(true, string.Empty));
         _settings = _store.LoadRecoverable(out _persistentSettingsDiagnostic);
         RequiresRepair = !string.IsNullOrWhiteSpace(_persistentSettingsDiagnostic);
         if (RequiresRepair)
@@ -530,6 +536,15 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             return false;
         }
 
+        BuildScenePreparationResult preparation = _prepareScene();
+        if (!preparation.Succeeded)
+        {
+            _validationMessage = string.IsNullOrWhiteSpace(preparation.Diagnostic)
+                ? "当前场景尚未准备好，构建未启动。"
+                : preparation.Diagnostic;
+            return false;
+        }
+
         // Build 与 Build And Run 是逐次命令；不能把上一次的启动选择粘滞到下一次 Build。
         _settings.RunAfterBuild = runAfterBuild;
         if (!Save())
@@ -821,3 +836,6 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         return changed;
     }
 }
+
+/// <summary>Build 提交前当前 authoring scene 的校验/持久化结果。</summary>
+internal readonly record struct BuildScenePreparationResult(bool Succeeded, string Diagnostic);

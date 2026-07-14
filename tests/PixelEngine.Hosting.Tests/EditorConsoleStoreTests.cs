@@ -316,6 +316,36 @@ public sealed class EditorConsoleStoreTests
         Assert.False(service.Requests[1].RunAfterBuild);
     }
 
+    /// <summary>
+    /// 验证场景校验或自动保存失败时，Build/Build And Run 不会打包旧的磁盘场景。
+    /// </summary>
+    [Fact]
+    public void BuildSettingsRejectsFailedScenePreparationBeforeStartingService()
+    {
+        using TempDir temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "BuildDirtySceneProject"), "Build Dirty Scene Project");
+        ImmediateBuildService service = new()
+        {
+            Preflight = new BuildPreflight { Ok = true, Diagnostic = "preflight ok" },
+        };
+        int preparationCalls = 0;
+        BuildSettingsPanel panel = new(
+            project,
+            service,
+            prepareScene: () =>
+            {
+                preparationCalls++;
+                return new BuildScenePreparationResult(false, "当前场景保存失败，构建未启动。");
+            });
+        _ = panel.ApplyScriptedBuildSettingsProbe(Path.Combine(temp.Path, "out"));
+
+        Assert.False(panel.TryStartBuild(runAfterBuild: true, out string diagnostic));
+
+        Assert.Equal(1, preparationCalls);
+        Assert.Equal("当前场景保存失败，构建未启动。", diagnostic);
+        Assert.Empty(service.Requests);
+    }
+
     private sealed class ImmediateBuildService : IPlayerBuildService
     {
         public BuildPreflight Preflight { get; init; } = new() { Ok = true, Diagnostic = "ok" };
