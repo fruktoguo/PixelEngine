@@ -651,6 +651,19 @@
       "notes": "Play Mode Transform and exact numeric/vector/decimal editing, Stop restoration, narrow label/value hierarchy, compact values and a real Draw revision probe are verified. Commit-bound 1024x720 framebuffer regions are complete and hashed; desktop automation could not activate the GL window, so physical runtime-field dragging, different-DPI cross-screen, Explorer pointer drag and independent review remain external blockers."
     },
     {
+      "entryId": "editor-003-unity-parity-cycle13-20260714",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "local_preferences_font_density_complete_task_active_external_input_dpi_review_pending",
+      "commit": "cf13620891fbdb4d44512712e0e6a9598e44ff4d",
+      "runSessionId": "local-20260714-editor003-unity-parity-cycle13",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; Unity 6.5 6000.5.3f1 local font metrics probe; real 150% Preferences, 1024x720 Build Settings and six-scenario desktop GL Game View framebuffers",
+      "command": "Unity 6000.5.3f1 FontProbe.Run for EditorGUIUtility and EditorStyles metrics; focused Preferences/localization/font-context/Build Settings/Game View Release tests; PixelEngine.EditorApp.Tests Release; dotnet build PixelEngine.sln -c Release --no-restore; isolated en-US and zh-CN 150% Preferences captures; tools/run-editor-build-settings-probe.ps1; tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; task and evidence catalog validation",
+      "reportPath": "docs/evidence-2026-07-14-editor-003-unity-parity-cycle-13.md",
+      "sha256": "06109b748a67c4e51ace99dd51491251ec6964c2e3fe626b0fe536ba47941424",
+      "notes": "Preferences now has responsive label/value hierarchy and localized safe unformatted help text; the old percent-format corruption is fixed. A local Unity 6.5 probe proves both editors use byte-identical Inter-Regular but PixelEngine had a 18px instead of Unity 12px base and a different Windows CJK fallback, now aligned across Shell and opened-project contexts. Commit-bound en-US/zh-CN 150% captures, actual Inline Build footer and all six Game View scenarios pass. Further reproducible Inspector/Settings localization and hierarchy work remains, final output is stale, and physical input, different-DPI cross-screen and independent review are not claimed."
+    },
+    {
       "entryId": "ui-004-web-canvas-player-dogfood-20260714",
       "taskIds": ["UI-004"],
       "evidenceState": "local_player_dogfood_complete_external_window_matrix_pending",
