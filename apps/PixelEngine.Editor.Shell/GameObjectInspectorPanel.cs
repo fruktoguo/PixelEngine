@@ -74,6 +74,7 @@ internal sealed class GameObjectInspectorPanel(
     private ComponentFieldEditTransaction? _componentFieldEdit;
     private BuiltInCanvasEditTransaction? _builtInCanvasEdit;
     private DecimalFieldTextEditState? _decimalFieldTextEdit;
+    private RuntimeDecimalFieldTextEditState? _runtimeDecimalFieldTextEdit;
     private int _focusDelayFrames;
     private bool _focusRequested;
     private string _assetPreviewCachePath = string.Empty;
@@ -124,7 +125,7 @@ internal sealed class GameObjectInspectorPanel(
             context.Selection.FolderPath is null
                 ? context.Selection.AssetPath
                 : null);
-        PrepareFrame(context.Selection.GameObjectStableId);
+        PrepareFrame(context.Selection.GameObjectStableId, context.Selection.EntityHandle);
         if (_focusDelayFrames > 0)
         {
             _focusDelayFrames--;
@@ -227,7 +228,7 @@ internal sealed class GameObjectInspectorPanel(
     /// Hierarchy 先于 Inspector 绘制；若用户从 A 的 InputFloat 直接点击 B，A 的旧控件不会再被绘制，
     /// 因此不能只依赖 ImGui.IsItemDeactivatedAfterEdit 提交 Undo。
     /// </summary>
-    internal void PrepareFrame(int? selectedStableId)
+    internal void PrepareFrame(int? selectedStableId, string? selectedEntityHandle = null)
     {
         EditorMode mode = CaptureMode();
         bool targetReplaced = _transformEditStableId.HasValue &&
@@ -245,7 +246,8 @@ internal sealed class GameObjectInspectorPanel(
              !_scene.TryGet(canvasEdit.StableId, out EditorGameObject? canvasTarget) ||
              !ReferenceEquals(canvasTarget, canvasEdit.GameObject) ||
              selectedStableId != canvasEdit.StableId);
-        UpdateRuntimeEditLifetime();
+        PrepareRuntimeFieldEdit(selectedEntityHandle, mode);
+        UpdateRuntimeEditLifetime(mode);
         if (_nameEditStableId.HasValue &&
             (!Visible || mode != EditorMode.Edit || selectedStableId != _nameEditStableId || nameTargetReplaced))
         {
@@ -937,17 +939,32 @@ internal sealed class GameObjectInspectorPanel(
         _disposed = true;
     }
 
-    private void UpdateRuntimeEditLifetime()
+    private void PrepareRuntimeFieldEdit(string? selectedEntityHandle, EditorMode mode)
+    {
+        if (_runtimeDecimalFieldTextEdit is not { } edit)
+        {
+            return;
+        }
+
+        if (!Visible ||
+            mode is not (EditorMode.Play or EditorMode.Paused) ||
+            !string.Equals(edit.EntityHandle, selectedEntityHandle, StringComparison.Ordinal))
+        {
+            _ = CommitPendingRuntimeDecimalFieldEdit();
+        }
+    }
+
+    private void UpdateRuntimeEditLifetime(EditorMode mode)
     {
         if (_modeProvider is null || _runtimeSource is null)
         {
             return;
         }
 
-        EditorMode mode = _modeProvider();
         if (_lastMode is EditorMode.Play or EditorMode.Paused &&
             mode == EditorMode.Edit)
         {
+            _ = CommitPendingRuntimeDecimalFieldEdit();
             _runtimeSource.RestoreTemporaryEdits();
         }
 
@@ -958,6 +975,7 @@ internal sealed class GameObjectInspectorPanel(
     {
         if (_runtimeSource is null || !_runtimeSource.TryGetEntity(handle, out ScriptEntityInspection entity))
         {
+            _ = CommitPendingRuntimeDecimalFieldEdit();
             ImGui.TextUnformatted("Runtime entity is no longer available");
             return;
         }
@@ -974,49 +992,160 @@ internal sealed class GameObjectInspectorPanel(
         for (int i = 0; i < entity.Components.Length; i++)
         {
             ScriptComponentInspection component = entity.Components[i];
-            if (!ImGui.CollapsingHeader(
-                $"{component.TypeName}##runtime_component_{entity.EntityId}_{i}",
-                ImGuiTreeNodeFlags.DefaultOpen))
+            string componentName = GetComponentDisplayName(component.TypeName);
+            if (!DrawInspectorComponentHeader(
+                $"{componentName}##runtime_component_{entity.EntityId}_{i}"))
+            {
+                CommitRuntimeDecimalFieldEditIfMatches(handle, i);
+                continue;
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip(component.TypeName);
+            }
+
+            ImGui.TextDisabled(component.Faulted
+                ? "Faulted"
+                : component.Enabled ? "Enabled" : "Disabled");
+            ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(component.Behaviour);
+            float availableWidth = ImGui.GetContentRegionAvail().X;
+            if (fields.Length == 0 ||
+                !BeginInspectorPropertyTable($"runtime-component-fields-{entity.EntityId}-{i}", 2))
             {
                 continue;
             }
 
-            ImGui.TextUnformatted(component.Faulted
-                ? "Faulted"
-                : component.Enabled ? "Enabled" : "Disabled");
-            ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(component.Behaviour);
+            SetupInspectorPropertyColumns(availableWidth);
             for (int fieldIndex = 0; fieldIndex < fields.Length; fieldIndex++)
             {
                 DrawRuntimeField(entity.Handle, i, fields[fieldIndex]);
             }
+
+            EndInspectorPropertyTable();
         }
     }
 
     private void DrawRuntimeTransform(ScriptEntityInspection entity)
     {
         Transform transform = entity.Transform!;
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        TransformFieldLayout layout = ResolveTransformFieldLayout(availableWidth);
+        bool inlineAxes = layout == TransformFieldLayout.InlineAxes;
+        int columnCount = inlineAxes ? 5 : 3;
+        if (!BeginInspectorPropertyTable(
+            inlineAxes ? "runtime-transform-fields-inline" : "runtime-transform-fields-stacked",
+            columnCount))
+        {
+            return;
+        }
+
+        float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
+        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
+        ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, axisWidth);
+        ImGui.TableSetupColumn("ValueA", ImGuiTableColumnFlags.WidthStretch);
+        if (inlineAxes)
+        {
+            ImGui.TableSetupColumn("AxisB", ImGuiTableColumnFlags.WidthFixed, axisWidth);
+            ImGui.TableSetupColumn("ValueB", ImGuiTableColumnFlags.WidthStretch);
+        }
+
         float x = transform.X;
         float y = transform.Y;
-        float rotation = transform.RotationRadians;
+        float rotationDegrees = RadiansToDegrees(transform.RotationRadians);
         float scaleX = transform.ScaleX;
         float scaleY = transform.ScaleY;
-        bool changed = ImGui.InputFloat("X##runtime_transform", ref x);
-        changed |= ImGui.InputFloat("Y##runtime_transform", ref y);
-        changed |= ImGui.InputFloat("Rotation##runtime_transform", ref rotation);
-        changed |= ImGui.InputFloat("Scale X##runtime_transform", ref scaleX);
-        changed |= ImGui.InputFloat("Scale Y##runtime_transform", ref scaleY);
-        if (changed)
+
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        DrawPropertyLabel("Position");
+        _ = ImGui.TableSetColumnIndex(1);
+        DrawAxisLabel("X", InspectorAxis.X);
+        _ = ImGui.TableSetColumnIndex(2);
+        ImGui.SetNextItemWidth(-1f);
+        bool anyChanged = ImGui.DragFloat("##runtime-position-x", ref x, 0.25f);
+        DrawTransformDragTooltip();
+
+        if (inlineAxes)
         {
-            _ = _runtimeSource!.TrySetEntityTransform(entity.Handle, x, y, rotation, scaleX, scaleY);
+            _ = ImGui.TableSetColumnIndex(3);
+        }
+        else
+        {
+            ImGui.TableNextRow();
+            _ = ImGui.TableSetColumnIndex(1);
+        }
+
+        DrawAxisLabel("Y", InspectorAxis.Y);
+        _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
+        ImGui.SetNextItemWidth(-1f);
+        anyChanged |= ImGui.DragFloat("##runtime-position-y", ref y, 0.25f);
+        DrawTransformDragTooltip();
+
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        DrawPropertyLabel("Rotation");
+        _ = ImGui.TableSetColumnIndex(1);
+        DrawAxisLabel("Z", InspectorAxis.Z);
+        _ = ImGui.TableSetColumnIndex(2);
+        ImGui.SetNextItemWidth(-1f);
+        anyChanged |= ImGui.DragFloat("##runtime-rotation-z", ref rotationDegrees, 0.5f);
+        DrawTransformDragTooltip();
+
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        DrawPropertyLabel("Scale");
+        _ = ImGui.TableSetColumnIndex(1);
+        DrawAxisLabel("X", InspectorAxis.X);
+        _ = ImGui.TableSetColumnIndex(2);
+        ImGui.SetNextItemWidth(-1f);
+        anyChanged |= ImGui.DragFloat("##runtime-scale-x", ref scaleX, 0.01f);
+        DrawTransformDragTooltip();
+
+        if (inlineAxes)
+        {
+            _ = ImGui.TableSetColumnIndex(3);
+        }
+        else
+        {
+            ImGui.TableNextRow();
+            _ = ImGui.TableSetColumnIndex(1);
+        }
+
+        DrawAxisLabel("Y", InspectorAxis.Y);
+        _ = ImGui.TableSetColumnIndex(inlineAxes ? 4 : 2);
+        ImGui.SetNextItemWidth(-1f);
+        anyChanged |= ImGui.DragFloat("##runtime-scale-y", ref scaleY, 0.01f);
+        DrawTransformDragTooltip();
+        EndInspectorPropertyTable();
+
+        if (anyChanged)
+        {
+            _ = _runtimeSource!.TrySetEntityTransform(
+                entity.Handle,
+                x,
+                y,
+                DegreesToRadians(rotationDegrees),
+                scaleX,
+                scaleY);
         }
     }
 
     private void DrawRuntimeField(string handle, int componentIndex, ScriptFieldDescriptor field)
     {
-        string label = $"{field.Name}##runtime_{handle}_{componentIndex}_{field.Name}";
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        DrawPropertyLabel(field.Name, disabled: !field.CanWrite || field.Kind == ScriptFieldKind.Unsupported);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(field.Name);
+        }
+
+        _ = ImGui.TableSetColumnIndex(1);
+        string id = $"##runtime_{handle}_{componentIndex}_{field.Name}";
         if (!field.CanWrite || field.Kind == ScriptFieldKind.Unsupported)
         {
-            ImGui.TextUnformatted($"{field.Name}: {field.Value}");
+            ImGui.TextWrapped(FormatRuntimeFieldValue(field.Value));
             return;
         }
 
@@ -1025,7 +1154,7 @@ internal sealed class GameObjectInspectorPanel(
             case ScriptFieldKind.Boolean:
                 {
                     bool value = field.Value is bool current && current;
-                    if (ImGui.Checkbox(label, ref value))
+                    if (ImGui.Checkbox(id, ref value))
                     {
                         _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, value);
                     }
@@ -1033,21 +1162,13 @@ internal sealed class GameObjectInspectorPanel(
                     break;
                 }
             case ScriptFieldKind.Number:
-                {
-                    float value = field.Value is IConvertible convertible
-                        ? convertible.ToSingle(System.Globalization.CultureInfo.InvariantCulture)
-                        : 0f;
-                    if (ImGui.InputFloat(label, ref value) && TryConvertRuntimeNumber(value, field.FieldType, out object? converted))
-                    {
-                        _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, converted);
-                    }
-
-                    break;
-                }
+                DrawRuntimeNumber(handle, componentIndex, field, id);
+                break;
             case ScriptFieldKind.String:
                 {
                     string value = field.Value?.ToString() ?? string.Empty;
-                    if (ImGui.InputText(label, ref value, 256))
+                    ImGui.SetNextItemWidth(-1f);
+                    if (ImGui.InputText(id, ref value, 256))
                     {
                         _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, value);
                     }
@@ -1059,7 +1180,8 @@ internal sealed class GameObjectInspectorPanel(
                     Type enumType = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
                     string[] names = Enum.GetNames(enumType);
                     int index = Math.Max(0, Array.IndexOf(names, field.Value?.ToString()));
-                    if (ImGui.Combo(label, ref index, names, names.Length) && (uint)index < (uint)names.Length)
+                    ImGui.SetNextItemWidth(-1f);
+                    if (ImGui.Combo(id, ref index, names, names.Length) && (uint)index < (uint)names.Length)
                     {
                         object value = Enum.Parse(enumType, names[index]);
                         _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, value);
@@ -1068,13 +1190,219 @@ internal sealed class GameObjectInspectorPanel(
                     break;
                 }
             case ScriptFieldKind.Vector:
+                DrawRuntimeVector(handle, componentIndex, field);
+                break;
             case ScriptFieldKind.Material:
             case ScriptFieldKind.AssetReference:
             case ScriptFieldKind.Unsupported:
             default:
-                ImGui.TextUnformatted($"{field.Name}: {field.Value}");
+                ImGui.TextWrapped(FormatRuntimeFieldValue(field.Value));
                 break;
         }
+    }
+
+    private void DrawRuntimeNumber(
+        string handle,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        string id)
+    {
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        if (!HasValidNumericRange(field))
+        {
+            ImGui.TextColored(
+                new Vector4(0.95f, 0.55f, 0.35f, 1f),
+                $"Range 中不存在 {target.Name} 可表示的值");
+            return;
+        }
+
+        if (target == typeof(decimal))
+        {
+            DrawRuntimeDecimalNumber(handle, componentIndex, field, id);
+            return;
+        }
+
+        if (field.Value is null)
+        {
+            if (Nullable.GetUnderlyingType(field.FieldType) is not null &&
+                ImGui.Button($"null  ·  Set 0{id}"))
+            {
+                if (TryConvertRuntimeSerializedNumber("0", field.FieldType, out object? zero))
+                {
+                    _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, zero);
+                }
+            }
+
+            return;
+        }
+
+        string current = FormatRuntimeNumericValue(field.Value, target);
+        if (!IsValidNumericSerializedValue(target, current))
+        {
+            ImGui.TextColored(new Vector4(0.95f, 0.55f, 0.35f, 1f), $"无效 {target.Name}：{current}");
+            return;
+        }
+
+        ImGui.SetNextItemWidth(-1f);
+        if (TryDrawNumericField(id, field, current, out string serialized) &&
+            TryConvertRuntimeSerializedNumber(serialized, field.FieldType, out object? converted))
+        {
+            _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, converted);
+        }
+
+        DrawComponentDragTooltip();
+    }
+
+    private void DrawRuntimeDecimalNumber(
+        string handle,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        string id)
+    {
+        RuntimeDecimalFieldTextEditState? state =
+            _runtimeDecimalFieldTextEdit is { } existing &&
+            existing.HasKey(handle, componentIndex, field.Name)
+                ? existing
+                : null;
+        string current = field.Value is null
+            ? string.Empty
+            : FormatRuntimeNumericValue(field.Value, typeof(decimal));
+        string edited = state?.Text ?? current;
+        ImGui.SetNextItemWidth(-1f);
+        bool submitted = ImGui.InputText(
+            id,
+            ref edited,
+            128,
+            ImGuiInputTextFlags.EnterReturnsTrue);
+        if (ImGui.IsItemActivated() && state is null)
+        {
+            _ = CommitPendingRuntimeDecimalFieldEdit();
+            state = _runtimeDecimalFieldTextEdit = new RuntimeDecimalFieldTextEditState(
+                handle,
+                componentIndex,
+                field,
+                current);
+        }
+
+        state?.Update(edited);
+        if (state is not null && (submitted || ImGui.IsItemDeactivated()))
+        {
+            _ = CommitPendingRuntimeDecimalFieldEdit();
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("decimal 使用精确文本编辑；Enter 或失去焦点时提交，中间输入不会被重置。");
+        }
+    }
+
+    private void DrawRuntimeVector(string handle, int componentIndex, ScriptFieldDescriptor field)
+    {
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        Span<float> values = stackalloc float[4];
+        int count;
+        switch (field.Value)
+        {
+            case Vector2 vector2 when target == typeof(Vector2):
+                values[0] = vector2.X;
+                values[1] = vector2.Y;
+                count = 2;
+                break;
+            case Vector3 vector3 when target == typeof(Vector3):
+                values[0] = vector3.X;
+                values[1] = vector3.Y;
+                values[2] = vector3.Z;
+                count = 3;
+                break;
+            case Vector4 vector4 when target == typeof(Vector4):
+                values[0] = vector4.X;
+                values[1] = vector4.Y;
+                values[2] = vector4.Z;
+                values[3] = vector4.W;
+                count = 4;
+                break;
+            case null when Nullable.GetUnderlyingType(field.FieldType) is not null:
+                if (ImGui.Button($"null  ·  Set Zero##runtime-vector-null-{handle}-{componentIndex}-{field.Name}") &&
+                    TryCreateRuntimeVector(target, values[..ResolveVectorComponentCount(target)], out object? zero))
+                {
+                    _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, zero);
+                }
+
+                return;
+            default:
+                ImGui.TextColored(
+                    new Vector4(0.95f, 0.55f, 0.35f, 1f),
+                    $"无效 {target.Name}：{FormatRuntimeFieldValue(field.Value)}");
+                return;
+        }
+
+        DrawRuntimeVectorComponents(handle, componentIndex, field, values[..count]);
+    }
+
+    private void DrawRuntimeVectorComponents(
+        string handle,
+        int componentIndex,
+        ScriptFieldDescriptor field,
+        Span<float> values)
+    {
+        VectorFieldLayout layout = ResolveVectorFieldLayout(ImGui.GetContentRegionAvail().X, values.Length);
+        bool inline = layout == VectorFieldLayout.InlineAxes;
+        int columnCount = inline ? values.Length * 2 : 2;
+        if (!ImGui.BeginTable(
+            $"runtime-vector-field-{handle}-{componentIndex}-{field.Name}",
+            columnCount,
+            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.NoSavedSettings))
+        {
+            return;
+        }
+
+        float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
+        if (inline)
+        {
+            for (int i = 0; i < values.Length; i++)
+            {
+                ImGui.TableSetupColumn($"Axis{i}", ImGuiTableColumnFlags.WidthFixed, axisWidth);
+                ImGui.TableSetupColumn($"Value{i}", ImGuiTableColumnFlags.WidthStretch);
+            }
+        }
+        else
+        {
+            ImGui.TableSetupColumn("Axis", ImGuiTableColumnFlags.WidthFixed, axisWidth);
+            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        }
+
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        for (int i = 0; i < values.Length; i++)
+        {
+            if (!inline || i == 0)
+            {
+                ImGui.TableNextRow();
+            }
+
+            int axisColumn = inline ? i * 2 : 0;
+            _ = ImGui.TableSetColumnIndex(axisColumn);
+            InspectorAxis axis = (InspectorAxis)i;
+            DrawAxisLabel(axis.ToString(), axis);
+            _ = ImGui.TableSetColumnIndex(axisColumn + 1);
+            ImGui.SetNextItemWidth(-1f);
+            float value = values[i];
+            bool changed = ImGui.DragFloat(
+                $"##runtime-vector-{handle}-{componentIndex}-{field.Name}-{i}",
+                ref value,
+                0.1f);
+            if (changed && float.IsFinite(value))
+            {
+                values[i] = value;
+                if (TryCreateRuntimeVector(target, values, out object? vector))
+                {
+                    _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, vector);
+                }
+            }
+
+            DrawComponentDragTooltip();
+        }
+
+        ImGui.EndTable();
     }
 
     private void DrawRuntimeBodyInspector(int bodyKey)
@@ -1095,21 +1423,238 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.TextWrapped("Rigid body editing requires a Physics phase-safe command and is intentionally read-only here.");
     }
 
-    private static bool TryConvertRuntimeNumber(float value, Type destinationType, out object? converted)
+    private static bool HasValidNumericRange(ScriptFieldDescriptor field)
     {
-        Type target = Nullable.GetUnderlyingType(destinationType) ?? destinationType;
-        try
-        {
-            converted = target == typeof(float)
-                ? value
-                : Convert.ChangeType(value, target, System.Globalization.CultureInfo.InvariantCulture);
-            return true;
-        }
-        catch (Exception exception) when (exception is InvalidCastException or FormatException or OverflowException)
+        Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
+        return (!IsIntegerNumericType(target) ||
+                TryResolveIntegerFieldRange(target, field, out _, out _)) &&
+            ((target != typeof(float) && target != typeof(double)) ||
+             TryResolveFloatingFieldRange(target, field, out _, out _)) &&
+            (target != typeof(decimal) ||
+             TryResolveDecimalFieldRange(field, out _, out _));
+    }
+
+    private static string FormatRuntimeNumericValue(object value, Type target)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        ArgumentNullException.ThrowIfNull(target);
+        return !target.IsInstanceOfType(value)
+            ? value.ToString() ?? string.Empty
+            : Type.GetTypeCode(target) switch
+            {
+                TypeCode.Single => ((float)value).ToString("R", CultureInfo.InvariantCulture),
+                TypeCode.Double => ((double)value).ToString("R", CultureInfo.InvariantCulture),
+                TypeCode.Decimal => ((decimal)value).ToString(CultureInfo.InvariantCulture),
+                TypeCode.Byte or
+                TypeCode.SByte or
+                TypeCode.Int16 or
+                TypeCode.UInt16 or
+                TypeCode.Int32 or
+                TypeCode.UInt32 or
+                TypeCode.Int64 or
+                TypeCode.UInt64 => ((IFormattable)value).ToString(null, CultureInfo.InvariantCulture),
+                TypeCode.Empty or
+                TypeCode.Object or
+                TypeCode.DBNull or
+                TypeCode.Boolean or
+                TypeCode.Char or
+                TypeCode.DateTime or
+                TypeCode.String => value.ToString() ?? string.Empty,
+                _ => value.ToString() ?? string.Empty,
+            };
+    }
+
+    internal static bool TryConvertRuntimeSerializedNumber(
+        string? serialized,
+        Type destinationType,
+        out object? converted)
+    {
+        ArgumentNullException.ThrowIfNull(destinationType);
+        Type? nullable = Nullable.GetUnderlyingType(destinationType);
+        if (string.IsNullOrEmpty(serialized))
         {
             converted = null;
+            return nullable is not null;
+        }
+
+        Type target = nullable ?? destinationType;
+        bool success;
+        switch (Type.GetTypeCode(target))
+        {
+            case TypeCode.Byte:
+                success = byte.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out byte byteValue);
+                converted = byteValue;
+                break;
+            case TypeCode.SByte:
+                success = sbyte.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte sbyteValue);
+                converted = sbyteValue;
+                break;
+            case TypeCode.Int16:
+                success = short.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out short int16Value);
+                converted = int16Value;
+                break;
+            case TypeCode.UInt16:
+                success = ushort.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out ushort uint16Value);
+                converted = uint16Value;
+                break;
+            case TypeCode.Int32:
+                success = int.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out int int32Value);
+                converted = int32Value;
+                break;
+            case TypeCode.UInt32:
+                success = uint.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint uint32Value);
+                converted = uint32Value;
+                break;
+            case TypeCode.Int64:
+                success = long.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out long int64Value);
+                converted = int64Value;
+                break;
+            case TypeCode.UInt64:
+                success = ulong.TryParse(serialized, NumberStyles.Integer, CultureInfo.InvariantCulture, out ulong uint64Value);
+                converted = uint64Value;
+                break;
+            case TypeCode.Single:
+                success = float.TryParse(serialized, NumberStyles.Float, CultureInfo.InvariantCulture, out float singleValue) &&
+                    float.IsFinite(singleValue);
+                converted = singleValue;
+                break;
+            case TypeCode.Double:
+                success = double.TryParse(serialized, NumberStyles.Float, CultureInfo.InvariantCulture, out double doubleValue) &&
+                    double.IsFinite(doubleValue);
+                converted = doubleValue;
+                break;
+            case TypeCode.Decimal:
+                success = decimal.TryParse(serialized, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal decimalValue);
+                converted = decimalValue;
+                break;
+            case TypeCode.Empty:
+            case TypeCode.Object:
+            case TypeCode.DBNull:
+            case TypeCode.Boolean:
+            case TypeCode.Char:
+            case TypeCode.DateTime:
+            case TypeCode.String:
+            default:
+                success = false;
+                converted = null;
+                break;
+        }
+
+        if (!success)
+        {
+            converted = null;
+        }
+
+        return success;
+    }
+
+    private static int ResolveVectorComponentCount(Type target)
+    {
+        return target == typeof(Vector2)
+            ? 2
+            : target == typeof(Vector3)
+                ? 3
+                : target == typeof(Vector4)
+                    ? 4
+                    : throw new ArgumentOutOfRangeException(
+                        nameof(target),
+                        target,
+                        "Runtime Inspector 仅支持 Vector2/3/4。");
+    }
+
+    internal static bool TryCreateRuntimeVector(
+        Type target,
+        ReadOnlySpan<float> components,
+        out object? vector)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        int expectedCount;
+        try
+        {
+            expectedCount = ResolveVectorComponentCount(Nullable.GetUnderlyingType(target) ?? target);
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            vector = null;
             return false;
         }
+
+        if (components.Length != expectedCount)
+        {
+            vector = null;
+            return false;
+        }
+
+        for (int i = 0; i < components.Length; i++)
+        {
+            if (!float.IsFinite(components[i]))
+            {
+                vector = null;
+                return false;
+            }
+        }
+
+        Type normalized = Nullable.GetUnderlyingType(target) ?? target;
+        vector = normalized == typeof(Vector2)
+            ? new Vector2(components[0], components[1])
+            : normalized == typeof(Vector3)
+                ? new Vector3(components[0], components[1], components[2])
+                : new Vector4(components[0], components[1], components[2], components[3]);
+        return true;
+    }
+
+    private static string FormatRuntimeFieldValue(object? value)
+    {
+        return value switch
+        {
+            null => "null",
+            Vector2 vector2 => SerializedFieldValueCodec.Format(vector2),
+            Vector3 vector3 => SerializedFieldValueCodec.Format(vector3),
+            Vector4 vector4 => SerializedFieldValueCodec.Format(vector4),
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty,
+            _ => value.ToString() ?? string.Empty,
+        };
+    }
+
+    private void CommitRuntimeDecimalFieldEditIfMatches(string handle, int componentIndex)
+    {
+        if (_runtimeDecimalFieldTextEdit is { } edit &&
+            string.Equals(edit.EntityHandle, handle, StringComparison.Ordinal) &&
+            edit.ComponentIndex == componentIndex)
+        {
+            _ = CommitPendingRuntimeDecimalFieldEdit();
+        }
+    }
+
+    private bool CommitPendingRuntimeDecimalFieldEdit()
+    {
+        if (_runtimeDecimalFieldTextEdit is not { } state)
+        {
+            return false;
+        }
+
+        _runtimeDecimalFieldTextEdit = null;
+        if (!state.Dirty)
+        {
+            return false;
+        }
+
+        if (!TryNormalizeDecimalFieldValue(state.Field, state.Text, out string? serialized) ||
+            !TryConvertRuntimeSerializedNumber(serialized, state.Field.FieldType, out object? converted))
+        {
+            Status = $"无效 runtime decimal：{(state.Text.Length == 0 ? "<empty>" : state.Text)}";
+            return false;
+        }
+
+        bool applied = _runtimeSource?.TrySetBehaviourField(
+            state.EntityHandle,
+            state.ComponentIndex,
+            state.Field.Name,
+            converted) == true;
+        Status = applied
+            ? ReadyStatus
+            : $"Runtime 字段已失效：{state.Field.Name}";
+        return applied;
     }
 
     private void DrawHeader(EditorGameObject gameObject)
@@ -1622,6 +2167,7 @@ internal sealed class GameObjectInspectorPanel(
         CommitPendingTransformEdit();
         CommitPendingComponentFieldEdit();
         CommitPendingBuiltInCanvasEdit();
+        _ = CommitPendingRuntimeDecimalFieldEdit();
     }
 
     private bool TryResolveComponentEditTarget(
@@ -3632,6 +4178,39 @@ internal enum InspectorAxis
     Y,
     Z,
     W,
+}
+
+internal sealed class RuntimeDecimalFieldTextEditState(
+    string entityHandle,
+    int componentIndex,
+    ScriptFieldDescriptor field,
+    string text)
+{
+    public string EntityHandle { get; } =
+        entityHandle ?? throw new ArgumentNullException(nameof(entityHandle));
+
+    public int ComponentIndex { get; } = componentIndex;
+
+    public ScriptFieldDescriptor Field { get; } = field;
+
+    public string Text { get; private set; } =
+        text ?? throw new ArgumentNullException(nameof(text));
+
+    public bool Dirty { get; private set; }
+
+    public bool HasKey(string entityHandle, int componentIndex, string fieldName)
+    {
+        return string.Equals(EntityHandle, entityHandle, StringComparison.Ordinal) &&
+            ComponentIndex == componentIndex &&
+            string.Equals(Field.Name, fieldName, StringComparison.Ordinal);
+    }
+
+    public void Update(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        Dirty |= !string.Equals(Text, text, StringComparison.Ordinal);
+        Text = text;
+    }
 }
 
 internal sealed class DecimalFieldTextEditState(

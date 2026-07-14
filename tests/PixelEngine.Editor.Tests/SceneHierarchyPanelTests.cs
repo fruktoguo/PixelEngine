@@ -1,4 +1,5 @@
 using PixelEngine.Scripting;
+using System.Numerics;
 using Xunit;
 using ScriptScene = PixelEngine.Scripting.Scene;
 
@@ -43,18 +44,34 @@ public sealed class SceneHierarchyPanelTests
         firstTransform.SetPosition(10f, 20f);
         EditableHierarchyBehaviour firstBehaviour = firstEntity.AddComponent<EditableHierarchyBehaviour>();
         firstBehaviour.Speed = 3f;
+        firstBehaviour.Offset = new Vector3(1f, 2f, 3f);
+        firstBehaviour.Budget = 12.5m;
         ScriptScene current = first;
         RuntimeSceneHierarchyDataSource source = RuntimeSceneHierarchyDataSource.CreateDynamic(() => current);
 
         Assert.True(source.TrySetEntityTransform($"script:{firstEntity.Id}", 40f, 50f, 0.25f, 2f, 3f));
         Assert.True(source.TrySetBehaviourField($"script:{firstEntity.Id}", 0, nameof(EditableHierarchyBehaviour.Speed), 9f));
+        Assert.True(source.TrySetBehaviourField(
+            $"script:{firstEntity.Id}",
+            0,
+            nameof(EditableHierarchyBehaviour.Offset),
+            new Vector3(4f, 5f, 6f)));
+        Assert.True(source.TrySetBehaviourField(
+            $"script:{firstEntity.Id}",
+            0,
+            nameof(EditableHierarchyBehaviour.Budget),
+            99.75m));
         Assert.Equal(40f, firstTransform.X);
         Assert.Equal(9f, firstBehaviour.Speed);
+        Assert.Equal(new Vector3(4f, 5f, 6f), firstBehaviour.Offset);
+        Assert.Equal(99.75m, firstBehaviour.Budget);
 
         source.RestoreTemporaryEdits();
         Assert.Equal(10f, firstTransform.X);
         Assert.Equal(20f, firstTransform.Y);
         Assert.Equal(3f, firstBehaviour.Speed);
+        Assert.Equal(new Vector3(1f, 2f, 3f), firstBehaviour.Offset);
+        Assert.Equal(12.5m, firstBehaviour.Budget);
 
         ScriptScene replacement = new();
         _ = replacement.CreateEntity().AddComponent<HierarchyBehaviour>();
@@ -105,6 +122,10 @@ public sealed class SceneHierarchyPanelTests
     private sealed class EditableHierarchyBehaviour : Behaviour
     {
         public float Speed { get; set; }
+
+        public Vector3 Offset { get; set; }
+
+        public decimal Budget { get; set; }
     }
 
     private sealed class RecordingHierarchySource(SceneHierarchySnapshot snapshot) : ISceneHierarchyDataSource

@@ -124,7 +124,9 @@ internal sealed class EditorShellHostExtension :
 
         _lastPreparedMode = mode;
         _gameViewPanel?.PrepareFrame(mode);
-        _gameObjectInspectorPanel?.PrepareFrame(_editor.Selection.GameObjectStableId);
+        _gameObjectInspectorPanel?.PrepareFrame(
+            _editor.Selection.GameObjectStableId,
+            _editor.Selection.EntityHandle);
         // Scene View 关闭后 EditorApp 不再 Draw 面板；gizmo 事务仍须响应 selection/mode/scene 生命周期。
         _sceneViewPanel?.PrepareFrame(_editor.Selection.GameObjectStableId, mode);
         _consolePanel?.PrepareFrame();

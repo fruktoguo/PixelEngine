@@ -192,6 +192,73 @@ public sealed class GameObjectInspectorPanelTests
     }
 
     /// <summary>
+    /// 验证 Play Mode Inspector 的拖拽写回不会先压成 float 再转换，避免 Int64/UInt64/decimal
+    /// 丢精度或溢出；nullable 空值仍保持 null 语义。
+    /// </summary>
+    [Fact]
+    public void RuntimeNumberConversionPreservesExactScalarTypes()
+    {
+        static void AssertConverted<T>(string serialized, T expected)
+        {
+            Assert.True(GameObjectInspectorPanel.TryConvertRuntimeSerializedNumber(
+                serialized,
+                typeof(T),
+                out object? converted));
+            Assert.Equal(expected, Assert.IsType<T>(converted));
+        }
+
+        AssertConverted("255", byte.MaxValue);
+        AssertConverted("-128", sbyte.MinValue);
+        AssertConverted("-32768", short.MinValue);
+        AssertConverted("65535", ushort.MaxValue);
+        AssertConverted("-2147483648", int.MinValue);
+        AssertConverted("4294967295", uint.MaxValue);
+        AssertConverted("9223372036854775807", long.MaxValue);
+        AssertConverted("18446744073709551615", ulong.MaxValue);
+        AssertConverted("1.25", 1.25f);
+        AssertConverted("1.0000000000000002", 1.0000000000000002d);
+        AssertConverted("79228162514264337593543950335", decimal.MaxValue);
+
+        Assert.True(GameObjectInspectorPanel.TryConvertRuntimeSerializedNumber(
+            null,
+            typeof(decimal?),
+            out object? nullable));
+        Assert.Null(nullable);
+        Assert.False(GameObjectInspectorPanel.TryConvertRuntimeSerializedNumber("256", typeof(byte), out _));
+        Assert.False(GameObjectInspectorPanel.TryConvertRuntimeSerializedNumber("NaN", typeof(float), out _));
+        Assert.False(GameObjectInspectorPanel.TryConvertRuntimeSerializedNumber(null, typeof(int), out _));
+    }
+
+    /// <summary>
+    /// 验证 Runtime Inspector 的 Vector2/3/4 分量写回保持原始向量类型，并拒绝维数不符与非有限值。
+    /// </summary>
+    [Fact]
+    public void RuntimeVectorConversionPreservesShapeAndFiniteValues()
+    {
+        Assert.True(GameObjectInspectorPanel.TryCreateRuntimeVector(
+            typeof(Vector2),
+            [1f, 2f],
+            out object? vector2));
+        Assert.Equal(new Vector2(1f, 2f), Assert.IsType<Vector2>(vector2));
+
+        Assert.True(GameObjectInspectorPanel.TryCreateRuntimeVector(
+            typeof(Vector3?),
+            [3f, 4f, 5f],
+            out object? vector3));
+        Assert.Equal(new Vector3(3f, 4f, 5f), Assert.IsType<Vector3>(vector3));
+
+        Assert.True(GameObjectInspectorPanel.TryCreateRuntimeVector(
+            typeof(Vector4),
+            [6f, 7f, 8f, 9f],
+            out object? vector4));
+        Assert.Equal(new Vector4(6f, 7f, 8f, 9f), Assert.IsType<Vector4>(vector4));
+
+        Assert.False(GameObjectInspectorPanel.TryCreateRuntimeVector(typeof(Vector3), [1f, 2f], out _));
+        Assert.False(GameObjectInspectorPanel.TryCreateRuntimeVector(typeof(Vector2), [float.NaN, 2f], out _));
+        Assert.False(GameObjectInspectorPanel.TryCreateRuntimeVector(typeof(string), [1f, 2f], out _));
+    }
+
+    /// <summary>
     /// 验证整数 Range 的下界向上取整、上界向下取整，且不把无可表示区间写成范围外值。
     /// </summary>
     [Fact]
