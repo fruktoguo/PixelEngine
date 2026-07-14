@@ -255,52 +255,83 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
     private void DrawSettings()
     {
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        if (!ImGui.BeginTable(
+            "build_settings_fields",
+            2,
+            ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.PadOuterX |
+            ImGuiTableFlags.BordersInnerH |
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.NoSavedSettings))
+        {
+            return;
+        }
+
+        ImGui.TableSetupColumn(
+            "Property",
+            ImGuiTableColumnFlags.WidthFixed,
+            ResolveSettingsLabelWidth(availableWidth));
+        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+
         bool changed = false;
         int rid = IndexOf(RidOptions, _settings.Rid);
-        if (ImGui.Combo("目标平台", ref rid, RidOptions, RidOptions.Length) && rid >= 0)
+        NextSetting("目标平台");
+        if (ImGui.Combo("##build-target-rid", ref rid, RidOptions, RidOptions.Length) && rid >= 0)
         {
             _settings.Rid = RidOptions[rid];
             changed = true;
         }
 
         int channel = _settings.Channel == BuildProfileChannel.Aot ? 1 : 0;
-        if (ImGui.Combo("通道", ref channel, ChannelOptions, ChannelOptions.Length))
+        NextSetting("通道");
+        if (ImGui.Combo("##build-channel", ref channel, ChannelOptions, ChannelOptions.Length))
         {
             _settings.Channel = channel == 1 ? BuildProfileChannel.Aot : BuildProfileChannel.R2R;
             changed = true;
         }
 
         int configuration = IndexOf(ConfigurationOptions, _settings.Configuration);
-        if (ImGui.Combo("配置", ref configuration, ConfigurationOptions, ConfigurationOptions.Length) && configuration >= 0)
+        NextSetting("配置");
+        if (ImGui.Combo("##build-configuration", ref configuration, ConfigurationOptions, ConfigurationOptions.Length) && configuration >= 0)
         {
             _settings.Configuration = ConfigurationOptions[configuration];
             changed = true;
         }
 
-        changed |= InputText("输出目录", _settings.OutputDirectory, value => _settings.OutputDirectory = value, 512);
-        changed |= InputText("产物名", _settings.ProductName, value => _settings.ProductName = value, 128);
-        changed |= InputText("版本", _settings.Version, value => _settings.Version = value, 64);
-        changed |= InputText("信息版本", _settings.InformationalVersion, value => _settings.InformationalVersion = value, 128);
+        NextSetting("输出目录");
+        changed |= InputTextValue("##build-output-directory", _settings.OutputDirectory, value => _settings.OutputDirectory = value, 512);
+        NextSetting("产物名");
+        changed |= InputTextValue("##build-product-name", _settings.ProductName, value => _settings.ProductName = value, 128);
+        NextSetting("版本");
+        changed |= InputTextValue("##build-version", _settings.Version, value => _settings.Version = value, 64);
+        NextSetting("信息版本");
+        changed |= InputTextValue("##build-informational-version", _settings.InformationalVersion, value => _settings.InformationalVersion = value, 128);
         string icon = _settings.IconPath ?? string.Empty;
-        if (InputText("图标 .ico", icon, value => _settings.IconPath = string.IsNullOrWhiteSpace(value) ? null : value, 512))
+        NextSetting("图标 .ico");
+        if (InputTextValue("##build-icon", icon, value => _settings.IconPath = string.IsNullOrWhiteSpace(value) ? null : value, 512))
         {
             changed = true;
         }
 
         bool includeSymbols = _settings.IncludeSymbols;
-        if (ImGui.Checkbox("调试符号", ref includeSymbols))
+        NextSetting("调试符号");
+        if (ImGui.Checkbox("##build-include-symbols", ref includeSymbols))
         {
             _settings.IncludeSymbols = includeSymbols;
             changed = true;
         }
 
         bool wholeContent = _settings.PackageWholeContent;
-        if (ImGui.Checkbox("完整 content", ref wholeContent))
+        NextSetting("完整 content");
+        if (ImGui.Checkbox("##build-package-whole-content", ref wholeContent))
         {
             _settings.PackageWholeContent = wholeContent;
             changed = true;
         }
 
+        ImGui.EndTable();
         if (changed)
         {
             _ = Save();
@@ -824,10 +855,26 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         return 0;
     }
 
-    private static bool InputText(string label, string value, Action<string> assign, uint maxLength)
+    internal static float ResolveSettingsLabelWidth(float availableWidth)
+    {
+        float width = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        return Math.Clamp(width * 0.44f, 72f, 144f);
+    }
+
+    private static void NextSetting(string label)
+    {
+        ImGui.TableNextRow();
+        _ = ImGui.TableSetColumnIndex(0);
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextUnformatted(label);
+        _ = ImGui.TableSetColumnIndex(1);
+        ImGui.SetNextItemWidth(-1f);
+    }
+
+    private static bool InputTextValue(string id, string value, Action<string> assign, uint maxLength)
     {
         string editable = value;
-        bool changed = ImGui.InputText(label, ref editable, maxLength);
+        bool changed = ImGui.InputText(id, ref editable, maxLength);
         if (changed)
         {
             assign(editable);

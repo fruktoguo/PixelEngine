@@ -346,6 +346,18 @@ public sealed class EditorConsoleStoreTests
         Assert.Empty(service.Requests);
     }
 
+    /// <summary>
+    /// 验证窄停靠区里的 Build Settings 仍为 label/value 两列保留可读宽度。
+    /// </summary>
+    [Fact]
+    public void BuildSettingsLabelColumnRemainsReadableAndBounded()
+    {
+        Assert.Equal(72f, BuildSettingsPanel.ResolveSettingsLabelWidth(120f));
+        Assert.Equal(132f, BuildSettingsPanel.ResolveSettingsLabelWidth(300f), precision: 3);
+        Assert.Equal(144f, BuildSettingsPanel.ResolveSettingsLabelWidth(600f));
+        Assert.Equal(72f, BuildSettingsPanel.ResolveSettingsLabelWidth(float.NaN));
+    }
+
     private sealed class ImmediateBuildService : IPlayerBuildService
     {
         public BuildPreflight Preflight { get; init; } = new() { Ok = true, Diagnostic = "ok" };

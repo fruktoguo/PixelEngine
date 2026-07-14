@@ -932,6 +932,24 @@ internal sealed class EditorShellApp
 
         if (state.Reopened && !state.Captured)
         {
+            if (!state.FocusRequested)
+            {
+                state.FocusRequested = CurrentSession.ShowBuildSettings();
+                if (!state.FocusRequested)
+                {
+                    state.Diagnostic = "构建设置探针无法聚焦 Build Settings 面板。";
+                    state.Completed = true;
+                }
+
+                return;
+            }
+
+            state.FramesAfterFocus++;
+            if (state.FramesAfterFocus < 2)
+            {
+                return;
+            }
+
             try
             {
                 state.After = CurrentSession.CaptureScriptedBuildSettingsProbe();
@@ -1280,6 +1298,8 @@ internal sealed class EditorShellApp
             $"applied={state.Applied}, " +
             $"close_requested={state.CloseRequested}, " +
             $"reopened={state.Reopened}, " +
+            $"build_settings_focused={state.FocusRequested}, " +
+            $"frames_after_focus={state.FramesAfterFocus.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"captured={state.Captured}, " +
             $"matches={matches}, " +
             $"product={SanitizeSummaryValue(state.After.ProductName)}, " +
@@ -2834,6 +2854,8 @@ internal sealed class ScriptedBuildSettingsProbeState
     public bool Applied;
     public bool CloseRequested;
     public bool Reopened;
+    public bool FocusRequested;
+    public int FramesAfterFocus;
     public bool Captured;
     public bool Completed;
     public string Diagnostic = string.Empty;

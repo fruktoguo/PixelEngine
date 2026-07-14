@@ -1541,6 +1541,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ShowBuildSettings", source, StringComparison.Ordinal);
         Assert.Contains("TryStartBuild", source, StringComparison.Ordinal);
         Assert.Contains("build_settings_body", source, StringComparison.Ordinal);
+        Assert.Contains("build_settings_fields", source, StringComparison.Ordinal);
+        Assert.Contains("ResolveSettingsLabelWidth", source, StringComparison.Ordinal);
         Assert.Contains("_settings.RunAfterBuild = runAfterBuild;", source, StringComparison.Ordinal);
         Assert.DoesNotContain("runAfterBuild || _settings.RunAfterBuild", source, StringComparison.Ordinal);
         Assert.Contains("ContentRoot = _project.ContentRootPath", source, StringComparison.Ordinal);
@@ -1555,6 +1557,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("editor_build_run_probe", source, StringComparison.Ordinal);
         Assert.Contains("editor_build_cancel_probe", source, StringComparison.Ordinal);
         Assert.Contains("editor_build_settings_probe", source, StringComparison.Ordinal);
+        Assert.Contains("build_settings_focused", source, StringComparison.Ordinal);
+        Assert.Contains("frames_after_focus", source, StringComparison.Ordinal);
         Assert.Contains("phase_timing_count", source, StringComparison.Ordinal);
         Assert.Contains("phase_timings", source, StringComparison.Ordinal);
         Assert.Contains("ui_frame_count", source, StringComparison.Ordinal);
