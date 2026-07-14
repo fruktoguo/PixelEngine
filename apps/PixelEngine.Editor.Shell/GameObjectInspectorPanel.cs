@@ -25,26 +25,6 @@ internal sealed class GameObjectInspectorPanel(
     IRuntimeSceneEditorDataSource? runtimeSource = null,
     Func<EditorMode>? modeProvider = null) : IEditorPanel, IDisposable
 {
-    private static readonly string[] ScaleModeLabels =
-    [
-        "Constant Pixel Size",
-        "Scale With Screen Size",
-        "Constant Physical Size",
-    ];
-    private static readonly string[] ScreenMatchModeLabels =
-    [
-        "Match Width Or Height",
-        "Expand",
-        "Shrink",
-    ];
-    private static readonly string[] PhysicalUnitLabels =
-    [
-        "Centimeters",
-        "Millimeters",
-        "Inches",
-        "Points",
-        "Picas",
-    ];
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly ScriptAssemblyRegistry _scripts = scripts ?? throw new ArgumentNullException(nameof(scripts));
@@ -60,6 +40,10 @@ internal sealed class GameObjectInspectorPanel(
     private readonly Func<EditorMode>? _modeProvider = modeProvider;
     private string _componentSearch = string.Empty;
     private string _statusMessage = string.Empty;
+    private string _canvasOptionsLocale = string.Empty;
+    private string[] _scaleModeLabels = [];
+    private string[] _screenMatchModeLabels = [];
+    private string[] _physicalUnitLabels = [];
     private string? _statusSelectionKey;
     private EditorMode _lastMode = EditorMode.Edit;
     private int? _transformEditStableId;
@@ -1171,7 +1155,11 @@ internal sealed class GameObjectInspectorPanel(
         TextColoredUnformatted(
             new Vector4(0.45f, 0.72f, 1f, 1f),
             L.Get("inspector.runtime.temporary", "Play Mode · changes are temporary"));
-        ImGui.TextUnformatted($"{entity.Handle} · Entity {entity.EntityId}");
+        ImGui.TextUnformatted(L.Format(
+            "inspector.runtime.entityIdentity",
+            "{0} · Entity {1}",
+            entity.Handle,
+            entity.EntityId));
         if (entity.Transform is not null)
         {
             ImGui.SeparatorText(L.Get("inspector.runtime.transform", "Transform (Runtime)"));
@@ -2506,7 +2494,7 @@ internal sealed class GameObjectInspectorPanel(
         float available = ImGui.GetContentRegionAvail().X;
         float addWidth = MathF.Min(220f, available);
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + MathF.Max(0f, (available - addWidth) * 0.5f));
-        if (ImGui.Button("Add Component", new Vector2(addWidth, 0f)))
+        if (ImGui.Button(L.Get("inspector.component.add", "Add Component"), new Vector2(addWidth, 0f)))
         {
             _componentSearch = string.Empty;
             ImGui.OpenPopup("add-component-popup");
@@ -2515,13 +2503,21 @@ internal sealed class GameObjectInspectorPanel(
         if (ImGui.BeginPopup("add-component-popup"))
         {
             ImGui.SetNextItemWidth(280f);
-            _ = ImGui.InputTextWithHint("##component-search", "Search components", ref _componentSearch, 128);
+            _ = ImGui.InputTextWithHint(
+                "##component-search",
+                L.Get("inspector.component.search", "Search components"),
+                ref _componentSearch,
+                128);
             ImGui.Separator();
             bool hasBuiltInMatch = false;
-            if (gameObject.WebCanvas is null && MatchesComponentSearch("Canvas (Web)"))
+            string webCanvasLabel = L.Get("inspector.canvas.web", "Canvas (Web)");
+            bool webCanvasMatches = MatchesComponentSearch(webCanvasLabel) ||
+                (!string.Equals(webCanvasLabel, "Canvas (Web)", StringComparison.Ordinal) &&
+                 MatchesComponentSearch("Canvas (Web)"));
+            if (gameObject.WebCanvas is null && webCanvasMatches)
             {
                 hasBuiltInMatch = true;
-                if (ImGui.Selectable("Canvas (Web)##add-built-in-web-canvas"))
+                if (ImGui.Selectable($"{webCanvasLabel}##add-built-in-web-canvas"))
                 {
                     _undo.Execute(
                         _scene,
@@ -2534,10 +2530,14 @@ internal sealed class GameObjectInspectorPanel(
                 }
             }
 
-            if (gameObject.CanvasScaler is null && MatchesComponentSearch("Canvas Scaler"))
+            string canvasScalerLabel = L.Get("inspector.canvasScaler", "Canvas Scaler");
+            bool canvasScalerMatches = MatchesComponentSearch(canvasScalerLabel) ||
+                (!string.Equals(canvasScalerLabel, "Canvas Scaler", StringComparison.Ordinal) &&
+                 MatchesComponentSearch("Canvas Scaler"));
+            if (gameObject.CanvasScaler is null && canvasScalerMatches)
             {
                 hasBuiltInMatch = true;
-                if (ImGui.Selectable("Canvas Scaler##add-built-in-canvas-scaler"))
+                if (ImGui.Selectable($"{canvasScalerLabel}##add-built-in-canvas-scaler"))
                 {
                     _undo.Execute(
                         _scene,
@@ -2569,13 +2569,13 @@ internal sealed class GameObjectInspectorPanel(
 
                 if (ImGui.IsItemHovered())
                 {
-                    ImGui.SetTooltip(label);
+                    SetTooltipUnformatted(label);
                 }
             }
 
             if (behaviours.Length == 0 && !hasBuiltInMatch)
             {
-                ImGui.TextDisabled("No matching Behaviour");
+                TextDisabledUnformatted(L.Get("inspector.component.noMatch", "No matching Behaviour"));
             }
 
             ImGui.EndPopup();
@@ -2593,9 +2593,15 @@ internal sealed class GameObjectInspectorPanel(
                 new Vector2(0f, 104f),
                 ImGuiChildFlags.Borders,
                 ImGuiWindowFlags.NoScrollbar);
-            ImGui.TextColored(new Vector4(0.45f, 0.72f, 1f, 1f), "Legacy implicit Web Canvas");
-            ImGui.TextWrapped("旧场景正在使用不落盘的 primary Canvas。转换前不会静默改写场景。");
-            if (ImGui.Button("Convert To Canvas (Web)", new Vector2(-1f, 0f)))
+            TextColoredUnformatted(
+                new Vector4(0.45f, 0.72f, 1f, 1f),
+                L.Get("inspector.canvas.legacyTitle", "Legacy implicit Web Canvas"));
+            TextWrappedUnformatted(L.Get(
+                "inspector.canvas.legacyHelp",
+                "This older scene uses a non-persistent primary Canvas. The scene will not be rewritten until you convert it."));
+            if (ImGui.Button(
+                L.Get("inspector.canvas.convert", "Convert To Canvas (Web)"),
+                new Vector2(-1f, 0f)))
             {
                 _undo.Execute(
                     _scene,
@@ -2623,13 +2629,14 @@ internal sealed class GameObjectInspectorPanel(
 
     private void DrawWebCanvasComponent(EditorGameObject gameObject, CanvasInspectorSnapshot snapshot)
     {
-        bool open = DrawInspectorComponentHeader("Canvas (Web)##built-in-web-canvas");
+        bool open = DrawInspectorComponentHeader(
+            $"{L.Get("inspector.canvas.web", "Canvas (Web)")}##built-in-web-canvas");
         bool reset = false;
         bool remove = false;
         if (ImGui.BeginPopupContextItem("built-in-web-canvas-context"))
         {
-            reset = ImGui.MenuItem("Reset");
-            remove = ImGui.MenuItem("Remove Component");
+            reset = ImGui.MenuItem(L.Get("inspector.action.reset", "Reset"));
+            remove = ImGui.MenuItem(L.Get("inspector.component.remove", "Remove Component"));
             ImGui.EndPopup();
         }
 
@@ -2668,7 +2675,10 @@ internal sealed class GameObjectInspectorPanel(
 
         SetupInspectorPropertyColumns(availableWidth);
         bool enabled = webCanvas.Enabled;
-        bool changed = DrawBooleanProperty("Enabled", "##web-canvas-enabled", ref enabled);
+        bool changed = DrawBooleanProperty(
+            L.Get("inspector.component.enabled", "Enabled"),
+            "##web-canvas-enabled",
+            ref enabled);
         if (changed)
         {
             webCanvas.Enabled = enabled;
@@ -2678,7 +2688,11 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         string manifestAssetId = webCanvas.ManifestAssetId ?? string.Empty;
-        changed = DrawTextProperty("Manifest Asset ID", "##web-canvas-manifest-id", ref manifestAssetId, 512);
+        changed = DrawTextProperty(
+            L.Get("inspector.canvas.manifestAssetId", "Manifest Asset ID"),
+            "##web-canvas-manifest-id",
+            ref manifestAssetId,
+            512);
         if (changed)
         {
             webCanvas.ManifestAssetId = NormalizeOptionalText(manifestAssetId);
@@ -2687,7 +2701,11 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         string manifestPath = webCanvas.ManifestPath ?? string.Empty;
-        changed = DrawTextProperty("Manifest Path", "##web-canvas-manifest-path", ref manifestPath, 512);
+        changed = DrawTextProperty(
+            L.Get("inspector.canvas.manifestPath", "Manifest Path"),
+            "##web-canvas-manifest-path",
+            ref manifestPath,
+            512);
         if (changed)
         {
             webCanvas.ManifestPath = NormalizeOptionalText(manifestPath);
@@ -2696,7 +2714,11 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         string initialScreen = webCanvas.InitialScreenId ?? string.Empty;
-        changed = DrawTextProperty("Initial Screen", "##web-canvas-initial-screen", ref initialScreen, 256);
+        changed = DrawTextProperty(
+            L.Get("inspector.canvas.initialScreen", "Initial Screen"),
+            "##web-canvas-initial-screen",
+            ref initialScreen,
+            256);
         if (changed)
         {
             webCanvas.InitialScreenId = NormalizeOptionalText(initialScreen);
@@ -2705,7 +2727,11 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         int sortingOrder = webCanvas.SortingOrder;
-        changed = DrawIntegerProperty("Sorting Order", "##web-canvas-sorting-order", ref sortingOrder, 1f);
+        changed = DrawIntegerProperty(
+            L.Get("inspector.canvas.sortingOrder", "Sorting Order"),
+            "##web-canvas-sorting-order",
+            ref sortingOrder,
+            1f);
         if (changed)
         {
             webCanvas.SortingOrder = sortingOrder;
@@ -2714,7 +2740,10 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         bool primary = webCanvas.Primary;
-        changed = DrawBooleanProperty("Primary", "##web-canvas-primary", ref primary);
+        changed = DrawBooleanProperty(
+            L.Get("inspector.canvas.primary", "Primary"),
+            "##web-canvas-primary",
+            ref primary);
         if (changed)
         {
             CommitPendingBuiltInCanvasEdit();
@@ -2731,16 +2760,26 @@ internal sealed class GameObjectInspectorPanel(
             }
         }
 
-        DrawReadOnlyProperty("Derived Canvas ID", snapshot.DerivedCanvasId == 0
-            ? "none"
+        DrawReadOnlyProperty(L.Get("inspector.canvas.derivedId", "Derived Canvas ID"), snapshot.DerivedCanvasId == 0
+            ? L.Get("inspector.none", "None")
             : $"0x{snapshot.DerivedCanvasId:X16}");
-        DrawReadOnlyProperty("Effective Primary", snapshot.IsEffectivePrimary ? "Yes" : "No");
-        DrawReadOnlyProperty("Runtime State", snapshot.IsRuntimeEnabled ? "Enabled" : "Not materialized");
+        DrawReadOnlyProperty(
+            L.Get("inspector.canvas.effectivePrimary", "Effective Primary"),
+            snapshot.IsEffectivePrimary
+                ? L.Get("inspector.value.yes", "Yes")
+                : L.Get("inspector.value.no", "No"));
+        DrawReadOnlyProperty(
+            L.Get("inspector.canvas.runtimeState", "Runtime State"),
+            snapshot.IsRuntimeEnabled
+                ? L.Get("inspector.component.enabled", "Enabled")
+                : L.Get("inspector.canvas.notMaterialized", "Not materialized"));
         EndInspectorPropertyTable();
 
         if (snapshot.UsesDefaultScaler)
         {
-            if (ImGui.Button("Add Canvas Scaler", new Vector2(-1f, 0f)))
+            if (ImGui.Button(
+                L.Get("inspector.canvas.addScaler", "Add Canvas Scaler"),
+                new Vector2(-1f, 0f)))
             {
                 _undo.Execute(
                     _scene,
@@ -2756,13 +2795,14 @@ internal sealed class GameObjectInspectorPanel(
 
     private void DrawCanvasScalerComponent(EditorGameObject gameObject, CanvasInspectorSnapshot snapshot)
     {
-        bool open = DrawInspectorComponentHeader("Canvas Scaler##built-in-canvas-scaler");
+        bool open = DrawInspectorComponentHeader(
+            $"{L.Get("inspector.canvasScaler", "Canvas Scaler")}##built-in-canvas-scaler");
         bool reset = false;
         bool remove = false;
         if (ImGui.BeginPopupContextItem("built-in-canvas-scaler-context"))
         {
-            reset = ImGui.MenuItem("Reset");
-            remove = ImGui.MenuItem("Remove Component");
+            reset = ImGui.MenuItem(L.Get("inspector.action.reset", "Reset"));
+            remove = ImGui.MenuItem(L.Get("inspector.component.remove", "Remove Component"));
             ImGui.EndPopup();
         }
 
@@ -2801,8 +2841,13 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         SetupInspectorPropertyColumns(availableWidth);
+        RefreshCanvasLocalizedOptions();
         int scaleMode = (int)settings.ScaleMode;
-        bool changed = DrawComboProperty("UI Scale Mode", "##canvas-scaler-mode", ref scaleMode, ScaleModeLabels);
+        bool changed = DrawComboProperty(
+            L.Get("inspector.canvasScaler.scaleMode", "UI Scale Mode"),
+            "##canvas-scaler-mode",
+            ref scaleMode,
+            _scaleModeLabels);
         if (changed)
         {
             settings = settings with { ScaleMode = (UiScaleMode)scaleMode };
@@ -2829,7 +2874,11 @@ internal sealed class GameObjectInspectorPanel(
         EndInspectorPropertyTable();
         if (snapshot.IsOrphanScaler)
         {
-            DrawCanvasDiagnostic("该 Canvas Scaler 没有同对象 Canvas (Web)，会保留序列化但当前 inactive。", warning: true);
+            DrawCanvasDiagnostic(
+                L.Get(
+                    "inspector.canvasScaler.orphan",
+                    "This Canvas Scaler has no Canvas (Web) on the same GameObject. It remains serialized but is currently inactive."),
+                warning: true);
         }
     }
 
@@ -2840,7 +2889,11 @@ internal sealed class GameObjectInspectorPanel(
     {
         UiCanvasScalerSettings settings = scaler.Settings;
         float scaleFactor = settings.ScaleFactor;
-        bool changed = DrawPositiveFloatProperty("Scale Factor", "##canvas-scale-factor", ref scaleFactor, 0.01f);
+        bool changed = DrawPositiveFloatProperty(
+            L.Get("inspector.canvasScaler.scaleFactor", "Scale Factor"),
+            "##canvas-scale-factor",
+            ref scaleFactor,
+            0.01f);
         if (changed)
         {
             scaler.Settings = settings with { ScaleFactor = scaleFactor };
@@ -2858,7 +2911,7 @@ internal sealed class GameObjectInspectorPanel(
         UiCanvasScalerSettings settings = scaler.Settings;
         float referenceWidth = settings.ReferenceWidth;
         bool changed = DrawPositiveFloatProperty(
-            "Reference Width",
+            L.Get("inspector.canvasScaler.referenceWidth", "Reference Width"),
             "##canvas-reference-width",
             ref referenceWidth,
             1f);
@@ -2872,7 +2925,7 @@ internal sealed class GameObjectInspectorPanel(
 
         float referenceHeight = settings.ReferenceHeight;
         changed = DrawPositiveFloatProperty(
-            "Reference Height",
+            L.Get("inspector.canvasScaler.referenceHeight", "Reference Height"),
             "##canvas-reference-height",
             ref referenceHeight,
             1f);
@@ -2885,7 +2938,11 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         int matchMode = (int)settings.ScreenMatchMode;
-        changed = DrawComboProperty("Screen Match Mode", "##canvas-screen-match", ref matchMode, ScreenMatchModeLabels);
+        changed = DrawComboProperty(
+            L.Get("inspector.canvasScaler.screenMatchMode", "Screen Match Mode"),
+            "##canvas-screen-match",
+            ref matchMode,
+            _screenMatchModeLabels);
         if (changed)
         {
             settings = settings with { ScreenMatchMode = (UiScreenMatchMode)matchMode };
@@ -2896,7 +2953,10 @@ internal sealed class GameObjectInspectorPanel(
         if (settings.ScreenMatchMode == UiScreenMatchMode.MatchWidthOrHeight)
         {
             float match = settings.MatchWidthOrHeight;
-            changed = DrawUnitFloatProperty("Match", "##canvas-match-width-height", ref match);
+            changed = DrawUnitFloatProperty(
+                L.Get("inspector.canvasScaler.match", "Match"),
+                "##canvas-match-width-height",
+                ref match);
             if (changed)
             {
                 scaler.Settings = settings with { MatchWidthOrHeight = match };
@@ -2915,7 +2975,11 @@ internal sealed class GameObjectInspectorPanel(
     {
         UiCanvasScalerSettings settings = scaler.Settings;
         int physicalUnit = (int)settings.PhysicalUnit;
-        bool changed = DrawComboProperty("Physical Unit", "##canvas-physical-unit", ref physicalUnit, PhysicalUnitLabels);
+        bool changed = DrawComboProperty(
+            L.Get("inspector.canvasScaler.physicalUnit", "Physical Unit"),
+            "##canvas-physical-unit",
+            ref physicalUnit,
+            _physicalUnitLabels);
         if (changed)
         {
             settings = settings with { PhysicalUnit = (UiPhysicalUnit)physicalUnit };
@@ -2925,7 +2989,11 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         float fallbackDpi = settings.FallbackScreenDpi;
-        changed = DrawPositiveFloatProperty("Fallback Screen DPI", "##canvas-fallback-dpi", ref fallbackDpi, 1f);
+        changed = DrawPositiveFloatProperty(
+            L.Get("inspector.canvasScaler.fallbackDpi", "Fallback Screen DPI"),
+            "##canvas-fallback-dpi",
+            ref fallbackDpi,
+            1f);
         if (changed)
         {
             settings = settings with { FallbackScreenDpi = fallbackDpi };
@@ -2935,7 +3003,11 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
 
         float spriteDpi = settings.DefaultSpriteDpi;
-        changed = DrawPositiveFloatProperty("Default Sprite DPI", "##canvas-default-sprite-dpi", ref spriteDpi, 1f);
+        changed = DrawPositiveFloatProperty(
+            L.Get("inspector.canvasScaler.defaultSpriteDpi", "Default Sprite DPI"),
+            "##canvas-default-sprite-dpi",
+            ref spriteDpi,
+            1f);
         if (changed)
         {
             scaler.Settings = settings with { DefaultSpriteDpi = spriteDpi };
@@ -2953,7 +3025,7 @@ internal sealed class GameObjectInspectorPanel(
         UiCanvasScalerSettings settings = scaler.Settings;
         float referencePixelsPerUnit = settings.ReferencePixelsPerUnit;
         bool changed = DrawPositiveFloatProperty(
-            "Reference Pixels Per Unit",
+            L.Get("inspector.canvasScaler.referencePixelsPerUnit", "Reference Pixels Per Unit"),
             "##canvas-reference-ppu",
             ref referencePixelsPerUnit,
             1f);
@@ -2965,10 +3037,44 @@ internal sealed class GameObjectInspectorPanel(
         HandleBuiltInCanvasInput(gameObject, webCanvas, scaler, changed);
     }
 
+    private void RefreshCanvasLocalizedOptions()
+    {
+        string locale = L.CurrentLocale;
+        if (string.Equals(_canvasOptionsLocale, locale, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _canvasOptionsLocale = locale;
+        _scaleModeLabels =
+        [
+            L.Get("inspector.canvasScaler.mode.constantPixel", "Constant Pixel Size"),
+            L.Get("inspector.canvasScaler.mode.screen", "Scale With Screen Size"),
+            L.Get("inspector.canvasScaler.mode.physical", "Constant Physical Size"),
+        ];
+        _screenMatchModeLabels =
+        [
+            L.Get("inspector.canvasScaler.matchMode.widthHeight", "Match Width Or Height"),
+            L.Get("inspector.canvasScaler.matchMode.expand", "Expand"),
+            L.Get("inspector.canvasScaler.matchMode.shrink", "Shrink"),
+        ];
+        _physicalUnitLabels =
+        [
+            L.Get("inspector.canvasScaler.unit.centimeters", "Centimeters"),
+            L.Get("inspector.canvasScaler.unit.millimeters", "Millimeters"),
+            L.Get("inspector.canvasScaler.unit.inches", "Inches"),
+            L.Get("inspector.canvasScaler.unit.points", "Points"),
+            L.Get("inspector.canvasScaler.unit.picas", "Picas"),
+        ];
+    }
+
     private static void SetupInspectorPropertyColumns(float availableWidth)
     {
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
-        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(
+            L.Get("settings.property", "Property"),
+            ImGuiTableColumnFlags.WidthFixed,
+            ResolveInspectorLabelWidth(availableWidth));
+        ImGui.TableSetupColumn(L.Get("settings.value", "Value"), ImGuiTableColumnFlags.WidthStretch);
     }
 
     private static bool DrawBooleanProperty(string label, string id, ref bool value)
@@ -3050,7 +3156,7 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.PushStyleColor(
             ImGuiCol.Text,
             warning ? new Vector4(0.95f, 0.70f, 0.25f, 1f) : new Vector4(0.55f, 0.75f, 0.95f, 1f));
-        ImGui.TextWrapped(diagnostic);
+        TextWrappedUnformatted(diagnostic);
         ImGui.PopStyleColor();
     }
 
@@ -3272,20 +3378,27 @@ internal sealed class GameObjectInspectorPanel(
         Vector2 headerMax = ImGui.GetItemRectMax();
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip($"{component.TypeName}\nRight-click for component actions");
+            SetTooltipUnformatted(L.Format(
+                "inspector.component.actionsTooltip",
+                "{0}\nRight-click for component actions",
+                component.TypeName));
         }
 
         int moveTarget = -1;
         bool remove = false;
         if (ImGui.BeginPopupContextItem($"component_context_{componentIndex}"))
         {
-            if (ImGui.MenuItem("Move Up", string.Empty, selected: false, enabled: componentIndex > 0))
+            if (ImGui.MenuItem(
+                L.Get("inspector.component.moveUp", "Move Up"),
+                string.Empty,
+                selected: false,
+                enabled: componentIndex > 0))
             {
                 moveTarget = componentIndex - 1;
             }
 
             if (ImGui.MenuItem(
-                "Move Down",
+                L.Get("inspector.component.moveDown", "Move Down"),
                 string.Empty,
                 selected: false,
                 enabled: componentIndex < gameObject.Components.Count - 1))
@@ -3294,7 +3407,7 @@ internal sealed class GameObjectInspectorPanel(
             }
 
             ImGui.Separator();
-            remove = ImGui.MenuItem("Remove Component");
+            remove = ImGui.MenuItem(L.Get("inspector.component.remove", "Remove Component"));
             ImGui.EndPopup();
         }
 
@@ -3320,7 +3433,9 @@ internal sealed class GameObjectInspectorPanel(
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(componentEnabled ? "Component enabled" : "Component disabled");
+            SetTooltipUnformatted(componentEnabled
+                ? L.Get("inspector.component.enabledTooltip", "Component enabled")
+                : L.Get("inspector.component.disabledTooltip", "Component disabled"));
         }
 
         ImGui.GetWindowDrawList().AddText(
@@ -3350,7 +3465,7 @@ internal sealed class GameObjectInspectorPanel(
 
         if (!TryCreateBehaviour(component.TypeName, out Behaviour? behaviour))
         {
-            ImGui.TextUnformatted("Behaviour type unavailable");
+            ImGui.TextUnformatted(L.Get("inspector.component.typeUnavailable", "Behaviour type unavailable"));
             return;
         }
 
@@ -3361,8 +3476,7 @@ internal sealed class GameObjectInspectorPanel(
             return;
         }
 
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
-        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        SetupInspectorPropertyColumns(availableWidth);
         for (int i = 0; i < fields.Length; i++)
         {
             DrawField(gameObject.StableId, componentIndex, component, fields[i]);

@@ -73,6 +73,30 @@ public sealed partial class EditorLocalizationSurfaceTests
         Assert.Contains("inspector.empty", inspector, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Inspector 会显示脚本值、路径和诊断等任意文本；这些内容不得进入 ImGui printf 风格 API。
+    /// Canvas Scaler 的枚举标签也必须按当前 locale 缓存刷新，而不是静态锁死英文。
+    /// </summary>
+    [Fact]
+    public void InspectorUsesUnformattedTextAndLocalizedCanvasOptions()
+    {
+        string root = FindRepositoryRoot();
+        string inspector = File.ReadAllText(Path.Combine(
+            root,
+            "apps",
+            "PixelEngine.Editor.Shell",
+            "GameObjectInspectorPanel.cs"));
+
+        Assert.DoesNotContain("ImGui.Text(", inspector, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImGui.TextWrapped(", inspector, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImGui.TextColored(", inspector, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImGui.TextDisabled(", inspector, StringComparison.Ordinal);
+        Assert.DoesNotContain("ImGui.SetTooltip(", inspector, StringComparison.Ordinal);
+        Assert.DoesNotContain("private static readonly string[] ScaleModeLabels", inspector, StringComparison.Ordinal);
+        Assert.Contains("RefreshCanvasLocalizedOptions", inspector, StringComparison.Ordinal);
+        Assert.Contains("inspector.canvasScaler.mode.screen", inspector, StringComparison.Ordinal);
+    }
+
     private static JsonObject LoadStrings(string path)
     {
         JsonObject document = JsonNode.Parse(File.ReadAllText(path))?.AsObject()
