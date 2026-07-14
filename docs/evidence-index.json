@@ -744,15 +744,15 @@
     {
       "entryId": "ui-004-canvas-draft-build-settings-20260714",
       "taskIds": ["UI-004"],
-      "evidenceState": "clean_final_output_complete_external_input_dpi_review_pending",
-      "commit": "1f9e5b6e1d63118dcf95314ceebfbdbf9cf30e52",
-      "runSessionId": "local-20260714-ui004-canvas-draft-build-settings",
+      "evidenceState": "local_build_settings_overflow_complete_clean_final_output_refresh_pending_external_input_dpi_review_pending",
+      "commit": "a3d36cd22459c62f57f28c51c08d90c2d7b35b14",
+      "runSessionId": "local-20260714-ui004-canvas-draft-build-settings-footer-overflow",
       "runIdentityStatus": "captured_commit_bound_local_run",
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; real 1024x720 desktop GL Editor framebuffer",
-      "command": "full PixelEngine.Hosting.Tests Release; focused EditorConsoleStoreTests and HostingProjectDisciplineTests; solution Release build; commit-bound Editor scripted build-player win-x64/r2r/Release package and audit; tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; tools/run-editor-build-settings-probe.ps1; detached clean worktree tools/update-final-output.ps1 win-x64/r2r/Release/RmlUi; clean and promoted root tools/verify-final-output.ps1; promoted root Player 80-frame run; task and evidence catalog validation",
+      "command": "full PixelEngine.Hosting.Tests Release at 1f9e5b6e; focused EditorConsoleStoreTests, EditorShellBuildTests and HostingProjectDisciplineTests 90/90 at a3d36cd2; solution Release build; commit-bound Editor scripted build-player win-x64/r2r/Release package and audit; tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; commit-bound tools/run-editor-build-settings-probe.ps1 with narrow footer overflow popup; prior detached clean worktree and promoted root final output verification at 289b0b06; task and evidence catalog validation",
       "reportPath": "docs/evidence-2026-07-14-ui-004-canvas-draft-build-settings.md",
-      "sha256": "3897d4e22b220d579e15ae30d3d45fec5eb7f2a25a1d19c31f128259c6440543",
-      "notes": "Invalid Canvas and CanvasScaler drafts now remain recoverable across Inspector, projection, Play, Save and scene/project open. Build and Build And Run flush, validate and save the current dirty scene before starting build-player, and a real R2R package passes audit. The narrow Build Settings panel uses a readable label/value table; an isolated 20-frame commit-bound runner verifies profile roundtrip and complete opaque framebuffer regions. A detached clean worktree and promoted root final output pass the packaged Editor matrix, Unicode-path RmlUi Player, 392 checksums and root 80-frame replay. Physical input, different-DPI/cross-screen and reviewer remain, so UI-004 stays active."
+      "sha256": "434d6424713c3ebc9644ec40632837f6d0588187d866248f461b1c60e99bc876",
+      "notes": "Invalid Canvas and CanvasScaler drafts remain recoverable across Inspector, projection, Play, Save and scene/project open. Build and Build And Run flush, validate and save the current dirty scene before starting build-player, and a real R2R package passes audit. The narrow Build Settings panel uses a readable label/value table and now resolves its footer into inline, primary-plus-overflow or all-overflow density; a3d36cd2 records 222px available versus 284px inline and opens the upward-anchored popup in a complete framebuffer. The prior detached clean output at 289b0b06 passed 392 checksums and root replay, but is intentionally marked stale after a3d36cd2 until the next staged refresh. Physical input, different-DPI/cross-screen and reviewer remain, so UI-004 stays active."
     },
     {
       "entryId": "ci-002-local-remediation-20260711",
