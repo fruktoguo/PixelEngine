@@ -358,12 +358,14 @@ public sealed class GameObjectInspectorPanelTests
         Assert.Equal("脚本：Player，1 KB", snapshot.PreviewSummary);
         Assert.Equal("Open Script", snapshot.PrimaryActionLabel);
         Assert.Equal(AssetBrowserPreviewContentKind.Text, snapshot.DetailedPreview?.ContentKind);
-        Assert.Equal("就绪", snapshot.Status);
+        Assert.Equal(EditorLocalization.Get("status.ready", "Ready"), snapshot.Status);
 
         Assert.False(missing.Found);
         Assert.Equal("Unknown", missing.Kind);
         Assert.Null(missing.AssetId);
-        Assert.Contains("资产不存在", missing.Status, StringComparison.Ordinal);
+        Assert.Equal(
+            EditorLocalization.Format("inspector.assetMissing", "Asset not found: {0}", "scripts/Missing.cs"),
+            missing.Status);
     }
 
     /// <summary>
@@ -483,7 +485,9 @@ public sealed class GameObjectInspectorPanelTests
         Assert.Equal("levels", levels.Path);
         Assert.Equal(2, levels.AssetCount);
         Assert.False(missing.Found);
-        Assert.Contains("文件夹不存在", missing.Status, StringComparison.Ordinal);
+        Assert.Equal(
+            EditorLocalization.Format("inspector.folderMissing", "Folder not found: {0}", "missing"),
+            missing.Status);
     }
 
 
@@ -548,7 +552,12 @@ public sealed class GameObjectInspectorPanelTests
 
         Assert.True(prefabInstantiated);
         Assert.Equal(["prefabs/Crate.prefab"], instantiatedPrefabs);
-        Assert.Equal("实例化 prefabs/Crate.prefab", panel.Status);
+        Assert.Equal(
+            EditorLocalization.Format(
+                "inspector.action.prefabInstantiated",
+                "Instantiated {0}",
+                "prefabs/Crate.prefab"),
+            panel.Status);
 
         Assert.True(panel.TryInvokePrimaryAssetAction("Content/scenes/Mine.scene"));
         Assert.Equal(["Content/scenes/Mine.scene"], openedScenes);
@@ -559,7 +568,12 @@ public sealed class GameObjectInspectorPanelTests
         Assert.False(textureHandled);
         Assert.Equal(["scripts/Player.cs"], openedScripts);
         Assert.Equal(["prefabs/Crate.prefab"], instantiatedPrefabs);
-        Assert.Contains("没有 Inspector 主操作", panel.Status, StringComparison.Ordinal);
+        Assert.Equal(
+            EditorLocalization.Format(
+                "inspector.action.none",
+                "This asset has no primary Inspector action: {0}",
+                "textures/Crate.png"),
+            panel.Status);
     }
 
     /// <summary>

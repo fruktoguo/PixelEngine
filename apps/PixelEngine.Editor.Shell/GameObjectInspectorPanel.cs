@@ -25,7 +25,6 @@ internal sealed class GameObjectInspectorPanel(
     IRuntimeSceneEditorDataSource? runtimeSource = null,
     Func<EditorMode>? modeProvider = null) : IEditorPanel, IDisposable
 {
-    private const string ReadyStatus = "就绪";
     private static readonly string[] ScaleModeLabels =
     [
         "Constant Pixel Size",
@@ -60,6 +59,7 @@ internal sealed class GameObjectInspectorPanel(
     private readonly IRuntimeSceneEditorDataSource? _runtimeSource = runtimeSource;
     private readonly Func<EditorMode>? _modeProvider = modeProvider;
     private string _componentSearch = string.Empty;
+    private string _statusMessage = string.Empty;
     private string? _statusSelectionKey;
     private EditorMode _lastMode = EditorMode.Edit;
     private int? _transformEditStableId;
@@ -89,7 +89,9 @@ internal sealed class GameObjectInspectorPanel(
 
     public string Title => EditorDockSpace.InspectorWindowTitle;
 
-    internal string Status { get; private set; } = ReadyStatus;
+    internal string Status => string.IsNullOrWhiteSpace(_statusMessage)
+        ? L.Get("status.ready", "Ready")
+        : _statusMessage;
 
     internal ScriptedRuntimeInspectorProbeSnapshot CaptureScriptedRuntimeInspectorProbe()
     {
@@ -202,11 +204,12 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.BeginDisabled(!canModify);
         DrawHeader(gameObject);
-        bool transformOpen = DrawInspectorComponentHeader("Transform##gameobject-transform");
+        bool transformOpen = DrawInspectorComponentHeader(
+            $"{L.Get("inspector.transform", "Transform")}##gameobject-transform");
         bool resetTransform = false;
         if (ImGui.BeginPopupContextItem("gameobject-transform-context"))
         {
-            resetTransform = ImGui.MenuItem("Reset");
+            resetTransform = ImGui.MenuItem(L.Get("inspector.action.reset", "Reset"));
             ImGui.EndPopup();
         }
 
@@ -222,7 +225,7 @@ internal sealed class GameObjectInspectorPanel(
 
         DrawComponents(gameObject);
         ImGui.EndDisabled();
-        if (!string.Equals(Status, ReadyStatus, StringComparison.Ordinal))
+        if (!string.IsNullOrWhiteSpace(_statusMessage))
         {
             ImGui.Separator();
             TextColoredUnformatted(new Vector4(0.95f, 0.70f, 0.25f, 1f), Status);
@@ -380,7 +383,17 @@ internal sealed class GameObjectInspectorPanel(
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
         if (_assetSource is null)
         {
-            return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, null, null, "资产数据源不可用");
+            return new AssetInspectorSnapshot(
+                assetPath,
+                Found: false,
+                L.Get("inspector.unknown", "Unknown"),
+                null,
+                0,
+                null,
+                null,
+                null,
+                null,
+                L.Get("inspector.assetSourceUnavailable", "Asset data source unavailable"));
         }
 
         IReadOnlyList<AssetBrowserItem> assets = _assetSource.ListAssets();
@@ -393,18 +406,28 @@ internal sealed class GameObjectInspectorPanel(
                 return new AssetInspectorSnapshot(
                     item.Path,
                     Found: true,
-                    item.Kind.ToString(),
+                    GetAssetKindLabel(item.Kind),
                     item.AssetId,
                     item.SizeBytes,
                     item.PreviewSummary,
                     GetPrimaryAssetActionLabel(item.Kind),
                     item,
                     preview,
-                    "就绪");
+                    L.Get("status.ready", "Ready"));
             }
         }
 
-        return new AssetInspectorSnapshot(assetPath, Found: false, "Unknown", null, 0, null, null, null, null, $"资产不存在：{assetPath}");
+        return new AssetInspectorSnapshot(
+            assetPath,
+            Found: false,
+            L.Get("inspector.unknown", "Unknown"),
+            null,
+            0,
+            null,
+            null,
+            null,
+            null,
+            L.Format("inspector.assetMissing", "Asset not found: {0}", assetPath));
     }
 
     internal AssetThumbnail? CaptureAssetPreviewThumbnail(string assetPath)
@@ -421,7 +444,11 @@ internal sealed class GameObjectInspectorPanel(
         string normalized = (folderPath ?? string.Empty).Trim().Replace('\\', '/');
         if (_assetSource is not IAssetBrowserFolderDataSource folderSource)
         {
-            return new FolderInspectorSnapshot(normalized, Found: false, 0, "文件夹数据源不可用");
+            return new FolderInspectorSnapshot(
+                normalized,
+                Found: false,
+                0,
+                L.Get("inspector.folderSourceUnavailable", "Folder data source unavailable"));
         }
 
         IReadOnlyList<AssetBrowserFolderItem> folders = folderSource.ListFolders();
@@ -430,11 +457,19 @@ internal sealed class GameObjectInspectorPanel(
             AssetBrowserFolderItem folder = folders[i];
             if (string.Equals(folder.Path, normalized, StringComparison.OrdinalIgnoreCase))
             {
-                return new FolderInspectorSnapshot(folder.Path, Found: true, folder.AssetCount, "就绪");
+                return new FolderInspectorSnapshot(
+                    folder.Path,
+                    Found: true,
+                    folder.AssetCount,
+                    L.Get("status.ready", "Ready"));
             }
         }
 
-        return new FolderInspectorSnapshot(normalized, Found: false, 0, $"文件夹不存在：{normalized}");
+        return new FolderInspectorSnapshot(
+            normalized,
+            Found: false,
+            0,
+            L.Format("inspector.folderMissing", "Folder not found: {0}", normalized));
     }
 
     internal bool TryInvokePrimaryAssetAction(string assetPath)
@@ -448,7 +483,11 @@ internal sealed class GameObjectInspectorPanel(
 
         if (asset.Item is not { } item)
         {
-            RecordInspectorStatus($"资产类型不可操作：{asset.Kind}", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
+            RecordInspectorStatus(
+                L.Format("inspector.action.unsupportedKind", "Asset type cannot be acted on: {0}", asset.Kind),
+                EditorConsoleSeverity.Warning,
+                "inspector-asset-action",
+                GetAssetSelectionKey(asset.Path));
             return false;
         }
 
@@ -457,14 +496,20 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Script:
                 if (_openScriptAsset is null)
                 {
-                    RecordInspectorStatus("脚本外部编辑器不可用", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
+                    RecordInspectorStatus(
+                        L.Get("inspector.action.scriptEditorUnavailable", "External script editor unavailable"),
+                        EditorConsoleSeverity.Warning,
+                        "inspector-asset-action",
+                        GetAssetSelectionKey(asset.Path));
                     return false;
                 }
 
                 bool opened = _openScriptAsset(asset.Path, out string diagnostic);
                 RecordInspectorStatus(
                     string.IsNullOrWhiteSpace(diagnostic)
-                        ? opened ? $"打开脚本 {asset.Path}" : $"脚本外部编辑器打开失败：{asset.Path}"
+                        ? opened
+                            ? L.Format("inspector.action.scriptOpened", "Opened script {0}", asset.Path)
+                            : L.Format("inspector.action.scriptOpenFailed", "Failed to open script: {0}", asset.Path)
                         : diagnostic,
                     opened ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
                     "inspector-asset-action",
@@ -475,14 +520,20 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Prefab:
                 if (_instantiatePrefab is null)
                 {
-                    RecordInspectorStatus("Prefab 实例化服务不可用", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
+                    RecordInspectorStatus(
+                        L.Get("inspector.action.prefabServiceUnavailable", "Prefab instantiation service unavailable"),
+                        EditorConsoleSeverity.Warning,
+                        "inspector-asset-action",
+                        GetAssetSelectionKey(asset.Path));
                     return false;
                 }
 
                 bool instantiated = _instantiatePrefab(asset.Path, out string prefabDiagnostic);
                 RecordInspectorStatus(
                     string.IsNullOrWhiteSpace(prefabDiagnostic)
-                        ? instantiated ? $"实例化 {asset.Path}" : $"Prefab 实例化失败：{asset.Path}"
+                        ? instantiated
+                            ? L.Format("inspector.action.prefabInstantiated", "Instantiated {0}", asset.Path)
+                            : L.Format("inspector.action.prefabInstantiateFailed", "Failed to instantiate Prefab: {0}", asset.Path)
                         : prefabDiagnostic,
                     instantiated ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
                     "inspector-asset-action",
@@ -493,14 +544,20 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Scene:
                 if (_openSceneAsset is null)
                 {
-                    RecordInspectorStatus("场景打开服务不可用", EditorConsoleSeverity.Warning, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
+                    RecordInspectorStatus(
+                        L.Get("inspector.action.sceneServiceUnavailable", "Scene open service unavailable"),
+                        EditorConsoleSeverity.Warning,
+                        "inspector-asset-action",
+                        GetAssetSelectionKey(asset.Path));
                     return false;
                 }
 
                 bool sceneOpened = _openSceneAsset(asset.Path, out string sceneDiagnostic);
                 RecordInspectorStatus(
                     string.IsNullOrWhiteSpace(sceneDiagnostic)
-                        ? sceneOpened ? $"打开场景 {asset.Path}" : $"场景打开失败：{asset.Path}"
+                        ? sceneOpened
+                            ? L.Format("inspector.action.sceneOpened", "Opened scene {0}", asset.Path)
+                            : L.Format("inspector.action.sceneOpenFailed", "Failed to open scene: {0}", asset.Path)
                         : sceneDiagnostic,
                     sceneOpened ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
                     "inspector-asset-action",
@@ -515,7 +572,11 @@ internal sealed class GameObjectInspectorPanel(
             case AssetBrowserItemKind.Folder:
             case AssetBrowserItemKind.Other:
             default:
-                RecordInspectorStatus($"当前资产没有 Inspector 主操作：{asset.Path}", EditorConsoleSeverity.Info, "inspector-asset-action", GetAssetSelectionKey(asset.Path));
+                RecordInspectorStatus(
+                    L.Format("inspector.action.none", "This asset has no primary Inspector action: {0}", asset.Path),
+                    EditorConsoleSeverity.Info,
+                    "inspector-asset-action",
+                    GetAssetSelectionKey(asset.Path));
                 return false;
         }
     }
@@ -531,7 +592,7 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         ImGui.TextUnformatted(preview.Title);
-        ImGui.TextDisabled(asset.Kind);
+        TextDisabledUnformatted(asset.Kind);
         if (!string.IsNullOrWhiteSpace(asset.PrimaryActionLabel))
         {
             ImGui.Spacing();
@@ -543,8 +604,7 @@ internal sealed class GameObjectInspectorPanel(
 
         if (BeginInspectorPropertyTable("asset-inspector-properties", 2))
         {
-            ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
-            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+            SetupInspectorPropertyColumns(ImGui.GetContentRegionAvail().X);
             DrawReadOnlyProperty(L.Get("inspector.path", "Path"), asset.Path);
             DrawReadOnlyProperty(L.Get("inspector.type", "Type"), asset.Kind);
             DrawReadOnlyProperty(L.Get("inspector.stableId", "Stable ID"), asset.AssetId ?? L.Get("inspector.none", "None"));
@@ -557,7 +617,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawAssetPreview(in item, preview);
 
         string selectionStatus = GetSelectionStatus(GetAssetSelectionKey(asset.Path), asset.Status);
-        if (!string.Equals(selectionStatus, ReadyStatus, StringComparison.Ordinal))
+        if (!string.Equals(selectionStatus, L.Get("status.ready", "Ready"), StringComparison.Ordinal))
         {
             ImGui.Spacing();
             TextColoredUnformatted(new Vector4(0.95f, 0.70f, 0.25f, 1f), selectionStatus);
@@ -569,8 +629,7 @@ internal sealed class GameObjectInspectorPanel(
         TextWrappedUnformatted(preview.Summary);
         if (preview.Properties.Count != 0 && BeginInspectorPropertyTable("asset-preview-properties", 2))
         {
-            ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
-            ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+            SetupInspectorPropertyColumns(ImGui.GetContentRegionAvail().X);
             for (int i = 0; i < preview.Properties.Count; i++)
             {
                 AssetBrowserPreviewProperty property = preview.Properties[i];
@@ -676,6 +735,13 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]);
         ImGui.TextUnformatted(text);
         ImGui.PopStyleColor();
+    }
+
+    private static void SetTooltipUnformatted(string text)
+    {
+        _ = ImGui.BeginTooltip();
+        TextWrappedUnformatted(text);
+        ImGui.EndTooltip();
     }
 
     private static void DrawPropertyLabel(string label, bool disabled = false)
@@ -790,11 +856,25 @@ internal sealed class GameObjectInspectorPanel(
     {
         FolderInspectorSnapshot folder = CaptureFolderInspector(folderPath);
         ImGui.SeparatorText(L.Get("inspector.folder", "Folder"));
-        ImGui.TextUnformatted($"{L.Get("inspector.path", "Path")}: {(string.IsNullOrEmpty(folder.Path) ? "content/" : folder.Path + "/")}");
-        ImGui.TextUnformatted($"{L.Get("inspector.type", "Type")}: {L.Get("inspector.folder", "Folder")}");
-        ImGui.TextUnformatted($"{L.Get("inspector.assetCount", "Assets")}: {folder.AssetCount}");
-        ImGui.SeparatorText(L.Get("inspector.status", "Inspector Status"));
-        ImGui.TextUnformatted(GetSelectionStatus(GetFolderSelectionKey(folder.Path), folder.Status));
+        if (BeginInspectorPropertyTable("folder-inspector-properties", 2))
+        {
+            SetupInspectorPropertyColumns(ImGui.GetContentRegionAvail().X);
+            DrawReadOnlyProperty(
+                L.Get("inspector.path", "Path"),
+                string.IsNullOrEmpty(folder.Path) ? "content/" : folder.Path + "/");
+            DrawReadOnlyProperty(L.Get("inspector.type", "Type"), L.Get("inspector.folder", "Folder"));
+            DrawReadOnlyProperty(
+                L.Get("inspector.assetCount", "Assets"),
+                folder.AssetCount.ToString(CultureInfo.InvariantCulture));
+            EndInspectorPropertyTable();
+        }
+
+        string selectionStatus = GetSelectionStatus(GetFolderSelectionKey(folder.Path), folder.Status);
+        if (!string.Equals(selectionStatus, L.Get("status.ready", "Ready"), StringComparison.Ordinal))
+        {
+            ImGui.Spacing();
+            TextColoredUnformatted(new Vector4(0.95f, 0.70f, 0.25f, 1f), selectionStatus);
+        }
     }
 
     private static string? GetPrimaryAssetActionLabel(AssetBrowserItemKind kind)
@@ -822,7 +902,7 @@ internal sealed class GameObjectInspectorPanel(
         string selectionKey,
         bool writeConsole = true)
     {
-        Status = string.IsNullOrWhiteSpace(status) ? ReadyStatus : status;
+        _statusMessage = string.IsNullOrWhiteSpace(status) ? string.Empty : status;
         _statusSelectionKey = selectionKey;
         if (writeConsole)
         {
@@ -837,9 +917,28 @@ internal sealed class GameObjectInspectorPanel(
 
     private string GetSelectionStatus(string selectionKey, string fallback)
     {
-        return Status != ReadyStatus && string.Equals(_statusSelectionKey, selectionKey, StringComparison.Ordinal)
-            ? Status
+        return !string.IsNullOrWhiteSpace(_statusMessage) &&
+            string.Equals(_statusSelectionKey, selectionKey, StringComparison.Ordinal)
+            ? _statusMessage
             : fallback;
+    }
+
+    private static string GetAssetKindLabel(AssetBrowserItemKind kind)
+    {
+        return kind switch
+        {
+            AssetBrowserItemKind.Folder => L.Get("inspector.kind.folder", "Folder"),
+            AssetBrowserItemKind.Material => L.Get("inspector.kind.material", "Material"),
+            AssetBrowserItemKind.Texture => L.Get("inspector.kind.texture", "Texture"),
+            AssetBrowserItemKind.Audio => L.Get("inspector.kind.audio", "Audio"),
+            AssetBrowserItemKind.Scene => L.Get("inspector.kind.scene", "Scene"),
+            AssetBrowserItemKind.Prefab => L.Get("inspector.kind.prefab", "Prefab"),
+            AssetBrowserItemKind.Script => L.Get("inspector.kind.script", "Script"),
+            AssetBrowserItemKind.UiScreen => L.Get("inspector.kind.uiScreen", "UI Screen"),
+            AssetBrowserItemKind.Json => L.Get("inspector.kind.json", "JSON"),
+            AssetBrowserItemKind.Other => L.Get("inspector.kind.other", "Other"),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown Inspector asset kind."),
+        };
     }
 
     private static string GetAssetSelectionKey(string assetPath)
@@ -1059,7 +1158,7 @@ internal sealed class GameObjectInspectorPanel(
                 ComponentVectorDragFieldCount: 0,
                 ComponentDecimalFieldCount: 0,
                 RenderRevision: ++_runtimeInspectorRenderRevision);
-            ImGui.TextUnformatted("Runtime entity is no longer available");
+            ImGui.TextUnformatted(L.Get("inspector.runtime.entityUnavailable", "Runtime entity is no longer available"));
             return;
         }
 
@@ -1069,17 +1168,17 @@ internal sealed class GameObjectInspectorPanel(
         int componentNumericDragFieldCount = 0;
         int componentVectorDragFieldCount = 0;
         int componentDecimalFieldCount = 0;
-        ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.45f, 0.72f, 1f, 1f));
-        ImGui.TextWrapped("Play Mode · changes are temporary");
-        ImGui.PopStyleColor();
+        TextColoredUnformatted(
+            new Vector4(0.45f, 0.72f, 1f, 1f),
+            L.Get("inspector.runtime.temporary", "Play Mode · changes are temporary"));
         ImGui.TextUnformatted($"{entity.Handle} · Entity {entity.EntityId}");
         if (entity.Transform is not null)
         {
-            ImGui.SeparatorText("Transform (Runtime)");
+            ImGui.SeparatorText(L.Get("inspector.runtime.transform", "Transform (Runtime)"));
             transformTableRendered = DrawRuntimeTransform(entity);
         }
 
-        ImGui.SeparatorText("Components (Runtime)");
+        ImGui.SeparatorText(L.Get("inspector.runtime.components", "Components (Runtime)"));
         for (int i = 0; i < entity.Components.Length; i++)
         {
             ScriptComponentInspection component = entity.Components[i];
@@ -1094,12 +1193,14 @@ internal sealed class GameObjectInspectorPanel(
 
             if (ImGui.IsItemHovered())
             {
-                ImGui.SetTooltip(component.TypeName);
+                SetTooltipUnformatted(component.TypeName);
             }
 
-            ImGui.TextDisabled(component.Faulted
-                ? "Faulted"
-                : component.Enabled ? "Enabled" : "Disabled");
+            TextDisabledUnformatted(component.Faulted
+                ? L.Get("inspector.component.faulted", "Faulted")
+                : component.Enabled
+                    ? L.Get("inspector.component.enabled", "Enabled")
+                    : L.Get("inspector.component.disabled", "Disabled"));
             ScriptFieldDescriptor[] fields = ScriptInspector.InspectFields(component.Behaviour);
             float availableWidth = ImGui.GetContentRegionAvail().X;
             if (fields.Length == 0 ||
@@ -1167,7 +1268,7 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
+        ImGui.TableSetupColumn(L.Get("settings.property", "Property"), ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
         ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, axisWidth);
         ImGui.TableSetupColumn("ValueA", ImGuiTableColumnFlags.WidthStretch);
         if (inlineAxes)
@@ -1184,7 +1285,7 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        DrawPropertyLabel("Position");
+        DrawPropertyLabel(L.Get("inspector.transform.position", "Position"));
         _ = ImGui.TableSetColumnIndex(1);
         DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
@@ -1210,7 +1311,7 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        DrawPropertyLabel("Rotation");
+        DrawPropertyLabel(L.Get("inspector.transform.rotation", "Rotation"));
         _ = ImGui.TableSetColumnIndex(1);
         DrawAxisLabel("Z", InspectorAxis.Z);
         _ = ImGui.TableSetColumnIndex(2);
@@ -1220,7 +1321,7 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        DrawPropertyLabel("Scale");
+        DrawPropertyLabel(L.Get("inspector.transform.scale", "Scale"));
         _ = ImGui.TableSetColumnIndex(1);
         DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
@@ -1266,14 +1367,14 @@ internal sealed class GameObjectInspectorPanel(
         DrawPropertyLabel(field.Name, disabled: !field.CanWrite || field.Kind == ScriptFieldKind.Unsupported);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(field.Name);
+            SetTooltipUnformatted(field.Name);
         }
 
         _ = ImGui.TableSetColumnIndex(1);
         string id = $"##runtime_{handle}_{componentIndex}_{field.Name}";
         if (!field.CanWrite || field.Kind == ScriptFieldKind.Unsupported)
         {
-            ImGui.TextWrapped(FormatRuntimeFieldValue(field.Value));
+            TextWrappedUnformatted(FormatRuntimeFieldValue(field.Value));
             return;
         }
 
@@ -1324,7 +1425,7 @@ internal sealed class GameObjectInspectorPanel(
             case ScriptFieldKind.AssetReference:
             case ScriptFieldKind.Unsupported:
             default:
-                ImGui.TextWrapped(FormatRuntimeFieldValue(field.Value));
+                TextWrappedUnformatted(FormatRuntimeFieldValue(field.Value));
                 break;
         }
     }
@@ -1338,9 +1439,12 @@ internal sealed class GameObjectInspectorPanel(
         Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
         if (!HasValidNumericRange(field))
         {
-            ImGui.TextColored(
+            TextColoredUnformatted(
                 new Vector4(0.95f, 0.55f, 0.35f, 1f),
-                $"Range 中不存在 {target.Name} 可表示的值");
+                L.Format(
+                    "inspector.number.rangeUnsupported",
+                    "The declared Range contains no value representable by {0}",
+                    target.Name));
             return;
         }
 
@@ -1353,7 +1457,7 @@ internal sealed class GameObjectInspectorPanel(
         if (field.Value is null)
         {
             if (Nullable.GetUnderlyingType(field.FieldType) is not null &&
-                ImGui.Button($"null  ·  Set 0{id}"))
+                ImGui.Button($"{L.Get("inspector.number.setZero", "null · Set 0")}{id}"))
             {
                 if (TryConvertRuntimeSerializedNumber("0", field.FieldType, out object? zero))
                 {
@@ -1367,7 +1471,9 @@ internal sealed class GameObjectInspectorPanel(
         string current = FormatRuntimeNumericValue(field.Value, target);
         if (!IsValidNumericSerializedValue(target, current))
         {
-            ImGui.TextColored(new Vector4(0.95f, 0.55f, 0.35f, 1f), $"无效 {target.Name}：{current}");
+            TextColoredUnformatted(
+                new Vector4(0.95f, 0.55f, 0.35f, 1f),
+                L.Format("inspector.number.invalid", "Invalid {0}: {1}", target.Name, current));
             return;
         }
 
@@ -1420,7 +1526,9 @@ internal sealed class GameObjectInspectorPanel(
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("decimal 使用精确文本编辑；Enter 或失去焦点时提交，中间输入不会被重置。");
+            SetTooltipUnformatted(L.Get(
+                "inspector.decimal.tooltip",
+                "decimal uses exact text editing. Press Enter or leave the field to commit; intermediate input is preserved."));
         }
     }
 
@@ -1450,7 +1558,7 @@ internal sealed class GameObjectInspectorPanel(
                 count = 4;
                 break;
             case null when Nullable.GetUnderlyingType(field.FieldType) is not null:
-                if (ImGui.Button($"null  ·  Set Zero##runtime-vector-null-{handle}-{componentIndex}-{field.Name}") &&
+                if (ImGui.Button($"{L.Get("inspector.vector.setZero", "null · Set Zero")}##runtime-vector-null-{handle}-{componentIndex}-{field.Name}") &&
                     TryCreateRuntimeVector(target, values[..ResolveVectorComponentCount(target)], out object? zero))
                 {
                     _ = _runtimeSource!.TrySetBehaviourField(handle, componentIndex, field.Name, zero);
@@ -1458,9 +1566,13 @@ internal sealed class GameObjectInspectorPanel(
 
                 return;
             default:
-                ImGui.TextColored(
+                TextColoredUnformatted(
                     new Vector4(0.95f, 0.55f, 0.35f, 1f),
-                    $"无效 {target.Name}：{FormatRuntimeFieldValue(field.Value)}");
+                    L.Format(
+                        "inspector.number.invalid",
+                        "Invalid {0}: {1}",
+                        target.Name,
+                        FormatRuntimeFieldValue(field.Value)));
                 return;
         }
 
@@ -1538,18 +1650,40 @@ internal sealed class GameObjectInspectorPanel(
     {
         if (_runtimeSource is null || !_runtimeSource.TryGetBody(bodyKey, out RigidBodySnapshot body))
         {
-            ImGui.TextUnformatted("Runtime body is no longer available");
+            ImGui.TextUnformatted(L.Get("inspector.runtime.bodyUnavailable", "Runtime body is no longer available"));
             return;
         }
 
-        ImGui.TextUnformatted($"Body {body.BodyKey}");
-        ImGui.SeparatorText("Transform (Runtime, read-only)");
-        ImGui.TextUnformatted($"Position: {body.Transform.Position.X:0.###}, {body.Transform.Position.Y:0.###}");
-        ImGui.TextUnformatted($"Rotation: sin={body.Transform.Sin:0.###}, cos={body.Transform.Cos:0.###}");
-        ImGui.TextUnformatted($"Linear velocity: {body.LinearVelocityPixelsPerSecond.X:0.###}, {body.LinearVelocityPixelsPerSecond.Y:0.###}");
-        ImGui.TextUnformatted($"Angular velocity: {body.AngularVelocityRadiansPerSecond:0.###}");
-        ImGui.TextUnformatted($"Mask: {body.Mask.Width}×{body.Mask.Height} · {body.Mask.SolidPixelCount} pixels");
-        ImGui.TextWrapped("Rigid body editing requires a Physics phase-safe command and is intentionally read-only here.");
+        ImGui.TextUnformatted(L.Format("inspector.runtime.body", "Body {0}", body.BodyKey));
+        ImGui.SeparatorText(L.Get("inspector.runtime.transformReadOnly", "Transform (Runtime, read-only)"));
+        ImGui.TextUnformatted(L.Format(
+            "inspector.runtime.position",
+            "Position: {0}, {1}",
+            body.Transform.Position.X.ToString("0.###", CultureInfo.InvariantCulture),
+            body.Transform.Position.Y.ToString("0.###", CultureInfo.InvariantCulture)));
+        ImGui.TextUnformatted(L.Format(
+            "inspector.runtime.rotation",
+            "Rotation: sin={0}, cos={1}",
+            body.Transform.Sin.ToString("0.###", CultureInfo.InvariantCulture),
+            body.Transform.Cos.ToString("0.###", CultureInfo.InvariantCulture)));
+        ImGui.TextUnformatted(L.Format(
+            "inspector.runtime.linearVelocity",
+            "Linear velocity: {0}, {1}",
+            body.LinearVelocityPixelsPerSecond.X.ToString("0.###", CultureInfo.InvariantCulture),
+            body.LinearVelocityPixelsPerSecond.Y.ToString("0.###", CultureInfo.InvariantCulture)));
+        ImGui.TextUnformatted(L.Format(
+            "inspector.runtime.angularVelocity",
+            "Angular velocity: {0}",
+            body.AngularVelocityRadiansPerSecond.ToString("0.###", CultureInfo.InvariantCulture)));
+        ImGui.TextUnformatted(L.Format(
+            "inspector.runtime.mask",
+            "Mask: {0}×{1} · {2} pixels",
+            body.Mask.Width,
+            body.Mask.Height,
+            body.Mask.SolidPixelCount));
+        TextWrappedUnformatted(L.Get(
+            "inspector.runtime.bodyReadOnly",
+            "Rigid body editing requires a Physics phase-safe command and is intentionally read-only here."));
     }
 
     private static bool HasValidNumericRange(ScriptFieldDescriptor field)
@@ -1771,7 +1905,10 @@ internal sealed class GameObjectInspectorPanel(
         if (!TryNormalizeDecimalFieldValue(state.Field, state.Text, out string? serialized) ||
             !TryConvertRuntimeSerializedNumber(serialized, state.Field.FieldType, out object? converted))
         {
-            Status = $"无效 runtime decimal：{(state.Text.Length == 0 ? "<empty>" : state.Text)}";
+            _statusMessage = L.Format(
+                "inspector.decimal.runtimeInvalid",
+                "Invalid runtime decimal: {0}",
+                state.Text.Length == 0 ? L.Get("inspector.value.empty", "<empty>") : state.Text);
             return false;
         }
 
@@ -1780,9 +1917,12 @@ internal sealed class GameObjectInspectorPanel(
             state.ComponentIndex,
             state.Field.Name,
             converted) == true;
-        Status = applied
-            ? ReadyStatus
-            : $"Runtime 字段已失效：{state.Field.Name}";
+        _statusMessage = applied
+            ? string.Empty
+            : L.Format(
+                "inspector.runtime.fieldExpired",
+                "Runtime field is no longer available: {0}",
+                state.Field.Name);
         return applied;
     }
 
@@ -1796,7 +1936,9 @@ internal sealed class GameObjectInspectorPanel(
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(enabled ? "GameObject active" : "GameObject inactive");
+            SetTooltipUnformatted(enabled
+                ? L.Get("inspector.gameObject.active", "GameObject active")
+                : L.Get("inspector.gameObject.inactive", "GameObject inactive"));
         }
 
         if (!_nameEditStableId.HasValue)
@@ -1821,13 +1963,22 @@ internal sealed class GameObjectInspectorPanel(
             CommitPendingNameEdit();
         }
 
-        ImGui.TextDisabled($"2D GameObject  ·  ID {gameObject.StableId}");
+        TextDisabledUnformatted(L.Format(
+            "inspector.gameObject.identity",
+            "2D GameObject · ID {0}",
+            gameObject.StableId));
         if (gameObject.PrefabLink?.AssetPath is { Length: > 0 } prefab)
         {
-            ImGui.TextColored(new Vector4(0.45f, 0.72f, 1f, 1f), $"Prefab  ·  {prefab}");
+            TextColoredUnformatted(
+                new Vector4(0.45f, 0.72f, 1f, 1f),
+                L.Format("inspector.prefab.source", "Prefab · {0}", prefab));
             ImGui.SameLine();
-            ImGui.TextDisabled($"{gameObject.PrefabLink.Overrides.Count} overrides");
-            if (gameObject.PrefabLink.Overrides.Count != 0 && ImGui.Button("Revert Overrides"))
+            TextDisabledUnformatted(L.Format(
+                "inspector.prefab.overrides",
+                "{0} overrides",
+                gameObject.PrefabLink.Overrides.Count));
+            if (gameObject.PrefabLink.Overrides.Count != 0 &&
+                ImGui.Button(L.Get("inspector.prefab.revertOverrides", "Revert Overrides")))
             {
                 _undo.Execute(_scene, new RevertPrefabOverridesCommand(gameObject.StableId));
             }
@@ -1852,7 +2003,7 @@ internal sealed class GameObjectInspectorPanel(
         }
 
         float axisWidth = MathF.Max(18f, ImGui.GetTextLineHeight() + 4f);
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
+        ImGui.TableSetupColumn(L.Get("settings.property", "Property"), ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(availableWidth));
         ImGui.TableSetupColumn("AxisA", ImGuiTableColumnFlags.WidthFixed, axisWidth);
         ImGui.TableSetupColumn("ValueA", ImGuiTableColumnFlags.WidthStretch);
         if (inlineAxes)
@@ -1863,7 +2014,7 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        DrawPropertyLabel("Position");
+        DrawPropertyLabel(L.Get("inspector.transform.position", "Position"));
         _ = ImGui.TableSetColumnIndex(1);
         DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
@@ -1901,7 +2052,7 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        DrawPropertyLabel("Rotation");
+        DrawPropertyLabel(L.Get("inspector.transform.rotation", "Rotation"));
         _ = ImGui.TableSetColumnIndex(1);
         DrawAxisLabel("Z", InspectorAxis.Z);
         _ = ImGui.TableSetColumnIndex(2);
@@ -1917,7 +2068,7 @@ internal sealed class GameObjectInspectorPanel(
 
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
-        DrawPropertyLabel("Scale");
+        DrawPropertyLabel(L.Get("inspector.transform.scale", "Scale"));
         _ = ImGui.TableSetColumnIndex(1);
         DrawAxisLabel("X", InspectorAxis.X);
         _ = ImGui.TableSetColumnIndex(2);
@@ -1967,7 +2118,9 @@ internal sealed class GameObjectInspectorPanel(
     {
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("左右拖动快速修改；Ctrl+单击后可精确输入。");
+            SetTooltipUnformatted(L.Get(
+                "inspector.transform.dragTooltip",
+                "Drag horizontally to adjust quickly; Ctrl+click for exact input."));
         }
     }
 
@@ -1977,7 +2130,7 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.TableSetBgColor(
             ImGuiTableBgTarget.CellBg,
             ImGui.GetColorU32(new Vector4(color.X * 0.22f, color.Y * 0.22f, color.Z * 0.22f, 1f)));
-        ImGui.TextColored(color, label);
+        TextColoredUnformatted(color, label);
     }
 
     private static Vector4 GetAxisColor(InspectorAxis axis)
@@ -3277,7 +3430,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawPropertyLabel(field.Name);
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(field.Name);
+            SetTooltipUnformatted(field.Name);
         }
 
         _ = ImGui.TableSetColumnIndex(1);
@@ -3340,9 +3493,12 @@ internal sealed class GameObjectInspectorPanel(
              TryResolveDecimalFieldRange(field, out _, out _));
         if (!validRange)
         {
-            ImGui.TextColored(
+            TextColoredUnformatted(
                 new Vector4(0.95f, 0.55f, 0.35f, 1f),
-                $"Range 中不存在 {target.Name} 可表示的值");
+                L.Format(
+                    "inspector.number.rangeUnsupported",
+                    "The declared Range contains no value representable by {0}",
+                    target.Name));
             return;
         }
 
@@ -3355,7 +3511,7 @@ internal sealed class GameObjectInspectorPanel(
 
         if (nullableNull)
         {
-            if (ImGui.Button($"null  ·  Set 0##field-{stableId}-{componentIndex}-{field.Name}"))
+            if (ImGui.Button($"{L.Get("inspector.number.setZero", "null · Set 0")}##field-{stableId}-{componentIndex}-{field.Name}"))
             {
                 _undo.Execute(
                     _scene,
@@ -3423,7 +3579,9 @@ internal sealed class GameObjectInspectorPanel(
         bool commit = state is not null && (submitted || ImGui.IsItemDeactivated());
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("decimal 使用精确文本编辑；Enter 或失去焦点时提交，中间输入不会被重置。");
+            SetTooltipUnformatted(L.Get(
+                "inspector.decimal.tooltip",
+                "decimal uses exact text editing. Press Enter or leave the field to commit; intermediate input is preserved."));
         }
 
         if (commit)
@@ -3474,11 +3632,14 @@ internal sealed class GameObjectInspectorPanel(
                     state.ComponentIndex,
                     state.Field.Name,
                     serialized);
-                Status = ReadyStatus;
+                _statusMessage = string.Empty;
             }
             else
             {
-                Status = $"无效 decimal：{(state.Text.Length == 0 ? "<empty>" : state.Text)}";
+                _statusMessage = L.Format(
+                    "inspector.decimal.invalid",
+                    "Invalid decimal: {0}",
+                    state.Text.Length == 0 ? L.Get("inspector.value.empty", "<empty>") : state.Text);
             }
         }
 
@@ -3518,11 +3679,15 @@ internal sealed class GameObjectInspectorPanel(
         Type target,
         string current)
     {
-        ImGui.TextColored(
+        TextColoredUnformatted(
             new Vector4(0.95f, 0.55f, 0.35f, 1f),
-            $"无效 {target.Name}：{(current.Length == 0 ? "<empty>" : current)}");
+            L.Format(
+                "inspector.number.invalid",
+                "Invalid {0}: {1}",
+                target.Name,
+                current.Length == 0 ? L.Get("inspector.value.empty", "<empty>") : current));
         ImGui.SameLine();
-        if (ImGui.SmallButton($"Reset##number-reset-{stableId}-{componentIndex}-{field.Name}"))
+        if (ImGui.SmallButton($"{L.Get("inspector.action.reset", "Reset")}##number-reset-{stableId}-{componentIndex}-{field.Name}"))
         {
             _undo.Execute(
                 _scene,
@@ -3998,8 +4163,10 @@ internal sealed class GameObjectInspectorPanel(
         }
         else
         {
-            ImGui.TextColored(new Vector4(0.95f, 0.55f, 0.35f, 1f), $"无效 {target.Name}：{current}");
-            if (ImGui.Button($"Reset to Zero##vector-reset-{stableId}-{componentIndex}-{field.Name}"))
+            TextColoredUnformatted(
+                new Vector4(0.95f, 0.55f, 0.35f, 1f),
+                L.Format("inspector.number.invalid", "Invalid {0}: {1}", target.Name, current));
+            if (ImGui.Button($"{L.Get("inspector.vector.resetZero", "Reset to Zero")}##vector-reset-{stableId}-{componentIndex}-{field.Name}"))
             {
                 string reset = target == typeof(Vector2)
                     ? SerializedFieldValueCodec.Format(Vector2.Zero)
@@ -4110,7 +4277,9 @@ internal sealed class GameObjectInspectorPanel(
     {
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("左右拖动快速修改；Ctrl+单击后可精确输入。一次拖动只生成一条 Undo。");
+            SetTooltipUnformatted(L.Get(
+                "inspector.component.dragTooltip",
+                "Drag horizontally to adjust quickly; Ctrl+click for exact input. One drag creates one Undo step."));
         }
     }
 
@@ -4138,16 +4307,21 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawAssetReference(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         string value = ReadFieldValue(component, field);
-        string typeLabel = field.AssetKind?.ToString() ?? "Unknown";
+        string typeLabel = field.AssetKind?.ToString() ?? L.Get("inspector.unknown", "Unknown");
         ImGui.TextUnformatted($"{FormatAssetReferenceDisplay(field, value)} ({typeLabel})");
         DrawAssetReferenceDropTarget(stableId, componentIndex, field);
         if (!string.IsNullOrWhiteSpace(value))
         {
             ImGui.SameLine();
-            if (ImGui.Button($"Clear##assetref_clear_{stableId}_{componentIndex}_{field.Name}"))
+            if (ImGui.Button($"{L.Get("inspector.assetReference.clear", "Clear")}##assetref_clear_{stableId}_{componentIndex}_{field.Name}"))
             {
                 _undo.Execute(_scene, new SetComponentFieldCommand(stableId, componentIndex, field.Name, null));
-                RecordAssetDropResult(EditorAssetDropResult.Success($"已清除字段 {field.Name} 的资产引用。", stableId));
+                RecordAssetDropResult(EditorAssetDropResult.Success(
+                    L.Format(
+                        "inspector.assetReference.cleared",
+                        "Cleared the asset reference in field {0}.",
+                        field.Name),
+                    stableId));
             }
         }
     }
@@ -4180,7 +4354,9 @@ internal sealed class GameObjectInspectorPanel(
     {
         EditorAssetDropResult result = EditorAssetDropPayload.TryFromBrowserPayload(browserPayload, out EditorAssetDropPayload payload)
             ? ApplyAssetDropPayloadToField(stableId, componentIndex, field, payload)
-            : EditorAssetDropResult.Failure("Project Window 拖拽 payload 缺少 stable asset id 或 logical path。");
+            : EditorAssetDropResult.Failure(L.Get(
+                "inspector.assetReference.invalidPayload",
+                "The Project Window drag payload is missing a stable asset ID or logical path."));
         RecordAssetDropResult(result);
         return result;
     }
@@ -4193,12 +4369,15 @@ internal sealed class GameObjectInspectorPanel(
     {
         return EditorAssetInspectorFieldTarget.TryCreate(stableId, componentIndex, field, out EditorAssetInspectorFieldTarget target)
             ? EditorAssetDropService.DropOnInspectorField(_scene, _undo, payload, target)
-            : EditorAssetDropResult.Failure($"字段 {field.Name} 不是 typed asset reference 字段。");
+            : EditorAssetDropResult.Failure(L.Format(
+                "inspector.assetReference.notTyped",
+                "Field {0} is not a typed asset reference field.",
+                field.Name));
     }
 
     private void RecordAssetDropResult(EditorAssetDropResult result)
     {
-        Status = string.IsNullOrWhiteSpace(result.Diagnostic) ? ReadyStatus : result.Diagnostic;
+        _statusMessage = string.IsNullOrWhiteSpace(result.Diagnostic) ? string.Empty : result.Diagnostic;
         _console?.Add(new EditorConsoleEntry(
             DateTimeOffset.UtcNow,
             EditorConsoleCategory.Asset,
@@ -4210,11 +4389,15 @@ internal sealed class GameObjectInspectorPanel(
     internal static string FormatAssetReferenceDisplay(ScriptFieldDescriptor field, string value)
     {
         return string.IsNullOrWhiteSpace(value)
-            ? "none"
+            ? L.Get("inspector.none", "None")
             : !ScriptAssetReference.TryDecode(value, out ScriptAssetReference reference)
-            ? $"invalid reference: {value}"
+            ? L.Format("inspector.assetReference.invalid", "Invalid reference: {0}", value)
             : field.AssetKind is ScriptAssetKind expected && reference.AssetType != expected
-            ? $"type mismatch: {reference.AssetType} {reference.LogicalPath}"
+            ? L.Format(
+                "inspector.assetReference.typeMismatch",
+                "Type mismatch: {0} {1}",
+                reference.AssetType,
+                reference.LogicalPath)
             : $"{reference.LogicalPath} [{reference.AssetId}]";
     }
 
