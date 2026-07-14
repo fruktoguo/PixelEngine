@@ -491,6 +491,18 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.CaptureScriptedBuildSettingsProbe();
     }
 
+    public ScriptedBuildSettingsFooterProbeSnapshot CaptureScriptedBuildSettingsFooterProbe()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedBuildSettingsFooterProbe();
+    }
+
+    public bool RequestScriptedBuildSettingsActionsOverflow()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.RequestScriptedBuildSettingsActionsOverflow();
+    }
+
     public ScriptedProjectSettingsProbeSnapshot ApplyScriptedProjectSettingsProbe()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

@@ -261,6 +261,17 @@ internal sealed class EditorShellHostExtension :
             throw new InvalidOperationException("Build Settings 面板尚未注册。");
     }
 
+    public ScriptedBuildSettingsFooterProbeSnapshot CaptureScriptedBuildSettingsFooterProbe()
+    {
+        return _buildSettingsPanel?.CaptureScriptedBuildSettingsFooterProbe() ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。");
+    }
+
+    public bool RequestScriptedBuildSettingsActionsOverflow()
+    {
+        return _buildSettingsPanel?.RequestScriptedBuildSettingsActionsOverflow() == true;
+    }
+
     public ScriptedProjectSettingsProbeSnapshot ApplyScriptedProjectSettingsProbe()
     {
         if (_projectSettingsPanel is null)

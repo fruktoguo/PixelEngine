@@ -238,16 +238,25 @@ public sealed class HostingProjectDisciplineTests
         string root = FindRepositoryRoot();
         string script = File.ReadAllText(Path.Combine(root, "tools", "run-editor-build-settings-probe.ps1"));
         string editorSource = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
+        string buildSettingsSource = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Build", "BuildSettingsPanel.cs"));
 
         Assert.Contains("Copy-TrackedProject", script, StringComparison.Ordinal);
         Assert.Contains("--scripted-build-settings-probe", script, StringComparison.Ordinal);
         Assert.Contains("build_settings_focused", script, StringComparison.Ordinal);
         Assert.Contains("frames_after_focus", script, StringComparison.Ordinal);
+        Assert.Contains("footer_density", script, StringComparison.Ordinal);
+        Assert.Contains("footer_overflow_visible", script, StringComparison.Ordinal);
+        Assert.Contains("footer_overflow_popup_open", script, StringComparison.Ordinal);
+        Assert.Contains("footer_actions_accessible", script, StringComparison.Ordinal);
+        Assert.Contains("footer_secondary_accessible", script, StringComparison.Ordinal);
+        Assert.Contains("footer_overflow_requested", script, StringComparison.Ordinal);
         Assert.Contains("Assert-MinimumSummaryInteger", script, StringComparison.Ordinal);
         Assert.Contains("Get-BmpEvidence", script, StringComparison.Ordinal);
         Assert.Contains("buildSettingsOpaqueRatio", script, StringComparison.Ordinal);
         Assert.Contains("pixelengine.editor-build-settings-evidence/v1", script, StringComparison.Ordinal);
         Assert.Contains("BuildSettingsProbeStableFrameCount = 20", editorSource, StringComparison.Ordinal);
+        Assert.Contains("ImGui.SetNextWindowPos", buildSettingsSource, StringComparison.Ordinal);
+        Assert.Contains("new System.Numerics.Vector2(0f, 1f)", buildSettingsSource, StringComparison.Ordinal);
     }
 
     /// <summary>

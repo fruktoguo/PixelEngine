@@ -12,6 +12,7 @@ namespace PixelEngine.Editor.Shell.Build;
 internal sealed class BuildSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.BuildSettingsWindowTitle;
+    private const string ActionsOverflowPopupName = "build-settings-actions-overflow";
     private static readonly string[] RidOptions = ["win-x64", "win-arm64"];
     private static readonly string[] ChannelOptions = ["R2R", "NativeAOT"];
     private static readonly string[] ConfigurationOptions = ["Release", "Debug"];
@@ -30,6 +31,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private string _validationMessage = string.Empty;
     private string _persistentSettingsDiagnostic = string.Empty;
     private bool _autoScroll = true;
+    private bool _scriptedOpenActionsOverflow;
+    private ScriptedBuildSettingsFooterProbeSnapshot _lastFooterProbe = new();
 
     public BuildSettingsPanel(
         EditorProject project,
@@ -201,6 +204,28 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             IncludedSceneCount = _settings.Scenes.Count(static scene => scene.Included),
             StartupScene = startup?.Source ?? startup?.SceneName ?? string.Empty,
         };
+    }
+
+    /// <summary>
+    /// 读取最近一帧实际绘制的 Build Settings footer 响应式布局。
+    /// </summary>
+    public ScriptedBuildSettingsFooterProbeSnapshot CaptureScriptedBuildSettingsFooterProbe()
+    {
+        return _lastFooterProbe;
+    }
+
+    /// <summary>
+    /// 让下一次绘制打开窄 footer 的动作菜单，供 commit-bound framebuffer 证明菜单内容可达。
+    /// </summary>
+    public bool RequestScriptedBuildSettingsActionsOverflow()
+    {
+        if (!_lastFooterProbe.OverflowVisible || !_lastFooterProbe.ActionsAccessible)
+        {
+            return false;
+        }
+
+        _scriptedOpenActionsOverflow = true;
+        return true;
     }
 
     public void Draw(in EditorContext context)
@@ -392,6 +417,87 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     {
         bool canBuild = CanStartBuild(out _validationMessage);
         ImGui.TextUnformatted(_validationMessage);
+        float availableWidth = ImGui.GetContentRegionAvail().X;
+        ImGuiStylePtr style = ImGui.GetStyle();
+        float horizontalPadding = style.FramePadding.X * 2f;
+        float buildWidth = ImGui.CalcTextSize("Build").X + horizontalPadding;
+        float buildAndRunWidth = ImGui.CalcTextSize("Build And Run").X + horizontalPadding;
+        float cancelWidth = ImGui.CalcTextSize("取消").X + horizontalPadding;
+        float preflightWidth = ImGui.CalcTextSize("重新预检").X + horizontalPadding;
+        float overflowWidth = MathF.Max(
+            ImGui.GetFrameHeight(),
+            ImGui.CalcTextSize("...").X + horizontalPadding);
+        BuildSettingsFooterLayout layout = ResolveFooterLayout(
+            availableWidth,
+            style.ItemSpacing.X,
+            buildWidth,
+            buildAndRunWidth,
+            cancelWidth,
+            preflightWidth,
+            overflowWidth);
+
+        bool primaryActionsVisible = layout.Density != BuildSettingsFooterDensity.AllOverflow;
+        if (primaryActionsVisible)
+        {
+            DrawPrimaryActions(canBuild);
+        }
+
+        bool overflowPopupOpen = false;
+        if (layout.Density == BuildSettingsFooterDensity.Inline)
+        {
+            ImGui.SameLine();
+            DrawInlineSecondaryActions();
+        }
+        else
+        {
+            if (primaryActionsVisible)
+            {
+                ImGui.SameLine();
+            }
+
+            bool popupRequested = DrawActionsOverflowButton(
+                overflowWidth,
+                out System.Numerics.Vector2 popupAnchor);
+            if (_scriptedOpenActionsOverflow)
+            {
+                ImGui.OpenPopup(ActionsOverflowPopupName);
+                _scriptedOpenActionsOverflow = false;
+                popupRequested = true;
+            }
+
+            if (popupRequested)
+            {
+                // footer 位于面板底部；菜单向上展开，避免落到状态栏外或依赖鼠标位置。
+                ImGui.SetNextWindowPos(
+                    popupAnchor,
+                    ImGuiCond.Appearing,
+                    new System.Numerics.Vector2(0f, 1f));
+            }
+
+            overflowPopupOpen = DrawActionsOverflowPopup(
+                includePrimaryActions: layout.Density == BuildSettingsFooterDensity.AllOverflow,
+                canBuild);
+        }
+
+        _lastFooterProbe = new ScriptedBuildSettingsFooterProbeSnapshot
+        {
+            Density = layout.Density,
+            AvailableWidth = layout.AvailableWidth,
+            RequiredInlineWidth = layout.RequiredInlineWidth,
+            RequiredResponsiveWidth = layout.RequiredResponsiveWidth,
+            RequiredOverflowWidth = layout.RequiredOverflowWidth,
+            PrimaryActionsFit = layout.PrimaryActionsFit,
+            ActionsAccessible = layout.ActionsAccessible,
+            BuildVisible = primaryActionsVisible,
+            BuildAndRunVisible = primaryActionsVisible,
+            OverflowVisible = layout.Density != BuildSettingsFooterDensity.Inline,
+            OverflowPopupOpen = overflowPopupOpen,
+            SecondaryActionsAccessible = layout.ActionsAccessible,
+        };
+    }
+
+    private void DrawPrimaryActions(bool canBuild)
+    {
         ImGui.BeginDisabled(!canBuild);
         if (ImGui.Button("Build"))
         {
@@ -405,7 +511,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         ImGui.EndDisabled();
-        ImGui.SameLine();
+    }
+
+    private void DrawInlineSecondaryActions()
+    {
         ImGui.BeginDisabled(!_view.IsRunning);
         if (ImGui.Button("取消"))
         {
@@ -418,6 +527,108 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         {
             StartPreflight();
         }
+    }
+
+    private static bool DrawActionsOverflowButton(
+        float overflowWidth,
+        out System.Numerics.Vector2 popupAnchor)
+    {
+        bool requested = ImGui.Button(
+            "...##build-settings-actions-overflow",
+            new System.Numerics.Vector2(overflowWidth, 0f));
+        System.Numerics.Vector2 buttonMin = ImGui.GetItemRectMin();
+        popupAnchor = new System.Numerics.Vector2(buttonMin.X, buttonMin.Y);
+        if (requested)
+        {
+            ImGui.OpenPopup(ActionsOverflowPopupName);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip("更多构建操作");
+        }
+
+        return requested;
+    }
+
+    private bool DrawActionsOverflowPopup(bool includePrimaryActions, bool canBuild)
+    {
+        if (!ImGui.BeginPopup(ActionsOverflowPopupName))
+        {
+            return false;
+        }
+
+        if (includePrimaryActions)
+        {
+            if (ImGui.MenuItem("Build", string.Empty, selected: false, enabled: canBuild))
+            {
+                _ = StartBuild(runAfterBuild: false);
+            }
+
+            if (ImGui.MenuItem("Build And Run", string.Empty, selected: false, enabled: canBuild))
+            {
+                _ = StartBuild(runAfterBuild: true);
+            }
+
+            ImGui.Separator();
+        }
+
+        bool cancelRequested = ImGui.MenuItem(
+            "取消构建",
+            string.Empty,
+            selected: false,
+            enabled: _view.IsRunning);
+        if (cancelRequested)
+        {
+            _buildCancellation?.Cancel();
+        }
+
+        if (ImGui.MenuItem("重新预检"))
+        {
+            StartPreflight();
+        }
+
+        ImGui.EndPopup();
+        return true;
+    }
+
+    /// <summary>
+    /// 按字体实测按钮宽度决定 footer 是否折叠次要动作；边界值采用 inline，避免临界宽度抖动。
+    /// </summary>
+    internal static BuildSettingsFooterLayout ResolveFooterLayout(
+        float availableWidth,
+        float itemSpacing,
+        float buildWidth,
+        float buildAndRunWidth,
+        float cancelWidth,
+        float preflightWidth,
+        float overflowWidth)
+    {
+        float available = NormalizeLayoutWidth(availableWidth);
+        float spacing = NormalizeLayoutWidth(itemSpacing);
+        float build = NormalizeLayoutWidth(buildWidth);
+        float buildAndRun = NormalizeLayoutWidth(buildAndRunWidth);
+        float cancel = NormalizeLayoutWidth(cancelWidth);
+        float preflight = NormalizeLayoutWidth(preflightWidth);
+        float overflow = NormalizeLayoutWidth(overflowWidth);
+        float requiredInline = build + buildAndRun + cancel + preflight + (spacing * 3f);
+        float requiredResponsive = build + buildAndRun + overflow + (spacing * 2f);
+        BuildSettingsFooterDensity density = available >= requiredInline
+            ? BuildSettingsFooterDensity.Inline
+            : available >= requiredResponsive
+                ? BuildSettingsFooterDensity.Overflow
+                : BuildSettingsFooterDensity.AllOverflow;
+        return new BuildSettingsFooterLayout(
+            density,
+            available,
+            requiredInline,
+            requiredResponsive,
+            overflow);
+    }
+
+    private static float NormalizeLayoutWidth(float width)
+    {
+        return float.IsFinite(width) ? MathF.Max(0f, width) : 0f;
     }
 
     private bool CanStartBuild(out string diagnostic)

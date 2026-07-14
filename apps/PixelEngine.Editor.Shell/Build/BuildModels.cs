@@ -389,6 +389,78 @@ internal sealed record ScriptedBuildSettingsProbeSnapshot
 }
 
 /// <summary>
+/// Build Settings footer 在当前横向预算下采用的动作密度。
+/// </summary>
+internal enum BuildSettingsFooterDensity
+{
+    /// <summary>
+    /// 四个动作全部直接显示。
+    /// </summary>
+    Inline,
+
+    /// <summary>
+    /// 保留 Build / Build And Run，次要动作进入溢出菜单。
+    /// </summary>
+    Overflow,
+
+    /// <summary>
+    /// 面板窄到主动作也无法并排时，所有动作进入唯一可见的溢出菜单。
+    /// </summary>
+    AllOverflow,
+}
+
+/// <summary>
+/// Build Settings footer 的纯布局解析结果。
+/// </summary>
+internal readonly record struct BuildSettingsFooterLayout(
+    BuildSettingsFooterDensity Density,
+    float AvailableWidth,
+    float RequiredInlineWidth,
+    float RequiredResponsiveWidth,
+    float RequiredOverflowWidth)
+{
+    /// <summary>
+    /// 当前宽度能否完整容纳常驻主动作和溢出入口。
+    /// </summary>
+    public bool PrimaryActionsFit => AvailableWidth >= RequiredResponsiveWidth;
+
+    /// <summary>
+    /// 当前宽度能否至少容纳动作溢出入口。
+    /// </summary>
+    public bool ActionsAccessible => AvailableWidth >= RequiredOverflowWidth;
+}
+
+/// <summary>
+/// 脚本化窗口验收记录的 Build Settings footer 实际绘制状态。
+/// </summary>
+internal sealed record ScriptedBuildSettingsFooterProbeSnapshot
+{
+    public BuildSettingsFooterDensity Density { get; init; }
+
+    public float AvailableWidth { get; init; }
+
+    public float RequiredInlineWidth { get; init; }
+
+    public float RequiredResponsiveWidth { get; init; }
+
+    public float RequiredOverflowWidth { get; init; }
+
+    public bool PrimaryActionsFit { get; init; }
+
+    public bool ActionsAccessible { get; init; }
+
+    public bool BuildVisible { get; init; }
+
+    public bool BuildAndRunVisible { get; init; }
+
+    public bool OverflowVisible { get; init; }
+
+    public bool OverflowPopupOpen { get; init; }
+
+    public bool SecondaryActionsAccessible { get; init; }
+}
+
+/// <summary>
 /// BuildLog。
 /// </summary>
 internal sealed class BuildLog(int capacity = 512)

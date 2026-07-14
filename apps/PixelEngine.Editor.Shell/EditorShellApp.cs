@@ -954,9 +954,29 @@ internal sealed class EditorShellApp
                 return;
             }
 
+            if (!state.OverflowRequested)
+            {
+                state.OverflowRequested = CurrentSession.RequestScriptedBuildSettingsActionsOverflow();
+                if (!state.OverflowRequested)
+                {
+                    state.Diagnostic = "构建设置探针无法打开窄 footer 的动作菜单。";
+                    state.Completed = true;
+                }
+
+                return;
+            }
+
+            state.FramesAfterOverflowRequest++;
+
             try
             {
                 state.After = CurrentSession.CaptureScriptedBuildSettingsProbe();
+                state.Footer = CurrentSession.CaptureScriptedBuildSettingsFooterProbe();
+                if (!state.Footer.OverflowPopupOpen)
+                {
+                    throw new InvalidOperationException("构建设置探针已请求动作菜单，但下一完整帧未绘制 popup。");
+                }
+
                 state.Captured = true;
                 state.Completed = true;
                 state.Diagnostic = "构建设置探针重启恢复完成。";
@@ -1304,6 +1324,7 @@ internal sealed class EditorShellApp
             $"reopened={state.Reopened}, " +
             $"build_settings_focused={state.FocusRequested}, " +
             $"frames_after_focus={state.FramesAfterFocus.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"frames_after_overflow_request={state.FramesAfterOverflowRequest.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"captured={state.Captured}, " +
             $"matches={matches}, " +
             $"product={SanitizeSummaryValue(state.After.ProductName)}, " +
@@ -1314,6 +1335,19 @@ internal sealed class EditorShellApp
             $"run_after_build={state.After.RunAfterBuild}, " +
             $"included_scene_count={state.After.IncludedSceneCount.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"startup_scene={SanitizeSummaryValue(state.After.StartupScene)}, " +
+            $"footer_density={state.Footer.Density}, " +
+            $"footer_available_width={state.Footer.AvailableWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"footer_required_inline_width={state.Footer.RequiredInlineWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"footer_required_responsive_width={state.Footer.RequiredResponsiveWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"footer_required_overflow_width={state.Footer.RequiredOverflowWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"footer_primary_fit={state.Footer.PrimaryActionsFit}, " +
+            $"footer_actions_accessible={state.Footer.ActionsAccessible}, " +
+            $"footer_build_visible={state.Footer.BuildVisible}, " +
+            $"footer_build_and_run_visible={state.Footer.BuildAndRunVisible}, " +
+            $"footer_overflow_visible={state.Footer.OverflowVisible}, " +
+            $"footer_overflow_popup_open={state.Footer.OverflowPopupOpen}, " +
+            $"footer_secondary_accessible={state.Footer.SecondaryActionsAccessible}, " +
+            $"footer_overflow_requested={state.OverflowRequested}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
@@ -2860,11 +2894,14 @@ internal sealed class ScriptedBuildSettingsProbeState
     public bool Reopened;
     public bool FocusRequested;
     public int FramesAfterFocus;
+    public int FramesAfterOverflowRequest;
     public bool Captured;
     public bool Completed;
     public string Diagnostic = string.Empty;
     public ScriptedBuildSettingsProbeSnapshot Before = new();
     public ScriptedBuildSettingsProbeSnapshot After = new();
+    public ScriptedBuildSettingsFooterProbeSnapshot Footer = new();
+    public bool OverflowRequested;
 }
 
 /// <summary>

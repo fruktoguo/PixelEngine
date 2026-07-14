@@ -358,6 +358,48 @@ public sealed class EditorConsoleStoreTests
         Assert.Equal(72f, BuildSettingsPanel.ResolveSettingsLabelWidth(float.NaN));
     }
 
+    /// <summary>
+    /// 验证 footer 只在四个动作放不下时折叠次要命令，并保留两个主命令与 overflow。
+    /// </summary>
+    [Fact]
+    public void BuildSettingsFooterCollapsesSecondaryActionsAtNarrowWidths()
+    {
+        BuildSettingsFooterLayout inline = BuildSettingsPanel.ResolveFooterLayout(
+            availableWidth: 274f,
+            itemSpacing: 8f,
+            buildWidth: 40f,
+            buildAndRunWidth: 100f,
+            cancelWidth: 40f,
+            preflightWidth: 70f,
+            overflowWidth: 24f);
+        BuildSettingsFooterLayout overflow = BuildSettingsPanel.ResolveFooterLayout(
+            availableWidth: 240f,
+            itemSpacing: 8f,
+            buildWidth: 40f,
+            buildAndRunWidth: 100f,
+            cancelWidth: 40f,
+            preflightWidth: 70f,
+            overflowWidth: 24f);
+        BuildSettingsFooterLayout invalid = BuildSettingsPanel.ResolveFooterLayout(
+            availableWidth: float.NaN,
+            itemSpacing: 8f,
+            buildWidth: 40f,
+            buildAndRunWidth: 100f,
+            cancelWidth: 40f,
+            preflightWidth: 70f,
+            overflowWidth: 24f);
+
+        Assert.Equal(BuildSettingsFooterDensity.Inline, inline.Density);
+        Assert.Equal(274f, inline.RequiredInlineWidth);
+        Assert.True(inline.PrimaryActionsFit);
+        Assert.Equal(BuildSettingsFooterDensity.Overflow, overflow.Density);
+        Assert.Equal(180f, overflow.RequiredResponsiveWidth);
+        Assert.True(overflow.PrimaryActionsFit);
+        Assert.Equal(BuildSettingsFooterDensity.AllOverflow, invalid.Density);
+        Assert.False(invalid.PrimaryActionsFit);
+        Assert.False(invalid.ActionsAccessible);
+    }
+
     private sealed class ImmediateBuildService : IPlayerBuildService
     {
         public BuildPreflight Preflight { get; init; } = new() { Ok = true, Diagnostic = "ok" };
