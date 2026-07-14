@@ -30,13 +30,24 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
 
     public void CreatePrefabFromSubtree(EditorSceneModel scene, int stableId, string assetPath)
     {
+        bool manifestSynchronized = false;
+        CreatePrefabFromSubtree(scene, stableId, assetPath, ref manifestSynchronized);
+    }
+
+    internal void CreatePrefabFromSubtree(
+        EditorSceneModel scene,
+        int stableId,
+        string assetPath,
+        ref bool manifestSynchronized)
+    {
         ArgumentNullException.ThrowIfNull(scene);
         string normalizedAssetPath = NormalizeAssetPath(assetPath);
         EditorSceneObjectSnapshot snapshot = scene.CaptureSubtree(stableId);
         Dictionary<int, int> remap = BuildStableIdRemap(snapshot.Objects);
         EngineSceneDocument document = BuildPrefabDocument(snapshot.Objects, remap, Path.GetFileNameWithoutExtension(normalizedAssetPath));
-        EngineSceneDocumentLoader.SaveDocument(document, ResolveFullPath(normalizedAssetPath));
+        EngineSceneDocumentLoader.SaveDocument(document, PrepareWritePath(normalizedAssetPath));
         string? assetId = TryEnsurePrefabAssetId(normalizedAssetPath);
+        manifestSynchronized = _assets is not null;
         for (int i = 0; i < snapshot.Objects.Length; i++)
         {
             int originalId = snapshot.Objects[i].StableId;
@@ -65,14 +76,10 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
     public void RestoreAsset(string assetPath, byte[] bytes)
     {
         ArgumentNullException.ThrowIfNull(bytes);
-        string fullPath = ResolveFullPath(assetPath);
-        string? directory = Path.GetDirectoryName(fullPath);
-        if (!string.IsNullOrEmpty(directory))
-        {
-            _ = Directory.CreateDirectory(directory);
-        }
-
-        File.WriteAllBytes(fullPath, bytes);
+        string normalizedAssetPath = NormalizeAssetPath(assetPath);
+        string fullPath = PrepareWritePath(normalizedAssetPath);
+        WriteAllBytesAtomically(fullPath, bytes);
+        _ = TryEnsurePrefabAssetId(normalizedAssetPath);
     }
 
     public void DeleteAsset(string assetPath)
@@ -84,12 +91,26 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
         }
     }
 
+    public void RemoveAssetRecord(string assetPath)
+    {
+        if (_assets is not null)
+        {
+            _ = _assets.RemoveAssetRecord(NormalizeAssetPath(assetPath));
+        }
+    }
+
     public EditorGameObject InstantiatePrefab(EditorSceneModel scene, string assetPath, int? parentId)
     {
         ArgumentNullException.ThrowIfNull(scene);
+        if (parentId is { } targetParentId)
+        {
+            _ = scene.Get(targetParentId);
+        }
+
         string normalizedAssetPath = NormalizeAssetPath(assetPath);
-        string? assetId = TryEnsurePrefabAssetId(normalizedAssetPath);
         EditorSceneModel prefabModel = LoadPrefabModel(normalizedAssetPath);
+        // 先完整验证/展开 prefab，再写 manifest。损坏或循环 prefab 不得留下幽灵资产记录。
+        string? assetId = TryEnsurePrefabAssetId(normalizedAssetPath);
         EditorGameObject sourceRoot = ResolvePrefabRoot(prefabModel);
         foreach (EditorGameObject gameObject in prefabModel.EnumerateDepthFirst())
         {
@@ -153,9 +174,124 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
             : _contentRoot + Path.DirectorySeparatorChar;
         bool insideContentRoot = string.Equals(fullPath, _contentRoot, StringComparison.OrdinalIgnoreCase) ||
             fullPath.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
-        return insideContentRoot
-            ? fullPath
-            : throw new InvalidOperationException($"prefab 路径越过 content 根目录：{assetPath}");
+        if (!insideContentRoot)
+        {
+            throw new InvalidOperationException($"prefab 路径越过 content 根目录：{assetPath}");
+        }
+
+        EnsureNoReparsePoints(fullPath);
+        return fullPath;
+    }
+
+    private string PrepareWritePath(string assetPath)
+    {
+        string fullPath = ResolveFullPath(assetPath);
+        if (!Directory.Exists(_contentRoot))
+        {
+            _ = Directory.CreateDirectory(_contentRoot);
+        }
+
+        RejectReparsePoint(_contentRoot);
+        string directory = Path.GetDirectoryName(fullPath)
+            ?? throw new InvalidOperationException("prefab 写入路径缺少父目录。");
+        string relativeDirectory = Path.GetRelativePath(_contentRoot, directory);
+        string current = _contentRoot;
+        if (!string.Equals(relativeDirectory, ".", StringComparison.Ordinal))
+        {
+            string[] segments = relativeDirectory.Split(
+                Path.DirectorySeparatorChar,
+                StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < segments.Length; i++)
+            {
+                current = Path.Combine(current, segments[i]);
+                if (!Directory.Exists(current))
+                {
+                    _ = Directory.CreateDirectory(current);
+                }
+
+                RejectReparsePoint(current);
+            }
+        }
+
+        EnsureNoReparsePoints(fullPath);
+        return fullPath;
+    }
+
+    private void EnsureNoReparsePoints(string fullPath)
+    {
+        string relative = Path.GetRelativePath(_contentRoot, fullPath);
+        if (relative is "." or ".." ||
+            relative.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("prefab 路径越过 content 根目录。");
+        }
+
+        string current = _contentRoot;
+        if (Directory.Exists(current) || File.Exists(current))
+        {
+            RejectReparsePoint(current);
+        }
+
+        string[] segments = relative.Split(
+            Path.DirectorySeparatorChar,
+            StringSplitOptions.RemoveEmptyEntries);
+        for (int i = 0; i < segments.Length; i++)
+        {
+            current = Path.Combine(current, segments[i]);
+            if (!File.Exists(current) && !Directory.Exists(current))
+            {
+                break;
+            }
+
+            RejectReparsePoint(current);
+        }
+    }
+
+    private static void RejectReparsePoint(string path)
+    {
+        try
+        {
+            if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException($"prefab 路径不允许经过 reparse point：{path}");
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException($"无法安全检查 prefab 路径：{path}", exception);
+        }
+    }
+
+    private static void WriteAllBytesAtomically(string fullPath, byte[] bytes)
+    {
+        string directory = Path.GetDirectoryName(fullPath)
+            ?? throw new InvalidOperationException("prefab 写入路径缺少父目录。");
+        string temporaryPath = Path.Combine(
+            directory,
+            $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            using (FileStream stream = new(
+                temporaryPath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                bufferSize: 64 * 1024,
+                FileOptions.SequentialScan))
+            {
+                stream.Write(bytes);
+                stream.Flush(flushToDisk: true);
+            }
+
+            File.Move(temporaryPath, fullPath, overwrite: true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+            {
+                File.Delete(temporaryPath);
+            }
+        }
     }
 
     private EditorSceneModel LoadPrefabModel(string assetPath, HashSet<string> resolving)
@@ -376,13 +512,49 @@ internal sealed class EditorPrefabAssetStore(string contentRoot, EditorAssetMani
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
-    private static string NormalizeAssetPath(string assetPath)
+    internal static string NormalizeAssetPath(string assetPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(assetPath);
-        string normalized = assetPath.Replace('\\', '/').TrimStart('/');
-        return normalized.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase)
-            ? normalized
-            : throw new InvalidOperationException($"prefab 资产必须使用 .prefab 后缀：{assetPath}");
+        string normalized = assetPath.Trim().Replace('\\', '/');
+        if (normalized.Length > 32767 ||
+            normalized.StartsWith("/", StringComparison.Ordinal) ||
+            Path.IsPathFullyQualified(normalized) ||
+            normalized.Any(char.IsControl) ||
+            !normalized.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"prefab 资产必须是 root-relative .prefab path：{assetPath}");
+        }
+
+        string[] segments = normalized.Split('/');
+        return segments.Length != 0 && !segments.Any(IsInvalidPathSegment)
+            ? string.Join('/', segments)
+            : throw new InvalidOperationException(
+                $"prefab 资产包含非法或越界 path segment：{assetPath}");
+    }
+
+    private static bool IsInvalidPathSegment(string segment)
+    {
+        if (segment.Length is 0 or > 255 ||
+            segment is "." or ".." ||
+            segment.EndsWith(' ') ||
+            segment.EndsWith('.') ||
+            segment.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            segment.IndexOfAny(['<', '>', ':', '"', '|', '?', '*']) >= 0)
+        {
+            return true;
+        }
+
+        string deviceName = segment.Split('.', 2)[0];
+        return deviceName.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+            deviceName.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+            deviceName.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+            deviceName.Equals("NUL", StringComparison.OrdinalIgnoreCase) ||
+            deviceName.Equals("CONIN$", StringComparison.OrdinalIgnoreCase) ||
+            deviceName.Equals("CONOUT$", StringComparison.OrdinalIgnoreCase) ||
+            (deviceName.Length == 4 &&
+             (deviceName.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
+              deviceName.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
+             (deviceName[3] is (>= '1' and <= '9') or '¹' or '²' or '³'));
     }
 
     private static Dictionary<int, int> BuildStableIdRemap(EditorGameObject[] objects)

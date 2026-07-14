@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Hexa.NET.ImGui;
+using PixelEngine.Editor.Automation.Protocol;
 using PixelEngine.Editor.Automation.Server;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
@@ -33,6 +34,7 @@ internal sealed class EditorShellApp
     private bool _exitRequested;
     private bool _allowDirtyShutdown;
     private EditorAutomationRuntime? _automation;
+    private RenderWindow? _activeWindow;
 
     private EditorShellApp(
         EditorShellOptions options,
@@ -198,7 +200,11 @@ internal sealed class EditorShellApp
             Preferences.Current.UiScale,
             LayoutPath,
             windowState.Width,
-            windowState.Height);
+            windowState.Height,
+            windowState.X,
+            windowState.Y,
+            windowState.State);
+        _activeWindow = shellWindow.Window;
         void HandleNativeWindowClosing()
         {
             bool isDirty = IsCurrentSceneDirtyAfterFlushing();
@@ -591,9 +597,8 @@ internal sealed class EditorShellApp
             }
         }
 
-        if (!Workspace.TrySetWindowSize(
-            shellWindow.Window.LogicalWidth,
-            shellWindow.Window.LogicalHeight,
+        if (!Workspace.TrySetWindowPlacement(
+            CaptureWorkspaceWindowPlacement(shellWindow.Window),
             out string windowStateDiagnostic))
         {
             ConsoleStore.AddProjectError("workspace", windowStateDiagnostic);
@@ -2170,6 +2175,381 @@ internal sealed class EditorShellApp
 
         CurrentSession?.ResetLayout();
     }
+
+    internal bool TryResetAutomationLayout(out string diagnostic)
+    {
+        if (!Layout.TryResetLayoutForAutomation(out diagnostic))
+        {
+            return false;
+        }
+
+        CurrentSession?.ResetLayout();
+        diagnostic = "默认 dock layout 已恢复。";
+        return true;
+    }
+
+    internal bool TryPersistAutomationLayout(
+        string layout,
+        out string normalized,
+        out string diagnostic)
+    {
+        return Layout.TryPersistAutomationLayout(layout, out normalized, out diagnostic);
+    }
+
+    internal bool TryCaptureAutomationLayoutPersistence(
+        out EditorLayoutPersistenceSnapshot snapshot,
+        out string diagnostic)
+    {
+        return Layout.TryCaptureAutomationPersistence(out snapshot, out diagnostic);
+    }
+
+    internal bool TryRestoreAutomationLayoutPersistence(
+        EditorLayoutPersistenceSnapshot snapshot,
+        out string diagnostic)
+    {
+        return Layout.TryRestoreAutomationPersistence(snapshot, out diagnostic);
+    }
+
+    internal AutomationWindowSnapshot CaptureAutomationWindow()
+    {
+        RenderWindow window = _activeWindow
+            ?? throw new InvalidOperationException("Editor 顶层窗口尚未创建。");
+        string title = CurrentProject is null || CurrentSession is null
+            ? "PixelEngine Hub"
+            : $"PixelEngine Editor - {CurrentProject.Name} - {CurrentSession.CurrentSceneDisplayName}" +
+                (CurrentSession.SceneModel.IsDirty ? "*" : string.Empty);
+        return new AutomationWindowSnapshot
+        {
+            LogicalWidth = window.LogicalWidth,
+            LogicalHeight = window.LogicalHeight,
+            LogicalX = window.LogicalX,
+            LogicalY = window.LogicalY,
+            FramebufferWidth = window.Width,
+            FramebufferHeight = window.Height,
+            FramebufferScaleX = window.FramebufferScaleX,
+            FramebufferScaleY = window.FramebufferScaleY,
+            State = ToAutomationWindowState(window.State),
+            Focused = EditorNativeWindowFocus.IsFocused(window),
+            Title = title,
+        };
+    }
+
+    internal bool TryResizeAutomationWindow(int width, int height, out string diagnostic)
+    {
+        return TrySetAutomationWindow(
+            new AutomationWindowSetRequest
+            {
+                Width = width,
+                Height = height,
+                State = AutomationWindowState.Normal,
+            },
+            out diagnostic);
+    }
+
+    internal bool TrySetAutomationWindow(AutomationWindowSetRequest request, out string diagnostic)
+    {
+        return TrySetAutomationWindow(request, out diagnostic, out _);
+    }
+
+    internal bool TrySetAutomationWindow(
+        AutomationWindowSetRequest request,
+        out string diagnostic,
+        out bool workspaceChanged)
+    {
+        workspaceChanged = false;
+        if (!TryValidateAutomationWindowRequest(request, out diagnostic))
+        {
+            return false;
+        }
+
+        RenderWindow window = _activeWindow!;
+        EditorWindowPlacement before = CaptureWindowPlacement(window);
+        EditorWorkspaceWindowState beforeWorkspace = Workspace.Current.Window ?? new EditorWorkspaceWindowState();
+        RenderWindowState targetState = request.State.HasValue
+            ? ToRenderWindowState(request.State.Value)
+            : before.State;
+        bool editsNormalPlacement = request.X.HasValue || request.Width.HasValue;
+        bool changesPlacement = editsNormalPlacement || request.State.HasValue;
+        EditorWindowPlacement appliedNormalPlacement = before;
+        try
+        {
+            if (editsNormalPlacement && window.State != RenderWindowState.Normal)
+            {
+                window.SetState(RenderWindowState.Normal);
+            }
+
+            if (request.X is { } x && request.Y is { } y)
+            {
+                window.Move(x, y);
+            }
+
+            if (request.Width is { } width && request.Height is { } height)
+            {
+                window.Resize(width, height);
+            }
+
+            if (editsNormalPlacement)
+            {
+                window.DoEvents();
+                appliedNormalPlacement = CaptureWindowPlacement(window);
+            }
+
+            if (window.State != targetState)
+            {
+                window.SetState(targetState);
+            }
+
+            window.DoEvents();
+            if (!editsNormalPlacement && targetState == RenderWindowState.Normal)
+            {
+                appliedNormalPlacement = CaptureWindowPlacement(window);
+            }
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            if (!TryRestoreWindowPlacement(window, before, out string rollbackDiagnostic))
+            {
+                throw new AggregateException(
+                    "平台窗口状态变更失败，且无法恢复 before placement。",
+                    exception,
+                    new InvalidOperationException(rollbackDiagnostic));
+            }
+
+            diagnostic = $"平台拒绝窗口状态变更：{exception.Message}";
+            return false;
+        }
+
+        EditorWorkspaceWindowState persisted = beforeWorkspace with
+        {
+            Width = editsNormalPlacement || targetState == RenderWindowState.Normal
+                ? appliedNormalPlacement.Width
+                : beforeWorkspace.Width,
+            Height = editsNormalPlacement || targetState == RenderWindowState.Normal
+                ? appliedNormalPlacement.Height
+                : beforeWorkspace.Height,
+            X = editsNormalPlacement || targetState == RenderWindowState.Normal
+                ? appliedNormalPlacement.X
+                : beforeWorkspace.X,
+            Y = editsNormalPlacement || targetState == RenderWindowState.Normal
+                ? appliedNormalPlacement.Y
+                : beforeWorkspace.Y,
+            State = ToWorkspaceWindowState(targetState),
+        };
+        workspaceChanged = changesPlacement && persisted != beforeWorkspace;
+        if (workspaceChanged && !Workspace.TrySetWindowPlacement(persisted, out diagnostic))
+        {
+            string persistenceDiagnostic = diagnostic;
+            workspaceChanged = false;
+            if (!TryRestoreWindowPlacement(window, before, out string rollbackDiagnostic))
+            {
+                throw new AggregateException(
+                    "窗口 workspace 持久化失败，且无法恢复平台 before placement。",
+                    new InvalidOperationException(persistenceDiagnostic),
+                    new InvalidOperationException(rollbackDiagnostic));
+            }
+
+            diagnostic = persistenceDiagnostic;
+            return false;
+        }
+
+        if (request.Activate)
+        {
+            try
+            {
+                window.Focus();
+                window.DoEvents();
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+            {
+                List<Exception> failures = [exception];
+                if (workspaceChanged &&
+                    !Workspace.TrySetWindowPlacement(beforeWorkspace, out string workspaceRollbackDiagnostic))
+                {
+                    failures.Add(new InvalidOperationException(workspaceRollbackDiagnostic));
+                }
+
+                if (!TryRestoreWindowPlacement(window, before, out string windowRollbackDiagnostic))
+                {
+                    failures.Add(new InvalidOperationException(windowRollbackDiagnostic));
+                }
+
+                workspaceChanged = false;
+                if (failures.Count > 1)
+                {
+                    throw new AggregateException(
+                        "窗口激活失败，且至少一个 before state 无法恢复。",
+                        failures);
+                }
+
+                diagnostic = $"平台拒绝窗口激活：{exception.Message}";
+                return false;
+            }
+
+            diagnostic = EditorNativeWindowFocus.IsFocused(window)
+                ? string.Empty
+                : "窗口 placement 已应用；操作系统焦点策略未把 Editor 置为前台，focused=false。";
+            return true;
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryValidateAutomationWindowRequest(
+        AutomationWindowSetRequest request,
+        out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_activeWindow is null)
+        {
+            diagnostic = "Editor 顶层窗口尚未创建。";
+            return false;
+        }
+
+        if (request.X.HasValue != request.Y.HasValue)
+        {
+            diagnostic = "Editor 窗口 X/Y 坐标必须同时提供。";
+            return false;
+        }
+
+        if (request.Width.HasValue != request.Height.HasValue)
+        {
+            diagnostic = "Editor 窗口 width/height 必须同时提供。";
+            return false;
+        }
+
+        if (!request.X.HasValue && !request.Width.HasValue && !request.State.HasValue && !request.Activate)
+        {
+            diagnostic = "window.set 至少需要 position、size、state 或 activate=true 之一。";
+            return false;
+        }
+
+        if (request.X is < -1_000_000 or > 1_000_000 || request.Y is < -1_000_000 or > 1_000_000)
+        {
+            diagnostic = "Editor 窗口坐标必须在 -1000000 到 1000000。";
+            return false;
+        }
+
+        if (request.Width is < 320 or > 32768 || request.Height is < 240 or > 32768)
+        {
+            diagnostic = "Editor 窗口尺寸必须在 320x240 到 32768x32768。";
+            return false;
+        }
+
+        if (request.State.HasValue && !Enum.IsDefined(request.State.Value))
+        {
+            diagnostic = "Editor 窗口状态无效。";
+            return false;
+        }
+
+        if (request.Activate && request.State == AutomationWindowState.Minimized)
+        {
+            diagnostic = "不能在同一原子请求中最小化并激活 Editor 窗口。";
+            return false;
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    private EditorWorkspaceWindowState CaptureWorkspaceWindowPlacement(RenderWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        EditorWorkspaceWindowState current = Workspace.Current.Window ?? new EditorWorkspaceWindowState();
+        return window.State == RenderWindowState.Normal
+            ? new EditorWorkspaceWindowState
+            {
+                Width = window.LogicalWidth,
+                Height = window.LogicalHeight,
+                X = window.LogicalX,
+                Y = window.LogicalY,
+                State = EditorWorkspaceWindowStateKind.Normal,
+            }
+            : current with { State = ToWorkspaceWindowState(window.State) };
+    }
+
+    private static EditorWindowPlacement CaptureWindowPlacement(RenderWindow window)
+    {
+        return new EditorWindowPlacement(
+            window.LogicalX,
+            window.LogicalY,
+            window.LogicalWidth,
+            window.LogicalHeight,
+            window.State);
+    }
+
+    private static bool TryRestoreWindowPlacement(
+        RenderWindow window,
+        EditorWindowPlacement placement,
+        out string diagnostic)
+    {
+        try
+        {
+            if (window.State != RenderWindowState.Normal)
+            {
+                window.SetState(RenderWindowState.Normal);
+            }
+
+            window.Move(placement.X, placement.Y);
+            window.Resize(placement.Width, placement.Height);
+            if (placement.State != RenderWindowState.Normal)
+            {
+                window.SetState(placement.State);
+            }
+
+            window.DoEvents();
+            diagnostic = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            diagnostic = $"平台窗口 before placement 恢复失败：{exception.Message}";
+            return false;
+        }
+    }
+
+    private static AutomationWindowState ToAutomationWindowState(RenderWindowState state)
+    {
+        return state switch
+        {
+            RenderWindowState.Normal => AutomationWindowState.Normal,
+            RenderWindowState.Minimized => AutomationWindowState.Minimized,
+            RenderWindowState.Maximized => AutomationWindowState.Maximized,
+            RenderWindowState.Fullscreen => AutomationWindowState.Fullscreen,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "未知窗口状态。"),
+        };
+    }
+
+    private static RenderWindowState ToRenderWindowState(AutomationWindowState state)
+    {
+        return state switch
+        {
+            AutomationWindowState.Normal => RenderWindowState.Normal,
+            AutomationWindowState.Minimized => RenderWindowState.Minimized,
+            AutomationWindowState.Maximized => RenderWindowState.Maximized,
+            AutomationWindowState.Fullscreen => RenderWindowState.Fullscreen,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "未知 automation 窗口状态。"),
+        };
+    }
+
+    private static EditorWorkspaceWindowStateKind ToWorkspaceWindowState(RenderWindowState state)
+    {
+        return state switch
+        {
+            RenderWindowState.Normal => EditorWorkspaceWindowStateKind.Normal,
+            RenderWindowState.Minimized => EditorWorkspaceWindowStateKind.Minimized,
+            RenderWindowState.Maximized => EditorWorkspaceWindowStateKind.Maximized,
+            RenderWindowState.Fullscreen => EditorWorkspaceWindowStateKind.Fullscreen,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "未知窗口状态。"),
+        };
+    }
+
+    private readonly record struct EditorWindowPlacement(
+        int X,
+        int Y,
+        int Width,
+        int Height,
+        RenderWindowState State);
 
     private void PersistRecentProjectsChange(bool changed, string failurePrefix)
     {

@@ -42,6 +42,7 @@ public sealed class RenderWindow : IDisposable
         InitialWidth = initialWidth;
         InitialHeight = initialHeight;
         InitialWindowMode = initialWindowMode;
+        _window.FocusChanged += HandleFocusChanged;
     }
 
     /// <summary>
@@ -168,6 +169,26 @@ public sealed class RenderWindow : IDisposable
     /// 当前平台窗口逻辑高度。Silk.NET 鼠标坐标使用该坐标系。
     /// </summary>
     public int LogicalHeight => Math.Max(1, _window.Size.Y);
+
+    /// <summary>
+    /// 当前平台窗口左上角 X 坐标。
+    /// </summary>
+    public int LogicalX => _window.Position.X;
+
+    /// <summary>
+    /// 当前平台窗口左上角 Y 坐标。
+    /// </summary>
+    public int LogicalY => _window.Position.Y;
+
+    /// <summary>
+    /// 当前平台窗口状态。
+    /// </summary>
+    public RenderWindowState State => FromSilkWindowState(_window.WindowState);
+
+    /// <summary>
+    /// 最近一次平台 focus event 报告的焦点状态。
+    /// </summary>
+    public bool IsFocused { get; private set; }
 
     /// <summary>
     /// 逻辑窗口坐标到 framebuffer 坐标的 X 轴缩放。
@@ -321,6 +342,36 @@ public sealed class RenderWindow : IDisposable
     }
 
     /// <summary>
+    /// 移动平台顶层窗口。
+    /// </summary>
+    /// <param name="x">窗口左上角 X 坐标。</param>
+    /// <param name="y">窗口左上角 Y 坐标。</param>
+    public void Move(int x, int y)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _window.Position = new Vector2D<int>(x, y);
+    }
+
+    /// <summary>
+    /// 切换平台顶层窗口状态。
+    /// </summary>
+    /// <param name="state">目标状态。</param>
+    public void SetState(RenderWindowState state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _window.WindowState = ToSilkWindowState(state);
+    }
+
+    /// <summary>
+    /// 请求操作系统把输入焦点交给当前窗口。
+    /// </summary>
+    public void Focus()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _window.Focus();
+    }
+
+    /// <summary>
     /// 请求关闭窗口。
     /// </summary>
     public void Close()
@@ -354,6 +405,7 @@ public sealed class RenderWindow : IDisposable
         }
 
         _disposed = true;
+        _window.FocusChanged -= HandleFocusChanged;
         _debugMessenger?.Dispose();
         _dxgiPresenter?.Dispose();
         Gl.Dispose();
@@ -514,5 +566,34 @@ public sealed class RenderWindow : IDisposable
     {
         return capabilities.MajorVersion > major ||
             (capabilities.MajorVersion == major && capabilities.MinorVersion >= minor);
+    }
+
+    private void HandleFocusChanged(bool focused)
+    {
+        IsFocused = focused;
+    }
+
+    private static RenderWindowState FromSilkWindowState(WindowState state)
+    {
+        return state switch
+        {
+            WindowState.Normal => RenderWindowState.Normal,
+            WindowState.Minimized => RenderWindowState.Minimized,
+            WindowState.Maximized => RenderWindowState.Maximized,
+            WindowState.Fullscreen => RenderWindowState.Fullscreen,
+            _ => throw new InvalidOperationException($"Silk.NET 返回未知窗口状态：{state}。"),
+        };
+    }
+
+    private static WindowState ToSilkWindowState(RenderWindowState state)
+    {
+        return state switch
+        {
+            RenderWindowState.Normal => WindowState.Normal,
+            RenderWindowState.Minimized => WindowState.Minimized,
+            RenderWindowState.Maximized => WindowState.Maximized,
+            RenderWindowState.Fullscreen => WindowState.Fullscreen,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "未知窗口状态。"),
+        };
     }
 }

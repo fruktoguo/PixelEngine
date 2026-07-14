@@ -52,8 +52,23 @@ public sealed record AutomationOperationResult
     /// <summary>被写入或被 snapshot 观察的稳定资源 ids。</summary>
     public string[] ResourceIds { get; init; } = [];
 
+    /// <summary>
+    /// Write operation 是否实际改变了权威状态。显式为 false 时不得携带 Undo action，
+    /// scheduler 只捕获当前 revision，不推进 revision、登记 Undo 或发布 state event。
+    /// </summary>
+    public bool WriteStateChanged { get; init; } = true;
+
     /// <summary>system coordinator 已经产生的显式 revision；普通 capability 由 scheduler 生成。</summary>
     public AutomationRevisionSnapshot? RevisionOverride { get; init; }
+
+    /// <summary>command 是否实际改变了权威状态；false 时不产生自动 state event。</summary>
+    public bool StateChanged { get; init; }
+
+    /// <summary>
+    /// command 调用的既有协调器是否已经发布 descriptor 声明的 state-changed event。
+    /// 仅用于 project/scene 转场这类必须复用同一手动协调器的操作，防止重复事件。
+    /// </summary>
+    public bool StateEventAlreadyPublished { get; init; }
 }
 
 /// <summary>

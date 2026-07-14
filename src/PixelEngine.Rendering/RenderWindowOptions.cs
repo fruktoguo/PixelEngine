@@ -21,6 +21,22 @@ public sealed record RenderWindowOptions
     public int Height { get; init; } = 720;
 
     /// <summary>
+    /// 可选初始窗口 X 坐标；必须与 <see cref="PositionY"/> 同时提供。
+    /// </summary>
+    public int? PositionX { get; init; }
+
+    /// <summary>
+    /// 可选初始窗口 Y 坐标；必须与 <see cref="PositionX"/> 同时提供。
+    /// </summary>
+    public int? PositionY { get; init; }
+
+    /// <summary>
+    /// 可选初始平台窗口状态。仅供普通 window mode 的宿主恢复窗口会话；
+    /// 独立 Player 的模式仍由 <see cref="WindowMode"/> 决定。
+    /// </summary>
+    public RenderWindowState? InitialState { get; init; }
+
+    /// <summary>
     /// 独立 Player 的初始平台窗口模式；必须在窗口初始化及首帧之前生效。
     /// </summary>
     public PlayerWindowMode WindowMode { get; init; } = PlayerWindowMode.Windowed;

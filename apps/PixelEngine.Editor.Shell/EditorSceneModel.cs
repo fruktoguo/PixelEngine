@@ -406,6 +406,26 @@ internal sealed class EditorSceneModel
         MarkDirty();
     }
 
+    /// <summary>
+    /// 仅恢复快照中的 prefab link，不重建层级、不改变选择；供 prefab 资产命令精确 Undo。
+    /// </summary>
+    internal void RestorePrefabLinks(EditorSceneObjectSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        for (int i = 0; i < snapshot.Objects.Length; i++)
+        {
+            _ = Get(snapshot.Objects[i].StableId);
+        }
+
+        for (int i = 0; i < snapshot.Objects.Length; i++)
+        {
+            EditorGameObject before = snapshot.Objects[i];
+            _objects[before.StableId].PrefabLink = before.PrefabLink?.Clone();
+        }
+
+        MarkDirty();
+    }
+
     public void RecordPrefabOverride(int stableId, string propertyPath, string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(propertyPath);

@@ -15,17 +15,20 @@ internal sealed class EditorAutomationRuntime : IDisposable
     private const string DiscoveryRootEnvironmentVariable = "PIXELENGINE_AUTOMATION_DISCOVERY_ROOT";
     private const string ArtifactRootEnvironmentVariable = "PIXELENGINE_AUTOMATION_ARTIFACT_ROOT";
     private readonly EditorShellApp _app;
+    private readonly EditorAutomationAuthoringApi _authoringApi;
     private readonly EditorAutomationServer _server;
     private string[] _publishedProjectResourceIds = [];
     private int _disposed;
 
     private EditorAutomationRuntime(
         EditorShellApp app,
+        EditorAutomationAuthoringApi authoringApi,
         AutomationMainThreadScheduler scheduler,
         AutomationArtifactStore artifacts,
         EditorAutomationServer server)
     {
         _app = app;
+        _authoringApi = authoringApi;
         Scheduler = scheduler;
         Artifacts = artifacts;
         _server = server;
@@ -51,8 +54,9 @@ internal sealed class EditorAutomationRuntime : IDisposable
             return null;
         }
 
+        EditorAutomationAuthoringApi authoringApi = new(app);
         AutomationMainThreadScheduler scheduler = new(
-            [],
+            authoringApi.CreateRegistrations(),
             new AutomationRevisionStore(),
             new EditorAutomationUndoSink(app),
             new EditorAutomationTransactionParticipant(app));
@@ -81,9 +85,10 @@ internal sealed class EditorAutomationRuntime : IDisposable
                     InstanceId = instanceId,
                     CredentialInputPath = options.AutomationCredentialPath,
                     SupportedScopes = AutomationScopes.All,
+                    CapabilityDigest = scheduler.CapabilityDigest,
                 },
                 scheduler);
-            EditorAutomationRuntime runtime = new(app, scheduler, artifacts, server);
+            EditorAutomationRuntime runtime = new(app, authoringApi, scheduler, artifacts, server);
             server.StartAsync().AsTask().GetAwaiter().GetResult();
             return runtime;
         }
@@ -116,6 +121,8 @@ internal sealed class EditorAutomationRuntime : IDisposable
             {
                 failures.Add(cleanupException);
             }
+
+            authoringApi.Dispose();
 
             if (failures.Count > 1)
             {
@@ -152,13 +159,21 @@ internal sealed class EditorAutomationRuntime : IDisposable
             _server.Descriptor.CapabilityDigest).AsTask().GetAwaiter().GetResult();
 
         string[] nextResources = summary is null
-            ? []
-            : ["editor:project", $"scene:{summary.ProjectId}:{summary.SceneId}"];
+            ? ["editor:workspace", "editor:transition"]
+            :
+            [
+                "editor:project",
+                "editor:workspace",
+                "editor:transition",
+                $"scene:{summary.ProjectId}:{summary.SceneId}",
+            ];
         string[] affectedResources =
         [
             .. _publishedProjectResourceIds
                 .Concat(nextResources)
                 .Append("editor:project")
+                .Append("editor:workspace")
+                .Append("editor:transition")
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
         ];
@@ -201,6 +216,15 @@ internal sealed class EditorAutomationRuntime : IDisposable
         try
         {
             Artifacts.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            failures.Add(exception);
+        }
+
+        try
+        {
+            _authoringApi.Dispose();
         }
         catch (Exception exception)
         {
@@ -283,14 +307,14 @@ internal sealed class EditorAutomationRuntime : IDisposable
         return $"scene:{StableProjectId(session.Project.ProjectRoot)}:{StableSceneId(session.Project.ProjectRoot, session.CurrentSceneRelativePath)}";
     }
 
-    private static string StableProjectId(string projectRoot)
+    internal static string StableProjectId(string projectRoot)
     {
         string canonicalRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot))
             .Replace('\\', '/');
         return StableTextId(canonicalRoot);
     }
 
-    private static string StableSceneId(string projectRoot, string sceneRelativePath)
+    internal static string StableSceneId(string projectRoot, string sceneRelativePath)
     {
         string canonicalRoot = Path.TrimEndingDirectorySeparator(Path.GetFullPath(projectRoot))
             .Replace('\\', '/');

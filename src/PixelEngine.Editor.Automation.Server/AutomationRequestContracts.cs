@@ -15,6 +15,18 @@ public sealed record AutomationMethodDescriptor
     /// <summary>执行该 method 所需全部 scopes。</summary>
     public required string[] RequiredScopes { get; init; }
 
+    /// <summary>稳定 capability domain。</summary>
+    public string Domain { get; init; } = "system";
+
+    /// <summary>请求 DTO 的 JSON Schema reference。</summary>
+    public string RequestSchema { get; init; } = "#/$defs/emptyRequest";
+
+    /// <summary>响应 DTO 的 JSON Schema reference。</summary>
+    public string ResponseSchema { get; init; } = "#/$defs/emptyResponse";
+
+    /// <summary>支持的 Editor mode。</summary>
+    public string[] SupportedModes { get; init; } = ["edit", "play", "paused"];
+
     /// <summary>只读、写入或非事务 command。</summary>
     public required AutomationOperationKind OperationKind { get; init; }
 
@@ -29,6 +41,38 @@ public sealed record AutomationMethodDescriptor
 
     /// <summary>是否强制请求携带跨连接 idempotency key。</summary>
     public bool RequiresIdempotencyKey { get; init; }
+
+    /// <summary>该 capability 可能发布的 event type。</summary>
+    public string[] EventTypes { get; init; } = [];
+
+    /// <summary>大型结果的 artifact 行为。</summary>
+    public AutomationArtifactBehavior ArtifactBehavior { get; init; }
+
+    /// <summary>复用相同 semantic implementation 的 UI command IDs。</summary>
+    public string[] UiCommandIds { get; init; } = [];
+
+    /// <summary>生成独立于 Server assembly 的发布 descriptor。</summary>
+    /// <returns>深复制的 protocol descriptor。</returns>
+    public AutomationCapabilityDescriptor ToCapabilityDescriptor()
+    {
+        return new AutomationCapabilityDescriptor
+        {
+            Id = Method,
+            Domain = Domain,
+            OperationKind = OperationKind,
+            RequestSchema = RequestSchema,
+            ResponseSchema = ResponseSchema,
+            RequiredScopes = [.. RequiredScopes],
+            SupportedModes = [.. SupportedModes],
+            ExecutionPhase = ExecutionPhase,
+            TransactionMode = TransactionMode,
+            RequiresExpectedRevision = RequiresExpectedRevision,
+            RequiresIdempotencyKey = RequiresIdempotencyKey,
+            EventTypes = [.. EventTypes],
+            ArtifactBehavior = ArtifactBehavior,
+            UiCommandIds = [.. UiCommandIds],
+        };
+    }
 }
 
 /// <summary>

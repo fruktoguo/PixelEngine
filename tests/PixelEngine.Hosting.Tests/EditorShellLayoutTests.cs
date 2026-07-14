@@ -218,6 +218,217 @@ Collapsed=0
         }
     }
 
+    /// <summary>外部 automation 要求持久化与内存布局原子成功，文件占用时必须失败闭合。</summary>
+    [Fact]
+    public void AutomationResetLayoutFailsClosedWhenIniIsLocked()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            File.WriteAllText(path, "[Window][WindowOverViewport_1]\nSize=1280,720\n");
+            EditorShellLayout layout = new(path, 1280, 720);
+            using FileStream locked = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            bool reset = layout.TryResetLayoutForAutomation(out string diagnostic);
+
+            Assert.False(reset);
+            Assert.Contains("无法原子重置布局", diagnostic, StringComparison.Ordinal);
+            Assert.Contains("当前会话保持不变", diagnostic, StringComparison.Ordinal);
+            Assert.True(File.Exists(path));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>Reset 的版本 sidecar 提交失败时必须恢复 layout，且不得切换当前会话。</summary>
+    [Fact]
+    public void AutomationResetLayoutRestoresLayoutWhenVersionCommitFails()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            const string before = "[Window][Scene]\nPos=1,2\n[Docking][Data]\nDockSpace ID=0x1\n";
+            File.WriteAllText(path, before);
+            File.WriteAllText($"{path}.version", "2");
+            EditorShellLayout layout = new(path, 1280, 720);
+            using FileStream lockedVersion = new(
+                $"{path}.version",
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
+            bool reset = layout.TryResetLayoutForAutomation(out string diagnostic);
+
+            Assert.False(reset);
+            Assert.Contains("无法原子重置布局", diagnostic, StringComparison.Ordinal);
+            Assert.Contains("当前会话保持不变", diagnostic, StringComparison.Ordinal);
+            Assert.Equal(before, File.ReadAllText(path));
+            Assert.Equal("2", File.ReadAllText($"{path}.version"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>automation layout 只接受有界 Window/Table/Docking sections，并规范换行。</summary>
+    [Fact]
+    public void AutomationLayoutValidationRejectsNativeParserGarbage()
+    {
+        Assert.True(EditorDockLayoutValidator.TryValidate(
+            "[Window][Scene]\r\nPos=0,0\r\n[Docking][Data]\r\nDockSpace ID=0x1\r\n",
+            out string normalized,
+            out string validDiagnostic),
+            validDiagnostic);
+        Assert.DoesNotContain('\r', normalized);
+        Assert.EndsWith("\n", normalized, StringComparison.Ordinal);
+
+        Assert.False(EditorDockLayoutValidator.TryValidate(
+            "[Malicious][Native]\nvalue=1\n[Docking][Data]\n",
+            out _,
+            out string unknownDiagnostic));
+        Assert.Contains("未知", unknownDiagnostic, StringComparison.Ordinal);
+        Assert.False(EditorDockLayoutValidator.TryValidate(
+            "[Window][Scene]\nPos=0,0\n",
+            out _,
+            out string missingDiagnostic));
+        Assert.Contains("[Docking][Data]", missingDiagnostic, StringComparison.Ordinal);
+
+        string oversized = "[Window][Scene]\n" +
+            string.Join('\n', Enumerable.Repeat(new string('x', 64), 5_000)) +
+            "\n[Docking][Data]\n";
+        Assert.False(EditorDockLayoutValidator.TryValidate(
+            oversized,
+            out _,
+            out string oversizedDiagnostic));
+        Assert.Contains("UTF-8", oversizedDiagnostic, StringComparison.Ordinal);
+    }
+
+    /// <summary>layout 与版本 sidecar 都必须落盘，且返回规范化文本。</summary>
+    [Fact]
+    public void AutomationLayoutPersistenceWritesLayoutAndVersionAtomically()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            EditorShellLayout layout = new(path, 1280, 720, migrateToCurrentLayout: true);
+            const string input = "[Window][Scene]\r\nPos=0,0\r\n[Docking][Data]\r\nDockSpace ID=0x1\r\n";
+
+            bool saved = layout.TryPersistAutomationLayout(input, out string normalized, out string diagnostic);
+
+            Assert.True(saved, diagnostic);
+            Assert.Equal(normalized, File.ReadAllText(path));
+            Assert.Equal(
+                EditorShellLayout.CurrentLayoutVersion.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                File.ReadAllText($"{path}.version"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>version sidecar 被占用时，已经写入的新 layout 必须回滚为完整 before image。</summary>
+    [Fact]
+    public void AutomationLayoutPersistenceRollsBackLayoutWhenVersionCommitFails()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            const string before = "[Window][Scene]\nPos=1,2\n[Docking][Data]\nDockSpace ID=0x1\n";
+            const string after = "[Window][Scene]\nPos=9,9\n[Docking][Data]\nDockSpace ID=0x2\n";
+            File.WriteAllText(path, before);
+            File.WriteAllText($"{path}.version", EditorShellLayout.CurrentLayoutVersion.ToString());
+            EditorShellLayout layout = new(path, 1280, 720);
+            using FileStream lockedVersion = new(
+                $"{path}.version",
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
+            bool saved = layout.TryPersistAutomationLayout(after, out _, out string diagnostic);
+
+            Assert.False(saved);
+            Assert.Contains("无法原子持久化", diagnostic, StringComparison.Ordinal);
+            Assert.Equal(before, File.ReadAllText(path));
+            Assert.Equal(
+                EditorShellLayout.CurrentLayoutVersion.ToString(),
+                File.ReadAllText($"{path}.version"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>Reset 后的上层失败必须按原始字节与存在性恢复 ini 和版本 sidecar。</summary>
+    [Fact]
+    public void AutomationPersistenceSnapshotRestoresExactTwoFileBeforeImage()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            string path = Path.Combine(directory, "editor-shell-imgui.ini");
+            byte[] layoutBefore = [0xef, 0xbb, 0xbf, .. System.Text.Encoding.UTF8.GetBytes(
+                "[Window][Scene]\r\nPos=1,2\r\n[Docking][Data]\r\nDockSpace ID=0x1\r\n")];
+            byte[] versionBefore = System.Text.Encoding.UTF8.GetBytes("2\r\n");
+            File.WriteAllBytes(path, layoutBefore);
+            File.WriteAllBytes($"{path}.version", versionBefore);
+            EditorShellLayout layout = new(path, 1280, 720);
+            Assert.True(
+                layout.TryCaptureAutomationPersistence(
+                    out EditorLayoutPersistenceSnapshot before,
+                    out string captureDiagnostic),
+                captureDiagnostic);
+
+            File.WriteAllText(path, "changed");
+            File.Delete($"{path}.version");
+
+            Assert.True(
+                layout.TryRestoreAutomationPersistence(before, out string restoreDiagnostic),
+                restoreDiagnostic);
+            Assert.Equal(layoutBefore, File.ReadAllBytes(path));
+            Assert.Equal(versionBefore, File.ReadAllBytes($"{path}.version"));
+
+            File.Delete($"{path}.version");
+            Assert.True(
+                layout.TryCaptureAutomationPersistence(
+                    out EditorLayoutPersistenceSnapshot withoutVersion,
+                    out captureDiagnostic),
+                captureDiagnostic);
+            File.WriteAllText($"{path}.version", "3");
+            Assert.True(
+                layout.TryRestoreAutomationPersistence(withoutVersion, out restoreDiagnostic),
+                restoreDiagnostic);
+            Assert.False(File.Exists($"{path}.version"));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "PixelEngine.EditorShellLayoutTests", Guid.NewGuid().ToString("N"));

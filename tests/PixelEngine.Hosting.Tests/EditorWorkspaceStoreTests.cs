@@ -9,9 +9,9 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class EditorWorkspaceStoreTests
 {
-    /// <summary>验证 v1 workspace 无损迁移到 v2，并持久化 Game View preset/scale/pan。</summary>
+    /// <summary>验证 v1 workspace 无损迁移到当前版本，并持久化 Game View preset/scale/pan。</summary>
     [Fact]
-    public void WorkspaceV1MigratesAndGameViewStateRoundTripsInV2()
+    public void WorkspaceV1MigratesAndGameViewStateRoundTripsInCurrentVersion()
     {
         using TempDirectory temp = new();
         string storagePath = Path.Combine(temp.Path, "editor-workspace.json");
@@ -85,6 +85,9 @@ public sealed class EditorWorkspaceStoreTests
             {
                 Width = 1600,
                 Height = 900,
+                X = -1200,
+                Y = 75,
+                State = EditorWorkspaceWindowStateKind.Maximized,
             },
             Projects =
             [
@@ -119,6 +122,9 @@ public sealed class EditorWorkspaceStoreTests
         Assert.Equal(Path.GetFullPath(projectRoot), reloaded.Current.LastSuccessfulProjectPath);
         Assert.Equal(1600, reloaded.Current.Window!.Width);
         Assert.Equal(900, reloaded.Current.Window.Height);
+        Assert.Equal(-1200, reloaded.Current.Window.X);
+        Assert.Equal(75, reloaded.Current.Window.Y);
+        Assert.Equal(EditorWorkspaceWindowStateKind.Maximized, reloaded.Current.Window.State);
         EditorProjectWorkspaceState project = Assert.Single(reloaded.Current.Projects!);
         Assert.Equal(Path.GetFullPath(projectRoot), project.ProjectPath);
         Assert.Equal("scenes/latest.scene", project.LastScenePath);
@@ -177,12 +183,67 @@ public sealed class EditorWorkspaceStoreTests
     [Fact]
     public void InvalidWindowSizeFallsBackToSupportedDefaults()
     {
-        EditorWorkspaceStore store = EditorWorkspaceStore.CreateInMemory();
+        EditorWorkspaceStore store = EditorWorkspaceStore.CreateInMemory(new EditorWorkspaceDocument
+        {
+            Window = new EditorWorkspaceWindowState
+            {
+                X = -500,
+                Y = 20,
+                State = EditorWorkspaceWindowStateKind.Fullscreen,
+            },
+        });
 
         Assert.True(store.TrySetWindowSize(-1, int.MaxValue, out string diagnostic), diagnostic);
 
         Assert.Equal(EditorWorkspaceWindowState.DefaultWidth, store.Current.Window!.Width);
         Assert.Equal(EditorWorkspaceWindowState.DefaultHeight, store.Current.Window.Height);
+        Assert.Equal(-500, store.Current.Window.X);
+        Assert.Equal(20, store.Current.Window.Y);
+        Assert.Equal(EditorWorkspaceWindowStateKind.Fullscreen, store.Current.Window.State);
+    }
+
+    /// <summary>验证 v2 的缺省 placement 迁移为平台默认位置与 Normal 状态。</summary>
+    [Fact]
+    public void WorkspaceV2MigratesWindowPlacementDefaultsToCurrentVersion()
+    {
+        using TempDirectory temp = new();
+        string storagePath = Path.Combine(temp.Path, "editor-workspace.json");
+        File.WriteAllText(storagePath, """
+        {
+          "formatVersion": 2,
+          "lastCleanShutdown": true,
+          "window": { "width": 1440, "height": 810 },
+          "projects": []
+        }
+        """);
+
+        EditorWorkspaceStore store = EditorWorkspaceStore.Load(storagePath);
+
+        Assert.True(store.LoadedFromDisk);
+        Assert.Equal(EditorWorkspaceDocument.CurrentFormatVersion, store.Current.FormatVersion);
+        Assert.Equal(1440, store.Current.Window!.Width);
+        Assert.Equal(810, store.Current.Window.Height);
+        Assert.Null(store.Current.Window.X);
+        Assert.Null(store.Current.Window.Y);
+        Assert.Equal(EditorWorkspaceWindowStateKind.Normal, store.Current.Window.State);
+    }
+
+    /// <summary>不完整或越界位置必须整体丢弃，不能把窗口恢复到半个旧坐标。</summary>
+    [Fact]
+    public void InvalidWindowPositionIsDiscardedAsAnAtomicPair()
+    {
+        EditorWorkspaceStore store = EditorWorkspaceStore.CreateInMemory(new EditorWorkspaceDocument
+        {
+            Window = new EditorWorkspaceWindowState
+            {
+                X = 120,
+                Y = int.MaxValue,
+            },
+        });
+
+        Assert.Null(store.Current.Window!.X);
+        Assert.Null(store.Current.Window.Y);
+        Assert.Contains("窗口位置", store.LastDiagnostic, StringComparison.Ordinal);
     }
 
     /// <summary>

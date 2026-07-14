@@ -47,6 +47,115 @@ internal sealed class EditorShellLayout
 
     public bool TryResetLayout(out string diagnostic)
     {
+        return TryResetLayoutCore(
+            resetCurrentSessionOnPersistenceFailure: true,
+            out diagnostic);
+    }
+
+    internal bool TryResetLayoutForAutomation(out string diagnostic)
+    {
+        if (!TryCaptureAutomationPersistence(out EditorLayoutPersistenceSnapshot before, out diagnostic))
+        {
+            return false;
+        }
+
+        try
+        {
+            File.Delete(LayoutPath);
+            EditorAtomicTextFile.WriteAllText(
+                GetVersionPath(LayoutPath),
+                CurrentLayoutVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            diagnostic = $"无法原子重置布局；当前会话保持不变：{exception.Message}";
+            if (!TryRestoreAutomationPersistence(before, out string rollbackDiagnostic))
+            {
+                diagnostic += $"；{rollbackDiagnostic}";
+            }
+
+            return false;
+        }
+
+        _dockSpace.ResetLayoutState(buildDefaultLayout: true);
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryPersistAutomationLayout(
+        string layout,
+        out string normalized,
+        out string diagnostic)
+    {
+        if (!EditorDockLayoutValidator.TryValidate(layout, out normalized, out diagnostic))
+        {
+            return false;
+        }
+
+        if (!TryCaptureAutomationPersistence(out EditorLayoutPersistenceSnapshot before, out diagnostic))
+        {
+            return false;
+        }
+
+        try
+        {
+            EditorAtomicTextFile.WriteAllText(LayoutPath, normalized);
+            EditorAtomicTextFile.WriteAllText(
+                GetVersionPath(LayoutPath),
+                CurrentLayoutVersion.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            diagnostic = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            diagnostic = $"无法原子持久化 dock layout：{exception.Message}";
+            if (!TryRestoreAutomationPersistence(before, out string rollbackDiagnostic))
+            {
+                diagnostic += $"；{rollbackDiagnostic}";
+            }
+
+            return false;
+        }
+    }
+
+    internal bool TryCaptureAutomationPersistence(
+        out EditorLayoutPersistenceSnapshot snapshot,
+        out string diagnostic)
+    {
+        try
+        {
+            string versionPath = GetVersionPath(LayoutPath);
+            snapshot = new EditorLayoutPersistenceSnapshot(
+                File.Exists(LayoutPath) ? File.ReadAllBytes(LayoutPath) : null,
+                File.Exists(versionPath) ? File.ReadAllBytes(versionPath) : null);
+            diagnostic = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            snapshot = default;
+            diagnostic = $"无法读取 dock layout before state：{exception.Message}";
+            return false;
+        }
+    }
+
+    internal bool TryRestoreAutomationPersistence(
+        EditorLayoutPersistenceSnapshot snapshot,
+        out string diagnostic)
+    {
+        List<string> failures = [];
+        TryRestoreFile(LayoutPath, snapshot.LayoutBytes, failures);
+        TryRestoreFile(GetVersionPath(LayoutPath), snapshot.VersionBytes, failures);
+        diagnostic = failures.Count == 0
+            ? string.Empty
+            : $"磁盘 rollback 失败：{string.Join(" | ", failures)}";
+        return failures.Count == 0;
+    }
+
+    private bool TryResetLayoutCore(
+        bool resetCurrentSessionOnPersistenceFailure,
+        out string diagnostic)
+    {
         diagnostic = string.Empty;
         bool deleted = true;
         try
@@ -56,7 +165,14 @@ internal sealed class EditorShellLayout
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             deleted = false;
-            diagnostic = $"无法删除旧布局文件；当前会话已恢复默认布局，但退出后可能再次加载旧布局：{exception.Message}";
+            diagnostic = resetCurrentSessionOnPersistenceFailure
+                ? $"无法删除旧布局文件；当前会话已恢复默认布局，但退出后可能再次加载旧布局：{exception.Message}"
+                : $"无法原子重置布局；旧布局文件未删除，当前会话保持不变：{exception.Message}";
+        }
+
+        if (!deleted && !resetCurrentSessionOnPersistenceFailure)
+        {
+            return false;
         }
 
         _dockSpace.ResetLayoutState(buildDefaultLayout: true);
@@ -179,6 +295,33 @@ internal sealed class EditorShellLayout
         }
     }
 
+    private static void TryRestoreFile(
+        string path,
+        byte[]? contents,
+        List<string> failures)
+    {
+        try
+        {
+            if (contents is not null)
+            {
+                if (File.Exists(path) && File.ReadAllBytes(path).AsSpan().SequenceEqual(contents))
+                {
+                    return;
+                }
+
+                EditorAtomicTextFile.WriteAllBytes(path, contents);
+            }
+            else if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            failures.Add($"{Path.GetFileName(path)}: {exception.Message}");
+        }
+    }
+
     private static string GetVersionPath(string layoutPath)
     {
         return $"{layoutPath}.version";
@@ -222,3 +365,7 @@ internal sealed class EditorShellLayout
             int.TryParse(parts[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out height);
     }
 }
+
+internal readonly record struct EditorLayoutPersistenceSnapshot(
+    byte[]? LayoutBytes,
+    byte[]? VersionBytes);

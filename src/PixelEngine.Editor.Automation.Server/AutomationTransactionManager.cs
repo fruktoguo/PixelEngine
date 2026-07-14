@@ -288,14 +288,23 @@ public sealed class AutomationTransactionManager : IDisposable
                     scheduledContext,
                     current.Payload) ?? throw new InvalidOperationException(
                     $"Transaction method '{current.Registration.Descriptor.Method}' 返回了 null result。");
-                if (operationResult.UndoAction is null)
+                if (operationResult.WriteStateChanged)
+                {
+                    if (operationResult.UndoAction is null)
+                    {
+                        throw new InvalidOperationException(
+                            $"Transaction method '{current.Registration.Descriptor.Method}' 必须返回真实 Undo action。");
+                    }
+
+                    // operation 已经修改权威状态，先登记 rollback action，再验证其余 handler contract。
+                    applied.Add(operationResult.UndoAction);
+                }
+                else if (operationResult.UndoAction is not null)
                 {
                     throw new InvalidOperationException(
-                        $"Transaction method '{current.Registration.Descriptor.Method}' 必须返回真实 Undo action。");
+                        $"No-change transaction method '{current.Registration.Descriptor.Method}' 不得返回 Undo action。");
                 }
 
-                // operation 已经修改权威状态，先登记 rollback action，再验证其余 handler contract。
-                applied.Add(operationResult.UndoAction);
                 if (operationResult.RevisionOverride is not null)
                 {
                     throw new InvalidOperationException(

@@ -138,4 +138,40 @@ public sealed class RenderBackendSelectorTests
             new RenderWindowOptions { UpdatesPerSecond = -1 },
             RenderBackend.DesktopGl33));
     }
+
+    /// <summary>Editor workspace placement 必须在创建平台窗口前完整转发。</summary>
+    [Fact]
+    public void InitialPlacementAndStateAreForwardedToSilk()
+    {
+        RenderWindowOptions options = new()
+        {
+            PositionX = -900,
+            PositionY = 40,
+            InitialState = RenderWindowState.Maximized,
+        };
+
+        WindowOptions actual = RenderBackendSelector.CreateWindowOptions(
+            options,
+            RenderBackend.DesktopGl33);
+
+        Assert.Equal(-900, actual.Position.X);
+        Assert.Equal(40, actual.Position.Y);
+        Assert.Equal(WindowState.Maximized, actual.WindowState);
+    }
+
+    /// <summary>不完整位置或与 Player mode 冲突的状态必须在建窗前失败。</summary>
+    [Fact]
+    public void InvalidInitialPlacementOrConflictingStateIsRejected()
+    {
+        _ = Assert.Throws<ArgumentException>(() => RenderBackendSelector.CreateWindowOptions(
+            new RenderWindowOptions { PositionX = 1 },
+            RenderBackend.DesktopGl33));
+        _ = Assert.Throws<ArgumentException>(() => RenderBackendSelector.CreateWindowOptions(
+            new RenderWindowOptions
+            {
+                WindowMode = PlayerWindowMode.MaximizedWindow,
+                InitialState = RenderWindowState.Maximized,
+            },
+            RenderBackend.DesktopGl33));
+    }
 }

@@ -22,6 +22,16 @@ public static class RenderBackendSelector
             throw new ArgumentOutOfRangeException(nameof(options), "窗口尺寸必须为正数。");
         }
 
+        if (options.PositionX.HasValue != options.PositionY.HasValue)
+        {
+            throw new ArgumentException("窗口初始 X/Y 坐标必须同时提供。", nameof(options));
+        }
+
+        if (options.InitialState.HasValue && options.WindowMode != PlayerWindowMode.Windowed)
+        {
+            throw new ArgumentException("InitialState 不能与非 Windowed 的 Player window mode 同时使用。", nameof(options));
+        }
+
         ValidateRate(options.FramesPerSecond, nameof(options.FramesPerSecond));
         ValidateRate(options.UpdatesPerSecond, nameof(options.UpdatesPerSecond));
 
@@ -42,6 +52,16 @@ public static class RenderBackendSelector
             PlayerWindowMode.BorderlessFullscreen => (WindowState.Normal, WindowBorder.Hidden),
             _ => throw new ArgumentOutOfRangeException(nameof(options), options.WindowMode, "未知 Player window mode。"),
         };
+        if (options.InitialState is { } initialState)
+        {
+            windowOptions.WindowState = ToSilkWindowState(initialState);
+        }
+
+        if (options.PositionX is { } positionX && options.PositionY is { } positionY)
+        {
+            windowOptions.Position = new Vector2D<int>(positionX, positionY);
+        }
+
         windowOptions.IsVisible = options.WindowMode != PlayerWindowMode.BorderlessFullscreen;
         return windowOptions;
     }
@@ -88,5 +108,17 @@ public static class RenderBackendSelector
         {
             throw new ArgumentOutOfRangeException(parameterName, rate, "窗口频率必须是非负有限数；0 表示不节流。");
         }
+    }
+
+    private static WindowState ToSilkWindowState(RenderWindowState state)
+    {
+        return state switch
+        {
+            RenderWindowState.Normal => WindowState.Normal,
+            RenderWindowState.Minimized => WindowState.Minimized,
+            RenderWindowState.Maximized => WindowState.Maximized,
+            RenderWindowState.Fullscreen => WindowState.Fullscreen,
+            _ => throw new ArgumentOutOfRangeException(nameof(state), state, "未知窗口状态。"),
+        };
     }
 }

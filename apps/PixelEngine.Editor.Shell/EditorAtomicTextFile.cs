@@ -13,9 +13,31 @@ internal static class EditorAtomicTextFile
             File.Move(temporaryPath, destinationPath, overwrite: true));
     }
 
+    public static void WriteAllBytes(string path, byte[] contents)
+    {
+        ArgumentNullException.ThrowIfNull(contents);
+        WriteAllBytes(
+            path,
+            contents,
+            static (temporaryPath, destinationPath) =>
+                File.Move(temporaryPath, destinationPath, overwrite: true));
+    }
+
     internal static void WriteAllText(
         string path,
         string contents,
+        Action<string, string> commit)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        ArgumentNullException.ThrowIfNull(contents);
+        ArgumentNullException.ThrowIfNull(commit);
+
+        WriteAllBytes(path, Encoding.UTF8.GetBytes(contents), commit);
+    }
+
+    private static void WriteAllBytes(
+        string path,
+        byte[] contents,
         Action<string, string> commit)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -32,7 +54,6 @@ internal static class EditorAtomicTextFile
         string temporaryPath = $"{destinationPath}.{Environment.ProcessId}.{Guid.NewGuid():N}.tmp";
         try
         {
-            byte[] bytes = Encoding.UTF8.GetBytes(contents);
             using (FileStream stream = new(
                 temporaryPath,
                 FileMode.CreateNew,
@@ -41,7 +62,7 @@ internal static class EditorAtomicTextFile
                 bufferSize: 4096,
                 FileOptions.WriteThrough))
             {
-                stream.Write(bytes);
+                stream.Write(contents);
                 stream.Flush(flushToDisk: true);
             }
 

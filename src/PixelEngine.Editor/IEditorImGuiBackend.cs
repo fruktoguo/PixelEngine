@@ -36,6 +36,25 @@ public interface IEditorImGuiBackend
     /// </summary>
     void ResetDockLayout();
 
+    /// <summary>把当前 ImGui window/table/dock settings 序列化为内存文本。</summary>
+    /// <returns>Dear ImGui ini 格式文本。</returns>
+    string CaptureDockLayout();
+
+    /// <summary>把经过宿主校验的完整 ini 文本应用到当前 ImGui context。</summary>
+    /// <param name="layout">Dear ImGui ini 格式文本。</param>
+    void ApplyDockLayout(string layout);
+
+    /// <summary>读取一个 ImGui window 的实时停靠状态。</summary>
+    /// <param name="windowTitle">完整稳定窗口标题。</param>
+    /// <returns>窗口状态；尚未 Begin 时 <see cref="EditorDockWindowState.Known"/> 为 false。</returns>
+    EditorDockWindowState CaptureDockWindow(string windowTitle);
+
+    /// <summary>执行真实 DockBuilder/SetWindowDock 语义变更。</summary>
+    /// <param name="request">停靠请求。</param>
+    /// <param name="diagnostic">失败诊断。</param>
+    /// <returns>变更已经进入当前 ImGui dock tree 时为 true。</returns>
+    bool TrySetDockWindow(EditorDockWindowRequest request, out string diagnostic);
+
     /// <summary>
     /// 结束当前 ImGui 帧并渲染 draw data。
     /// </summary>

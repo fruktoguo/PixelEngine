@@ -86,6 +86,41 @@ public sealed class ImGuiController
         Backend.ResetDockLayout();
     }
 
+    /// <summary>捕获当前完整 dock layout 文本。</summary>
+    /// <returns>Dear ImGui 当前会话的完整 ini layout 文本。</returns>
+    public string CaptureDockLayout()
+    {
+        ThrowIfNotInitialized();
+        return Backend.CaptureDockLayout();
+    }
+
+    /// <summary>应用经过宿主校验的完整 dock layout 文本。</summary>
+    /// <param name="layout">Dear ImGui ini 文本。</param>
+    public void ApplyDockLayout(string layout)
+    {
+        ThrowIfNotInitialized();
+        Backend.ApplyDockLayout(layout);
+    }
+
+    /// <summary>读取指定 window 的实时 dock 状态。</summary>
+    /// <param name="windowTitle">需要读取的完整稳定窗口标题。</param>
+    /// <returns>窗口是否已实例化、当前 dock node 与矩形。</returns>
+    public EditorDockWindowState CaptureDockWindow(string windowTitle)
+    {
+        ThrowIfNotInitialized();
+        return Backend.CaptureDockWindow(windowTitle);
+    }
+
+    /// <summary>执行指定 window 的语义 dock 变更。</summary>
+    /// <param name="request">源窗口、目标窗口、位置与可选浮动矩形。</param>
+    /// <param name="diagnostic">失败时的稳定诊断；成功为空。</param>
+    /// <returns>变更已由 Dear ImGui docking API 接受时返回 <see langword="true"/>。</returns>
+    public bool TrySetDockWindow(EditorDockWindowRequest request, out string diagnostic)
+    {
+        ThrowIfNotInitialized();
+        return Backend.TrySetDockWindow(request, out diagnostic);
+    }
+
     /// <summary>
     /// 渲染 ImGui draw data。Hexa.NET OpenGL3 backend 负责恢复被它修改的 GL 状态。
     /// </summary>

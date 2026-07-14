@@ -37,6 +37,7 @@ internal sealed class SceneViewPanel(
     private const float GizmoAxisLength = 48f;
     private const float GizmoRotationRadius = 38f;
     private const float ToolOverlayInset = 8f;
+    private const string SnapSettingsPopupName = "scene-gizmo-snap-settings";
     private static readonly Vector2 ToolOverlayDesiredSize = new(300f, 390f);
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
@@ -51,8 +52,8 @@ internal sealed class SceneViewPanel(
     private bool _toolOverlayHovered;
     private bool _webCanvasPreviewHovered;
     private bool _cameraAutoFit = true;
-    private SceneToolOverlayDock _toolOverlayDock = SceneToolOverlayDock.Right;
-    private Vector2 _toolOverlayFloatingOffset = new(ToolOverlayInset, ToolOverlayInset);
+    internal SceneToolOverlayDock ToolOverlayDock { get; private set; } = SceneToolOverlayDock.Right;
+    internal Vector2 ToolOverlayFloatingOffset { get; private set; } = new(ToolOverlayInset, ToolOverlayInset);
     private int _previewVersion = -1;
     private int _previewSceneViewVersion = -1;
     private long _previewAuthoringWorldVersion = -1;
@@ -109,7 +110,29 @@ internal sealed class SceneViewPanel(
 
     internal bool ShowGrid { get; private set; } = true;
 
+    internal SceneGizmoSnapSettings SnapSettings { get; private set; } = SceneGizmoSnapSettings.Default;
+
     internal bool MaterialBrushActive => _brushPanel?.IsActive == true;
+
+    internal void SetToolOverlay(SceneToolOverlayDock dock, Vector2 floatingOffset)
+    {
+        if (!Enum.IsDefined(dock) ||
+            !float.IsFinite(floatingOffset.X) ||
+            !float.IsFinite(floatingOffset.Y))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(floatingOffset),
+                "Scene tool overlay dock 与 floating offset 必须有效且有限。");
+        }
+
+        if (ToolOverlayDock == dock && ToolOverlayFloatingOffset == floatingOffset)
+        {
+            return;
+        }
+
+        ToolOverlayDock = dock;
+        ToolOverlayFloatingOffset = floatingOffset;
+    }
 
     internal void InvalidateWorldTexture()
     {
@@ -489,6 +512,8 @@ internal sealed class SceneViewPanel(
             ImGui.SetTooltip("Toggle Local / Global gizmo orientation");
         }
 
+        DrawSnapControls();
+
         SceneAuthoringPreview preview = EnsurePreview();
         ImGui.SameLine();
         ImGui.TextUnformatted($"{preview.StatusLabel} · {preview.SceneName}");
@@ -536,6 +561,11 @@ internal sealed class SceneViewPanel(
             throw new ArgumentOutOfRangeException(nameof(operation), operation, "Scene View 仅支持 Move、Rotate Z 与 Scale gizmo。");
         }
 
+        if (Operation == operation && !MaterialBrushActive)
+        {
+            return;
+        }
+
         if (_gizmoTransactionStableId.HasValue)
         {
             _ = CommitGizmoTransform();
@@ -551,6 +581,11 @@ internal sealed class SceneViewPanel(
         if (_brushPanel is null)
         {
             return false;
+        }
+
+        if (_brushPanel.IsActive == active && (!active || _brushPanel.Visible))
+        {
+            return true;
         }
 
         if (active && _preparedMode != EditorMode.Edit)
@@ -573,6 +608,28 @@ internal sealed class SceneViewPanel(
         return _brushPanel.IsActive == active;
     }
 
+    internal int ApplyMaterialBrushAt(int worldX, int worldY)
+    {
+        if (_brushPanel is null || !MaterialBrushActive || _preparedMode != EditorMode.Edit)
+        {
+            return 0;
+        }
+
+        SceneAuthoringBounds previewBounds = EnsurePreview().Bounds;
+        MaterialBrushBounds brushBounds = new(
+            (int)MathF.Ceiling(previewBounds.X),
+            (int)MathF.Ceiling(previewBounds.Y),
+            (int)MathF.Ceiling(previewBounds.Right) - 1,
+            (int)MathF.Ceiling(previewBounds.Bottom) - 1);
+        int writes = _brushPanel.ApplyAt(worldX, worldY, brushBounds);
+        if (writes > 0)
+        {
+            InvalidateWorldTexture();
+        }
+
+        return writes;
+    }
+
     internal void ToggleGrid()
     {
         ShowGrid = !ShowGrid;
@@ -587,6 +644,91 @@ internal sealed class SceneViewPanel(
 
         ClearGizmoInteraction();
         GizmoMode = GizmoMode == ImGuizmoMode.Local ? ImGuizmoMode.World : ImGuizmoMode.Local;
+    }
+
+    internal void SetSnapSettings(in SceneGizmoSnapSettings settings)
+    {
+        if (!settings.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(settings),
+                settings,
+                "Scene gizmo snap 必须使用有限正步长且不超过公共上限。");
+        }
+
+        if (SnapSettings == settings)
+        {
+            return;
+        }
+
+        if (_gizmoTransactionStableId.HasValue)
+        {
+            _ = CommitGizmoTransform();
+        }
+
+        ClearGizmoInteraction();
+        SnapSettings = settings;
+    }
+
+    internal void SetCamera(float centerX, float centerY, float cellsPerPixel)
+    {
+        SceneAuthoringCameraSnapshot current = _camera.Snapshot;
+        if (current.CenterX == centerX &&
+            current.CenterY == centerY &&
+            current.CellsPerPixel == cellsPerPixel)
+        {
+            return;
+        }
+
+        if (_gizmoTransactionStableId.HasValue)
+        {
+            _ = CommitGizmoTransform();
+        }
+
+        ClearGizmoInteraction();
+        _camera.SetView(centerX, centerY, cellsPerPixel);
+        _cameraAutoFit = false;
+    }
+
+    private void DrawSnapControls()
+    {
+        ImGui.SameLine(0f, 6f);
+        bool enabled = SnapSettings.Enabled;
+        if (ImGui.Checkbox("Snap##scene-gizmo-snap", ref enabled))
+        {
+            SetSnapSettings(SnapSettings with { Enabled = enabled });
+        }
+
+        ImGui.SameLine(0f, 2f);
+        if (ImGui.SmallButton("...##scene-gizmo-snap-settings"))
+        {
+            ImGui.OpenPopup(SnapSettingsPopupName);
+        }
+
+        if (!ImGui.BeginPopup(SnapSettingsPopupName))
+        {
+            return;
+        }
+
+        float move = SnapSettings.Move;
+        float rotationDegrees = SnapSettings.RotationDegrees;
+        float scale = SnapSettings.Scale;
+        bool changed = ImGui.DragFloat("Move", ref move, 0.1f, "%g");
+        changed |= ImGui.DragFloat("Rotate (deg)", ref rotationDegrees, 1f, "%g");
+        changed |= ImGui.DragFloat("Scale", ref scale, 0.01f, "%g");
+        if (changed && float.IsFinite(move) && float.IsFinite(rotationDegrees) && float.IsFinite(scale))
+        {
+            SetSnapSettings(new SceneGizmoSnapSettings(
+                SnapSettings.Enabled,
+                Math.Clamp(move, SceneGizmoSnapSettings.MinimumStep, SceneGizmoSnapSettings.MaximumMove),
+                Math.Clamp(
+                    rotationDegrees,
+                    SceneGizmoSnapSettings.MinimumStep,
+                    SceneGizmoSnapSettings.MaximumRotationDegrees),
+                Math.Clamp(scale, SceneGizmoSnapSettings.MinimumStep, SceneGizmoSnapSettings.MaximumScale)));
+        }
+
+        ImGui.EndPopup();
     }
 
     private static bool SceneToolbarButton(
@@ -781,8 +923,8 @@ internal sealed class SceneViewPanel(
             _canvasMin,
             _canvasSize,
             ToolOverlayDesiredSize,
-            _toolOverlayDock,
-            _toolOverlayFloatingOffset,
+            ToolOverlayDock,
+            ToolOverlayFloatingOffset,
             ToolOverlayInset);
         Vector2 resumeCursor = ImGui.GetCursorScreenPos();
         ImGui.SetCursorScreenPos(layout.Position);
@@ -824,13 +966,13 @@ internal sealed class SceneViewPanel(
 
         if (ImGui.IsItemActivated())
         {
-            _toolOverlayDock = SceneToolOverlayDock.Floating;
-            _toolOverlayFloatingOffset = layout.Position - _canvasMin;
+            ToolOverlayDock = SceneToolOverlayDock.Floating;
+            ToolOverlayFloatingOffset = layout.Position - _canvasMin;
         }
 
         if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
         {
-            _toolOverlayFloatingOffset += ImGui.GetIO().MouseDelta;
+            ToolOverlayFloatingOffset += ImGui.GetIO().MouseDelta;
         }
 
         if (ImGui.IsItemDeactivated())
@@ -840,37 +982,37 @@ internal sealed class SceneViewPanel(
                 _canvasSize,
                 ToolOverlayDesiredSize,
                 SceneToolOverlayDock.Floating,
-                _toolOverlayFloatingOffset,
+                ToolOverlayFloatingOffset,
                 ToolOverlayInset);
-            _toolOverlayDock = ResolveToolOverlayDock(
+            ToolOverlayDock = ResolveToolOverlayDock(
                 floated.Position,
                 floated.Size,
                 _canvasMin,
                 _canvasSize,
                 snapDistance: 24f,
                 ToolOverlayInset);
-            _toolOverlayFloatingOffset = floated.Position - _canvasMin;
+            ToolOverlayFloatingOffset = floated.Position - _canvasMin;
         }
 
         ImGui.SameLine(0f, 4f);
         if (ImGui.SmallButton("L##scene-tool-dock-left"))
         {
-            _toolOverlayDock = SceneToolOverlayDock.Left;
+            ToolOverlayDock = SceneToolOverlayDock.Left;
         }
 
         DrawOverlayButtonTooltip("Dock left");
         ImGui.SameLine(0f, 2f);
         if (ImGui.SmallButton("F##scene-tool-float"))
         {
-            _toolOverlayDock = SceneToolOverlayDock.Floating;
-            _toolOverlayFloatingOffset = layout.Position - _canvasMin;
+            ToolOverlayDock = SceneToolOverlayDock.Floating;
+            ToolOverlayFloatingOffset = layout.Position - _canvasMin;
         }
 
         DrawOverlayButtonTooltip("Float inside Scene View");
         ImGui.SameLine(0f, 2f);
         if (ImGui.SmallButton("R##scene-tool-dock-right"))
         {
-            _toolOverlayDock = SceneToolOverlayDock.Right;
+            ToolOverlayDock = SceneToolOverlayDock.Right;
         }
 
         DrawOverlayButtonTooltip("Dock right");
@@ -882,9 +1024,9 @@ internal sealed class SceneViewPanel(
         }
 
         DrawOverlayButtonTooltip("Close Brush Tool");
-        if (_toolOverlayDock != SceneToolOverlayDock.Floating)
+        if (ToolOverlayDock != SceneToolOverlayDock.Floating)
         {
-            uint accent = _toolOverlayDock == SceneToolOverlayDock.Left ? GizmoXAxisColor : GizmoYAxisColor;
+            uint accent = ToolOverlayDock == SceneToolOverlayDock.Left ? GizmoXAxisColor : GizmoYAxisColor;
             drawList.AddLine(
                 new Vector2(dragMin.X, dragMax.Y),
                 new Vector2(dragMax.X, dragMax.Y),
@@ -1354,21 +1496,9 @@ internal sealed class SceneViewPanel(
         if (MaterialBrushActive && _preparedMode == EditorMode.Edit)
         {
             Vector2 world = _camera.CanvasToWorld(panelPoint);
-            MaterialBrushPalettePanel brushPanel = _brushPanel!;
-            SceneAuthoringBounds previewBounds = EnsurePreview().Bounds;
-            MaterialBrushBounds brushBounds = new(
-                (int)MathF.Ceiling(previewBounds.X),
-                (int)MathF.Ceiling(previewBounds.Y),
-                (int)MathF.Ceiling(previewBounds.Right) - 1,
-                (int)MathF.Ceiling(previewBounds.Bottom) - 1);
-            int writes = brushPanel.ApplyAt(
+            _ = ApplyMaterialBrushAt(
                 (int)MathF.Round(world.X),
-                (int)MathF.Round(world.Y),
-                brushBounds);
-            if (writes > 0)
-            {
-                InvalidateWorldTexture();
-            }
+                (int)MathF.Round(world.Y));
 
             return;
         }
@@ -1460,6 +1590,13 @@ internal sealed class SceneViewPanel(
                     _gizmoDragStartScreen,
                     io.MousePos,
                     _gizmoDragCenterScreen);
+                nextWorld = ApplyGizmoSnap(
+                    _gizmoDragStartWorldTransform,
+                    nextWorld,
+                    _activeGizmoHandle,
+                    Operation,
+                    GizmoMode,
+                    SnapSettings);
                 _ = ApplyGizmoWorldTransform(gameObject.StableId, nextWorld);
                 world = _scene.ComputeWorldTransform(gameObject.StableId);
                 geometry = BuildGizmoGeometry(
@@ -1600,6 +1737,79 @@ internal sealed class SceneViewPanel(
         }
 
         return next;
+    }
+
+    internal static EditorSceneTransform ApplyGizmoSnap(
+        EditorSceneTransform start,
+        EditorSceneTransform value,
+        SceneGizmoHandle handle,
+        ImGuizmoOperation operation,
+        ImGuizmoMode mode,
+        in SceneGizmoSnapSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        ArgumentNullException.ThrowIfNull(value);
+        if (!settings.Enabled)
+        {
+            return value;
+        }
+
+        if (!settings.IsValid)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settings), settings, "Scene gizmo snap settings 无效。");
+        }
+
+        EditorSceneTransform snapped = value.Clone();
+        if (operation == ImGuizmoOperation.Translate)
+        {
+            ResolveGizmoAxes(start, mode, out Vector2 axisX, out Vector2 axisY);
+            Vector2 delta = new(value.X - start.X, value.Y - start.Y);
+            float amountX = Vector2.Dot(delta, axisX);
+            float amountY = Vector2.Dot(delta, axisY);
+            Vector2 snappedDelta = handle switch
+            {
+                SceneGizmoHandle.AxisX => axisX * SnapDelta(amountX, settings.Move),
+                SceneGizmoHandle.AxisY => axisY * SnapDelta(amountY, settings.Move),
+                SceneGizmoHandle.Both =>
+                    (axisX * SnapDelta(amountX, settings.Move)) +
+                    (axisY * SnapDelta(amountY, settings.Move)),
+                SceneGizmoHandle.None or SceneGizmoHandle.Rotate or SceneGizmoHandle.Uniform => delta,
+                _ => throw new ArgumentOutOfRangeException(nameof(handle), handle, "未知 Scene gizmo handle。"),
+            };
+            snapped.X = start.X + snappedDelta.X;
+            snapped.Y = start.Y + snappedDelta.Y;
+            return snapped;
+        }
+
+        if (operation == ImGuizmoOperation.RotateZ && handle == SceneGizmoHandle.Rotate)
+        {
+            float stepRadians = settings.RotationDegrees * (MathF.PI / 180f);
+            snapped.RotationRadians = start.RotationRadians +
+                SnapDelta(value.RotationRadians - start.RotationRadians, stepRadians);
+            return snapped;
+        }
+
+        if (operation != ImGuizmoOperation.Scale)
+        {
+            return snapped;
+        }
+
+        if (handle is SceneGizmoHandle.AxisX or SceneGizmoHandle.Uniform)
+        {
+            snapped.ScaleX = start.ScaleX + SnapDelta(value.ScaleX - start.ScaleX, settings.Scale);
+        }
+
+        if (handle is SceneGizmoHandle.AxisY or SceneGizmoHandle.Uniform)
+        {
+            snapped.ScaleY = start.ScaleY + SnapDelta(value.ScaleY - start.ScaleY, settings.Scale);
+        }
+
+        return snapped;
+    }
+
+    private static float SnapDelta(float value, float step)
+    {
+        return MathF.Round(value / step, MidpointRounding.AwayFromZero) * step;
     }
 
     private void DrawGizmoGeometry(
@@ -1844,6 +2054,30 @@ internal enum SceneToolOverlayDock
 internal readonly record struct SceneToolOverlayLayout(
     Vector2 Position,
     Vector2 Size);
+
+internal readonly record struct SceneGizmoSnapSettings(
+    bool Enabled,
+    float Move,
+    float RotationDegrees,
+    float Scale)
+{
+    public const float MinimumStep = 0.0001f;
+    public const float MaximumMove = 1_000_000f;
+    public const float MaximumRotationDegrees = 360f;
+    public const float MaximumScale = 100_000f;
+
+    public static SceneGizmoSnapSettings Default { get; } = new(
+        Enabled: false,
+        Move: 1f,
+        RotationDegrees: 15f,
+        Scale: 0.1f);
+
+    public bool IsValid =>
+        float.IsFinite(Move) && Move is >= MinimumStep and <= MaximumMove &&
+        float.IsFinite(RotationDegrees) &&
+        RotationDegrees is >= MinimumStep and <= MaximumRotationDegrees &&
+        float.IsFinite(Scale) && Scale is >= MinimumStep and <= MaximumScale;
+}
 
 internal enum SceneToolbarIcon
 {

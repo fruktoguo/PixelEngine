@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using PixelEngine.Editor.Automation.Protocol;
@@ -20,6 +21,8 @@ public sealed class AutomationMainThreadScheduler :
     private readonly int[] _phasePending = new int[PhaseCount];
     private readonly ConcurrentQueue<InternalWork> _internalEditorIngress = new();
     private readonly FrozenDictionary<string, AutomationMethodRegistration> _registrations;
+    private readonly AutomationCapabilityDescriptor[] _capabilities;
+    private readonly byte[] _capabilityCursorKey = RandomNumberGenerator.GetBytes(32);
     private readonly IAutomationUndoSink _undoSink;
     private readonly AutomationTransactionManager _transactions;
     private readonly AutomationIdempotencyCache _idempotency;
@@ -60,10 +63,18 @@ public sealed class AutomationMainThreadScheduler :
         List<AutomationMethodRegistration> all = [.. registrations];
         all.AddRange(CreateTransactionRegistrations());
         all.AddRange(CreateEventRegistrations());
+        all.Add(CreateCapabilityRegistration());
         ValidateRegistrations(all);
         _registrations = all.ToFrozenDictionary(
             static registration => registration.Descriptor.Method,
             StringComparer.Ordinal);
+        _capabilities =
+        [
+            .. all
+                .Select(static registration => registration.Descriptor.ToCapabilityDescriptor())
+                .OrderBy(static descriptor => descriptor.Id, StringComparer.Ordinal),
+        ];
+        CapabilityDigest = ComputeCapabilityDigest(_capabilities);
         _idempotency = new AutomationIdempotencyCache(
             _options.TimeProvider,
             _options.IdempotencyRetention,
@@ -93,6 +104,16 @@ public sealed class AutomationMainThreadScheduler :
 
     /// <summary>事件订阅与 bounded replay 权威 hub。</summary>
     public AutomationEventHub Events { get; }
+
+    /// <summary>真实 semantic registry 的 SHA256 digest。</summary>
+    public string CapabilityDigest { get; }
+
+    /// <summary>返回按 capability ID 排序的深复制 descriptor 快照。</summary>
+    /// <returns>不可与 scheduler 内部数组共享可变集合的 descriptor 数组。</returns>
+    public AutomationCapabilityDescriptor[] CaptureCapabilities()
+    {
+        return [.. _capabilities.Select(CloneCapability)];
+    }
 
     /// <summary>当前主线程是否存在全局互斥 automation transaction 写租约。</summary>
     public bool HasActiveTransaction
@@ -297,6 +318,7 @@ public sealed class AutomationMainThreadScheduler :
 
         Events.Dispose();
         _transactions.Dispose();
+        CryptographicOperations.ZeroMemory(_capabilityCursorKey);
     }
 
     private Task<AutomationHandlerResult> Schedule(
@@ -430,6 +452,21 @@ public sealed class AutomationMainThreadScheduler :
         AutomationMethodDescriptor descriptor = registration.Descriptor;
         RequireScopes(context, descriptor.RequiredScopes);
         ValidateTransactionShape(context, descriptor);
+        if (descriptor.OperationKind == AutomationOperationKind.Command)
+        {
+            if (context.ExpectedRevision is not null)
+            {
+                Revisions.Validate(context.ExpectedRevision);
+            }
+            else if (descriptor.RequiresExpectedRevision)
+            {
+                throw RequestError(
+                    AutomationErrorCodes.InvalidRequest,
+                    AutomationErrorCategory.Validation,
+                    $"Automation method '{descriptor.Method}' 必须携带 expectedRevision。");
+            }
+        }
+
         if (descriptor.OperationKind == AutomationOperationKind.Write)
         {
             _transactions.EnsureWriteAllowed(context.SessionId, context.TransactionId);
@@ -504,12 +541,33 @@ public sealed class AutomationMainThreadScheduler :
                     revision = operationResult.RevisionOverride is null
                         ? Revisions.Capture(resourceIds)
                         : NormalizeRevisionOverride(operationResult.RevisionOverride);
+                    if (operationResult.StateChanged &&
+                        !operationResult.StateEventAlreadyPublished &&
+                        descriptor.EventTypes.Contains(
+                        AutomationProtocolConstants.StateChangedEventType,
+                        StringComparer.Ordinal))
+                    {
+                        if (resourceIds.Length == 0 || operationResult.RevisionOverride is null)
+                        {
+                            throw new InvalidOperationException(
+                                $"State-changing Command '{descriptor.Method}' 必须返回 resources 与显式 revision override。");
+                        }
+
+                        PublishStateChanged(
+                            descriptor.Method,
+                            resourceIds,
+                            "execute",
+                            null,
+                            context.RequestId,
+                            revision);
+                    }
                     break;
                 default:
                     throw new InvalidOperationException($"未知 automation operation kind {descriptor.OperationKind}。");
             }
 
             if (descriptor.OperationKind == AutomationOperationKind.Write &&
+                operationResult.WriteStateChanged &&
                 string.IsNullOrWhiteSpace(context.TransactionId))
             {
                 PublishStateChanged(
@@ -556,6 +614,14 @@ public sealed class AutomationMainThreadScheduler :
         {
             throw new InvalidOperationException(
                 $"Write method '{descriptor.Method}' 的 revision 只能由 scheduler 统一推进。");
+        }
+
+        if (!result.WriteStateChanged)
+        {
+            return result.UndoAction is null
+                ? Revisions.Capture(resourceIds)
+                : throw new InvalidOperationException(
+                    $"No-change Write method '{descriptor.Method}' 不得返回 Undo action。");
         }
 
         if (descriptor.TransactionMode is AutomationTransactionMode.Optional or AutomationTransactionMode.Required)
@@ -621,7 +687,8 @@ public sealed class AutomationMainThreadScheduler :
         AutomationRequestContext context,
         AutomationMethodDescriptor descriptor)
     {
-        if (descriptor.OperationKind == AutomationOperationKind.Write && context.ExpectedRevision is not null)
+        if (descriptor.OperationKind is AutomationOperationKind.Write or AutomationOperationKind.Command &&
+            context.ExpectedRevision is not null)
         {
             Revisions.Validate(context.ExpectedRevision);
         }
@@ -699,21 +766,418 @@ public sealed class AutomationMainThreadScheduler :
         ];
     }
 
-    private static AutomationMethodRegistration CreateEventRegistration(
-        string method,
-        AutomationScheduledOperation operation)
+    private AutomationMethodRegistration CreateCapabilityRegistration()
     {
         return new AutomationMethodRegistration
         {
             Descriptor = new AutomationMethodDescriptor
             {
-                Method = method,
+                Method = AutomationProtocolConstants.CapabilityListMethod,
+                Domain = "automation",
+                RequestSchema = "#/$defs/pageRequest",
+                ResponseSchema = "#/$defs/capabilityListResponse",
                 RequiredScopes = [AutomationScopes.EditorRead],
+                SupportedModes = ["edit", "play", "paused"],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                RequiresExpectedRevision = false,
+                RequiresIdempotencyKey = false,
+                EventTypes = [],
+                ArtifactBehavior = AutomationArtifactBehavior.None,
+                UiCommandIds = [],
+            },
+            Operation = ListCapabilities,
+        };
+    }
+
+    private AutomationOperationResult ListCapabilities(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        AutomationPageRequest request;
+        try
+        {
+            request = payload is null
+                ? new AutomationPageRequest()
+                : payload.Value.Deserialize(AutomationJsonContext.Default.AutomationPageRequest)
+                    ?? throw RequestError(
+                        AutomationErrorCodes.InvalidRequest,
+                        AutomationErrorCategory.Validation,
+                        "automation.capabilities.list payload 不能为空。");
+        }
+        catch (JsonException exception)
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"automation.capabilities.list payload schema 无效：{exception.Message}");
+        }
+        ValidateSchemaVersion(request.SchemaVersion, AutomationProtocolConstants.CapabilityListMethod);
+        if (request.PageSize is < 1 or > 500)
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                "capability pageSize 必须在 1..500。");
+        }
+
+        if (request.Sort is null ||
+            (request.Filter is not null && request.Filter.Clauses is null))
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                "capability filter.clauses 与 sort 不得为 null。");
+        }
+
+        AutomationCapabilityDescriptor[] filtered = ApplyCapabilityFilter(request.Filter);
+        SortCapabilities(filtered, request.Sort);
+        string queryDigest = ComputeCapabilityQueryDigest(request);
+        int offset = DecodeCapabilityCursor(request.Cursor, queryDigest, filtered.Length);
+        int count = Math.Min(request.PageSize, filtered.Length - offset);
+        AutomationCapabilityDescriptor[] items = new AutomationCapabilityDescriptor[count];
+        for (int i = 0; i < count; i++)
+        {
+            items[i] = CloneCapability(filtered[offset + i]);
+        }
+
+        int nextOffset = checked(offset + count);
+        AutomationCapabilityListResponse response = new()
+        {
+            CapabilityDigest = CapabilityDigest,
+            Items = items,
+            Page = new AutomationPageInfo
+            {
+                Returned = items.Length,
+                Total = filtered.Length,
+                NextCursor = nextOffset < filtered.Length
+                    ? EncodeCapabilityCursor(nextOffset, queryDigest)
+                    : null,
+            },
+        };
+        return new AutomationOperationResult
+        {
+            Payload = JsonSerializer.SerializeToElement(
+                response,
+                AutomationJsonContext.Default.AutomationCapabilityListResponse),
+            ResourceIds = ["automation:capabilities"],
+        };
+    }
+
+    private AutomationCapabilityDescriptor[] ApplyCapabilityFilter(AutomationQueryFilter? filter)
+    {
+        if (filter is null || filter.Clauses is { Length: 0 })
+        {
+            return CaptureCapabilities();
+        }
+
+        if (!Enum.IsDefined(filter.Match) || filter.Clauses is not { Length: >= 1 and <= 32 })
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                "capability filter match/clauses 无效或超过 32 条。");
+        }
+
+        List<AutomationCapabilityDescriptor> result = [];
+        for (int i = 0; i < _capabilities.Length; i++)
+        {
+            bool matched = filter.Match == AutomationFilterMatch.All;
+            for (int clauseIndex = 0; clauseIndex < filter.Clauses.Length; clauseIndex++)
+            {
+                bool clauseMatched = CapabilityMatches(_capabilities[i], filter.Clauses[clauseIndex]);
+                if (filter.Match == AutomationFilterMatch.All)
+                {
+                    matched &= clauseMatched;
+                    if (!matched)
+                    {
+                        break;
+                    }
+                }
+                else
+                {
+                    matched |= clauseMatched;
+                    if (matched)
+                    {
+                        break;
+                    }
+                }
+            }
+
+            if (matched)
+            {
+                result.Add(CloneCapability(_capabilities[i]));
+            }
+        }
+
+        return [.. result];
+    }
+
+    private static bool CapabilityMatches(
+        AutomationCapabilityDescriptor descriptor,
+        AutomationFilterClause clause)
+    {
+        ArgumentNullException.ThrowIfNull(clause);
+        string actual = clause.Field switch
+        {
+            "id" => descriptor.Id,
+            "domain" => descriptor.Domain,
+            "operationKind" => descriptor.OperationKind.ToString(),
+            "executionPhase" => descriptor.ExecutionPhase.ToString(),
+            "transactionMode" => descriptor.TransactionMode.ToString(),
+            "artifactBehavior" => descriptor.ArtifactBehavior.ToString(),
+            _ => throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"capability filter field '{clause.Field}' 不受支持。"),
+        };
+        if (clause.Value.ValueKind != JsonValueKind.String)
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"capability filter field '{clause.Field}' 只接受 string value。");
+        }
+
+        string expected = clause.Value.GetString() ?? string.Empty;
+        bool equals = string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
+        return clause.Operator switch
+        {
+            AutomationFilterOperator.Equals => equals,
+            AutomationFilterOperator.NotEquals => !equals,
+            AutomationFilterOperator.Contains => actual.Contains(expected, StringComparison.OrdinalIgnoreCase),
+            AutomationFilterOperator.StartsWith => actual.StartsWith(expected, StringComparison.OrdinalIgnoreCase),
+            AutomationFilterOperator.LessThan or
+            AutomationFilterOperator.LessThanOrEqual or
+            AutomationFilterOperator.GreaterThan or
+            AutomationFilterOperator.GreaterThanOrEqual => throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"capability filter 不支持 operator {clause.Operator}。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(clause), clause.Operator, "未知 filter operator。"),
+        };
+    }
+
+    private static void SortCapabilities(
+        AutomationCapabilityDescriptor[] capabilities,
+        AutomationSortClause[] sort)
+    {
+        ArgumentNullException.ThrowIfNull(sort);
+        if (sort.Length > 8 || sort.Any(static clause => clause is null || !Enum.IsDefined(clause.Direction)))
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                "capability sort 无效或超过 8 条。");
+        }
+
+        for (int i = 0; i < sort.Length; i++)
+        {
+            _ = GetCapabilitySortValue(capabilities.Length == 0 ? null : capabilities[0], sort[i].Field);
+        }
+
+        Array.Sort(capabilities, (left, right) =>
+        {
+            for (int i = 0; i < sort.Length; i++)
+            {
+                int compared = string.Compare(
+                    GetCapabilitySortValue(left, sort[i].Field),
+                    GetCapabilitySortValue(right, sort[i].Field),
+                    StringComparison.Ordinal);
+                if (compared != 0)
+                {
+                    return sort[i].Direction == AutomationSortDirection.Descending ? -compared : compared;
+                }
+            }
+
+            return string.Compare(left.Id, right.Id, StringComparison.Ordinal);
+        });
+    }
+
+    private static string GetCapabilitySortValue(
+        AutomationCapabilityDescriptor? descriptor,
+        string field)
+    {
+        return field switch
+        {
+            "id" => descriptor?.Id ?? string.Empty,
+            "domain" => descriptor?.Domain ?? string.Empty,
+            "operationKind" => descriptor?.OperationKind.ToString() ?? string.Empty,
+            "executionPhase" => descriptor?.ExecutionPhase.ToString() ?? string.Empty,
+            "transactionMode" => descriptor?.TransactionMode.ToString() ?? string.Empty,
+            "artifactBehavior" => descriptor?.ArtifactBehavior.ToString() ?? string.Empty,
+            _ => throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"capability sort field '{field}' 不受支持。"),
+        };
+    }
+
+    private string ComputeCapabilityQueryDigest(AutomationPageRequest request)
+    {
+        AutomationPageRequest canonical = request with { Cursor = null };
+        byte[] utf8 = JsonSerializer.SerializeToUtf8Bytes(
+            canonical,
+            AutomationJsonContext.Default.AutomationPageRequest);
+        try
+        {
+            return Convert.ToHexStringLower(SHA256.HashData(utf8));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(utf8);
+        }
+    }
+
+    private string EncodeCapabilityCursor(int offset, string queryDigest)
+    {
+        byte[] body = Encoding.UTF8.GetBytes(string.Create(
+            System.Globalization.CultureInfo.InvariantCulture,
+            $"v1\n{CapabilityDigest}\n{queryDigest}\n{offset}"));
+        try
+        {
+            byte[] signature = HMACSHA256.HashData(_capabilityCursorKey, body);
+            try
+            {
+                return $"{Base64UrlEncode(body)}.{Base64UrlEncode(signature)}";
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(signature);
+            }
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(body);
+        }
+    }
+
+    private int DecodeCapabilityCursor(string? cursor, string queryDigest, int total)
+    {
+        if (string.IsNullOrWhiteSpace(cursor))
+        {
+            return 0;
+        }
+
+        if (cursor.Length > 2048)
+        {
+            throw InvalidCapabilityCursor();
+        }
+
+        try
+        {
+            string[] tokenParts = cursor.Split('.');
+            if (tokenParts.Length != 2)
+            {
+                throw InvalidCapabilityCursor();
+            }
+
+            byte[] body = Base64UrlDecode(tokenParts[0]);
+            byte[] suppliedSignature = Base64UrlDecode(tokenParts[1]);
+            try
+            {
+                byte[] expectedSignature = HMACSHA256.HashData(_capabilityCursorKey, body);
+                try
+                {
+                    if (!CryptographicOperations.FixedTimeEquals(
+                        suppliedSignature,
+                        expectedSignature))
+                    {
+                        throw InvalidCapabilityCursor();
+                    }
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(expectedSignature);
+                }
+
+                string[] parts = Encoding.UTF8.GetString(body).Split('\n');
+                return parts.Length != 4 ||
+                    !string.Equals(parts[0], "v1", StringComparison.Ordinal) ||
+                    !string.Equals(parts[1], CapabilityDigest, StringComparison.Ordinal) ||
+                    !string.Equals(parts[2], queryDigest, StringComparison.Ordinal) ||
+                    !int.TryParse(
+                        parts[3],
+                        System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out int offset) ||
+                    offset < 0 ||
+                    offset > total
+                        ? throw InvalidCapabilityCursor()
+                        : offset;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(body);
+                CryptographicOperations.ZeroMemory(suppliedSignature);
+            }
+        }
+        catch (Exception exception) when (exception is FormatException or DecoderFallbackException)
+        {
+            throw InvalidCapabilityCursor();
+        }
+    }
+
+    private static string Base64UrlEncode(ReadOnlySpan<byte> value)
+    {
+        return Convert.ToBase64String(value)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
+    }
+
+    private static byte[] Base64UrlDecode(string value)
+    {
+        string normalized = value.Replace('-', '+').Replace('_', '/');
+        normalized = (normalized.Length % 4) switch
+        {
+            0 => normalized,
+            2 => normalized + "==",
+            3 => normalized + "=",
+            _ => throw new FormatException(),
+        };
+        return Convert.FromBase64String(normalized);
+    }
+
+    private static AutomationRequestException InvalidCapabilityCursor()
+    {
+        return RequestError(
+            AutomationErrorCodes.RevisionConflict,
+            AutomationErrorCategory.Conflict,
+            "capability cursor 已失效、被篡改或不属于当前 query/digest。");
+    }
+
+    private static AutomationMethodRegistration CreateEventRegistration(
+        string method,
+        AutomationScheduledOperation operation)
+    {
+        string requestSchema = method switch
+        {
+            AutomationProtocolConstants.EventSubscribeMethod => "eventSubscribeRequest",
+            AutomationProtocolConstants.EventAckMethod => "eventAckRequest",
+            AutomationProtocolConstants.EventUnsubscribeMethod => "eventSubscriptionRequest",
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, "未知 event control method。"),
+        };
+        return new AutomationMethodRegistration
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                Domain = "event",
+                RequestSchema = $"#/$defs/{requestSchema}",
+                ResponseSchema = "#/$defs/subscriptionInfo",
+                RequiredScopes = [AutomationScopes.EditorRead],
+                SupportedModes = ["edit", "play", "paused"],
                 OperationKind = AutomationOperationKind.Command,
                 ExecutionPhase = AutomationExecutionPhase.EditorIngress,
                 TransactionMode = AutomationTransactionMode.Forbidden,
                 RequiresExpectedRevision = false,
                 RequiresIdempotencyKey = false,
+                EventTypes = [],
+                ArtifactBehavior = AutomationArtifactBehavior.None,
+                UiCommandIds = [],
             },
             Operation = operation,
         };
@@ -724,17 +1188,47 @@ public sealed class AutomationMainThreadScheduler :
         bool requiresIdempotency,
         AutomationScheduledOperation operation)
     {
+        bool status = string.Equals(
+            method,
+            AutomationProtocolConstants.TransactionStatusMethod,
+            StringComparison.Ordinal);
+        string requestSchema = string.Equals(
+            method,
+            AutomationProtocolConstants.TransactionBeginMethod,
+            StringComparison.Ordinal)
+            ? "transactionBeginRequest"
+            : "transactionRequest";
+        string responseSchema = string.Equals(
+            method,
+            AutomationProtocolConstants.TransactionCommitMethod,
+            StringComparison.Ordinal)
+            ? "transactionCommitResult"
+            : "transactionInfo";
+        bool changesTransaction = method is
+            AutomationProtocolConstants.TransactionCommitMethod or
+            AutomationProtocolConstants.TransactionRollbackMethod;
         return new AutomationMethodRegistration
         {
             Descriptor = new AutomationMethodDescriptor
             {
                 Method = method,
+                Domain = "transaction",
+                RequestSchema = $"#/$defs/{requestSchema}",
+                ResponseSchema = $"#/$defs/{responseSchema}",
                 RequiredScopes = [AutomationScopes.EditorControl],
-                OperationKind = AutomationOperationKind.Command,
+                SupportedModes = ["edit", "play", "paused"],
+                OperationKind = status
+                    ? AutomationOperationKind.Read
+                    : AutomationOperationKind.Command,
                 ExecutionPhase = AutomationExecutionPhase.EditorIngress,
                 TransactionMode = AutomationTransactionMode.Forbidden,
                 RequiresExpectedRevision = false,
                 RequiresIdempotencyKey = requiresIdempotency,
+                EventTypes = changesTransaction
+                    ? [AutomationProtocolConstants.TransactionChangedEventType]
+                    : [],
+                ArtifactBehavior = AutomationArtifactBehavior.None,
+                UiCommandIds = [],
             },
             Operation = operation,
         };
@@ -1121,6 +1615,44 @@ public sealed class AutomationMainThreadScheduler :
         return revision with { Resources = resources };
     }
 
+    private static string ComputeCapabilityDigest(AutomationCapabilityDescriptor[] capabilities)
+    {
+        byte[] utf8 = JsonSerializer.SerializeToUtf8Bytes(
+            capabilities,
+            AutomationJsonContext.Default.AutomationCapabilityDescriptorArray);
+        try
+        {
+            return Convert.ToHexStringLower(SHA256.HashData(utf8));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(utf8);
+        }
+    }
+
+    private static AutomationCapabilityDescriptor CloneCapability(
+        AutomationCapabilityDescriptor descriptor)
+    {
+        return descriptor with
+        {
+            RequiredScopes = [.. descriptor.RequiredScopes],
+            SupportedModes = [.. descriptor.SupportedModes],
+            EventTypes = [.. descriptor.EventTypes],
+            UiCommandIds = [.. descriptor.UiCommandIds],
+        };
+    }
+
+    private static void ValidateSchemaVersion(int schemaVersion, string method)
+    {
+        if (schemaVersion != AutomationProtocolConstants.WireSchemaVersion)
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"Automation method '{method}' schemaVersion 必须为 {AutomationProtocolConstants.WireSchemaVersion}。");
+        }
+    }
+
     private static void ValidateRegistrations(IReadOnlyList<AutomationMethodRegistration> registrations)
     {
         HashSet<string> methods = new(StringComparer.Ordinal);
@@ -1132,10 +1664,40 @@ public sealed class AutomationMainThreadScheduler :
                 ?? throw new ArgumentException("Automation descriptor 不能为 null。", nameof(registrations));
             ArgumentNullException.ThrowIfNull(registration.Operation);
             ArgumentNullException.ThrowIfNull(descriptor.RequiredScopes);
+            ArgumentNullException.ThrowIfNull(descriptor.SupportedModes);
+            ArgumentNullException.ThrowIfNull(descriptor.EventTypes);
+            ArgumentNullException.ThrowIfNull(descriptor.UiCommandIds);
             if (!IsSemanticIdentifier(descriptor.Method, 256))
             {
                 throw new ArgumentException(
                     "Automation method 必须是 1..256 字符的 ASCII semantic id。",
+                    nameof(registrations));
+            }
+
+            if (!IsSemanticIdentifier(descriptor.Domain, 64) ||
+                descriptor.RequestSchema is not { Length: >= 9 and <= 256 } ||
+                !descriptor.RequestSchema.StartsWith("#/$defs/", StringComparison.Ordinal) ||
+                descriptor.ResponseSchema is not { Length: >= 9 and <= 256 } ||
+                !descriptor.ResponseSchema.StartsWith("#/$defs/", StringComparison.Ordinal))
+            {
+                throw new ArgumentException(
+                    $"Automation method '{descriptor.Method}' 的 domain 或 schema reference 无效。",
+                    nameof(registrations));
+            }
+
+            if (descriptor.SupportedModes is not { Length: >= 1 and <= 16 } ||
+                descriptor.SupportedModes.Any(static mode => !IsSemanticIdentifier(mode, 32)) ||
+                descriptor.SupportedModes.Distinct(StringComparer.Ordinal).Count() != descriptor.SupportedModes.Length ||
+                descriptor.EventTypes.Length > 256 ||
+                descriptor.EventTypes.Any(static eventType => !IsSemanticIdentifier(eventType, 128)) ||
+                descriptor.EventTypes.Distinct(StringComparer.Ordinal).Count() != descriptor.EventTypes.Length ||
+                descriptor.UiCommandIds.Length > 256 ||
+                descriptor.UiCommandIds.Any(static commandId => !IsSemanticIdentifier(commandId, 128)) ||
+                descriptor.UiCommandIds.Distinct(StringComparer.Ordinal).Count() != descriptor.UiCommandIds.Length ||
+                !Enum.IsDefined(descriptor.ArtifactBehavior))
+            {
+                throw new ArgumentException(
+                    $"Automation method '{descriptor.Method}' 的 modes/events/artifact/UI command metadata 无效。",
                     nameof(registrations));
             }
 
@@ -1178,10 +1740,10 @@ public sealed class AutomationMainThreadScheduler :
                     nameof(registrations));
             }
 
-            if (descriptor.RequiresExpectedRevision && descriptor.OperationKind != AutomationOperationKind.Write)
+            if (descriptor.RequiresExpectedRevision && descriptor.OperationKind == AutomationOperationKind.Read)
             {
                 throw new ArgumentException(
-                    $"只有 Write capability 可要求 expected revision：'{descriptor.Method}'。",
+                    $"Read capability 不得要求 expected revision：'{descriptor.Method}'。",
                     nameof(registrations));
             }
 

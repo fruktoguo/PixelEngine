@@ -1,4 +1,5 @@
 using PixelEngine.Audio;
+using PixelEngine.Editor.Automation.Protocol;
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Editor.Shell.Build;
@@ -41,6 +42,7 @@ internal sealed class EditorShellHostExtension :
     private GameObjectInspectorPanel? _gameObjectInspectorPanel;
     private EditorConsolePanel? _consolePanel;
     private AssetBrowserPanel? _assetBrowserPanel;
+    private MaterialBrushPalettePanel? _brushPanel;
     private RuntimeSceneHierarchyDataSource? _runtimeHierarchy;
     private EditorAssetBrowserDataSource? _assetBrowserDataSource;
     private EditorTextureThumbnailProvider? _textureThumbnailProvider;
@@ -155,6 +157,456 @@ internal sealed class EditorShellHostExtension :
         return _editor.TrySetPanelVisibility(title, visible);
     }
 
+    internal EditorPanelSnapshot[] CaptureAutomationPanels()
+    {
+        return _editor.CapturePanels();
+    }
+
+    internal bool TrySetAutomationPanel(string panelId, bool visible, bool focus)
+    {
+        if (string.Equals(panelId, EditorPanelIds.Brush, StringComparison.Ordinal) && !visible)
+        {
+            _ = _sceneViewPanel?.SetMaterialBrushActive(false);
+        }
+
+        return _editor.TrySetPanelById(panelId, visible, focus);
+    }
+
+    internal bool TryRestoreAutomationPanels(IReadOnlyList<EditorPanelSnapshot> snapshots)
+    {
+        return _editor.TryRestorePanels(snapshots);
+    }
+
+    internal string CaptureAutomationDockLayout()
+    {
+        return _editor.CaptureDockLayout();
+    }
+
+    internal void ApplyAutomationDockLayout(string layout)
+    {
+        _editor.ApplyDockLayout(layout);
+    }
+
+    internal bool TrySetAutomationPanelDock(
+        string panelId,
+        string? targetPanelId,
+        EditorDockWindowRequest request,
+        out string diagnostic)
+    {
+        return _editor.TrySetPanelDock(panelId, targetPanelId, request, out diagnostic);
+    }
+
+    internal bool TryCaptureAutomationSceneTool(out AutomationSceneToolSnapshot snapshot)
+    {
+        if (_sceneViewPanel is null)
+        {
+            snapshot = null!;
+            return false;
+        }
+
+        SceneAuthoringCameraSnapshot camera = _sceneViewPanel.CameraSnapshot;
+        SceneGizmoSnapSettings snap = _sceneViewPanel.SnapSettings;
+        snapshot = new AutomationSceneToolSnapshot
+        {
+            Tool = _sceneViewPanel.MaterialBrushActive
+                ? AutomationSceneTool.Brush
+                : ResolveAutomationSceneTool(_sceneViewPanel.Operation),
+            GizmoSpace = _sceneViewPanel.GizmoMode == Hexa.NET.ImGuizmo.ImGuizmoMode.Local
+                ? AutomationGizmoSpace.Local
+                : AutomationGizmoSpace.World,
+            GridVisible = _sceneViewPanel.ShowGrid,
+            SnapEnabled = snap.Enabled,
+            MoveSnap = snap.Move,
+            RotationSnapDegrees = snap.RotationDegrees,
+            ScaleSnap = snap.Scale,
+            CameraCenterX = camera.CenterX,
+            CameraCenterY = camera.CenterY,
+            CameraCellsPerPixel = camera.CellsPerPixel,
+            BrushPanelVisible = _brushPanel?.Visible == true,
+            OverlayDock = _sceneViewPanel.ToolOverlayDock switch
+            {
+                SceneToolOverlayDock.Left => AutomationSceneToolOverlayDock.Left,
+                SceneToolOverlayDock.Floating => AutomationSceneToolOverlayDock.Floating,
+                SceneToolOverlayDock.Right => AutomationSceneToolOverlayDock.Right,
+                _ => throw new InvalidOperationException("未知 Scene tool overlay dock。"),
+            },
+            OverlayOffsetX = _sceneViewPanel.ToolOverlayFloatingOffset.X,
+            OverlayOffsetY = _sceneViewPanel.ToolOverlayFloatingOffset.Y,
+            Brush = _brushPanel is null ? null : CaptureBrushSettings(_brushPanel.Settings),
+        };
+        return true;
+    }
+
+    private static AutomationSceneTool ResolveAutomationSceneTool(
+        Hexa.NET.ImGuizmo.ImGuizmoOperation operation)
+    {
+        return operation == Hexa.NET.ImGuizmo.ImGuizmoOperation.Translate
+            ? AutomationSceneTool.Move
+            : operation == Hexa.NET.ImGuizmo.ImGuizmoOperation.RotateZ
+                ? AutomationSceneTool.Rotate
+                : operation == Hexa.NET.ImGuizmo.ImGuizmoOperation.Scale
+                    ? AutomationSceneTool.Scale
+                    : throw new InvalidOperationException(
+                        "Scene View gizmo operation 违反仅支持 Move、Rotate Z 与 Scale 的内部不变式。");
+    }
+
+    internal bool TrySetAutomationSceneTool(
+        AutomationSceneToolSetRequest request,
+        out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (_sceneViewPanel is null)
+        {
+            diagnostic = "Scene View 尚未注册。";
+            return false;
+        }
+
+        if (request.Tool is { } requestedTool &&
+            requestedTool is not AutomationSceneTool.Move and
+            not AutomationSceneTool.Rotate and
+            not AutomationSceneTool.Scale and
+            not AutomationSceneTool.Brush)
+        {
+            diagnostic = $"未知 Scene tool：{requestedTool}。";
+            return false;
+        }
+
+        if (request.Tool == AutomationSceneTool.Brush &&
+            (_brushPanel is null || CapturePlayMode() != EditorMode.Edit))
+        {
+            diagnostic = "当前工程没有可用世界画刷，或 Editor 不在 Edit mode。";
+            return false;
+        }
+
+        if (request.Tool == AutomationSceneTool.Brush && request.BrushPanelVisible == false)
+        {
+            diagnostic = "Brush tool 激活时 BrushPanelVisible 不能为 false。";
+            return false;
+        }
+
+        if (request.BrushPanelVisible == true && _brushPanel is null)
+        {
+            diagnostic = "当前工程没有 Brush 参数面板。";
+            return false;
+        }
+
+        bool changesSnap = request.SnapEnabled.HasValue ||
+            request.MoveSnap.HasValue ||
+            request.RotationSnapDegrees.HasValue ||
+            request.ScaleSnap.HasValue;
+        SceneGizmoSnapSettings currentSnap = _sceneViewPanel.SnapSettings;
+        SceneGizmoSnapSettings nextSnap = new(
+            request.SnapEnabled ?? currentSnap.Enabled,
+            request.MoveSnap ?? currentSnap.Move,
+            request.RotationSnapDegrees ?? currentSnap.RotationDegrees,
+            request.ScaleSnap ?? currentSnap.Scale);
+        if (changesSnap && !nextSnap.IsValid)
+        {
+            diagnostic =
+                "Scene gizmo snap 步长必须是有限正数；Move/Rotate/Scale 分别不得超过 1000000/360/100000。";
+            return false;
+        }
+
+        bool hasCameraX = request.CameraCenterX.HasValue;
+        bool hasCameraY = request.CameraCenterY.HasValue;
+        SceneAuthoringCameraSnapshot currentCamera = _sceneViewPanel.CameraSnapshot;
+        float cameraX = request.CameraCenterX ?? currentCamera.CenterX;
+        float cameraY = request.CameraCenterY ?? currentCamera.CenterY;
+        float cellsPerPixel = request.CameraCellsPerPixel ?? currentCamera.CellsPerPixel;
+        bool changesCamera = hasCameraX || request.CameraCellsPerPixel.HasValue;
+        if (hasCameraX != hasCameraY ||
+            (changesCamera &&
+             (!float.IsFinite(cameraX) ||
+              !float.IsFinite(cameraY) ||
+              MathF.Abs(cameraX) > 100_000_000f ||
+              MathF.Abs(cameraY) > 100_000_000f ||
+              !float.IsFinite(cellsPerPixel) ||
+              cellsPerPixel is < SceneAuthoringCamera.MinCellsPerPixel or
+                  > SceneAuthoringCamera.MaxCellsPerPixel)))
+        {
+            diagnostic =
+                "Scene camera X/Y 必须同时提供且中心有限，cellsPerPixel 必须在 0.05..64。";
+            return false;
+        }
+
+        bool hasOffsetX = request.OverlayOffsetX.HasValue;
+        bool hasOffsetY = request.OverlayOffsetY.HasValue;
+        if (hasOffsetX != hasOffsetY ||
+            (request.OverlayDock is { } overlayDock && !Enum.IsDefined(overlayDock)) ||
+            (hasOffsetX &&
+             (!float.IsFinite(request.OverlayOffsetX!.Value) ||
+              !float.IsFinite(request.OverlayOffsetY!.Value) ||
+              MathF.Abs(request.OverlayOffsetX.Value) > 1_000_000f ||
+              MathF.Abs(request.OverlayOffsetY.Value) > 1_000_000f)))
+        {
+            diagnostic = "Scene tool overlay dock/offset 无效，X/Y 必须同时提供有限值。";
+            return false;
+        }
+
+        if (request.Brush is not null && !TryApplyBrushSettings(request.Brush, out diagnostic))
+        {
+            return false;
+        }
+
+        if (request.GizmoSpace is { } gizmoSpace)
+        {
+            bool wantsLocal = gizmoSpace == AutomationGizmoSpace.Local;
+            if (_sceneViewPanel.GizmoMode == Hexa.NET.ImGuizmo.ImGuizmoMode.Local != wantsLocal)
+            {
+                _sceneViewPanel.ToggleGizmoMode();
+            }
+        }
+
+        if (request.GridVisible is { } gridVisible && _sceneViewPanel.ShowGrid != gridVisible)
+        {
+            _sceneViewPanel.ToggleGrid();
+        }
+
+        if (changesSnap)
+        {
+            _sceneViewPanel.SetSnapSettings(nextSnap);
+        }
+
+        if (changesCamera)
+        {
+            _sceneViewPanel.SetCamera(cameraX, cameraY, cellsPerPixel);
+        }
+
+        if (request.OverlayDock.HasValue || hasOffsetX)
+        {
+            SceneToolOverlayDock dock = request.OverlayDock switch
+            {
+                AutomationSceneToolOverlayDock.Left => SceneToolOverlayDock.Left,
+                AutomationSceneToolOverlayDock.Floating => SceneToolOverlayDock.Floating,
+                AutomationSceneToolOverlayDock.Right => SceneToolOverlayDock.Right,
+                null => _sceneViewPanel.ToolOverlayDock,
+                _ => throw new InvalidOperationException("未知 Scene tool overlay dock。"),
+            };
+            System.Numerics.Vector2 offset = hasOffsetX
+                ? new System.Numerics.Vector2(
+                    request.OverlayOffsetX!.Value,
+                    request.OverlayOffsetY!.Value)
+                : _sceneViewPanel.ToolOverlayFloatingOffset;
+            _sceneViewPanel.SetToolOverlay(dock, offset);
+        }
+
+        if (request.BrushPanelVisible is { } brushPanelVisible && _brushPanel is not null)
+        {
+            if (!brushPanelVisible)
+            {
+                _ = _sceneViewPanel.SetMaterialBrushActive(false);
+            }
+
+            _brushPanel.Visible = brushPanelVisible;
+        }
+
+        if (request.Tool is { } tool)
+        {
+            switch (tool)
+            {
+                case AutomationSceneTool.Move:
+                    _sceneViewPanel.SetOperation(Hexa.NET.ImGuizmo.ImGuizmoOperation.Translate);
+                    break;
+                case AutomationSceneTool.Rotate:
+                    _sceneViewPanel.SetOperation(Hexa.NET.ImGuizmo.ImGuizmoOperation.RotateZ);
+                    break;
+                case AutomationSceneTool.Scale:
+                    _sceneViewPanel.SetOperation(Hexa.NET.ImGuizmo.ImGuizmoOperation.Scale);
+                    break;
+                case AutomationSceneTool.Brush:
+                    if (!_sceneViewPanel.SetMaterialBrushActive(true))
+                    {
+                        throw new InvalidOperationException(
+                            "Scene tool 已通过 Brush preflight，但无法激活世界画刷。");
+                    }
+
+                    break;
+                default:
+                    throw new InvalidOperationException($"未知 Scene tool：{tool}。");
+            }
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryFrameAutomationScene(
+        AutomationSceneFrameTarget target,
+        out string diagnostic)
+    {
+        if (_sceneViewPanel is null)
+        {
+            diagnostic = "Scene View 尚未注册。";
+            return false;
+        }
+
+        bool framed = target switch
+        {
+            AutomationSceneFrameTarget.All => _sceneViewPanel.FrameAll(),
+            AutomationSceneFrameTarget.Selected => _sceneViewPanel.FrameSelected(_editor.Selection),
+            _ => false,
+        };
+        diagnostic = framed ? string.Empty : $"Scene View 无法 frame {target}。";
+        return framed;
+    }
+
+    internal bool TryApplyAutomationBrush(
+        int worldX,
+        int worldY,
+        out AutomationBrushApplyResult result,
+        out string diagnostic)
+    {
+        if (_sceneViewPanel is null || _brushPanel is null)
+        {
+            result = null!;
+            diagnostic = "当前工程没有可用世界画刷。";
+            return false;
+        }
+
+        if (!_sceneViewPanel.MaterialBrushActive || CapturePlayMode() != EditorMode.Edit)
+        {
+            result = null!;
+            diagnostic = "世界画刷必须在 Edit mode 显式激活后才能应用。";
+            return false;
+        }
+
+        int written = _sceneViewPanel.ApplyMaterialBrushAt(worldX, worldY);
+        result = new AutomationBrushApplyResult
+        {
+            WrittenCells = written,
+            SkippedNonResidentCells = _brushPanel.LastSkippedNonResidentCells,
+            SkippedOutOfBoundsCells = _brushPanel.LastSkippedOutOfBoundsCells,
+            Diagnostic = _brushPanel.Status,
+        };
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryApplyAutomationBrushStroke(
+        IReadOnlyList<AutomationWorldPoint> points,
+        out AutomationBrushStrokeResult result,
+        out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(points);
+        if (_sceneViewPanel is null || _brushPanel is null)
+        {
+            result = null!;
+            diagnostic = "当前工程没有可用世界画刷。";
+            return false;
+        }
+
+        if (!_sceneViewPanel.MaterialBrushActive || CapturePlayMode() != EditorMode.Edit)
+        {
+            result = null!;
+            diagnostic = "世界画刷必须在 Edit mode 显式激活后才能应用。";
+            return false;
+        }
+
+        long writtenCells = 0;
+        long skippedNonResidentCells = 0;
+        long skippedOutOfBoundsCells = 0;
+        int sampleCount = 0;
+        ApplySample(points[0].X, points[0].Y);
+        for (int pointIndex = 1; pointIndex < points.Count; pointIndex++)
+        {
+            int x = points[pointIndex - 1].X;
+            int y = points[pointIndex - 1].Y;
+            int targetX = points[pointIndex].X;
+            int targetY = points[pointIndex].Y;
+            int deltaX = Math.Abs(targetX - x);
+            int stepX = x < targetX ? 1 : -1;
+            int deltaY = -Math.Abs(targetY - y);
+            int stepY = y < targetY ? 1 : -1;
+            int error = deltaX + deltaY;
+            while (x != targetX || y != targetY)
+            {
+                int doubledError = error * 2;
+                if (doubledError >= deltaY)
+                {
+                    error += deltaY;
+                    x += stepX;
+                }
+
+                if (doubledError <= deltaX)
+                {
+                    error += deltaX;
+                    y += stepY;
+                }
+
+                ApplySample(x, y);
+            }
+        }
+
+        result = new AutomationBrushStrokeResult
+        {
+            ControlPointCount = points.Count,
+            SampleCount = sampleCount,
+            WrittenCells = writtenCells,
+            SkippedNonResidentCells = skippedNonResidentCells,
+            SkippedOutOfBoundsCells = skippedOutOfBoundsCells,
+            Diagnostic = _brushPanel.Status,
+        };
+        diagnostic = string.Empty;
+        return true;
+
+        void ApplySample(int worldX, int worldY)
+        {
+            writtenCells += _sceneViewPanel.ApplyMaterialBrushAt(worldX, worldY);
+            skippedNonResidentCells += _brushPanel.LastSkippedNonResidentCells;
+            skippedOutOfBoundsCells += _brushPanel.LastSkippedOutOfBoundsCells;
+            sampleCount++;
+        }
+    }
+
+    private static AutomationBrushSettings CaptureBrushSettings(MaterialBrushSettings settings)
+    {
+        return new AutomationBrushSettings
+        {
+            Tool = settings.Tool.ToString(),
+            Shape = settings.Shape.ToString(),
+            MaterialId = settings.MaterialId,
+            Radius = settings.Radius,
+            Probability = settings.Probability,
+            TemperatureMode = settings.TemperatureMode.ToString(),
+            TemperatureCelsius = settings.TemperatureCelsius,
+        };
+    }
+
+    private bool TryApplyBrushSettings(AutomationBrushSettings settings, out string diagnostic)
+    {
+        if (_brushPanel is null)
+        {
+            diagnostic = "当前工程没有可用世界画刷。";
+            return false;
+        }
+
+        if (!Enum.TryParse(settings.Tool, ignoreCase: true, out EditorBrushTool tool) ||
+            !Enum.IsDefined(tool) ||
+            !Enum.TryParse(settings.Shape, ignoreCase: true, out EditorBrushShape shape) ||
+            !Enum.IsDefined(shape) ||
+            !Enum.TryParse(settings.TemperatureMode, ignoreCase: true, out TemperatureBrushMode temperatureMode) ||
+            !Enum.IsDefined(temperatureMode) ||
+            settings.MaterialId is < ushort.MinValue or > ushort.MaxValue ||
+            settings.Radius is < 0 or > 128 ||
+            !float.IsFinite(settings.Probability) || settings.Probability is < 0f or > 1f ||
+            !float.IsFinite(settings.TemperatureCelsius))
+        {
+            diagnostic = "画刷设置无效：枚举、materialId、radius、probability 或 temperature 超出公共 API 契约。";
+            return false;
+        }
+
+        MaterialBrushSettings target = _brushPanel.Settings;
+        target.Tool = tool;
+        target.Shape = shape;
+        target.MaterialId = (ushort)settings.MaterialId;
+        target.Radius = settings.Radius;
+        target.Probability = settings.Probability;
+        target.TemperatureMode = temperatureMode;
+        target.TemperatureCelsius = settings.TemperatureCelsius;
+        diagnostic = string.Empty;
+        return true;
+    }
+
     public void ResetLayout()
     {
         _editor.ResetDockLayout();
@@ -249,6 +701,16 @@ internal sealed class EditorShellHostExtension :
         else if (snapshot.BodyId is { } bodyId)
         {
             selection.SelectBody(bodyId);
+        }
+    }
+
+    internal void SetAutomationGameObjectSelection(int? stableId)
+    {
+        EditorSelection selection = _editor.Selection;
+        selection.Clear();
+        if (stableId is { } value)
+        {
+            selection.SelectGameObject(value);
         }
     }
 
@@ -563,8 +1025,8 @@ internal sealed class EditorShellHostExtension :
             return;
         }
 
-        _editor.AddPanel(new EditorMainMenuPanel(_app));
-        _editor.AddPanel(_app.PreferencesWindow);
+        _editor.AddPanel(EditorPanelIds.MainMenu, new EditorMainMenuPanel(_app));
+        _editor.AddPanel(EditorPanelIds.Preferences, _app.PreferencesWindow);
         _assetBrowserDataSource = new EditorAssetBrowserDataSource(
             _project,
             _textureThumbnailProvider,
@@ -582,7 +1044,7 @@ internal sealed class EditorShellHostExtension :
         }
 
         _consolePanel = new EditorConsolePanel(_app);
-        _editor.AddPanel(_consolePanel);
+        _editor.AddPanel(EditorPanelIds.Console, _consolePanel);
         IAudioPreviewService? audioPreview =
             engine.Context.TryGetService(out AudioSystem audioSystem) &&
             engine.Context.TryGetService(out AudioClipCache audioClips)
@@ -597,7 +1059,7 @@ internal sealed class EditorShellHostExtension :
                 () => engine.CurrentScene?.ScriptScene,
                 runtimePhysics);
             _runtimeHierarchy = runtimeHierarchy;
-            _editor.AddPanel(new GameObjectHierarchyPanel(
+            _editor.AddPanel(EditorPanelIds.Hierarchy, new GameObjectHierarchyPanel(
                 _sceneModel,
                 _undoStack,
                 _prefabs,
@@ -623,7 +1085,7 @@ internal sealed class EditorShellHostExtension :
                 _gameObjectInspectorPanel.RequestFocus();
             }
 
-            _editor.AddPanel(_gameObjectInspectorPanel);
+            _editor.AddPanel(EditorPanelIds.Inspector, _gameObjectInspectorPanel);
         }
 
         MaterialBrushPalettePanel? brushPanel = null;
@@ -632,6 +1094,7 @@ internal sealed class EditorShellHostExtension :
         {
             brushPanel = new MaterialBrushPalettePanel(materials, editApi);
             brushPanel.HostInSceneView();
+            _brushPanel = brushPanel;
         }
 
         SceneWorldTexture? sceneWorldTexture =
@@ -666,7 +1129,7 @@ internal sealed class EditorShellHostExtension :
             () => _authoringWorld?.Snapshot ?? default,
             _sceneWebCanvasPreview);
         _undoStack.BeforeOperation = FlushPendingAuthoringEdits;
-        _editor.AddPanel(_sceneViewPanel);
+        _editor.AddPanel(EditorPanelIds.Scene, _sceneViewPanel);
         _playerSettingsPanel = new PlayerSettingsPanel(_project, () => _app.UiScale);
         GamePresentationCoordinator presentation = engine.Context.GetService<GamePresentationCoordinator>();
         _gameViewPanel = new GameViewPanel(
@@ -678,7 +1141,7 @@ internal sealed class EditorShellHostExtension :
             pipeline.MaximumTextureSize,
             _app.Workspace,
             _project.ProjectRoot);
-        _editor.AddPanel(_gameViewPanel);
+        _editor.AddPanel(EditorPanelIds.Game, _gameViewPanel);
         _assetBrowserPanel = new AssetBrowserPanel(
             assetBrowserDataSource,
             audioPreview: audioPreview,
@@ -694,12 +1157,12 @@ internal sealed class EditorShellHostExtension :
                 ? new AssetBrowserImportSourcePickResult(true, selectedPath, string.Empty)
                 : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic),
             tryInstantiatePrefab: _app.InstantiatePrefab);
-        _editor.AddPanel(_assetBrowserPanel);
-        AddHiddenPanel(new UiManifestPanel(new EditorAssetManifestStore(_project)));
+        _editor.AddPanel(EditorPanelIds.Project, _assetBrowserPanel);
+        AddHiddenPanel(EditorPanelIds.UiManifest, new UiManifestPanel(new EditorAssetManifestStore(_project)));
         MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
         if (materialReactionPanel is not null)
         {
-            AddHiddenPanel(materialReactionPanel);
+            AddHiddenPanel(EditorPanelIds.Materials, materialReactionPanel);
         }
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project, () => _app.UiScale);
@@ -707,48 +1170,48 @@ internal sealed class EditorShellHostExtension :
             _project,
             console: _app.ConsoleStore,
             prepareScene: _app.PrepareSceneForBuild);
-        AddHiddenPanel(_projectSettingsPanel);
-        AddHiddenPanel(_playerSettingsPanel);
-        AddHiddenPanel(_buildSettingsPanel);
-        AddHiddenPanel(new PerformanceHudPanel());
-        AddHiddenPanel(new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
-        AddHiddenPanel(new EditorModePanel(new EditorPlaySessionAdapter(_app)));
-        AddHiddenPanel(new SaveLoadPanel(new EditorWorldSaveLoadService(
+        AddHiddenPanel(EditorPanelIds.ProjectSettings, _projectSettingsPanel);
+        AddHiddenPanel(EditorPanelIds.PlayerSettings, _playerSettingsPanel);
+        AddHiddenPanel(EditorPanelIds.BuildSettings, _buildSettingsPanel);
+        AddHiddenPanel(EditorPanelIds.Profiler, new PerformanceHudPanel());
+        AddHiddenPanel(EditorPanelIds.Simulation, new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
+        AddHiddenPanel(EditorPanelIds.PlayMode, new EditorModePanel(new EditorPlaySessionAdapter(_app)));
+        AddHiddenPanel(EditorPanelIds.SaveLoad, new SaveLoadPanel(new EditorWorldSaveLoadService(
             engine,
             Path.Combine(_project.ProjectRoot, "saves"))));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))
         {
-            AddHiddenPanel(new DebugOverlayPanel(debugSettings));
+            AddHiddenPanel(EditorPanelIds.Overlays, new DebugOverlayPanel(debugSettings));
         }
 
         if (engine.Context.TryGetService(out ISimulationInspectApi inspectApi))
         {
-            AddHiddenPanel(new WorldInspectorPanel(inspectApi));
+            AddHiddenPanel(EditorPanelIds.WorldInspector, new WorldInspectorPanel(inspectApi));
         }
 
         if (brushPanel is not null)
         {
-            AddHiddenPanel(brushPanel);
+            AddHiddenPanel(EditorPanelIds.Brush, brushPanel);
         }
 
         if (engine.Context.TryGetService(out PhysicsSystem physics))
         {
-            AddHiddenPanel(new PhysicsTuningPanel(new PhysicsSystemTuningService(physics)));
+            AddHiddenPanel(EditorPanelIds.Physics, new PhysicsTuningPanel(new PhysicsSystemTuningService(physics)));
         }
 
         if (engine.Context.TryGetService(out ParticleSystem particles))
         {
-            AddHiddenPanel(new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
+            AddHiddenPanel(EditorPanelIds.Particles, new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
         }
 
-        AddHiddenPanel(new LightingTuningPanel(new RenderPipelineLightingTuningService(pipeline.Settings)));
+        AddHiddenPanel(EditorPanelIds.Lighting, new LightingTuningPanel(new RenderPipelineLightingTuningService(pipeline.Settings)));
         _panelsRegistered = true;
     }
 
-    private void AddHiddenPanel(IEditorPanel panel)
+    private void AddHiddenPanel(string panelId, IEditorPanel panel)
     {
         panel.Visible = false;
-        _editor.AddPanel(panel);
+        _editor.AddPanel(panelId, panel);
     }
 
     private MaterialReactionEditorPanel? TryCreateMaterialReactionPanel(Engine engine)

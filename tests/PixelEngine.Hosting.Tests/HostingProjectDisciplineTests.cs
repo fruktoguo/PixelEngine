@@ -1079,8 +1079,12 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("StatusBarHeight", menu, StringComparison.Ordinal);
         Assert.Contains("IEditorChromePanel", host, StringComparison.Ordinal);
         Assert.True(
-            host.IndexOf("_editor.AddPanel(_consolePanel)", StringComparison.Ordinal) <
-            host.IndexOf("_editor.AddPanel(_gameObjectInspectorPanel)", StringComparison.Ordinal),
+            host.IndexOf(
+                "_editor.AddPanel(EditorPanelIds.Console, _consolePanel)",
+                StringComparison.Ordinal) <
+            host.IndexOf(
+                "_editor.AddPanel(EditorPanelIds.Inspector, _gameObjectInspectorPanel)",
+                StringComparison.Ordinal),
             "默认右侧 dock 必须最后注册 Inspector，使新布局优先显示选择上下文而不是 Console。");
         Assert.Contains("_focusInspectorOnInitialLayout = !File.Exists(app.LayoutPath)", host, StringComparison.Ordinal);
         Assert.Contains("if (_focusInspectorOnInitialLayout)", host, StringComparison.Ordinal);
@@ -1259,9 +1263,18 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("PreferencesWindow.Draw()", shellApp, StringComparison.Ordinal);
         Assert.Contains("DpiScale = EditorUiScale.Normalize(uiScale)", shellWindow, StringComparison.Ordinal);
         Assert.Contains("DpiScale = app.UiScale", host, StringComparison.Ordinal);
-        Assert.Contains("_editor.AddPanel(_app.PreferencesWindow)", host, StringComparison.Ordinal);
-        Assert.Contains("AddHiddenPanel(_projectSettingsPanel)", host, StringComparison.Ordinal);
-        Assert.Contains("AddHiddenPanel(_buildSettingsPanel)", host, StringComparison.Ordinal);
+        Assert.Contains(
+            "_editor.AddPanel(EditorPanelIds.Preferences, _app.PreferencesWindow)",
+            host,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AddHiddenPanel(EditorPanelIds.ProjectSettings, _projectSettingsPanel)",
+            host,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AddHiddenPanel(EditorPanelIds.BuildSettings, _buildSettingsPanel)",
+            host,
+            StringComparison.Ordinal);
         Assert.Contains("EditorUiScale.Scale(ToolbarHeight, uiScale)", menu, StringComparison.Ordinal);
         Assert.Contains("DispatchShortcuts(app)", menu, StringComparison.Ordinal);
         Assert.Contains("ImGuiInputFlags.RouteGlobal", shortcuts, StringComparison.Ordinal);

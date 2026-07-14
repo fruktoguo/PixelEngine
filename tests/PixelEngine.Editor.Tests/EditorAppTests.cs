@@ -26,7 +26,7 @@ public sealed class EditorAppTests
             .SingleOrDefault(method =>
                 method.Name == nameof(EditorRenderBridge.AttachIfEnabled) &&
                 method.GetParameters() is { Length: 6 } parameters &&
-                parameters[^1].ParameterType == typeof(PixelEngine.Scripting.IScriptRuntime));
+                parameters[^1].ParameterType == typeof(Scripting.IScriptRuntime));
 
         Assert.NotNull(legacy);
         Assert.Null(legacy.GetCustomAttributes(typeof(ObsoleteAttribute), inherit: false).SingleOrDefault());
@@ -179,6 +179,57 @@ public sealed class EditorAppTests
     }
 
     /// <summary>
+    /// 外部 automation 使用的 panel ID 必须与标题解耦，并与手动显示/隐藏复用同一实例状态。
+    /// </summary>
+    [Fact]
+    public void StablePanelRegistryCapturesAndMutatesTheSamePanelInstance()
+    {
+        using EditorApp app = new(new RecordingBackend(), new EditorAppOptions());
+        RecordingPanel panel = new() { Visible = false };
+        app.AddPanel("editor.panel.test-inspector", panel);
+
+        EditorPanelSnapshot initial = Assert.Single(app.CapturePanels());
+        Assert.Equal("editor.panel.test-inspector", initial.Id);
+        Assert.Equal(panel.Title, initial.Title);
+        Assert.False(initial.Visible);
+
+        Assert.True(app.TrySetPanelById("editor.panel.test-inspector", visible: true, focus: true));
+        Assert.True(panel.Visible);
+        Assert.Equal(panel.Title, app.PendingPanelFocusTitle);
+        EditorPanelSnapshot focused = Assert.Single(app.CapturePanels());
+        Assert.True(focused.Visible);
+        Assert.True(focused.FocusPending);
+
+        Assert.True(app.TrySetPanelById("editor.panel.test-inspector", visible: false, focus: false));
+        Assert.False(panel.Visible);
+        Assert.Null(app.PendingPanelFocusTitle);
+        Assert.False(app.TrySetPanelById("editor.panel.missing", visible: true, focus: true));
+    }
+
+    /// <summary>automation 失败回滚必须同时恢复全部可见性与唯一 pending focus。</summary>
+    [Fact]
+    public void StablePanelRegistryRestoresCompleteSnapshotAtomically()
+    {
+        using EditorApp app = new(new RecordingBackend(), new EditorAppOptions());
+        RecordingPanel first = new() { Visible = true };
+        RecordingPanel second = new() { Visible = false };
+        app.AddPanel("editor.panel.first", first);
+        app.AddPanel("editor.panel.second", second);
+        Assert.True(app.TrySetPanelById("editor.panel.first", visible: true, focus: true));
+        EditorPanelSnapshot[] before = app.CapturePanels();
+
+        Assert.True(app.TrySetPanelById("editor.panel.second", visible: true, focus: true));
+        Assert.True(app.TrySetPanelById("editor.panel.first", visible: false, focus: false));
+        Assert.True(app.TryRestorePanels(before));
+
+        Assert.True(first.Visible);
+        Assert.False(second.Visible);
+        Assert.Equal(first.Title, app.PendingPanelFocusTitle);
+        Assert.Equal(before, app.CapturePanels());
+        Assert.False(app.TryRestorePanels(before[..1]));
+    }
+
+    /// <summary>
     /// 重置布局恢复各面板注册时的默认可见性，不再把全部工具窗口强制展开。
     /// </summary>
     [Fact]
@@ -199,6 +250,39 @@ public sealed class EditorAppTests
         Assert.True(corePanel.Visible);
         Assert.False(utilityPanel.Visible);
         Assert.Contains("ResetDockLayout", backend.Events);
+    }
+
+    /// <summary>稳定 panel IDs 必须在 Editor 层解析为真实 window title 后交给 backend。</summary>
+    [Fact]
+    public void DockLayoutAndPanelDockUseStableRegistryInsteadOfCallerTitles()
+    {
+        RecordingBackend backend = new();
+        using EditorApp app = new(backend, new EditorAppOptions());
+        RecordingPanel source = new() { Visible = false };
+        RecordingPanel target = new() { Visible = true };
+        app.AddPanel("editor.panel.source", source);
+        app.AddPanel("editor.panel.target", target);
+        app.Initialize();
+
+        Assert.Equal("[Docking][Data]\n", app.CaptureDockLayout());
+        const string layout = "[Docking][Data]\nDockSpace ID=0x1\n";
+        app.ApplyDockLayout(layout);
+        Assert.True(app.TrySetPanelDock(
+            "editor.panel.source",
+            "editor.panel.target",
+            new EditorDockWindowRequest
+            {
+                WindowTitle = "caller-must-not-control-this",
+                TargetWindowTitle = "caller-must-not-control-this-either",
+                Placement = EditorDockPlacement.Tab,
+            },
+            out string diagnostic),
+            diagnostic);
+
+        Assert.True(source.Visible);
+        Assert.Contains("CaptureDockLayout", backend.Events);
+        Assert.Contains($"ApplyDockLayout:{layout.Length}", backend.Events);
+        Assert.Contains($"Dock:{source.Title}:{target.Title}:Tab", backend.Events);
     }
 
     /// <summary>
@@ -490,6 +574,30 @@ public sealed class EditorAppTests
         public void ResetDockLayout()
         {
             Events.Add("ResetDockLayout");
+        }
+
+        public string CaptureDockLayout()
+        {
+            Events.Add("CaptureDockLayout");
+            return "[Docking][Data]\n";
+        }
+
+        public void ApplyDockLayout(string layout)
+        {
+            Events.Add($"ApplyDockLayout:{layout.Length}");
+        }
+
+        public EditorDockWindowState CaptureDockWindow(string windowTitle)
+        {
+            _ = windowTitle;
+            return default;
+        }
+
+        public bool TrySetDockWindow(EditorDockWindowRequest request, out string diagnostic)
+        {
+            Events.Add($"Dock:{request.WindowTitle}:{request.TargetWindowTitle}:{request.Placement}");
+            diagnostic = string.Empty;
+            return true;
         }
 
         public void AddMousePosition(float x, float y)

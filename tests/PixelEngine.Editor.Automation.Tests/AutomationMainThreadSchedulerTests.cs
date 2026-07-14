@@ -48,6 +48,56 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(3, scheduler.Revisions.GlobalRevision);
     }
 
+    /// <summary>幂等 Write 必须返回当前 revision，且不得登记 Undo 或推进全局/资源 revision。</summary>
+    [Fact]
+    public void NoChangeWriteDoesNotAdvanceRevisionOrRecordUndo()
+    {
+        TestState state = new();
+        TestUndoSink undo = new();
+        using AutomationMainThreadScheduler scheduler = CreateScheduler(
+            state,
+            undo,
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(Expected(0, 0), "no-change-write"),
+            SetValueMethod,
+            JsonSerializer.SerializeToElement(new { value = 0 }),
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult result = pending.GetAwaiter().GetResult();
+
+        Assert.Equal(0, state.Value);
+        Assert.Equal(0, result.Revision?.GlobalRevision);
+        Assert.Equal(0, Assert.Single(result.Revision!.Resources).Revision);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+        Assert.Empty(undo.Actions);
+    }
+
+    /// <summary>非事务 write 在 handler contract 校验失败时也必须撤回已经执行的 semantic action。</summary>
+    [Fact]
+    public void WriteContractFailureRollsBackAppliedActionBeforeCommit()
+    {
+        TestState state = new();
+        TestUndoSink undo = new();
+        using AutomationMainThreadScheduler scheduler = CreateScheduler(
+            state,
+            undo,
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(Expected(0, 0), "contract-failure-write"),
+            SetValueMethod,
+            JsonSerializer.SerializeToElement(new { value = int.MaxValue }),
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        _ = Assert.Throws<InvalidOperationException>(() => pending.GetAwaiter().GetResult());
+
+        Assert.Equal(0, state.Value);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+        Assert.Empty(undo.Actions);
+    }
+
     /// <summary>验证排队后发生 revision 变化时，执行前第二次校验拒绝 stale write。</summary>
     [Fact]
     public void RevisionIsCheckedAgainAtExecutionSafePoint()
@@ -463,6 +513,46 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(3, scheduler.Revisions.GlobalRevision);
     }
 
+    /// <summary>全为幂等操作的 transaction 可以提交，但不得创建空 Undo 或虚假 revision。</summary>
+    [Fact]
+    public void NoChangeTransactionCommitsWithoutUndoOrRevisionAdvance()
+    {
+        TestState state = new();
+        TestUndoSink undo = new();
+        using AutomationMainThreadScheduler scheduler = CreateScheduler(
+            state,
+            undo,
+            new TestTransactionParticipant());
+        AutomationTransactionInfo transaction = BeginTransaction(scheduler, "no-change-transaction");
+        AutomationTransactionStagedOperationInfo staged = ExecuteTransactionalWrite(
+            scheduler,
+            transaction.TransactionId,
+            "no-change-transaction-write",
+            0);
+
+        Task<AutomationHandlerResult> commit = scheduler.HandleAsync(
+            CreateContext(idempotencyKey: "no-change-transaction-commit"),
+            AutomationProtocolConstants.TransactionCommitMethod,
+            JsonSerializer.SerializeToElement(new AutomationTransactionRequest
+            {
+                SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                TransactionId = transaction.TransactionId,
+            }, AutomationJsonContext.Default.AutomationTransactionRequest),
+            CancellationToken.None).AsTask();
+        _ = scheduler.Drain(AutomationExecutionPhase.EditorIngress);
+        AutomationHandlerResult result = commit.GetAwaiter().GetResult();
+        AutomationTransactionCommitResult commitResult = result.Payload?.Deserialize(
+            AutomationJsonContext.Default.AutomationTransactionCommitResult)
+            ?? throw new InvalidOperationException("transaction.commit 未返回结果。");
+
+        Assert.Equal(AutomationTransactionStatus.Committed, commitResult.Transaction.Status);
+        Assert.Equal(staged.OperationId, Assert.Single(commitResult.Operations).OperationId);
+        Assert.Equal(0, result.Revision?.GlobalRevision);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+        Assert.Equal(0, state.Value);
+        Assert.Empty(undo.Actions);
+    }
+
     /// <summary>验证连接关闭排队到 EditorIngress 后回滚 transaction 且不推进 revision。</summary>
     [Fact]
     public void SessionDisconnectRollsBackTransactionAtEditorIngress()
@@ -701,6 +791,142 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(1, status.OperationCount);
     }
 
+    /// <summary>
+    /// Capability registry、digest、分页与 HMAC cursor 必须来自同一组真实 registration，
+    /// 且任意 token 篡改都以 revision_conflict fail closed。
+    /// </summary>
+    [Fact]
+    public void CapabilityRegistryPublishesStableDigestAndRejectsTamperedCursor()
+    {
+        TestState state = new();
+        using AutomationMainThreadScheduler scheduler = CreateScheduler(
+            state,
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+        using AutomationMainThreadScheduler sameRegistry = CreateScheduler(
+            new TestState(),
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+
+        Assert.Equal(scheduler.CapabilityDigest, sameRegistry.CapabilityDigest);
+        Assert.Matches("^[0-9a-f]{64}$", scheduler.CapabilityDigest);
+        AutomationCapabilityDescriptor[] descriptors = scheduler.CaptureCapabilities();
+        Assert.Contains(descriptors, descriptor =>
+            descriptor.Id == SetValueMethod &&
+            descriptor.OperationKind == AutomationOperationKind.Write &&
+            descriptor.RequiresExpectedRevision &&
+            descriptor.RequiresIdempotencyKey);
+
+        AutomationPageRequest firstRequest = new() { PageSize = 1 };
+        Task<AutomationHandlerResult> firstPending = scheduler.HandleAsync(
+            CreateContext(),
+            AutomationProtocolConstants.CapabilityListMethod,
+            JsonSerializer.SerializeToElement(
+                firstRequest,
+                AutomationJsonContext.Default.AutomationPageRequest),
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationCapabilityListResponse first = firstPending.GetAwaiter().GetResult()
+            .Payload?.Deserialize(AutomationJsonContext.Default.AutomationCapabilityListResponse)
+            ?? throw new InvalidOperationException("capability list 未返回响应。");
+
+        Assert.Equal(scheduler.CapabilityDigest, first.CapabilityDigest);
+        Assert.Equal(1, first.Page.Returned);
+        Assert.Equal(descriptors.Length, first.Page.Total);
+        string cursor = Assert.IsType<string>(first.Page.NextCursor);
+        char replacement = cursor[0] == 'A' ? 'B' : 'A';
+        string tampered = replacement + cursor[1..];
+        Task<AutomationHandlerResult> rejected = scheduler.HandleAsync(
+            CreateContext(),
+            AutomationProtocolConstants.CapabilityListMethod,
+            JsonSerializer.SerializeToElement(
+                firstRequest with { Cursor = tampered },
+                AutomationJsonContext.Default.AutomationPageRequest),
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationRequestException exception = Assert.Throws<AutomationRequestException>(
+            () => rejected.GetAwaiter().GetResult());
+        Assert.Equal(AutomationErrorCodes.RevisionConflict, exception.Error.Code);
+    }
+
+    /// <summary>
+    /// 非事务 command 只要会改变权威状态，也必须在执行点复核 expected revision；
+    /// 缺失或排队后变 stale 时 delegate 不得运行。
+    /// </summary>
+    [Fact]
+    public void StateChangingCommandRequiresAndRechecksExpectedRevision()
+    {
+        const string method = "test.command.set";
+        TestState state = new();
+        AutomationMethodRegistration command = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorControl],
+                OperationKind = AutomationOperationKind.Command,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                RequiresExpectedRevision = true,
+                RequiresIdempotencyKey = true,
+                EventTypes = [AutomationProtocolConstants.StateChangedEventType],
+            },
+            Operation = (context, _) =>
+            {
+                string[] resources = [ResourceId];
+                context.Revisions.EnsureCanAdvance(resources);
+                state.Value++;
+                AutomationRevisionSnapshot revision = context.Revisions.Advance(resources);
+                return new AutomationOperationResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(new { state.Value }),
+                    ResourceIds = resources,
+                    RevisionOverride = revision,
+                    StateChanged = true,
+                };
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [command],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+
+        Task<AutomationHandlerResult> missing = scheduler.HandleAsync(
+            CreateContext(idempotencyKey: "command-missing-revision"),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationRequestException missingException = Assert.Throws<AutomationRequestException>(
+            () => missing.GetAwaiter().GetResult());
+        Assert.Equal(AutomationErrorCodes.InvalidRequest, missingException.Error.Code);
+        Assert.Equal(0, state.Value);
+
+        Task<AutomationHandlerResult> stale = scheduler.HandleAsync(
+            CreateContext(Expected(0, 0), "command-stale"),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        _ = scheduler.Revisions.Advance([ResourceId]);
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationRequestException staleException = Assert.Throws<AutomationRequestException>(
+            () => stale.GetAwaiter().GetResult());
+        Assert.Equal(AutomationErrorCodes.RevisionConflict, staleException.Error.Code);
+        Assert.Equal(0, state.Value);
+
+        Task<AutomationHandlerResult> accepted = scheduler.HandleAsync(
+            CreateContext(Expected(1, 1), "command-accepted"),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult result = accepted.GetAwaiter().GetResult();
+        Assert.Equal(1, state.Value);
+        Assert.Equal(2, result.Revision?.GlobalRevision);
+    }
+
     private static AutomationMainThreadScheduler CreateScheduler(
         TestState state,
         TestUndoSink undo,
@@ -730,6 +956,16 @@ public sealed class AutomationMainThreadSchedulerTests
                 }
 
                 int previous = state.Value;
+                if (next == previous)
+                {
+                    return new AutomationOperationResult
+                    {
+                        Payload = JsonSerializer.SerializeToElement(new { value = next }),
+                        ResourceIds = [ResourceId],
+                        WriteStateChanged = false,
+                    };
+                }
+
                 state.Value = next;
                 return new AutomationOperationResult
                 {

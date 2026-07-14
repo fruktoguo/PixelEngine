@@ -285,13 +285,13 @@ internal sealed class GameObjectHierarchyPanel(
         ImGui.BeginDisabled(!canModify);
         if (DrawVisibilityToggle("hierarchy-visible-all", allVisible, allObjects: true))
         {
-            _scene.SetAllSceneVisible(!allVisible);
+            _undo.Execute(_scene, new SetAllSceneVisibilityCommand(!allVisible));
         }
 
         ImGui.SameLine();
         if (DrawPickingToggle("hierarchy-pickable-all", allPickable, allObjects: true))
         {
-            _scene.SetAllScenePickable(!allPickable);
+            _undo.Execute(_scene, new SetAllScenePickabilityCommand(!allPickable));
         }
         ImGui.EndDisabled();
 
@@ -327,13 +327,13 @@ internal sealed class GameObjectHierarchyPanel(
         ImGui.BeginDisabled(!canModify);
         if (DrawVisibilityToggle($"hierarchy-visible-{stableId}", gameObject.SceneVisible, allObjects: false))
         {
-            _scene.SetSceneVisible(stableId, !gameObject.SceneVisible);
+            _undo.Execute(_scene, new SetSceneVisibilityCommand(stableId, !gameObject.SceneVisible));
         }
 
         ImGui.SameLine();
         if (DrawPickingToggle($"hierarchy-pickable-{stableId}", gameObject.ScenePickable, allObjects: false))
         {
-            _scene.SetScenePickable(stableId, !gameObject.ScenePickable);
+            _undo.Execute(_scene, new SetScenePickabilityCommand(stableId, !gameObject.ScenePickable));
         }
         ImGui.EndDisabled();
 

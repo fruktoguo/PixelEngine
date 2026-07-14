@@ -52,6 +52,10 @@ internal sealed class EditorUndoStack
 
     public string? RedoName => _redo.Count == 0 ? null : _redo.Peek().Name;
 
+    public int UndoCount => _undo.Count;
+
+    public int RedoCount => _redo.Count;
+
     public void Execute(EditorSceneModel scene, IEditorCommand command)
     {
         ArgumentNullException.ThrowIfNull(scene);
@@ -70,6 +74,11 @@ internal sealed class EditorUndoStack
 
     public bool Undo(EditorSceneModel scene)
     {
+        return Undo(scene, notifyHistoryApplied: true);
+    }
+
+    internal bool Undo(EditorSceneModel scene, bool notifyHistoryApplied)
+    {
         ArgumentNullException.ThrowIfNull(scene);
         if (!IsModificationAllowed())
         {
@@ -82,14 +91,24 @@ internal sealed class EditorUndoStack
             return false;
         }
 
-        IEditorCommand command = _undo.Pop();
+        IEditorCommand command = _undo.Peek();
         command.Undo(scene);
+        _ = _undo.Pop();
         _redo.Push(command);
-        HistoryApplied?.Invoke(command, EditorUndoMutationKind.Undo);
+        if (notifyHistoryApplied)
+        {
+            HistoryApplied?.Invoke(command, EditorUndoMutationKind.Undo);
+        }
+
         return true;
     }
 
     public bool Redo(EditorSceneModel scene)
+    {
+        return Redo(scene, notifyHistoryApplied: true);
+    }
+
+    internal bool Redo(EditorSceneModel scene, bool notifyHistoryApplied)
     {
         ArgumentNullException.ThrowIfNull(scene);
         if (!IsModificationAllowed())
@@ -103,10 +122,15 @@ internal sealed class EditorUndoStack
             return false;
         }
 
-        IEditorCommand command = _redo.Pop();
+        IEditorCommand command = _redo.Peek();
         command.Execute(scene);
+        _ = _redo.Pop();
         _undo.Push(command);
-        HistoryApplied?.Invoke(command, EditorUndoMutationKind.Redo);
+        if (notifyHistoryApplied)
+        {
+            HistoryApplied?.Invoke(command, EditorUndoMutationKind.Redo);
+        }
+
         return true;
     }
 
@@ -161,6 +185,8 @@ internal sealed class CreateGameObjectCommand(string name, int? parentId = null,
     private EditorSceneObjectSnapshot? _created;
 
     public string Name => "Create GameObject";
+
+    public int? CreatedStableId => _created?.Objects[0].StableId;
 
     public void Execute(EditorSceneModel scene)
     {
@@ -293,6 +319,122 @@ internal sealed class SetGameObjectEnabledCommand(int stableId, bool enabled) : 
         }
     }
 }
+
+/// <summary>
+/// Undo 命令：设置单个 GameObject 的 Scene View visibility。
+/// </summary>
+internal sealed class SetSceneVisibilityCommand(int stableId, bool visible) : IEditorCommand
+{
+    private bool? _before;
+
+    public string Name => "Set Scene Visibility";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _before ??= scene.Get(stableId).SceneVisible;
+        scene.SetSceneVisible(stableId, visible);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_before is { } before)
+        {
+            scene.SetSceneVisible(stableId, before);
+        }
+    }
+}
+
+/// <summary>
+/// Undo 命令：设置单个 GameObject 的 Scene View picking。
+/// </summary>
+internal sealed class SetScenePickabilityCommand(int stableId, bool pickable) : IEditorCommand
+{
+    private bool? _before;
+
+    public string Name => "Set Scene Pickability";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _before ??= scene.Get(stableId).ScenePickable;
+        scene.SetScenePickable(stableId, pickable);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_before is { } before)
+        {
+            scene.SetScenePickable(stableId, before);
+        }
+    }
+}
+
+/// <summary>
+/// Undo 命令：批量设置 Scene View visibility，同时保留每个节点原值。
+/// </summary>
+internal sealed class SetAllSceneVisibilityCommand(bool visible) : IEditorCommand
+{
+    private SceneBoolState[]? _before;
+
+    public string Name => "Set All Scene Visibility";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _before ??=
+        [
+            .. scene.EnumerateDepthFirst().Select(static gameObject =>
+                new SceneBoolState(gameObject.StableId, gameObject.SceneVisible)),
+        ];
+        scene.SetAllSceneVisible(visible);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_before is null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _before.Length; i++)
+        {
+            scene.SetSceneVisible(_before[i].StableId, _before[i].Value);
+        }
+    }
+}
+
+/// <summary>
+/// Undo 命令：批量设置 Scene View picking，同时保留每个节点原值。
+/// </summary>
+internal sealed class SetAllScenePickabilityCommand(bool pickable) : IEditorCommand
+{
+    private SceneBoolState[]? _before;
+
+    public string Name => "Set All Scene Pickability";
+
+    public void Execute(EditorSceneModel scene)
+    {
+        _before ??=
+        [
+            .. scene.EnumerateDepthFirst().Select(static gameObject =>
+                new SceneBoolState(gameObject.StableId, gameObject.ScenePickable)),
+        ];
+        scene.SetAllScenePickable(pickable);
+    }
+
+    public void Undo(EditorSceneModel scene)
+    {
+        if (_before is null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _before.Length; i++)
+        {
+            scene.SetScenePickable(_before[i].StableId, _before[i].Value);
+        }
+    }
+}
+
+internal readonly record struct SceneBoolState(int StableId, bool Value);
 
 /// <summary>
 /// Undo 命令：SetTransform。
@@ -733,6 +875,8 @@ internal sealed class DuplicateGameObjectCommand(int stableId) : IEditorCommand
 
     public string Name => "Duplicate GameObject";
 
+    public int? DuplicateStableId => _duplicate?.Objects[0].StableId;
+
     public void Execute(EditorSceneModel scene)
     {
         if (_duplicate is null)
@@ -763,6 +907,9 @@ internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, i
     private byte[]? _previousAssetBytes;
     private bool _hadPreviousAsset;
     private bool _capturedAsset;
+    private bool _assetMutationAttempted;
+    private bool _manifestSynchronized;
+    private bool _sceneChanged;
 
     public string Name => "Create Prefab";
 
@@ -775,7 +922,15 @@ internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, i
             _capturedAsset = true;
         }
 
-        prefabs.CreatePrefabFromSubtree(scene, stableId, assetPath);
+        _assetMutationAttempted = true;
+        _manifestSynchronized = false;
+        _sceneChanged = false;
+        prefabs.CreatePrefabFromSubtree(
+            scene,
+            stableId,
+            assetPath,
+            ref _manifestSynchronized);
+        _sceneChanged = true;
     }
 
     public void Undo(EditorSceneModel scene)
@@ -785,8 +940,17 @@ internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, i
             return;
         }
 
-        _ = scene.DeleteSubtree(stableId);
-        scene.RestoreSubtree(_before);
+        if (_sceneChanged)
+        {
+            scene.RestorePrefabLinks(_before);
+            _sceneChanged = false;
+        }
+
+        if (!_assetMutationAttempted)
+        {
+            return;
+        }
+
         if (_hadPreviousAsset && _previousAssetBytes is not null)
         {
             prefabs.RestoreAsset(assetPath, _previousAssetBytes);
@@ -794,7 +958,14 @@ internal sealed class CreatePrefabAssetCommand(EditorPrefabAssetStore prefabs, i
         else
         {
             prefabs.DeleteAsset(assetPath);
+            if (_manifestSynchronized)
+            {
+                prefabs.RemoveAssetRecord(assetPath);
+            }
         }
+
+        _assetMutationAttempted = false;
+        _manifestSynchronized = false;
     }
 }
 
@@ -810,6 +981,8 @@ internal sealed class InstantiatePrefabCommand(
     private EditorSceneObjectSnapshot? _created;
 
     public string Name => "Instantiate Prefab";
+
+    public int? CreatedStableId => _created?.Objects[0].StableId;
 
     public void Execute(EditorSceneModel scene)
     {

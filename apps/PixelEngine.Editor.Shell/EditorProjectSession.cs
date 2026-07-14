@@ -1,4 +1,5 @@
 using PixelEngine.Hosting;
+using PixelEngine.Editor.Automation.Protocol;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Rendering;
@@ -129,6 +130,18 @@ internal sealed class EditorProjectSession : IDisposable
             : null);
         SceneModel.RestoreDirtyState(state.SceneWasDirty);
         _editorHost.RestoreAutomationSelection(state.Selection);
+    }
+
+    internal void SetAutomationGameObjectSelection(int? stableId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (stableId is { } value)
+        {
+            _ = SceneModel.Get(value);
+        }
+
+        SceneModel.Select(stableId);
+        _editorHost.SetAutomationGameObjectSelection(stableId);
     }
 
     public static EditorProjectSession Open(EditorProject project, RenderWindow window, EditorShellApp app)
@@ -480,6 +493,87 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.TrySetPanelVisibility(title, visible);
+    }
+
+    internal EditorPanelSnapshot[] CaptureAutomationPanels()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPanels();
+    }
+
+    internal bool TrySetAutomationPanel(string panelId, bool visible, bool focus)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySetAutomationPanel(panelId, visible, focus);
+    }
+
+    internal bool TryRestoreAutomationPanels(IReadOnlyList<EditorPanelSnapshot> snapshots)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryRestoreAutomationPanels(snapshots);
+    }
+
+    internal string CaptureAutomationDockLayout()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationDockLayout();
+    }
+
+    internal void ApplyAutomationDockLayout(string layout)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ApplyAutomationDockLayout(layout);
+    }
+
+    internal bool TrySetAutomationPanelDock(
+        string panelId,
+        string? targetPanelId,
+        EditorDockWindowRequest request,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySetAutomationPanelDock(panelId, targetPanelId, request, out diagnostic);
+    }
+
+    internal bool TryCaptureAutomationSceneTool(out AutomationSceneToolSnapshot snapshot)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryCaptureAutomationSceneTool(out snapshot);
+    }
+
+    internal bool TrySetAutomationSceneTool(
+        AutomationSceneToolSetRequest request,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySetAutomationSceneTool(request, out diagnostic);
+    }
+
+    internal bool TryFrameAutomationScene(
+        AutomationSceneFrameTarget target,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryFrameAutomationScene(target, out diagnostic);
+    }
+
+    internal bool TryApplyAutomationBrush(
+        int worldX,
+        int worldY,
+        out AutomationBrushApplyResult result,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationBrush(worldX, worldY, out result, out diagnostic);
+    }
+
+    internal bool TryApplyAutomationBrushStroke(
+        IReadOnlyList<AutomationWorldPoint> points,
+        out AutomationBrushStrokeResult result,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationBrushStroke(points, out result, out diagnostic);
     }
 
     public void ResetLayout()

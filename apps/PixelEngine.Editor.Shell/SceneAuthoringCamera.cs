@@ -7,8 +7,8 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class SceneAuthoringCamera
 {
-    private const float MinCellsPerPixel = 0.05f;
-    private const float MaxCellsPerPixel = 64f;
+    internal const float MinCellsPerPixel = 0.05f;
+    internal const float MaxCellsPerPixel = 64f;
     private float _viewportWidth = 1f;
     private float _viewportHeight = 1f;
 
@@ -35,6 +35,25 @@ internal sealed class SceneAuthoringCamera
     {
         CenterX -= delta.X * CellsPerPixel;
         CenterY -= delta.Y * CellsPerPixel;
+    }
+
+    public void SetView(float centerX, float centerY, float cellsPerPixel)
+    {
+        if (!float.IsFinite(centerX) ||
+            !float.IsFinite(centerY) ||
+            MathF.Abs(centerX) > 100_000_000f ||
+            MathF.Abs(centerY) > 100_000_000f ||
+            !float.IsFinite(cellsPerPixel) ||
+            cellsPerPixel is < MinCellsPerPixel or > MaxCellsPerPixel)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(cellsPerPixel),
+                "Scene camera center 或 cellsPerPixel 越过公共范围。");
+        }
+
+        CenterX = centerX;
+        CenterY = centerY;
+        CellsPerPixel = cellsPerPixel;
     }
 
     public void ZoomAt(Vector2 canvasPoint, float wheelDelta)

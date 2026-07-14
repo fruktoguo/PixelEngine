@@ -149,7 +149,7 @@ public sealed class AutomationRevisionStore
     /// 该方法与紧随其后的 <see cref="Advance" /> 必须位于同一 Editor 主线程 safe point。
     /// </summary>
     /// <param name="resourceIds">将受影响的资源。</param>
-    internal void EnsureCanAdvance(IEnumerable<string>? resourceIds)
+    public void EnsureCanAdvance(IEnumerable<string>? resourceIds)
     {
         string[] normalized = NormalizeResourceIds(resourceIds);
         lock (_sync)

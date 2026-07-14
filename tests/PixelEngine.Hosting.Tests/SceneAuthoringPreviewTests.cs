@@ -55,6 +55,7 @@ public sealed class SceneAuthoringPreviewTests
         Assert.Equal(ImGuizmoOperation.Translate, panel.Operation);
         Assert.Equal(ImGuizmoMode.Local, panel.GizmoMode);
         Assert.True(panel.ShowGrid);
+        Assert.Equal(SceneGizmoSnapSettings.Default, panel.SnapSettings);
 
         panel.SetOperation(ImGuizmoOperation.RotateZ);
         panel.ToggleGrid();
@@ -63,7 +64,11 @@ public sealed class SceneAuthoringPreviewTests
         Assert.Equal(ImGuizmoOperation.RotateZ, panel.Operation);
         Assert.Equal(ImGuizmoMode.World, panel.GizmoMode);
         Assert.False(panel.ShowGrid);
+        panel.SetSnapSettings(new SceneGizmoSnapSettings(true, 2f, 30f, 0.25f));
+        Assert.True(panel.SnapSettings.Enabled);
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => panel.SetOperation(ImGuizmoOperation.Bounds));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            panel.SetSnapSettings(new SceneGizmoSnapSettings(true, 0f, 30f, 0.25f)));
     }
 
     /// <summary>
@@ -150,6 +155,60 @@ public sealed class SceneAuthoringPreviewTests
             center);
         Assert.Equal(3f, scaled.ScaleX, precision: 3);
         Assert.Equal(3f, scaled.ScaleY, precision: 3);
+    }
+
+    /// <summary>Move/Rotate/Scale snapping 必须基于拖动 before-image，且 Local 轴向不能退化为世界轴。</summary>
+    [Fact]
+    public void SceneGizmoSnapQuantizesLocalMoveRotationAndScaleDeltas()
+    {
+        EditorSceneTransform start = new()
+        {
+            X = 10f,
+            Y = 20f,
+            RotationRadians = MathF.PI / 2f,
+            ScaleX = 2f,
+            ScaleY = 3f,
+        };
+        SceneGizmoSnapSettings settings = new(true, 2f, 15f, 0.25f);
+
+        EditorSceneTransform moveCandidate = start.Clone();
+        moveCandidate.Y += 2.6f;
+        EditorSceneTransform moved = SceneViewPanel.ApplyGizmoSnap(
+            start,
+            moveCandidate,
+            SceneGizmoHandle.AxisX,
+            ImGuizmoOperation.Translate,
+            ImGuizmoMode.Local,
+            settings);
+        Assert.Equal(10f, moved.X, precision: 3);
+        Assert.Equal(22f, moved.Y, precision: 3);
+
+        EditorSceneTransform rotateCandidate = start.Clone();
+        rotateCandidate.RotationRadians += 20f * (MathF.PI / 180f);
+        EditorSceneTransform rotated = SceneViewPanel.ApplyGizmoSnap(
+            start,
+            rotateCandidate,
+            SceneGizmoHandle.Rotate,
+            ImGuizmoOperation.RotateZ,
+            ImGuizmoMode.World,
+            settings);
+        Assert.Equal(
+            start.RotationRadians + (15f * (MathF.PI / 180f)),
+            rotated.RotationRadians,
+            precision: 3);
+
+        EditorSceneTransform scaleCandidate = start.Clone();
+        scaleCandidate.ScaleX += 0.38f;
+        scaleCandidate.ScaleY += 0.38f;
+        EditorSceneTransform scaled = SceneViewPanel.ApplyGizmoSnap(
+            start,
+            scaleCandidate,
+            SceneGizmoHandle.Uniform,
+            ImGuizmoOperation.Scale,
+            ImGuizmoMode.World,
+            settings);
+        Assert.Equal(2.5f, scaled.ScaleX, precision: 3);
+        Assert.Equal(3.5f, scaled.ScaleY, precision: 3);
     }
 
     /// <summary>
@@ -981,6 +1040,27 @@ public sealed class SceneAuthoringPreviewTests
         camera.PanPixels(new Vector2(10f, -8f));
         Assert.NotEqual(previousCenterX, camera.CenterX);
         Assert.NotEqual(previousCenterY, camera.CenterY);
+    }
+
+    /// <summary>
+    /// 验证外部自动化可直接恢复 Scene authoring camera，并严格拒绝非有限值与越界 zoom。
+    /// </summary>
+    [Fact]
+    public void AuthoringCameraAcceptsBoundedSemanticViewState()
+    {
+        SceneAuthoringCamera camera = new();
+
+        camera.SetView(12.5f, -4.25f, 0.5f);
+
+        Assert.Equal(12.5f, camera.CenterX);
+        Assert.Equal(-4.25f, camera.CenterY);
+        Assert.Equal(0.5f, camera.CellsPerPixel);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            camera.SetView(float.NaN, 0f, 1f));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            camera.SetView(0f, 0f, SceneAuthoringCamera.MinCellsPerPixel / 2f));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            camera.SetView(0f, 0f, SceneAuthoringCamera.MaxCellsPerPixel * 2f));
     }
 
     /// <summary>

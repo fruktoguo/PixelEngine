@@ -477,6 +477,1038 @@
         "transactionId": { "type": "string", "minLength": 1, "maxLength": 128 }
       }
     },
+    "emptyRequest": {
+      "type": "object",
+      "additionalProperties": false
+    },
+    "filterClause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "operator", "value"],
+      "properties": {
+        "field": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "operator": {
+          "enum": [
+            "Equals",
+            "NotEquals",
+            "Contains",
+            "StartsWith",
+            "LessThan",
+            "LessThanOrEqual",
+            "GreaterThan",
+            "GreaterThanOrEqual"
+          ]
+        },
+        "value": {}
+      }
+    },
+    "queryFilter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["match", "clauses"],
+      "properties": {
+        "match": { "enum": ["All", "Any"] },
+        "clauses": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "#/$defs/filterClause" }
+        }
+      }
+    },
+    "sortClause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "direction"],
+      "properties": {
+        "field": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "direction": { "enum": ["Ascending", "Descending"] }
+      }
+    },
+    "pageRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sort", "pageSize"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "filter": { "$ref": "#/$defs/queryFilter" },
+        "sort": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/sortClause" }
+        },
+        "cursor": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "pageSize": { "type": "integer", "minimum": 1, "maximum": 500 }
+      }
+    },
+    "pageInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "returned", "total"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "returned": { "type": "integer", "minimum": 0, "maximum": 500 },
+        "total": { "type": "integer", "minimum": 0 },
+        "nextCursor": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    },
+    "capabilityDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "id",
+        "domain",
+        "operationKind",
+        "requestSchema",
+        "responseSchema",
+        "requiredScopes",
+        "supportedModes",
+        "executionPhase",
+        "transactionMode",
+        "requiresExpectedRevision",
+        "requiresIdempotencyKey",
+        "eventTypes",
+        "artifactBehavior",
+        "uiCommandIds"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,255}$" },
+        "domain": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" },
+        "operationKind": { "enum": ["Read", "Write", "Command"] },
+        "requestSchema": { "type": "string", "pattern": "^#\\/\\$defs\\/[A-Za-z][A-Za-z0-9._-]*$" },
+        "responseSchema": { "type": "string", "pattern": "^#\\/\\$defs\\/[A-Za-z][A-Za-z0-9._-]*$" },
+        "requiredScopes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" }
+        },
+        "supportedModes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": { "enum": ["edit", "play", "paused"] }
+        },
+        "executionPhase": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "transactionMode": { "enum": ["Forbidden", "Optional", "Required"] },
+        "requiresExpectedRevision": { "type": "boolean" },
+        "requiresIdempotencyKey": { "type": "boolean" },
+        "eventTypes": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "artifactBehavior": { "enum": ["None", "Required", "Optional"] },
+        "uiCommandIds": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      }
+    },
+    "capabilityListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "capabilityDigest", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "capabilityDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/capabilityDescriptor" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "workspaceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "projectOpen",
+        "sceneDirty",
+        "mode",
+        "transitionPending"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectOpen": { "type": "boolean" },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "projectName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "projectRoot": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "sceneId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "scenePath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "sceneDirty": { "type": "boolean" },
+        "mode": { "enum": ["Edit", "Play", "Paused"] },
+        "transitionPending": { "type": "boolean" },
+        "transitionKind": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "transitionTarget": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "commandResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "succeeded", "diagnostic", "resourceIds"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "succeeded": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 4096 },
+        "resourceIds": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      }
+    },
+    "transitionResolveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "decision"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "decision": { "enum": ["Save", "Discard", "Cancel"] }
+      }
+    },
+    "transitionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "status"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "status": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "kind": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "target": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "diagnostic": { "type": "string", "maxLength": 4096 }
+      }
+    },
+    "windowSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "logicalWidth",
+        "logicalHeight",
+        "logicalX",
+        "logicalY",
+        "framebufferWidth",
+        "framebufferHeight",
+        "framebufferScaleX",
+        "framebufferScaleY",
+        "state",
+        "focused",
+        "title"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "logicalWidth": { "type": "integer", "minimum": 1 },
+        "logicalHeight": { "type": "integer", "minimum": 1 },
+        "logicalX": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "logicalY": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "framebufferWidth": { "type": "integer", "minimum": 1 },
+        "framebufferHeight": { "type": "integer", "minimum": 1 },
+        "framebufferScaleX": { "type": "number", "exclusiveMinimum": 0 },
+        "framebufferScaleY": { "type": "number", "exclusiveMinimum": 0 },
+        "state": { "$ref": "#/$defs/windowState" },
+        "focused": { "type": "boolean" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 1024 }
+      }
+    },
+    "windowState": {
+      "type": "string",
+      "enum": ["Normal", "Minimized", "Maximized", "Fullscreen"]
+    },
+    "windowResizeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "width", "height"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "width": { "type": "integer", "minimum": 320, "maximum": 32768 },
+        "height": { "type": "integer", "minimum": 240, "maximum": 32768 }
+      }
+    },
+    "windowSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "activate"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "x": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "integer", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "integer", "minimum": 320, "maximum": 32768 },
+        "height": { "type": "integer", "minimum": 240, "maximum": 32768 },
+        "state": { "$ref": "#/$defs/windowState" },
+        "activate": { "type": "boolean" }
+      },
+      "anyOf": [
+        { "required": ["x", "y"] },
+        { "required": ["width", "height"] },
+        { "required": ["state"] },
+        { "properties": { "activate": { "const": true } } }
+      ]
+    },
+    "panelInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "visible", "chrome", "maximized", "focusPending", "dockStateKnown", "docked"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "visible": { "type": "boolean" },
+        "chrome": { "type": "boolean" },
+        "maximized": { "type": "boolean" },
+        "focusPending": { "type": "boolean" },
+        "dockStateKnown": { "type": "boolean" },
+        "docked": { "type": "boolean" },
+        "dockGroupId": { "type": "string", "pattern": "^dock-group:[0-9a-f]{16}$" },
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "minimum": 0, "maximum": 32768 },
+        "height": { "type": "number", "minimum": 0, "maximum": 32768 }
+      }
+    },
+    "panelListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/panelInfo" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "panelSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "panelId", "visible", "focus"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "panelId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "visible": { "type": "boolean" },
+        "focus": { "type": "boolean" }
+      }
+    },
+    "panelDockPlacement": {
+      "type": "string",
+      "enum": ["Tab", "Left", "Right", "Top", "Bottom", "Floating"]
+    },
+    "panelDockRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "panelId", "placement", "splitRatio"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "panelId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "targetPanelId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "placement": { "$ref": "#/$defs/panelDockPlacement" },
+        "splitRatio": { "type": "number", "minimum": 0.05, "maximum": 0.95 },
+        "x": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "y": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "width": { "type": "number", "minimum": 100, "maximum": 32768 },
+        "height": { "type": "number", "minimum": 100, "maximum": 32768 }
+      }
+    },
+    "panelLayoutEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["panelId", "visible"],
+      "properties": {
+        "panelId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "visible": { "type": "boolean" }
+      }
+    },
+    "dockLayoutSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "layoutVersion", "utf8ByteLength", "sha256", "layoutText", "panels"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "layoutVersion": { "type": "integer", "minimum": 1 },
+        "utf8ByteLength": { "type": "integer", "minimum": 1, "maximum": 262144 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "layoutText": { "type": "string", "minLength": 1, "maxLength": 262144 },
+        "panels": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/panelLayoutEntry" }
+        }
+      }
+    },
+    "dockLayoutSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "layout"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "layout": { "$ref": "#/$defs/dockLayoutSnapshot" }
+      }
+    },
+    "sceneSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "sceneId",
+        "resourceId",
+        "path",
+        "name",
+        "dirty",
+        "contentVersion",
+        "sceneViewVersion",
+        "generation",
+        "gameObjectCount",
+        "rootStableIds"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "sceneId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "dirty": { "type": "boolean" },
+        "contentVersion": { "type": "integer", "minimum": 0 },
+        "sceneViewVersion": { "type": "integer", "minimum": 0 },
+        "generation": { "type": "integer", "minimum": 0 },
+        "gameObjectCount": { "type": "integer", "minimum": 0 },
+        "rootStableIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 1 }
+        },
+        "selectedStableId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "scenePathRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "path"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "sceneSaveAsRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "path", "makeStartScene"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "makeStartScene": { "type": "boolean" }
+      }
+    },
+    "hierarchyItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stableId",
+        "resourceId",
+        "siblingIndex",
+        "depth",
+        "hierarchyPath",
+        "name",
+        "enabled",
+        "sceneVisible",
+        "scenePickable",
+        "selected",
+        "childCount",
+        "componentCount",
+        "hasPrefabLink",
+        "hasWebCanvas",
+        "hasCanvasScaler"
+      ],
+      "properties": {
+        "stableId": { "type": "integer", "minimum": 1 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "parentStableId": { "type": "integer", "minimum": 1 },
+        "siblingIndex": { "type": "integer", "minimum": 0 },
+        "depth": { "type": "integer", "minimum": 0 },
+        "hierarchyPath": { "type": "string", "pattern": "^[1-9][0-9]*(\\/[1-9][0-9]*)*$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "enabled": { "type": "boolean" },
+        "sceneVisible": { "type": "boolean" },
+        "scenePickable": { "type": "boolean" },
+        "selected": { "type": "boolean" },
+        "childCount": { "type": "integer", "minimum": 0 },
+        "componentCount": { "type": "integer", "minimum": 0 },
+        "hasPrefabLink": { "type": "boolean" },
+        "hasWebCanvas": { "type": "boolean" },
+        "hasCanvasScaler": { "type": "boolean" }
+      }
+    },
+    "hierarchyListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/hierarchyItem" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "gameObjectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "inspectorGetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "transformValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "rotationRadians", "scaleX", "scaleY"],
+      "properties": {
+        "x": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "y": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "rotationRadians": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "scaleX": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "scaleY": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+      }
+    },
+    "inspectorField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "valueType",
+        "kind",
+        "canWrite",
+        "public",
+        "serializedPrivate",
+        "nullable",
+        "enumNames",
+        "value",
+        "overridden"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "valueType": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "kind": {
+          "enum": [
+            "Unsupported",
+            "Boolean",
+            "Number",
+            "String",
+            "Enum",
+            "Vector",
+            "Material",
+            "AssetReference"
+          ]
+        },
+        "canWrite": { "type": "boolean" },
+        "public": { "type": "boolean" },
+        "serializedPrivate": { "type": "boolean" },
+        "nullable": { "type": "boolean" },
+        "rangeMinimum": { "type": "number" },
+        "rangeMaximum": { "type": "number" },
+        "enumNames": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "assetKind": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "value": { "type": "string" },
+        "overridden": { "type": "boolean" }
+      }
+    },
+    "componentSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index", "typeName", "typeAvailable", "enabled", "fields"],
+      "properties": {
+        "index": { "type": "integer", "minimum": 0 },
+        "typeName": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "typeAvailable": { "type": "boolean" },
+        "enabled": { "type": "boolean" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/inspectorField" }
+        }
+      }
+    },
+    "webCanvasValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "sortingOrder"],
+      "properties": {
+        "manifestAssetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "manifestPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "initialScreenId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "enabled": { "type": "boolean" },
+        "sortingOrder": { "type": "integer" }
+      }
+    },
+    "webCanvasSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "sortingOrder", "primary"],
+      "properties": {
+        "manifestAssetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "manifestPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "initialScreenId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "enabled": { "type": "boolean" },
+        "sortingOrder": { "type": "integer" },
+        "primary": { "type": "boolean" }
+      }
+    },
+    "canvasScalerValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scaleMode",
+        "scaleFactor",
+        "referenceWidth",
+        "referenceHeight",
+        "screenMatchMode",
+        "matchWidthOrHeight",
+        "physicalUnit",
+        "fallbackScreenDpi",
+        "defaultSpriteDpi",
+        "referencePixelsPerUnit"
+      ],
+      "properties": {
+        "scaleMode": {
+          "enum": ["ConstantPixelSize", "ScaleWithScreenSize", "ConstantPhysicalSize"]
+        },
+        "scaleFactor": { "type": "number", "exclusiveMinimum": 0 },
+        "referenceWidth": { "type": "number", "exclusiveMinimum": 0 },
+        "referenceHeight": { "type": "number", "exclusiveMinimum": 0 },
+        "screenMatchMode": {
+          "enum": ["MatchWidthOrHeight", "Expand", "Shrink"]
+        },
+        "matchWidthOrHeight": { "type": "number", "minimum": 0, "maximum": 1 },
+        "physicalUnit": {
+          "enum": ["Centimeters", "Millimeters", "Inches", "Points", "Picas"]
+        },
+        "fallbackScreenDpi": { "type": "number", "exclusiveMinimum": 0 },
+        "defaultSpriteDpi": { "type": "number", "exclusiveMinimum": 0 },
+        "referencePixelsPerUnit": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "gameObjectSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "hierarchy",
+        "localTransform",
+        "worldTransform",
+        "prefabOverridePaths",
+        "components"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "hierarchy": { "$ref": "#/$defs/hierarchyItem" },
+        "localTransform": { "$ref": "#/$defs/transformValue" },
+        "worldTransform": { "$ref": "#/$defs/transformValue" },
+        "prefabAssetPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "prefabOverridePaths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 1024 }
+        },
+        "webCanvas": { "$ref": "#/$defs/webCanvasSnapshot" },
+        "canvasScaler": { "$ref": "#/$defs/canvasScalerValue" },
+        "components": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/componentSnapshot" }
+        }
+      }
+    },
+    "selectionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "selectionSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "gameObjectCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "name"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "parentStableId": { "type": "integer", "minimum": 1 },
+        "siblingIndex": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "gameObjectRenameRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "name"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "gameObjectBoolRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "value"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "value": { "type": "boolean" }
+      }
+    },
+    "boolValueRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "value"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "value": { "type": "boolean" }
+      }
+    },
+    "gameObjectReparentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "parentStableId": { "type": "integer", "minimum": 1 },
+        "siblingIndex": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "transformSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "transform"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "transform": { "$ref": "#/$defs/transformValue" }
+      }
+    },
+    "componentAddRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "typeName"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "typeName": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "componentRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "index"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "index": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "componentEnabledSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "index", "enabled"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "index": { "type": "integer", "minimum": 0 },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "componentMoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "fromIndex", "toIndex"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "fromIndex": { "type": "integer", "minimum": 0 },
+        "toIndex": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "componentFieldSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "componentIndex", "fieldName", "removeOverride"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "componentIndex": { "type": "integer", "minimum": 0 },
+        "fieldName": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "value": { "type": "string" },
+        "removeOverride": { "type": "boolean" }
+      }
+    },
+    "builtInCanvasSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "webCanvas": { "$ref": "#/$defs/webCanvasValue" },
+        "canvasScaler": { "$ref": "#/$defs/canvasScalerValue" }
+      }
+    },
+    "canvasPrimarySetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId", "primary"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "primary": { "type": "boolean" }
+      }
+    },
+    "historySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "canUndo", "canRedo", "undoCount", "redoCount"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "canUndo": { "type": "boolean" },
+        "canRedo": { "type": "boolean" },
+        "undoCount": { "type": "integer", "minimum": 0 },
+        "redoCount": { "type": "integer", "minimum": 0 },
+        "undoName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "redoName": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "prefabCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "stableId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "stableId": { "type": "integer", "minimum": 1 },
+        "assetPath": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "prefabCreateResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetPath", "gameObject"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "gameObject": { "$ref": "#/$defs/gameObjectSnapshot" }
+      }
+    },
+    "prefabInstantiateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetPath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "parentStableId": { "type": "integer", "minimum": 1 },
+        "transform": { "$ref": "#/$defs/transformValue" }
+      }
+    },
+    "brushSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "shape",
+        "materialId",
+        "radius",
+        "probability",
+        "temperatureMode",
+        "temperatureCelsius"
+      ],
+      "properties": {
+        "tool": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "shape": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "materialId": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "radius": { "type": "integer", "minimum": 0, "maximum": 128 },
+        "probability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "temperatureMode": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "temperatureCelsius": { "type": "number" }
+      }
+    },
+    "sceneToolSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "tool",
+        "gizmoSpace",
+        "gridVisible",
+        "snapEnabled",
+        "moveSnap",
+        "rotationSnapDegrees",
+        "scaleSnap",
+        "cameraCenterX",
+        "cameraCenterY",
+        "cameraCellsPerPixel",
+        "brushPanelVisible",
+        "overlayDock",
+        "overlayOffsetX",
+        "overlayOffsetY"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "tool": { "enum": ["Move", "Rotate", "Scale", "Brush"] },
+        "gizmoSpace": { "enum": ["Local", "World"] },
+        "gridVisible": { "type": "boolean" },
+        "snapEnabled": { "type": "boolean" },
+        "moveSnap": { "type": "number", "minimum": 0.0001, "maximum": 1000000 },
+        "rotationSnapDegrees": { "type": "number", "minimum": 0.0001, "maximum": 360 },
+        "scaleSnap": { "type": "number", "minimum": 0.0001, "maximum": 100000 },
+        "cameraCenterX": { "type": "number" },
+        "cameraCenterY": { "type": "number" },
+        "cameraCellsPerPixel": { "type": "number", "exclusiveMinimum": 0 },
+        "brushPanelVisible": { "type": "boolean" },
+        "overlayDock": { "enum": ["Left", "Floating", "Right"] },
+        "overlayOffsetX": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "overlayOffsetY": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "brush": { "$ref": "#/$defs/brushSettings" }
+      }
+    },
+    "sceneToolSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "tool": { "enum": ["Move", "Rotate", "Scale", "Brush"] },
+        "gizmoSpace": { "enum": ["Local", "World"] },
+        "gridVisible": { "type": "boolean" },
+        "snapEnabled": { "type": "boolean" },
+        "moveSnap": { "type": "number", "minimum": 0.0001, "maximum": 1000000 },
+        "rotationSnapDegrees": { "type": "number", "minimum": 0.0001, "maximum": 360 },
+        "scaleSnap": { "type": "number", "minimum": 0.0001, "maximum": 100000 },
+        "cameraCenterX": { "type": "number", "minimum": -100000000, "maximum": 100000000 },
+        "cameraCenterY": { "type": "number", "minimum": -100000000, "maximum": 100000000 },
+        "cameraCellsPerPixel": { "type": "number", "minimum": 0.05, "maximum": 64 },
+        "brush": { "$ref": "#/$defs/brushSettings" },
+        "brushPanelVisible": { "type": "boolean" },
+        "overlayDock": { "enum": ["Left", "Floating", "Right"] },
+        "overlayOffsetX": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "overlayOffsetY": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+      }
+    },
+    "sceneFrameRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "target"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "target": { "enum": ["All", "Selected"] }
+      }
+    },
+    "brushApplyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "x", "y"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" }
+      }
+    },
+    "brushApplyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "writtenCells",
+        "skippedNonResidentCells",
+        "skippedOutOfBoundsCells",
+        "diagnostic"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "writtenCells": { "type": "integer", "minimum": 0 },
+        "skippedNonResidentCells": { "type": "integer", "minimum": 0 },
+        "skippedOutOfBoundsCells": { "type": "integer", "minimum": 0 },
+        "diagnostic": { "type": "string", "maxLength": 4096 }
+      }
+    },
+    "worldPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "integer" },
+        "y": { "type": "integer" }
+      }
+    },
+    "brushStrokeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "points"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "points": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 256,
+          "items": { "$ref": "#/$defs/worldPoint" }
+        }
+      }
+    },
+    "brushStrokeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "controlPointCount",
+        "sampleCount",
+        "writtenCells",
+        "skippedNonResidentCells",
+        "skippedOutOfBoundsCells",
+        "diagnostic"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "controlPointCount": { "type": "integer", "minimum": 1, "maximum": 256 },
+        "sampleCount": { "type": "integer", "minimum": 1, "maximum": 8192 },
+        "writtenCells": { "type": "integer", "minimum": 0 },
+        "skippedNonResidentCells": { "type": "integer", "minimum": 0 },
+        "skippedOutOfBoundsCells": { "type": "integer", "minimum": 0 },
+        "diagnostic": { "type": "string", "maxLength": 4096 }
+      }
+    },
     "envelope": {
       "type": "object",
       "additionalProperties": false,

@@ -168,6 +168,142 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IEditorImGuiBackend
     }
 
     /// <inheritdoc />
+    public string CaptureDockLayout()
+    {
+        ThrowIfNotInitialized();
+        SetCurrentContext();
+        return ImGui.SaveIniSettingsToMemoryS();
+    }
+
+    /// <inheritdoc />
+    public void ApplyDockLayout(string layout)
+    {
+        ThrowIfNotInitialized();
+        ArgumentException.ThrowIfNullOrWhiteSpace(layout);
+        SetCurrentContext();
+        ImGui.LoadIniSettingsFromMemory(layout);
+        ImGui.GetIO().WantSaveIniSettings = true;
+    }
+
+    /// <inheritdoc />
+    public unsafe EditorDockWindowState CaptureDockWindow(string windowTitle)
+    {
+        ThrowIfNotInitialized();
+        ArgumentException.ThrowIfNullOrWhiteSpace(windowTitle);
+        SetCurrentContext();
+        ImGuiWindowPtr window = ImGuiP.FindWindowByName(windowTitle);
+        return window.Handle == null
+            ? default
+            : new EditorDockWindowState(
+                Known: true,
+                window.DockId,
+                window.Pos.X,
+                window.Pos.Y,
+                window.Size.X,
+                window.Size.Y);
+    }
+
+    /// <inheritdoc />
+    public unsafe bool TrySetDockWindow(EditorDockWindowRequest request, out string diagnostic)
+    {
+        ThrowIfNotInitialized();
+        ArgumentNullException.ThrowIfNull(request);
+        SetCurrentContext();
+        ImGuiWindowPtr source = ImGuiP.FindWindowByName(request.WindowTitle);
+
+        if (request.Placement == EditorDockPlacement.Floating)
+        {
+            if (source.Handle == null)
+            {
+                if (request.X.HasValue || request.Width.HasValue)
+                {
+                    diagnostic = "尚未 Begin 的 panel 可语义 undock，但不能设置 floating rect；先显示一帧后重试。";
+                    return false;
+                }
+
+                ImGuiP.DockBuilderDockWindow(request.WindowTitle, 0);
+            }
+            else
+            {
+                ImGuiP.SetWindowDock(source, 0, ImGuiCond.Always);
+            }
+            if (request.X is { } x && request.Y is { } y)
+            {
+                ImGuiP.SetWindowPos(source, new System.Numerics.Vector2(x, y), ImGuiCond.Always);
+            }
+
+            if (request.Width is { } width && request.Height is { } height)
+            {
+                ImGuiP.SetWindowSize(source, new System.Numerics.Vector2(width, height), ImGuiCond.Always);
+            }
+
+            ImGui.GetIO().WantSaveIniSettings = true;
+            diagnostic = string.Empty;
+            return true;
+        }
+
+        ImGuiWindowPtr target = ImGuiP.FindWindowByName(request.TargetWindowTitle!);
+        if (target.Handle == null || target.DockId == 0)
+        {
+            diagnostic = "目标 panel 尚未位于可拆分的 dock node。";
+            return false;
+        }
+
+        if (request.Placement == EditorDockPlacement.Tab)
+        {
+            ImGuiP.DockBuilderDockWindow(request.WindowTitle, target.DockId);
+            ImGui.GetIO().WantSaveIniSettings = true;
+            diagnostic = string.Empty;
+            return true;
+        }
+
+        ImGuiDockNodePtr targetNode = ImGuiP.DockBuilderGetNode(target.DockId);
+        if (targetNode.Handle == null)
+        {
+            diagnostic = "目标 dock node 已失效。";
+            return false;
+        }
+
+        ImGuiDockNodePtr rootNode = targetNode;
+        while (rootNode.ParentNode.Handle != null)
+        {
+            rootNode = rootNode.ParentNode;
+        }
+
+        uint rootNodeId = rootNode.ID;
+
+        uint newNode;
+        uint remainingNode;
+        ImGuiDir direction = request.Placement switch
+        {
+            EditorDockPlacement.Left => ImGuiDir.Left,
+            EditorDockPlacement.Right => ImGuiDir.Right,
+            EditorDockPlacement.Top => ImGuiDir.Up,
+            EditorDockPlacement.Bottom => ImGuiDir.Down,
+            EditorDockPlacement.Tab or EditorDockPlacement.Floating =>
+                throw new InvalidOperationException("Tab/Floating 不应进入 split 分支。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(request), request.Placement, "未知停靠位置。"),
+        };
+        _ = ImGuiP.DockBuilderSplitNode(
+            target.DockId,
+            direction,
+            request.SplitRatio,
+            &newNode,
+            &remainingNode);
+        if (newNode == 0 || remainingNode == 0)
+        {
+            diagnostic = "DockBuilder 未能拆分目标 node。";
+            return false;
+        }
+
+        ImGuiP.DockBuilderDockWindow(request.WindowTitle, newNode);
+        ImGuiP.DockBuilderFinish(rootNodeId);
+        ImGui.GetIO().WantSaveIniSettings = true;
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    /// <inheritdoc />
     public void Render()
     {
         ThrowIfNotInitialized();

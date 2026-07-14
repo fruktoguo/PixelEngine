@@ -69,7 +69,10 @@ internal sealed class EditorShellWindow : IDisposable
         float uiScale = EditorUiScale.Default,
         string? layoutPath = null,
         int width = EditorWorkspaceWindowState.DefaultWidth,
-        int height = EditorWorkspaceWindowState.DefaultHeight)
+        int height = EditorWorkspaceWindowState.DefaultHeight,
+        int? x = null,
+        int? y = null,
+        EditorWorkspaceWindowStateKind state = EditorWorkspaceWindowStateKind.Normal)
     {
         int normalizedWidth = width > 0 ? width : EditorWorkspaceWindowState.DefaultWidth;
         int normalizedHeight = height > 0 ? height : EditorWorkspaceWindowState.DefaultHeight;
@@ -78,6 +81,16 @@ internal sealed class EditorShellWindow : IDisposable
             Title = "PixelEngine Editor",
             Width = normalizedWidth,
             Height = normalizedHeight,
+            PositionX = x,
+            PositionY = y,
+            InitialState = state switch
+            {
+                EditorWorkspaceWindowStateKind.Normal => RenderWindowState.Normal,
+                EditorWorkspaceWindowStateKind.Minimized => RenderWindowState.Minimized,
+                EditorWorkspaceWindowStateKind.Maximized => RenderWindowState.Maximized,
+                EditorWorkspaceWindowStateKind.Fullscreen => RenderWindowState.Fullscreen,
+                _ => throw new ArgumentOutOfRangeException(nameof(state), state, "未知 workspace 窗口状态。"),
+            },
             BackendPreference = OperatingSystem.IsWindows()
                 ? RenderBackendPreference.CaptureCompatible
                 : RenderBackendPreference.Auto,

@@ -9,7 +9,7 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed record EditorWorkspaceDocument
 {
-    public const int CurrentFormatVersion = 2;
+    public const int CurrentFormatVersion = 3;
 
     public int FormatVersion { get; init; } = CurrentFormatVersion;
 
@@ -23,7 +23,7 @@ internal sealed record EditorWorkspaceDocument
 }
 
 /// <summary>
-/// Editor 顶层窗口尺寸。窗口位置与显示器拓扑由后续窗口接线切片扩展。
+/// Editor 顶层窗口的可恢复 placement。
 /// </summary>
 internal sealed record EditorWorkspaceWindowState
 {
@@ -33,6 +33,21 @@ internal sealed record EditorWorkspaceWindowState
     public int Width { get; init; } = DefaultWidth;
 
     public int Height { get; init; } = DefaultHeight;
+
+    public int? X { get; init; }
+
+    public int? Y { get; init; }
+
+    public EditorWorkspaceWindowStateKind State { get; init; }
+}
+
+/// <summary>workspace 中稳定入盘的顶层窗口状态。</summary>
+internal enum EditorWorkspaceWindowStateKind
+{
+    Normal,
+    Minimized,
+    Maximized,
+    Fullscreen,
 }
 
 /// <summary>
@@ -91,6 +106,7 @@ internal sealed class EditorWorkspaceStore
 {
     public const int MaxProjectWorkspaces = 50;
     private const int MaximumWindowDimension = 32768;
+    private const int MaximumWindowCoordinateMagnitude = 1_000_000;
 
     private EditorWorkspaceStore(
         string? storagePath,
@@ -292,7 +308,7 @@ internal sealed class EditorWorkspaceStore
         return TryUpdate(
             Current with
             {
-                Window = new EditorWorkspaceWindowState
+                Window = (Current.Window ?? new EditorWorkspaceWindowState()) with
                 {
                     Width = width,
                     Height = height,
@@ -301,12 +317,18 @@ internal sealed class EditorWorkspaceStore
             out diagnostic);
     }
 
+    public bool TrySetWindowPlacement(EditorWorkspaceWindowState placement, out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+        return TryUpdate(Current with { Window = placement }, out diagnostic);
+    }
+
     private static bool TryNormalize(
         EditorWorkspaceDocument document,
         out EditorWorkspaceDocument normalized,
         out string diagnostic)
     {
-        if (document.FormatVersion is not 1 and not EditorWorkspaceDocument.CurrentFormatVersion)
+        if (document.FormatVersion is < 1 or > EditorWorkspaceDocument.CurrentFormatVersion)
         {
             normalized = new EditorWorkspaceDocument();
             diagnostic = $"不支持的 Editor workspace 版本：{document.FormatVersion}。";
@@ -376,6 +398,23 @@ internal sealed class EditorWorkspaceStore
         }
 
         EditorWorkspaceWindowState window = document.Window ?? new EditorWorkspaceWindowState();
+        int? windowX = NormalizeWindowCoordinate(window.X);
+        int? windowY = NormalizeWindowCoordinate(window.Y);
+        if (windowX.HasValue != windowY.HasValue)
+        {
+            windowX = null;
+            windowY = null;
+            warnings.Add("已忽略不完整或越界的窗口位置。");
+        }
+
+        EditorWorkspaceWindowStateKind windowState = Enum.IsDefined(window.State)
+            ? window.State
+            : EditorWorkspaceWindowStateKind.Normal;
+        if (!Enum.IsDefined(window.State))
+        {
+            warnings.Add("已将未知窗口状态恢复为 Normal。");
+        }
+
         normalized = new EditorWorkspaceDocument
         {
             FormatVersion = EditorWorkspaceDocument.CurrentFormatVersion,
@@ -385,6 +424,9 @@ internal sealed class EditorWorkspaceStore
             {
                 Width = NormalizeWindowDimension(window.Width, EditorWorkspaceWindowState.DefaultWidth),
                 Height = NormalizeWindowDimension(window.Height, EditorWorkspaceWindowState.DefaultHeight),
+                X = windowX,
+                Y = windowY,
+                State = windowState,
             },
             Projects = [.. projects],
         };
@@ -470,6 +512,13 @@ internal sealed class EditorWorkspaceStore
     private static int NormalizeWindowDimension(int value, int fallback)
     {
         return value is > 0 and <= MaximumWindowDimension ? value : fallback;
+    }
+
+    private static int? NormalizeWindowCoordinate(int? value)
+    {
+        return value is >= -MaximumWindowCoordinateMagnitude and <= MaximumWindowCoordinateMagnitude
+            ? value
+            : null;
     }
 
     private static bool TryGetFullPath(string? path, out string? fullPath)
@@ -563,7 +612,8 @@ internal sealed class EditorWorkspaceStore
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     ReadCommentHandling = JsonCommentHandling.Skip,
     AllowTrailingCommas = true,
-    WriteIndented = true)]
+    WriteIndented = true,
+    UseStringEnumConverter = true)]
 [JsonSerializable(typeof(EditorWorkspaceDocument))]
 internal sealed partial class EditorWorkspaceJsonContext : JsonSerializerContext
 {
