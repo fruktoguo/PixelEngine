@@ -684,9 +684,13 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         BuildPreflight? preflight = _view.Preflight;
-        diagnostic = preflight?.Diagnostic ?? L.Get(
-            "build.preflightPending",
-            "Build tool preflight has not completed.");
+        diagnostic = preflight is null
+            ? L.Get("build.preflightPending", "Build tool preflight has not completed.")
+            : preflight.Ok
+                ? L.Get("build.preflightReady", "Build tools are ready.")
+                : string.IsNullOrWhiteSpace(preflight.Diagnostic)
+                    ? L.Get("build.preflightFailed", "Build tool preflight failed.")
+                    : preflight.Diagnostic;
         return preflight?.Ok == true;
     }
 
@@ -1117,7 +1121,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
         ImGui.AlignTextToFramePadding();
-        ImGui.TextUnformatted(label);
+        TextWrappedUnformatted(label);
         _ = ImGui.TableSetColumnIndex(1);
         ImGui.SetNextItemWidth(-1f);
     }
