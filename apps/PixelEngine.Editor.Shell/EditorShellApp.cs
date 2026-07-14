@@ -17,6 +17,7 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class EditorShellApp
 {
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
+    private const int BuildSettingsProbeStableFrameCount = 20;
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
     private readonly EditorUserDataPaths _userDataPaths;
@@ -945,7 +946,10 @@ internal sealed class EditorShellApp
             }
 
             state.FramesAfterFocus++;
-            if (state.FramesAfterFocus < 2)
+            // 工程重开会重建 dock、Scene texture 与 DXGI presentation；只等 1-2 帧在部分
+            // Windows 驱动上仍可能读到局部黑色 backbuffer。与 runtime Inspector 探针一致，
+            // 给完整工作台至少 20 个交换缓冲周期再结束 scripted route。
+            if (state.FramesAfterFocus < BuildSettingsProbeStableFrameCount)
             {
                 return;
             }

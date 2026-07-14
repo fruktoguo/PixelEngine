@@ -229,6 +229,28 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Build Settings 视觉证据使用隔离工程、稳定帧等待、摘要与 framebuffer 分区门禁，
+    /// 不污染 Demo profile，也不把局部黑帧当作通过。
+    /// </summary>
+    [Fact]
+    public void EditorBuildSettingsProbeRequiresIsolatedStableFramebuffer()
+    {
+        string root = FindRepositoryRoot();
+        string script = File.ReadAllText(Path.Combine(root, "tools", "run-editor-build-settings-probe.ps1"));
+        string editorSource = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellApp.cs"));
+
+        Assert.Contains("Copy-TrackedProject", script, StringComparison.Ordinal);
+        Assert.Contains("--scripted-build-settings-probe", script, StringComparison.Ordinal);
+        Assert.Contains("build_settings_focused", script, StringComparison.Ordinal);
+        Assert.Contains("frames_after_focus", script, StringComparison.Ordinal);
+        Assert.Contains("Assert-MinimumSummaryInteger", script, StringComparison.Ordinal);
+        Assert.Contains("Get-BmpEvidence", script, StringComparison.Ordinal);
+        Assert.Contains("buildSettingsOpaqueRatio", script, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.editor-build-settings-evidence/v1", script, StringComparison.Ordinal);
+        Assert.Contains("BuildSettingsProbeStableFrameCount = 20", editorSource, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证本机正式输出会写出根级 SHA256SUMS，并在 manifest / README 中登记，便于人工验收绑定到已验证产物。
     /// </summary>
     [Fact]
