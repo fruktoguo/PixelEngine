@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
+using L = PixelEngine.Editor.EditorLocalization;
 
 namespace PixelEngine.Editor.Shell.Build;
 
@@ -79,7 +80,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         RefreshTasks();
         if (_view.IsRunning)
         {
-            diagnostic = "已有构建正在运行。";
+            diagnostic = L.Get("build.alreadyRunning", "Another build is already running.");
             return false;
         }
 
@@ -106,7 +107,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             return false;
         }
 
-        diagnostic = "构建探针已启动。";
+        diagnostic = L.Get("build.probeStarted", "Build probe started.");
         return true;
     }
 
@@ -147,7 +148,9 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             return false;
         }
 
-        diagnostic = runAfterBuild ? "Build And Run 已启动。" : "Build 已启动。";
+        diagnostic = runAfterBuild
+            ? L.Get("build.buildAndRunStarted", "Build And Run started.")
+            : L.Get("build.started", "Build started.");
         return true;
     }
 
@@ -158,7 +161,9 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         RefreshTasks();
         if (_view.IsRunning)
         {
-            throw new InvalidOperationException("构建运行中不能修改构建设置。");
+            throw new InvalidOperationException(L.Get(
+                "build.editWhileRunning",
+                "Build settings cannot be modified while a build is running."));
         }
 
         _settings.Rid = BuildHostRid.Current;
@@ -254,23 +259,23 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         ImGui.BeginDisabled(_view.IsRunning);
         if (RequiresRepair)
         {
-            ImGui.SeparatorText("设置恢复");
-            ImGui.TextWrapped(_persistentSettingsDiagnostic);
-            if (ImGui.Button("保存当前回退设置并修复"))
+            ImGui.SeparatorText(L.Get("build.settingsRecovery", "Settings Recovery"));
+            TextWrappedUnformatted(_persistentSettingsDiagnostic);
+            if (ImGui.Button(L.Get("build.repairSettings", "Save Fallback Settings and Repair")))
             {
                 _ = TryRepairSettings(out _);
             }
         }
 
         DrawSettings();
-        ImGui.SeparatorText("场景");
+        ImGui.SeparatorText(L.Get("build.scenes", "Scenes"));
         DrawScenes();
         ImGui.EndDisabled();
-        ImGui.SeparatorText("进度");
+        ImGui.SeparatorText(L.Get("build.progress", "Progress"));
         DrawProgress();
-        ImGui.SeparatorText("日志");
+        ImGui.SeparatorText(L.Get("build.log", "Log"));
         DrawLog();
-        ImGui.SeparatorText("结果");
+        ImGui.SeparatorText(L.Get("build.result", "Result"));
         DrawResult();
         ImGui.EndChild();
         ImGui.Separator();
@@ -295,14 +300,14 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         ImGui.TableSetupColumn(
-            "Property",
+            L.Get("settings.property", "Property"),
             ImGuiTableColumnFlags.WidthFixed,
             ResolveSettingsLabelWidth(availableWidth));
-        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(L.Get("settings.value", "Value"), ImGuiTableColumnFlags.WidthStretch);
 
         bool changed = false;
         int rid = IndexOf(RidOptions, _settings.Rid);
-        NextSetting("目标平台");
+        NextSetting(L.Get("build.targetPlatform", "Target Platform"));
         if (ImGui.Combo("##build-target-rid", ref rid, RidOptions, RidOptions.Length) && rid >= 0)
         {
             _settings.Rid = RidOptions[rid];
@@ -310,7 +315,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         int channel = _settings.Channel == BuildProfileChannel.Aot ? 1 : 0;
-        NextSetting("通道");
+        NextSetting(L.Get("build.channel", "Channel"));
         if (ImGui.Combo("##build-channel", ref channel, ChannelOptions, ChannelOptions.Length))
         {
             _settings.Channel = channel == 1 ? BuildProfileChannel.Aot : BuildProfileChannel.R2R;
@@ -318,30 +323,30 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         int configuration = IndexOf(ConfigurationOptions, _settings.Configuration);
-        NextSetting("配置");
+        NextSetting(L.Get("build.configuration", "Configuration"));
         if (ImGui.Combo("##build-configuration", ref configuration, ConfigurationOptions, ConfigurationOptions.Length) && configuration >= 0)
         {
             _settings.Configuration = ConfigurationOptions[configuration];
             changed = true;
         }
 
-        NextSetting("输出目录");
+        NextSetting(L.Get("build.outputDirectory", "Output Directory"));
         changed |= InputTextValue("##build-output-directory", _settings.OutputDirectory, value => _settings.OutputDirectory = value, 512);
-        NextSetting("产物名");
+        NextSetting(L.Get("build.productName", "Product Name"));
         changed |= InputTextValue("##build-product-name", _settings.ProductName, value => _settings.ProductName = value, 128);
-        NextSetting("版本");
+        NextSetting(L.Get("build.version", "Version"));
         changed |= InputTextValue("##build-version", _settings.Version, value => _settings.Version = value, 64);
-        NextSetting("信息版本");
+        NextSetting(L.Get("build.informationalVersion", "Informational Version"));
         changed |= InputTextValue("##build-informational-version", _settings.InformationalVersion, value => _settings.InformationalVersion = value, 128);
         string icon = _settings.IconPath ?? string.Empty;
-        NextSetting("图标 .ico");
+        NextSetting(L.Get("build.icon", "Icon (.ico)"));
         if (InputTextValue("##build-icon", icon, value => _settings.IconPath = string.IsNullOrWhiteSpace(value) ? null : value, 512))
         {
             changed = true;
         }
 
         bool includeSymbols = _settings.IncludeSymbols;
-        NextSetting("调试符号");
+        NextSetting(L.Get("build.includeSymbols", "Debug Symbols"));
         if (ImGui.Checkbox("##build-include-symbols", ref includeSymbols))
         {
             _settings.IncludeSymbols = includeSymbols;
@@ -349,7 +354,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         bool wholeContent = _settings.PackageWholeContent;
-        NextSetting("完整 content");
+        NextSetting(L.Get("build.wholeContent", "Package All Content"));
         if (ImGui.Checkbox("##build-package-whole-content", ref wholeContent))
         {
             _settings.PackageWholeContent = wholeContent;
@@ -368,10 +373,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         bool changed = false;
         if (ImGui.BeginTable("build_scenes", 4, ImGuiTableFlags.RowBg | ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable))
         {
-            ImGui.TableSetupColumn("场景名");
-            ImGui.TableSetupColumn("入包");
-            ImGui.TableSetupColumn("启动");
-            ImGui.TableSetupColumn("来源");
+            ImGui.TableSetupColumn(L.Get("build.sceneName", "Scene"));
+            ImGui.TableSetupColumn(L.Get("build.include", "Include"));
+            ImGui.TableSetupColumn(L.Get("build.startup", "Startup"));
+            ImGui.TableSetupColumn(L.Get("build.source", "Source"));
             ImGui.TableHeadersRow();
             for (int i = 0; i < _settings.Scenes.Count; i++)
             {
@@ -420,10 +425,16 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         float availableWidth = ImGui.GetContentRegionAvail().X;
         ImGuiStylePtr style = ImGui.GetStyle();
         float horizontalPadding = style.FramePadding.X * 2f;
-        float buildWidth = ImGui.CalcTextSize("Build").X + horizontalPadding;
-        float buildAndRunWidth = ImGui.CalcTextSize("Build And Run").X + horizontalPadding;
-        float cancelWidth = ImGui.CalcTextSize("取消").X + horizontalPadding;
-        float preflightWidth = ImGui.CalcTextSize("重新预检").X + horizontalPadding;
+        string buildLabel = L.Get("build.action.build", "Build");
+        string buildAndRunLabel = L.Get("build.action.buildAndRun", "Build And Run");
+        string cancelLabel = L.Get("build.action.cancel", "Cancel");
+        string preflightLabel = L.Get("build.action.preflight", "Preflight");
+        string moreActionsLabel = L.Get("build.action.more", "More build actions");
+        string cancelBuildLabel = L.Get("build.action.cancelBuild", "Cancel Build");
+        float buildWidth = ImGui.CalcTextSize(buildLabel).X + horizontalPadding;
+        float buildAndRunWidth = ImGui.CalcTextSize(buildAndRunLabel).X + horizontalPadding;
+        float cancelWidth = ImGui.CalcTextSize(cancelLabel).X + horizontalPadding;
+        float preflightWidth = ImGui.CalcTextSize(preflightLabel).X + horizontalPadding;
         float overflowWidth = MathF.Max(
             ImGui.GetFrameHeight(),
             ImGui.CalcTextSize("...").X + horizontalPadding);
@@ -439,14 +450,14 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         bool primaryActionsVisible = layout.Density != BuildSettingsFooterDensity.AllOverflow;
         if (primaryActionsVisible)
         {
-            DrawPrimaryActions(canBuild);
+            DrawPrimaryActions(canBuild, buildLabel, buildAndRunLabel);
         }
 
         bool overflowPopupOpen = false;
         if (layout.Density == BuildSettingsFooterDensity.Inline)
         {
             ImGui.SameLine();
-            DrawInlineSecondaryActions();
+            DrawInlineSecondaryActions(cancelLabel, preflightLabel);
         }
         else
         {
@@ -457,6 +468,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
             bool popupRequested = DrawActionsOverflowButton(
                 overflowWidth,
+                moreActionsLabel,
                 out System.Numerics.Vector2 popupAnchor);
             if (_scriptedOpenActionsOverflow)
             {
@@ -476,7 +488,11 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
             overflowPopupOpen = DrawActionsOverflowPopup(
                 includePrimaryActions: layout.Density == BuildSettingsFooterDensity.AllOverflow,
-                canBuild);
+                canBuild,
+                buildLabel,
+                buildAndRunLabel,
+                cancelBuildLabel,
+                preflightLabel);
         }
 
         _lastFooterProbe = new ScriptedBuildSettingsFooterProbeSnapshot
@@ -496,16 +512,16 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         };
     }
 
-    private void DrawPrimaryActions(bool canBuild)
+    private void DrawPrimaryActions(bool canBuild, string buildLabel, string buildAndRunLabel)
     {
         ImGui.BeginDisabled(!canBuild);
-        if (ImGui.Button("Build"))
+        if (ImGui.Button(buildLabel))
         {
             _ = StartBuild(runAfterBuild: false);
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("Build And Run"))
+        if (ImGui.Button(buildAndRunLabel))
         {
             _ = StartBuild(runAfterBuild: true);
         }
@@ -513,17 +529,17 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         ImGui.EndDisabled();
     }
 
-    private void DrawInlineSecondaryActions()
+    private void DrawInlineSecondaryActions(string cancelLabel, string preflightLabel)
     {
         ImGui.BeginDisabled(!_view.IsRunning);
-        if (ImGui.Button("取消"))
+        if (ImGui.Button(cancelLabel))
         {
             _buildCancellation?.Cancel();
         }
 
         ImGui.EndDisabled();
         ImGui.SameLine();
-        if (ImGui.Button("重新预检"))
+        if (ImGui.Button(preflightLabel))
         {
             StartPreflight();
         }
@@ -531,6 +547,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
     private static bool DrawActionsOverflowButton(
         float overflowWidth,
+        string tooltip,
         out System.Numerics.Vector2 popupAnchor)
     {
         bool requested = ImGui.Button(
@@ -545,13 +562,19 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip("更多构建操作");
+            TooltipUnformatted(tooltip);
         }
 
         return requested;
     }
 
-    private bool DrawActionsOverflowPopup(bool includePrimaryActions, bool canBuild)
+    private bool DrawActionsOverflowPopup(
+        bool includePrimaryActions,
+        bool canBuild,
+        string buildLabel,
+        string buildAndRunLabel,
+        string cancelBuildLabel,
+        string preflightLabel)
     {
         if (!ImGui.BeginPopup(ActionsOverflowPopupName))
         {
@@ -560,12 +583,12 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         if (includePrimaryActions)
         {
-            if (ImGui.MenuItem("Build", string.Empty, selected: false, enabled: canBuild))
+            if (ImGui.MenuItem(buildLabel, string.Empty, selected: false, enabled: canBuild))
             {
                 _ = StartBuild(runAfterBuild: false);
             }
 
-            if (ImGui.MenuItem("Build And Run", string.Empty, selected: false, enabled: canBuild))
+            if (ImGui.MenuItem(buildAndRunLabel, string.Empty, selected: false, enabled: canBuild))
             {
                 _ = StartBuild(runAfterBuild: true);
             }
@@ -574,7 +597,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         bool cancelRequested = ImGui.MenuItem(
-            "取消构建",
+            cancelBuildLabel,
             string.Empty,
             selected: false,
             enabled: _view.IsRunning);
@@ -583,7 +606,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             _buildCancellation?.Cancel();
         }
 
-        if (ImGui.MenuItem("重新预检"))
+        if (ImGui.MenuItem(preflightLabel))
         {
             StartPreflight();
         }
@@ -635,7 +658,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     {
         if (_view.IsRunning)
         {
-            diagnostic = "构建正在运行。";
+            diagnostic = L.Get("build.running", "A build is running.");
             return false;
         }
 
@@ -647,18 +670,23 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         if (_settings.Channel == BuildProfileChannel.Aot &&
             !string.Equals(_settings.Rid, BuildHostRid.Current, StringComparison.OrdinalIgnoreCase))
         {
-            diagnostic = $"NativeAOT 仅支持当前宿主 RID：{BuildHostRid.Current}。";
+            diagnostic = L.Format(
+                "build.nativeAotHostOnly",
+                "NativeAOT only supports the current host RID: {0}.",
+                BuildHostRid.Current);
             return false;
         }
 
         if (_preflightTask is { IsCompleted: false })
         {
-            diagnostic = "正在预检构建工具...";
+            diagnostic = L.Get("build.preflightRunning", "Checking build tools...");
             return false;
         }
 
         BuildPreflight? preflight = _view.Preflight;
-        diagnostic = preflight?.Diagnostic ?? "构建工具尚未完成预检。";
+        diagnostic = preflight?.Diagnostic ?? L.Get(
+            "build.preflightPending",
+            "Build tool preflight has not completed.");
         return preflight?.Ok == true;
     }
 
@@ -668,20 +696,23 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         if (_view.StartedAt is { } startedAt)
         {
             TimeSpan elapsed = DateTimeOffset.UtcNow - startedAt;
-            ImGui.TextUnformatted($"已用时 {elapsed:mm\\:ss}");
+            ImGui.TextUnformatted(L.Format(
+                "build.elapsed",
+                "Elapsed {0}",
+                elapsed.ToString("mm\\:ss", System.Globalization.CultureInfo.InvariantCulture)));
         }
     }
 
     private void DrawLog()
     {
         bool autoScroll = _autoScroll;
-        if (ImGui.Checkbox("自动滚动", ref autoScroll))
+        if (ImGui.Checkbox(L.Get("build.autoScroll", "Auto scroll"), ref autoScroll))
         {
             _autoScroll = autoScroll;
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("复制日志"))
+        if (ImGui.Button(L.Get("build.copyLog", "Copy Log")))
         {
             ImGui.SetClipboardText(BuildLogText());
         }
@@ -689,13 +720,13 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         ImGui.SameLine();
         bool hasOutput = !string.IsNullOrWhiteSpace(_settings.OutputDirectory);
         ImGui.BeginDisabled(!hasOutput);
-        if (ImGui.Button("打开 build.log"))
+        if (ImGui.Button(L.Get("build.openLog", "Open build.log")))
         {
             OpenPath(Path.Combine(ResolveOutputDirectory(), "build.log"));
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("打开产物目录"))
+        if (ImGui.Button(L.Get("build.openOutput", "Open Output Folder")))
         {
             OpenPath(ResolveOutputDirectory());
         }
@@ -705,7 +736,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _ = ImGui.BeginChild("build_log");
         if (_log.Count == 0)
         {
-            ImGui.TextUnformatted("Ready");
+            ImGui.TextUnformatted(L.Get("status.ready", "Ready"));
         }
         else
         {
@@ -729,15 +760,17 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         BuildResult? result = _view.Result;
         if (result is null)
         {
-            ImGui.TextUnformatted("尚无构建结果。");
+            ImGui.TextUnformatted(L.Get("build.noResult", "No build result yet."));
             return;
         }
 
-        ImGui.TextUnformatted(result.Ok ? "构建成功" : "构建失败");
+        ImGui.TextUnformatted(result.Ok
+            ? L.Get("build.succeeded", "Build succeeded")
+            : L.Get("build.failed", "Build failed"));
         ImGui.TextUnformatted($"ExitCode: {result.ExitCode}");
         if (!string.IsNullOrWhiteSpace(result.PackageArchive))
         {
-            ImGui.TextUnformatted($"包: {result.PackageArchive}");
+            ImGui.TextUnformatted($"{L.Get("build.package", "Package")}: {result.PackageArchive}");
         }
 
         if (!string.IsNullOrWhiteSpace(result.Sha256))
@@ -747,7 +780,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         if (result.SizeBytes > 0)
         {
-            ImGui.TextUnformatted($"大小: {result.SizeBytes} bytes");
+            ImGui.TextUnformatted($"{L.Get("build.size", "Size")}: {result.SizeBytes} bytes");
         }
 
         if (result.PhaseTimingsMs.Count > 0)
@@ -760,7 +793,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         if (!string.IsNullOrWhiteSpace(result.Error))
         {
-            ImGui.TextWrapped(result.Error);
+            TextWrappedUnformatted(result.Error);
         }
     }
 
@@ -782,7 +815,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         if (!preparation.Succeeded)
         {
             _validationMessage = string.IsNullOrWhiteSpace(preparation.Diagnostic)
-                ? "当前场景尚未准备好，构建未启动。"
+                ? L.Get("build.sceneNotReady", "The current scene is not ready; the build was not started.")
                 : preparation.Diagnostic;
             return false;
         }
@@ -838,7 +871,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 : new BuildPreflight
                 {
                     Ok = false,
-                    Diagnostic = preflightTask.Exception?.GetBaseException().Message ?? "构建工具预检失败。",
+                    Diagnostic = preflightTask.Exception?.GetBaseException().Message ??
+                        L.Get("build.preflightFailed", "Build tool preflight failed."),
                 };
             _view = _view with { Preflight = preflight };
             BuildProgressEvent preflightEvent = new(
@@ -860,7 +894,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 : new BuildResult
                 {
                     Ok = false,
-                    Error = buildTask.Exception?.GetBaseException().Message ?? "构建任务失败。",
+                    Error = buildTask.Exception?.GetBaseException().Message ??
+                        L.Get("build.taskFailed", "Build task failed."),
                     ExitCode = -3,
                 };
             _view = _view with
@@ -913,7 +948,9 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 BuildPhase.Done,
                 1,
                 BuildLogLevel.Warning,
-                "构建结果未提供 LauncherExe，无法 Build And Run。",
+                L.Get(
+                    "build.missingLauncher",
+                    "The build result has no LauncherExe; Build And Run cannot continue."),
                 DateTimeOffset.UtcNow);
             _log.Add(missingLauncher);
             _console?.AddBuildEvent(missingLauncher, "build-run");
@@ -941,7 +978,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 BuildPhase.Done,
                 1,
                 BuildLogLevel.Error,
-                $"启动玩家包失败：{ex.Message}",
+                L.Format("build.launchFailed", "Failed to launch the player package: {0}", ex.Message),
                 DateTimeOffset.UtcNow);
             _log.Add(launchFailure);
             _console?.AddBuildEvent(launchFailure, "build-run");
@@ -978,7 +1015,10 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            string diagnostic = $"保存 Build Settings 失败：{exception.Message}";
+            string diagnostic = L.Format(
+                "build.saveFailed",
+                "Failed to save Build Settings: {0}",
+                exception.Message);
             bool shouldReport = !string.Equals(_persistentSettingsDiagnostic, diagnostic, StringComparison.Ordinal);
             _persistentSettingsDiagnostic = diagnostic;
             RequiresRepair = true;
@@ -1038,7 +1078,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 EditorConsoleCategory.Build,
                 EditorConsoleSeverity.Error,
                 "build-path-opener",
-                $"打开路径失败：{path}。{ex.Message}"));
+                L.Format("build.openPathFailed", "Failed to open path {0}: {1}", path, ex.Message)));
         }
     }
 
@@ -1080,6 +1120,21 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         ImGui.TextUnformatted(label);
         _ = ImGui.TableSetColumnIndex(1);
         ImGui.SetNextItemWidth(-1f);
+    }
+
+    private static void TextWrappedUnformatted(string text)
+    {
+        float contentWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
+        ImGui.TextUnformatted(text);
+        ImGui.PopTextWrapPos();
+    }
+
+    private static void TooltipUnformatted(string text)
+    {
+        _ = ImGui.BeginTooltip();
+        ImGui.TextUnformatted(text);
+        ImGui.EndTooltip();
     }
 
     private static bool InputTextValue(string id, string value, Action<string> assign, uint maxLength)

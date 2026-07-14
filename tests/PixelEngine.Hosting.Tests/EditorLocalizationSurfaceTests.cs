@@ -33,6 +33,7 @@ public sealed partial class EditorLocalizationSurfaceTests
         [
             Path.Combine(shellRoot, "Settings", "ProjectSettingsPanel.cs"),
             Path.Combine(shellRoot, "Settings", "PlayerSettingsPanel.cs"),
+            Path.Combine(shellRoot, "Build", "BuildSettingsPanel.cs"),
             Path.Combine(shellRoot, "GameObjectInspectorPanel.cs"),
         ];
         foreach (string sourcePath in localizedSurfaces)
@@ -57,14 +58,18 @@ public sealed partial class EditorLocalizationSurfaceTests
         string shellRoot = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
         string project = File.ReadAllText(Path.Combine(shellRoot, "Settings", "ProjectSettingsPanel.cs"));
         string player = File.ReadAllText(Path.Combine(shellRoot, "Settings", "PlayerSettingsPanel.cs"));
+        string build = File.ReadAllText(Path.Combine(shellRoot, "Build", "BuildSettingsPanel.cs"));
         string inspector = File.ReadAllText(Path.Combine(shellRoot, "GameObjectInspectorPanel.cs"));
 
         Assert.DoesNotContain("工程级 authoring 设置", project, StringComparison.Ordinal);
         Assert.DoesNotContain("玩家包运行时与发布设置", player, StringComparison.Ordinal);
+        Assert.DoesNotContain("重新预检", build, StringComparison.Ordinal);
+        Assert.DoesNotContain("尚无构建结果", build, StringComparison.Ordinal);
         Assert.DoesNotContain("未选中 GameObject 或 Asset", inspector, StringComparison.Ordinal);
         Assert.DoesNotContain("Play 运行中：Authoring 数据只读", inspector, StringComparison.Ordinal);
         Assert.Contains("projectSettings.help", project, StringComparison.Ordinal);
         Assert.Contains("playerSettings.help", player, StringComparison.Ordinal);
+        Assert.Contains("build.action.preflight", build, StringComparison.Ordinal);
         Assert.Contains("inspector.empty", inspector, StringComparison.Ordinal);
     }
 
