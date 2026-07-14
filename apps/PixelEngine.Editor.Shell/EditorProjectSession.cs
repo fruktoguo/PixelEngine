@@ -666,12 +666,9 @@ internal sealed class EditorProjectSession : IDisposable
                 scenePath,
                 exception);
         }
-        catch (Exception exception) when (exception is
-            System.Text.Json.JsonException or
-            NotSupportedException or
-            InvalidOperationException or
-            IOException or
-            UnauthorizedAccessException)
+        catch (Exception exception) when (
+            exception is System.Text.Json.JsonException or NotSupportedException or IOException or UnauthorizedAccessException ||
+            IsRecoverableAuthoringSceneValidationFailure(exception))
         {
             throw new InvalidOperationException(
                 $"无法打开场景 '{sceneRelativePath}'：{exception.Message}",

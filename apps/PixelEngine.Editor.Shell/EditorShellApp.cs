@@ -2408,7 +2408,7 @@ internal sealed class EditorShellApp
             RecordCurrentWorkspace();
             LastProjectError = null;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException)
+        catch (Exception exception) when (IsRecoverableProjectOpenFailure(exception))
         {
             LastProjectError = $"打开场景失败：{exception.Message}";
             ConsoleStore.AddProjectError("scene-open", LastProjectError);
@@ -2483,6 +2483,12 @@ internal sealed class EditorShellApp
             EditorProjectSession.IsRecoverableAuthoringSceneValidationFailure(exception);
     }
 
+    internal static bool IsRecoverableProjectOpenFailure(Exception exception)
+    {
+        return IsRecoverableSceneOperationFailure(exception) ||
+            exception is JsonException or NotSupportedException;
+    }
+
     private void HandleTransitionResult(EditorTransitionResult result)
     {
         if (result.Status is EditorTransitionStatus.SaveFailed or EditorTransitionStatus.PendingTransitionExists)
@@ -2526,7 +2532,7 @@ internal sealed class EditorShellApp
             }
             catch (Exception exception) when (
                 _pendingSceneOverrideFromWorkspace &&
-                exception is IOException or InvalidOperationException or JsonException or NotSupportedException)
+                IsRecoverableProjectOpenFailure(exception))
             {
                 ConsoleStore.AddProjectError(
                     "workspace",
@@ -2551,7 +2557,7 @@ internal sealed class EditorShellApp
                 ConsoleStore.AddProjectError("recent-projects", $"工程已打开，但最近工程列表保存失败：{exception.Message}");
             }
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or NotSupportedException)
+        catch (Exception exception) when (IsRecoverableProjectOpenFailure(exception))
         {
             LastProjectError = $"打开工程失败：{exception.Message}";
             ConsoleStore.AddProjectError("project-open", LastProjectError);

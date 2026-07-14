@@ -27,6 +27,12 @@ public sealed class EditorShellProjectTests
         Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new ArgumentOutOfRangeException("scaler")));
         Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new InvalidOperationException("primary")));
         Assert.False(EditorShellApp.IsRecoverableSceneOperationFailure(new NullReferenceException("bug")));
+
+        Assert.True(EditorShellApp.IsRecoverableProjectOpenFailure(new InvalidDataException("manifest")));
+        Assert.True(EditorShellApp.IsRecoverableProjectOpenFailure(new ArgumentOutOfRangeException("scaler")));
+        Assert.True(EditorShellApp.IsRecoverableProjectOpenFailure(new JsonException("json")));
+        Assert.True(EditorShellApp.IsRecoverableProjectOpenFailure(new NotSupportedException("format")));
+        Assert.False(EditorShellApp.IsRecoverableProjectOpenFailure(new NullReferenceException("bug")));
     }
 
     /// <summary>
@@ -161,6 +167,30 @@ public sealed class EditorShellProjectTests
             EditorProjectSession.LoadSceneModel(project, project.StartScene));
         _ = Assert.IsType<JsonException>(corrupted.InnerException);
         Assert.Contains(project.StartScene, corrupted.Message, StringComparison.Ordinal);
+
+        File.WriteAllText(
+            scenePath,
+            """
+            {
+              "formatVersion": 3,
+              "name": "invalid-canvas",
+              "entities": [
+                {
+                  "stableId": 1,
+                  "name": "Canvas",
+                  "webCanvas": {
+                    "manifestPath": "../outside.json",
+                    "enabled": true,
+                    "primary": true
+                  }
+                }
+              ]
+            }
+            """);
+        InvalidOperationException invalidCanvas = Assert.Throws<InvalidOperationException>(() =>
+            EditorProjectSession.LoadSceneModel(project, project.StartScene));
+        _ = Assert.IsType<InvalidDataException>(invalidCanvas.InnerException);
+        Assert.Contains("不能逃逸", invalidCanvas.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
