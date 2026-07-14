@@ -5,6 +5,7 @@ using PixelEngine.Scripting;
 using PixelEngine.UI;
 using System.Globalization;
 using System.Numerics;
+using L = PixelEngine.Editor.EditorLocalization;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -182,7 +183,7 @@ internal sealed class GameObjectInspectorPanel(
         int? stableId = context.Selection.GameObjectStableId ?? _scene.SelectedStableId;
         if (!stableId.HasValue || !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject))
         {
-            ImGui.TextUnformatted("未选中 GameObject 或 Asset");
+            ImGui.TextUnformatted(L.Get("inspector.empty", "Select a GameObject or asset to inspect it."));
             ImGui.End();
             return;
         }
@@ -191,11 +192,11 @@ internal sealed class GameObjectInspectorPanel(
         bool canModify = mode == EditorMode.Edit;
         if (!canModify)
         {
-            ImGui.TextColored(
+            TextColoredUnformatted(
                 new Vector4(0.95f, 0.70f, 0.25f, 1f),
                 mode == EditorMode.Paused
-                    ? "Play 已暂停：Authoring 数据只读"
-                    : "Play 运行中：Authoring 数据只读");
+                    ? L.Get("inspector.playPausedReadOnly", "Play is paused — authoring data is read-only")
+                    : L.Get("inspector.playRunningReadOnly", "Play is running — authoring data is read-only"));
             ImGui.Separator();
         }
 
@@ -224,7 +225,7 @@ internal sealed class GameObjectInspectorPanel(
         if (!string.Equals(Status, ReadyStatus, StringComparison.Ordinal))
         {
             ImGui.Separator();
-            ImGui.TextColored(new Vector4(0.95f, 0.70f, 0.25f, 1f), Status);
+            TextColoredUnformatted(new Vector4(0.95f, 0.70f, 0.25f, 1f), Status);
         }
 
         ImGui.End();
@@ -522,10 +523,10 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawAssetInspector(string assetPath)
     {
         AssetInspectorSnapshot asset = CaptureAssetInspector(assetPath);
-        ImGui.SeparatorText("Asset");
+        ImGui.SeparatorText(L.Get("inspector.asset", "Asset"));
         if (!asset.Found || asset.Item is not { } item || asset.DetailedPreview is not { } preview)
         {
-            ImGui.TextColored(new Vector4(0.95f, 0.55f, 0.35f, 1f), asset.Status);
+            TextColoredUnformatted(new Vector4(0.95f, 0.55f, 0.35f, 1f), asset.Status);
             return;
         }
 
@@ -544,28 +545,28 @@ internal sealed class GameObjectInspectorPanel(
         {
             ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
             ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
-            DrawReadOnlyProperty("Path", asset.Path);
-            DrawReadOnlyProperty("Type", asset.Kind);
-            DrawReadOnlyProperty("Stable ID", asset.AssetId ?? "none");
-            DrawReadOnlyProperty("Size", FormatAssetSize(asset.SizeBytes));
+            DrawReadOnlyProperty(L.Get("inspector.path", "Path"), asset.Path);
+            DrawReadOnlyProperty(L.Get("inspector.type", "Type"), asset.Kind);
+            DrawReadOnlyProperty(L.Get("inspector.stableId", "Stable ID"), asset.AssetId ?? L.Get("inspector.none", "None"));
+            DrawReadOnlyProperty(L.Get("inspector.size", "Size"), FormatAssetSize(asset.SizeBytes));
             EndInspectorPropertyTable();
         }
 
         ImGui.Spacing();
-        ImGui.SeparatorText("Preview");
+        ImGui.SeparatorText(L.Get("inspector.preview", "Preview"));
         DrawAssetPreview(in item, preview);
 
         string selectionStatus = GetSelectionStatus(GetAssetSelectionKey(asset.Path), asset.Status);
         if (!string.Equals(selectionStatus, ReadyStatus, StringComparison.Ordinal))
         {
             ImGui.Spacing();
-            ImGui.TextColored(new Vector4(0.95f, 0.70f, 0.25f, 1f), selectionStatus);
+            TextColoredUnformatted(new Vector4(0.95f, 0.70f, 0.25f, 1f), selectionStatus);
         }
     }
 
     private void DrawAssetPreview(in AssetBrowserItem item, AssetBrowserDetailedPreview preview)
     {
-        ImGui.TextWrapped(preview.Summary);
+        TextWrappedUnformatted(preview.Summary);
         if (preview.Properties.Count != 0 && BeginInspectorPropertyTable("asset-preview-properties", 2))
         {
             ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, ResolveInspectorLabelWidth(ImGui.GetContentRegionAvail().X));
@@ -587,7 +588,7 @@ internal sealed class GameObjectInspectorPanel(
 
             case AssetBrowserPreviewContentKind.Audio:
                 ImGui.Spacing();
-                if (ImGui.Button("▶ 试听##inspector-audio-preview", new Vector2(-1f, 0f)))
+                if (ImGui.Button($"▶ {L.Get("inspector.audioPreview", "Play Preview")}##inspector-audio-preview", new Vector2(-1f, 0f)))
                 {
                     _ = TryPreviewAudioAsset(item.Path);
                 }
@@ -621,7 +622,7 @@ internal sealed class GameObjectInspectorPanel(
         if (!string.IsNullOrWhiteSpace(preview.Diagnostic))
         {
             ImGui.Spacing();
-            ImGui.TextDisabled(preview.Diagnostic);
+            TextDisabledUnformatted(preview.Diagnostic);
         }
     }
 
@@ -630,7 +631,7 @@ internal sealed class GameObjectInspectorPanel(
         AssetThumbnail? thumbnail = ResolveAssetPreviewThumbnail(in item);
         if (thumbnail is not { } image)
         {
-            ImGui.TextDisabled("纹理缩略图不可用");
+            TextDisabledUnformatted(L.Get("inspector.textureUnavailable", "Texture preview unavailable"));
             return;
         }
 
@@ -652,7 +653,29 @@ internal sealed class GameObjectInspectorPanel(
         _ = ImGui.TableSetColumnIndex(0);
         DrawPropertyLabel(label, disabled: true);
         _ = ImGui.TableSetColumnIndex(1);
-        ImGui.TextWrapped(value);
+        TextWrappedUnformatted(value);
+    }
+
+    private static void TextWrappedUnformatted(string text)
+    {
+        float contentWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
+        ImGui.TextUnformatted(text);
+        ImGui.PopTextWrapPos();
+    }
+
+    private static void TextColoredUnformatted(Vector4 color, string text)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, color);
+        ImGui.TextUnformatted(text);
+        ImGui.PopStyleColor();
+    }
+
+    private static void TextDisabledUnformatted(string text)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled]);
+        ImGui.TextUnformatted(text);
+        ImGui.PopStyleColor();
     }
 
     private static void DrawPropertyLabel(string label, bool disabled = false)
@@ -661,7 +684,7 @@ internal sealed class GameObjectInspectorPanel(
         string visibleLabel = ResolveVisiblePropertyLabel(label, ImGui.GetContentRegionAvail().X);
         if (disabled)
         {
-            ImGui.TextDisabled(visibleLabel);
+            TextDisabledUnformatted(visibleLabel);
         }
         else
         {
@@ -766,11 +789,11 @@ internal sealed class GameObjectInspectorPanel(
     private void DrawFolderInspector(string folderPath)
     {
         FolderInspectorSnapshot folder = CaptureFolderInspector(folderPath);
-        ImGui.SeparatorText("Folder");
-        ImGui.TextUnformatted($"Path: {(string.IsNullOrEmpty(folder.Path) ? "content/" : folder.Path + "/")}");
-        ImGui.TextUnformatted("Type: Folder");
-        ImGui.TextUnformatted($"Assets: {folder.AssetCount}");
-        ImGui.SeparatorText("Inspector 状态");
+        ImGui.SeparatorText(L.Get("inspector.folder", "Folder"));
+        ImGui.TextUnformatted($"{L.Get("inspector.path", "Path")}: {(string.IsNullOrEmpty(folder.Path) ? "content/" : folder.Path + "/")}");
+        ImGui.TextUnformatted($"{L.Get("inspector.type", "Type")}: {L.Get("inspector.folder", "Folder")}");
+        ImGui.TextUnformatted($"{L.Get("inspector.assetCount", "Assets")}: {folder.AssetCount}");
+        ImGui.SeparatorText(L.Get("inspector.status", "Inspector Status"));
         ImGui.TextUnformatted(GetSelectionStatus(GetFolderSelectionKey(folder.Path), folder.Status));
     }
 
@@ -778,9 +801,9 @@ internal sealed class GameObjectInspectorPanel(
     {
         return kind switch
         {
-            AssetBrowserItemKind.Script => "Open Script",
-            AssetBrowserItemKind.Prefab => "Instantiate",
-            AssetBrowserItemKind.Scene => "Open Scene",
+            AssetBrowserItemKind.Script => L.Get("inspector.action.openScript", "Open Script"),
+            AssetBrowserItemKind.Prefab => L.Get("inspector.action.instantiate", "Instantiate"),
+            AssetBrowserItemKind.Scene => L.Get("inspector.action.openScene", "Open Scene"),
             AssetBrowserItemKind.Material or
             AssetBrowserItemKind.Texture or
             AssetBrowserItemKind.Audio or
@@ -881,14 +904,14 @@ internal sealed class GameObjectInspectorPanel(
         };
         AssetBrowserPreviewProperty[] properties =
         [
-            new("类型", item.Descriptor?.TypeLabel ?? item.Kind.ToString()),
-            new("路径", item.Path),
-            new("大小", FormatAssetSize(item.SizeBytes)),
+            new(L.Get("inspector.type", "Type"), item.Descriptor?.TypeLabel ?? item.Kind.ToString()),
+            new(L.Get("inspector.path", "Path"), item.Path),
+            new(L.Get("inspector.size", "Size"), FormatAssetSize(item.SizeBytes)),
         ];
         return new AssetBrowserDetailedPreview(
             item.DisplayName,
             contentKind,
-            item.PreviewSummary ?? item.Descriptor?.Purpose ?? "暂无摘要",
+            item.PreviewSummary ?? item.Descriptor?.Purpose ?? L.Get("inspector.noSummary", "No summary available"),
             properties);
     }
 
@@ -934,7 +957,7 @@ internal sealed class GameObjectInspectorPanel(
         if (_audioPreview is null)
         {
             RecordInspectorStatus(
-                "音频试听不可用",
+                L.Get("inspector.audioUnavailable", "Audio preview unavailable"),
                 EditorConsoleSeverity.Warning,
                 "inspector-audio-preview",
                 GetAssetSelectionKey(assetPath));
@@ -943,7 +966,9 @@ internal sealed class GameObjectInspectorPanel(
 
         bool played = _audioPreview.TryPlayPreview(assetPath);
         RecordInspectorStatus(
-            played ? $"试听 {assetPath}" : $"音频试听失败：{assetPath}",
+            played
+                ? L.Format("inspector.audioPlayed", "Previewing {0}", assetPath)
+                : L.Format("inspector.audioFailed", "Failed to preview audio: {0}", assetPath),
             played ? EditorConsoleSeverity.Info : EditorConsoleSeverity.Warning,
             "inspector-audio-preview",
             GetAssetSelectionKey(assetPath));

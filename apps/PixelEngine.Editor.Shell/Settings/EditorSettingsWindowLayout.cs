@@ -37,4 +37,19 @@ internal static class EditorSettingsWindowLayout
         Vector2 position = workPosition + ((workSize - size) * 0.5f);
         return new EditorSettingsWindowPlacement(position, size, minimumSize, maximumSize);
     }
+
+    /// <summary>
+    /// 为 Project/Player Settings 的 label/value 表格分配 label 列。
+    /// 高缩放或窄窗口优先保留可编辑的 value 宽度，避免固定 210px label 把输入框挤没。
+    /// </summary>
+    public static float ResolveLabelWidth(float availableWidth, float uiScale)
+    {
+        float available = float.IsFinite(availableWidth) ? MathF.Max(1f, availableWidth) : 1f;
+        float scale = EditorUiScale.Normalize(uiScale);
+        float minimum = EditorUiScale.Scale(120f, scale);
+        float maximum = EditorUiScale.Scale(220f, scale);
+        float minimumValueWidth = EditorUiScale.Scale(180f, scale);
+        float preferred = Math.Clamp(available * 0.36f, minimum, maximum);
+        return MathF.Min(preferred, MathF.Max(1f, available - minimumValueWidth));
+    }
 }

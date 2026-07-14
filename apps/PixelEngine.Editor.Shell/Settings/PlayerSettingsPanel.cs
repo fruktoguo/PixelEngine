@@ -3,6 +3,7 @@ using Hexa.NET.ImGui;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
 using PixelEngine.UI;
+using L = PixelEngine.Editor.EditorLocalization;
 
 namespace PixelEngine.Editor.Shell.Settings;
 
@@ -15,14 +16,14 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     private static readonly UiBackendKind[] UiBackendOptions = [UiBackendKind.ManagedFallback, UiBackendKind.RmlUi, UiBackendKind.Ultralight];
     private static readonly string[] UiBackendLabels = [.. UiBackendOptions.Select(UltralightOptionalProfileGate.GetDisplayLabel)];
     private static readonly PlayerReleaseChannel[] ReleaseOptions = [PlayerReleaseChannel.Development, PlayerReleaseChannel.Production];
-    private static readonly string[] ReleaseLabels = ["Development", "Production"];
     private static readonly PlayerWindowMode[] WindowModeOptions =
     [
         PlayerWindowMode.Windowed,
         PlayerWindowMode.MaximizedWindow,
         PlayerWindowMode.BorderlessFullscreen,
     ];
-    private static readonly string[] WindowModeLabels =
+    private string[] _releaseLabels = ["Development", "Production"];
+    private string[] _windowModeLabels =
     [
         "Windowed",
         "Maximized Window",
@@ -30,6 +31,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
     ];
     private readonly PlayerSettingsStore _store;
     private readonly Func<float> _uiScaleProvider;
+    private string _localizedOptionsLocale = string.Empty;
     private string _persistentDiagnostic = string.Empty;
     private bool _draftIsValid = true;
     private float _lastWindowScale = float.NaN;
@@ -126,7 +128,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
-            diagnostic = $"保存 Player Settings 失败：{exception.Message}";
+            diagnostic = L.Format("settings.saveFailed", "Failed to save {0}: {1}", "Player Settings", exception.Message);
             _persistentDiagnostic = diagnostic;
             RequiresRepair = true;
             ValidationMessage = diagnostic;
@@ -194,13 +196,15 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         float footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y + 2f;
         float bodyHeight = MathF.Max(1f, ImGui.GetContentRegionAvail().Y - footerHeight);
         _ = ImGui.BeginChild("player_settings_body", new Vector2(0f, bodyHeight));
-        ImGui.SeparatorText("Player");
-        ImGui.TextWrapped("玩家包运行时与发布设置。修改会先保留在草稿中，点击 Apply 后才写入工程文件。");
+        ImGui.SeparatorText(L.Get("playerSettings.section", "Player"));
+        TextWrappedUnformatted(L.Get(
+            "playerSettings.help",
+            "Player runtime and release settings. Changes remain in a draft until you select Apply."));
         DrawSettings(scale);
         if (!string.IsNullOrWhiteSpace(ValidationMessage))
         {
-            ImGui.SeparatorText("诊断");
-            ImGui.TextWrapped(ValidationMessage);
+            ImGui.SeparatorText(L.Get("settings.diagnostic", "Diagnostic"));
+            TextWrappedUnformatted(ValidationMessage);
         }
 
         ImGui.EndChild();
@@ -211,75 +215,85 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
 
     private void DrawSettings(float scale)
     {
+        RefreshLocalizedOptionLabels();
+        float availableWidth = ImGui.GetContentRegionAvail().X;
         if (!ImGui.BeginTable(
             "player_settings_fields",
             2,
-            ImGuiTableFlags.SizingStretchProp | ImGuiTableFlags.PadOuterX | ImGuiTableFlags.BordersInnerH))
+            ImGuiTableFlags.SizingStretchProp |
+            ImGuiTableFlags.PadOuterX |
+            ImGuiTableFlags.BordersInnerH |
+            ImGuiTableFlags.BordersInnerV |
+            ImGuiTableFlags.RowBg |
+            ImGuiTableFlags.NoSavedSettings))
         {
             return;
         }
 
-        ImGui.TableSetupColumn("Property", ImGuiTableColumnFlags.WidthFixed, EditorUiScale.Scale(210f, scale));
-        ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch);
+        ImGui.TableSetupColumn(
+            L.Get("settings.property", "Property"),
+            ImGuiTableColumnFlags.WidthFixed,
+            EditorSettingsWindowLayout.ResolveLabelWidth(availableWidth, scale));
+        ImGui.TableSetupColumn(L.Get("settings.value", "Value"), ImGuiTableColumnFlags.WidthStretch);
 
         string title = DraftSettings.WindowTitle;
-        NextProperty("窗口标题 / Product Name");
+        NextProperty(L.Get("playerSettings.windowTitle", "Window Title / Product Name"));
         if (ImGui.InputText("##player-window-title", ref title, 128))
         {
             UpdateDraft(DraftSettings with { WindowTitle = title });
         }
 
         int width = DraftSettings.WindowWidth;
-        NextProperty("窗口宽度");
+        NextProperty(L.Get("playerSettings.windowWidth", "Window Width"));
         if (ImGui.InputInt("##player-window-width", ref width))
         {
             UpdateDraft(DraftSettings with { WindowWidth = width });
         }
 
         int height = DraftSettings.WindowHeight;
-        NextProperty("窗口高度");
+        NextProperty(L.Get("playerSettings.windowHeight", "Window Height"));
         if (ImGui.InputInt("##player-window-height", ref height))
         {
             UpdateDraft(DraftSettings with { WindowHeight = height });
         }
 
         int windowMode = IndexOf(WindowModeOptions, DraftSettings.WindowMode);
-        NextProperty("窗口模式");
-        if (ImGui.Combo("##player-window-mode", ref windowMode, WindowModeLabels, WindowModeLabels.Length) && windowMode >= 0)
+        NextProperty(L.Get("playerSettings.windowMode", "Window Mode"));
+        if (ImGui.Combo("##player-window-mode", ref windowMode, _windowModeLabels, _windowModeLabels.Length) && windowMode >= 0)
         {
             UpdateDraft(DraftSettings with { WindowMode = WindowModeOptions[windowMode] });
         }
 
         bool vSync = DraftSettings.VSync;
-        NextProperty("VSync");
+        NextProperty(L.Get("playerSettings.vsync", "VSync"));
         if (ImGui.Checkbox("##player-vsync", ref vSync))
         {
             UpdateDraft(DraftSettings with { VSync = vSync });
         }
 
         string iconPath = DraftSettings.IconPath ?? string.Empty;
-        NextProperty("图标路径");
+        NextProperty(L.Get("playerSettings.iconPath", "Icon Path"));
         if (ImGui.InputText("##player-icon-path", ref iconPath, 512))
         {
             UpdateDraft(DraftSettings with { IconPath = string.IsNullOrWhiteSpace(iconPath) ? null : iconPath });
         }
 
         string version = DraftSettings.Version;
-        NextProperty("版本");
+        NextProperty(L.Get("playerSettings.version", "Version"));
         if (ImGui.InputText("##player-version", ref version, 64))
         {
             UpdateDraft(DraftSettings with { Version = version });
         }
 
         string startupScene = DraftSettings.StartupScene;
-        NextProperty("启动场景");
+        NextProperty(L.Get("playerSettings.startupScene", "Startup Scene"));
         if (ImGui.InputText("##player-startup-scene", ref startupScene, 512))
         {
             UpdateDraft(DraftSettings with { StartupScene = startupScene });
         }
 
         bool keyboardMouse = DraftSettings.InputDefaults.EnableKeyboardMouse;
-        NextProperty("键盘鼠标输入");
+        NextProperty(L.Get("playerSettings.keyboardMouse", "Keyboard and Mouse Input"));
         if (ImGui.Checkbox("##player-keyboard-mouse", ref keyboardMouse))
         {
             UpdateDraft(DraftSettings with
@@ -289,7 +303,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         }
 
         bool gamepad = DraftSettings.InputDefaults.EnableGamepad;
-        NextProperty("手柄输入");
+        NextProperty(L.Get("playerSettings.gamepad", "Gamepad Input"));
         if (ImGui.Checkbox("##player-gamepad", ref gamepad))
         {
             UpdateDraft(DraftSettings with
@@ -299,7 +313,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         }
 
         int backend = IndexOf(UiBackendOptions, DraftSettings.RuntimeUiBackend);
-        NextProperty("运行时 UI 后端");
+        NextProperty(L.Get("playerSettings.runtimeUiBackend", "Runtime UI Backend"));
         if (ImGui.Combo("##player-runtime-ui", ref backend, UiBackendLabels, UiBackendLabels.Length) && backend >= 0)
         {
             UpdateDraft(DraftSettings with { RuntimeUiBackend = UiBackendOptions[backend] });
@@ -309,12 +323,12 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         {
             ImGui.TableNextRow();
             _ = ImGui.TableSetColumnIndex(1);
-            ImGui.TextWrapped(UltralightOptionalProfileGate.InactiveReason);
+            TextWrappedUnformatted(UltralightOptionalProfileGate.InactiveReason);
         }
 
         int release = IndexOf(ReleaseOptions, DraftSettings.ReleaseChannel);
-        NextProperty("发行通道");
-        if (ImGui.Combo("##player-release-channel", ref release, ReleaseLabels, ReleaseLabels.Length) && release >= 0)
+        NextProperty(L.Get("playerSettings.releaseChannel", "Release Channel"));
+        if (ImGui.Combo("##player-release-channel", ref release, _releaseLabels, _releaseLabels.Length) && release >= 0)
         {
             UpdateDraft(DraftSettings with { ReleaseChannel = ReleaseOptions[release] });
         }
@@ -329,15 +343,15 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         float startX = ImGui.GetCursorPosX();
         float available = ImGui.GetContentRegionAvail().X;
         string status = RequiresRepair
-            ? "配置文件需要修复"
+            ? L.Get("settings.status.repair", "Configuration file needs repair")
             : HasDraftChanges
-                ? "有尚未应用的修改"
-                : "设置已应用";
+                ? L.Get("settings.status.modified", "Unapplied changes")
+                : L.Get("settings.status.applied", "Settings applied");
         ImGui.TextDisabled(status);
         float actionX = startX + MathF.Max(0f, available - ((buttonWidth * 2f) + spacing));
         ImGui.SameLine(actionX);
         ImGui.BeginDisabled(!HasDraftChanges);
-        if (ImGui.Button("Revert", new Vector2(buttonWidth, 0f)))
+        if (ImGui.Button(L.Get("settings.revert", "Revert"), new Vector2(buttonWidth, 0f)))
         {
             RevertDraft();
         }
@@ -345,7 +359,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ImGui.EndDisabled();
         ImGui.SameLine();
         ImGui.BeginDisabled(!HasPendingChanges || !_draftIsValid);
-        if (ImGui.Button("Apply", new Vector2(buttonWidth, 0f)))
+        if (ImGui.Button(L.Get("settings.apply", "Apply"), new Vector2(buttonWidth, 0f)))
         {
             _ = TryApplyDraft(out _);
         }
@@ -364,6 +378,28 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         }
 
         return 0;
+    }
+
+    private void RefreshLocalizedOptionLabels()
+    {
+        string locale = L.CurrentLocale;
+        if (string.Equals(_localizedOptionsLocale, locale, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _localizedOptionsLocale = locale;
+        _windowModeLabels =
+        [
+            L.Get("playerSettings.mode.windowed", "Windowed"),
+            L.Get("playerSettings.mode.maximized", "Maximized Window"),
+            L.Get("playerSettings.mode.borderless", "Borderless Fullscreen"),
+        ];
+        _releaseLabels =
+        [
+            L.Get("playerSettings.release.development", "Development"),
+            L.Get("playerSettings.release.production", "Production"),
+        ];
     }
 
     private static int IndexOf(PlayerReleaseChannel[] values, PlayerReleaseChannel value)
@@ -428,9 +464,17 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ImGui.TableNextRow();
         _ = ImGui.TableSetColumnIndex(0);
         ImGui.AlignTextToFramePadding();
-        ImGui.TextUnformatted(label);
+        TextWrappedUnformatted(label);
         _ = ImGui.TableSetColumnIndex(1);
         ImGui.SetNextItemWidth(-1f);
+    }
+
+    private static void TextWrappedUnformatted(string text)
+    {
+        float contentWidth = MathF.Max(1f, ImGui.GetContentRegionAvail().X);
+        ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + contentWidth);
+        ImGui.TextUnformatted(text);
+        ImGui.PopTextWrapPos();
     }
 }
 

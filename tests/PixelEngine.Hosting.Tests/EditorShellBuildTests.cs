@@ -607,6 +607,12 @@ public sealed class EditorShellBuildTests
         Assert.Equal(new Vector2(640f, 451f), placement.Size);
         Assert.True(placement.MinimumSize.X <= placement.Size.X);
         Assert.True(placement.MinimumSize.Y <= placement.Size.Y);
+
+        // label/value 分栏随可用宽度收缩，并始终优先保留可编辑的 value 区。
+        Assert.Equal(220f, EditorSettingsWindowLayout.ResolveLabelWidth(780f, 1f));
+        Assert.Equal(151.2f, EditorSettingsWindowLayout.ResolveLabelWidth(420f, 1f), precision: 3);
+        Assert.Equal(120f, EditorSettingsWindowLayout.ResolveLabelWidth(300f, 1f));
+        Assert.Equal(240f, EditorSettingsWindowLayout.ResolveLabelWidth(640f, 2f));
     }
 
     /// <summary>
@@ -628,7 +634,7 @@ public sealed class EditorShellBuildTests
 
         // Assert：失败可见、草稿可恢复、运行中的工程模型未被半更新。
         Assert.False(applied);
-        Assert.Contains("保存 Project Settings 失败", diagnostic, StringComparison.Ordinal);
+        Assert.Contains("Failed to save Project Settings", diagnostic, StringComparison.Ordinal);
         Assert.Equal(diagnostic, panel.ValidationMessage);
         Assert.True(panel.HasPendingChanges);
         Assert.Equal("Pending Name", panel.DraftSettings.Name);
