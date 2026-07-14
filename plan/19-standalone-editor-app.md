@@ -29,6 +29,8 @@
 | Project / Console / Picker | 资源树、搜索过滤、行选择、日志等级与首次工程入口使用一致的紧凑层级 | 目录/资产/日志操作、删除确认、drag/drop、错误恢复和 Project Picker 信息架构需用真实鼠标键盘闭环 |
 | 窗口系统 | resize、DPI、IME、焦点、停靠与 Windows Graphics Capture 可稳定观察 | framebuffer、屏幕录制和输入坐标必须一致；白屏捕获、旧 DPI 坐标、透明区域误捕获均视为未完成 |
 
+字体与基础行高必须使用可复现的 Unity 6.5 数值，而不是凭截图估算。同机 `6000.5.3f1` 资源与 EditorStyles 探针确认：拉丁主字体为 `Inter-Regular.ttf`，100% scale 的 label/text field 字号为 12px、单行高度 18px、标准垂直间距 2px；Windows 中文 fallback 按 `fontsettings.txt` 使用 Microsoft YaHei。PixelEngine 发行包继续携带与 Unity 文件 SHA256 相同的 Inter，并以 12px 作为两个 Editor ImGui context 的唯一基准字号；Windows 优先使用系统 Microsoft YaHei，缺失或非 Windows 时回退包内 Noto Sans SC。UI Scale 只在此逻辑基线上放大字体和 style，不能再把 18px 误当 100% 基准后重复放大。
+
 Hierarchy / Inspector 的 Unity 对标必须服从 PixelEngine 2D authoring 真相源：Hierarchy 提供真实场景搜索、对象图标、Scene Visibility、Scene Picking、选择与层级操作，其中 visibility/picking 只影响编辑态 Scene View，不得偷换为 GameObject active；Inspector 以 active + name header、始终存在的 Transform component、Behaviour component foldout/context menu 和 Add Component 搜索组织现有能力。PixelEngine 尚无 Tag、Layer、Static 或 3D Z 轴产品语义，因此不得为视觉相似绘制这些无行为字段。GameObject `Enabled` 一旦暴露为 active 开关，就必须随 `.scene` / prefab 往返，并在运行时物化时递归考虑父级禁用状态；不能继续停留为保存后丢失的编辑器临时位。Scene Visibility / Picking 则是非落盘的编辑器状态：父级隐藏/禁止拾取递归作用于子级，分别真实控制 marker 绘制与鼠标命中/gizmo，不得用无行为图标占位。
 
 Project / Console 的默认 chrome 同样按 Unity 6.5 的高频信息层级收敛：Project 常态只保留 `+` 创建入口、搜索/类型过滤、树/内容双栏、breadcrumb、grid/list 与底部缩放/计数，refresh/sort/import 等低频操作进入 options 或 context menu，不能把 rename/delete 等 selection action 长期铺满顶栏；列表行保持单行紧凑，详情交给 Inspector。Console 使用单行 Clear/Collapse/Clear on Play/Error Pause、右侧搜索和带计数的 Log/Warning/Error toggle，主体为可选日志列表并在下方保留稳定详情区；不得因窗口变窄把一组功能固定拆成三层工具栏。两者所有迁移后的动作仍须真实可达，不能用“视觉精简”删除创建、导入、拖放、错误恢复或源码定位。

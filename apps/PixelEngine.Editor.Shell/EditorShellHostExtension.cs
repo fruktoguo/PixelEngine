@@ -52,7 +52,7 @@ internal sealed class EditorShellHostExtension :
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _app = app ?? throw new ArgumentNullException(nameof(app));
         ArgumentNullException.ThrowIfNull(window);
-        EditorFontStackPaths fonts = EditorFontAssets.Resolve();
+        EditorFontStackPaths fonts = EditorFontAssets.ResolveRuntime();
         _focusInspectorOnInitialLayout = !File.Exists(app.LayoutPath);
         _editor = new EditorApp(
             new HexaImGuiBackend(window),
@@ -63,6 +63,7 @@ internal sealed class EditorShellHostExtension :
                 DpiScale = app.UiScale,
                 PrimaryFontPath = fonts.PrimaryFontPath,
                 CjkFallbackFontPath = fonts.CjkFallbackFontPath,
+                FontSizePixels = EditorFontAssets.BaseFontSizePixels,
             });
         _gameUiPresentTargetProvider = new GameViewUiPresentTargetProvider(
             CapturePlayMode,

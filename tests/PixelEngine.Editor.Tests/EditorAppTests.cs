@@ -345,6 +345,7 @@ public sealed class EditorAppTests
         GuiThemeTokens tokens = GuiTheme.GetTokens(editorOptions.Theme);
 
         Assert.Equal(GuiThemeKind.Unity6Dark, editorOptions.Theme);
+        Assert.Equal(12f, editorOptions.FontSizePixels);
         Assert.Equal(GuiThemeKind.NeutralDark, guiOptions.Theme);
         Assert.Equal("Unity 6 Editor Dark", tokens.Name);
         Assert.Equal(0f, tokens.WindowRounding);

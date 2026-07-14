@@ -87,7 +87,7 @@ internal sealed class EditorShellWindow : IDisposable
             TitleBarTextColorRgb = 0xE7E9ED,
             WindowBorderColorRgb = 0x111216,
         };
-        EditorFontStackPaths fonts = EditorFontAssets.Resolve();
+        EditorFontStackPaths fonts = EditorFontAssets.ResolveRuntime();
         GuiAppOptions guiOptions = new()
         {
             Enabled = true,
@@ -96,6 +96,7 @@ internal sealed class EditorShellWindow : IDisposable
             DpiScale = EditorUiScale.Normalize(uiScale),
             PrimaryFontPath = fonts.PrimaryFontPath,
             CjkFallbackFontPath = fonts.CjkFallbackFontPath,
+            FontSizePixels = EditorFontAssets.BaseFontSizePixels,
         };
         return new EditorShellWindow(EditorHostBootstrap.Create(windowOptions, guiOptions));
     }

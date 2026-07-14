@@ -8,6 +8,11 @@ namespace PixelEngine.Editor;
 public sealed record EditorAppOptions
 {
     /// <summary>
+    /// Unity 6.5 EditorStyles 在 100% scale 下的基础字号；控件行高由主题 padding 收敛到 18px。
+    /// </summary>
+    public const float DefaultFontSizePixels = 12f;
+
+    /// <summary>
     /// 是否启用 Editor。关闭时 <see cref="EditorApp"/> 不创建 ImGui context，也不挂接 UI 绘制。
     /// </summary>
     public bool Enabled { get; init; } = true;
@@ -40,7 +45,7 @@ public sealed record EditorAppOptions
     /// <summary>
     /// 基准字体大小，DPI 缩放会乘到此值上。
     /// </summary>
-    public float FontSizePixels { get; init; } = 18f;
+    public float FontSizePixels { get; init; } = DefaultFontSizePixels;
 
     /// <summary>
     /// UI DPI 缩放。
