@@ -19,6 +19,7 @@ internal sealed class EditorShellApp
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
     private const int BuildSettingsProbeStableFrameCount = 20;
     private const int SettingsPanelProbeStableFrameCount = 60;
+    private const int AuthoringInspectorProbeStableFrameCount = 60;
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
     private readonly EditorUserDataPaths _userDataPaths;
@@ -238,6 +239,7 @@ internal sealed class EditorShellApp
         ScriptedGameViewProbeState scriptedGameView = new();
         ScriptedRuntimeInspectorProbeState scriptedRuntimeInspector = new();
         ScriptedSettingsPanelProbeState scriptedSettingsPanel = new();
+        ScriptedAuthoringInspectorProbeState scriptedAuthoringInspector = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!_exitRequested)
@@ -358,6 +360,10 @@ internal sealed class EditorShellApp
                 {
                     RunScriptedSettingsPanelProbeActions(scriptedSettingsPanel);
                 }
+                else if (_options.ScriptedAuthoringInspectorProbeStableId.HasValue)
+                {
+                    RunScriptedAuthoringInspectorProbeActions(scriptedAuthoringInspector);
+                }
                 else if (_options.ScriptedBuildSettingsProbe)
                 {
                     RunScriptedBuildSettingsProbeActions(scriptedBuildSettings);
@@ -402,6 +408,11 @@ internal sealed class EditorShellApp
             }
 
             if (_options.ScriptedSettingsPanelProbe is not null && scriptedSettingsPanel.Completed)
+            {
+                break;
+            }
+
+            if (_options.ScriptedAuthoringInspectorProbeStableId.HasValue && scriptedAuthoringInspector.Completed)
             {
                 break;
             }
@@ -507,6 +518,11 @@ internal sealed class EditorShellApp
         if (_options.ScriptedSettingsPanelProbe is not null)
         {
             WriteScriptedSettingsPanelProbeSummary(scriptedSettingsPanel);
+        }
+
+        if (_options.ScriptedAuthoringInspectorProbeStableId.HasValue)
+        {
+            WriteScriptedAuthoringInspectorProbeSummary(scriptedAuthoringInspector);
         }
 
         if (_options.ScriptedBuildSettingsProbe)
@@ -969,6 +985,68 @@ internal sealed class EditorShellApp
         }
     }
 
+    private void RunScriptedAuthoringInspectorProbeActions(ScriptedAuthoringInspectorProbeState state)
+    {
+        if (CurrentSession is null ||
+            state.Completed ||
+            _options.ScriptedAuthoringInspectorProbeStableId is not { } stableId)
+        {
+            return;
+        }
+
+        try
+        {
+            EditorSceneModel scene = CurrentSession.SceneModel;
+            if (!state.Selected)
+            {
+                if (!scene.TryGet(stableId, out EditorGameObject? gameObject))
+                {
+                    throw new InvalidOperationException($"场景中不存在 stable ID {stableId}。");
+                }
+
+                scene.Select(stableId);
+                state.StableId = stableId;
+                state.Name = gameObject.Name;
+                state.Selected = scene.SelectedStableId == stableId;
+                state.InspectorShown = ShowPanel(EditorDockSpace.InspectorWindowTitle);
+                if (!state.Selected || !state.InspectorShown)
+                {
+                    throw new InvalidOperationException("无法选择对象或显示 Inspector。");
+                }
+
+                return;
+            }
+
+            state.FramesAfterSelection++;
+            if (state.FramesAfterSelection < AuthoringInspectorProbeStableFrameCount)
+            {
+                return;
+            }
+
+            if (scene.SelectedStableId != stableId || !scene.TryGet(stableId, out EditorGameObject? selected))
+            {
+                throw new InvalidOperationException("Inspector 稳定绘制期间选择已失效。");
+            }
+
+            state.HasWebCanvas = selected.WebCanvas is not null;
+            state.HasCanvasScaler = selected.CanvasScaler is not null;
+            if (selected.CanvasScaler is { } scaler)
+            {
+                state.ScaleMode = scaler.Settings.ScaleMode.ToString();
+                state.ScreenMatchMode = scaler.Settings.ScreenMatchMode.ToString();
+                state.PhysicalUnit = scaler.Settings.PhysicalUnit.ToString();
+            }
+
+            state.Completed = true;
+            state.Diagnostic = "accepted";
+        }
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        {
+            state.Completed = true;
+            state.Diagnostic = ex.Message;
+        }
+    }
+
     private void RunScriptedBuildSettingsProbeActions(ScriptedBuildSettingsProbeState state)
     {
         if (CurrentSession is null || state.Completed)
@@ -1413,6 +1491,26 @@ internal sealed class EditorShellApp
             $"{presentation?.WindowSize.Y.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
             $"pending_changes={presentation?.HasPendingChanges.ToString() ?? "<missing>"}, " +
             $"validation_empty={string.IsNullOrWhiteSpace(presentation?.ValidationMessage)}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
+    private static void WriteScriptedAuthoringInspectorProbeSummary(ScriptedAuthoringInspectorProbeState state)
+    {
+        Console.WriteLine(
+            "editor_authoring_inspector_probe " +
+            "schema=pixelengine.editor-authoring-inspector-probe/v1, " +
+            $"stable_id={state.StableId.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"name={SanitizeSummaryValue(state.Name)}, " +
+            $"selected={state.Selected}, " +
+            $"inspector_shown={state.InspectorShown}, " +
+            $"frames_after_selection={state.FramesAfterSelection.ToString(System.Globalization.CultureInfo.InvariantCulture)}, " +
+            $"locale={EditorLocalization.CurrentLocale}, " +
+            $"web_canvas={state.HasWebCanvas}, " +
+            $"canvas_scaler={state.HasCanvasScaler}, " +
+            $"scale_mode={SanitizeSummaryValue(state.ScaleMode)}, " +
+            $"screen_match_mode={SanitizeSummaryValue(state.ScreenMatchMode)}, " +
+            $"physical_unit={SanitizeSummaryValue(state.PhysicalUnit)}, " +
+            $"completed={state.Completed}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
@@ -3015,6 +3113,23 @@ internal sealed class ScriptedSettingsPanelProbeState
     public int FramesAfterShow;
     public bool Completed;
     public ScriptedSettingsPanelPresentationSnapshot? Presentation;
+    public string Diagnostic = string.Empty;
+}
+
+/// <summary>Authoring GameObject Inspector 真实窗口绘制探针状态。</summary>
+internal sealed class ScriptedAuthoringInspectorProbeState
+{
+    public int StableId;
+    public string Name = string.Empty;
+    public bool Selected;
+    public bool InspectorShown;
+    public int FramesAfterSelection;
+    public bool HasWebCanvas;
+    public bool HasCanvasScaler;
+    public string ScaleMode = string.Empty;
+    public string ScreenMatchMode = string.Empty;
+    public string PhysicalUnit = string.Empty;
+    public bool Completed;
     public string Diagnostic = string.Empty;
 }
 

@@ -91,6 +91,23 @@ public sealed class EditorShellOptionsTests
     }
 
     /// <summary>
+    /// 验证 authoring Inspector 真实窗口探针只接受正 stable ID，并自动隔离用户状态。
+    /// </summary>
+    [Fact]
+    public void ParseRecognizesAuthoringInspectorProbe()
+    {
+        EditorShellOptions options = EditorShellOptions.Parse(
+            ["--scripted-authoring-inspector-probe", "4"]);
+
+        Assert.Equal(4, options.ScriptedAuthoringInspectorProbeStableId);
+        Assert.True(options.EphemeralUserState);
+        _ = Assert.Throws<ArgumentException>(() =>
+            EditorShellOptions.Parse(["--scripted-authoring-inspector-probe", "0"]));
+        _ = Assert.Throws<ArgumentException>(() =>
+            EditorShellOptions.Parse(["--scripted-authoring-inspector-probe", "not-an-id"]));
+    }
+
+    /// <summary>
     /// 验证 CLI 用户数据目录优先于环境变量。
     /// </summary>
     [Fact]

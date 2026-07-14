@@ -50,6 +50,11 @@ internal sealed record EditorShellOptions(
     /// </summary>
     public string? ScriptedSettingsPanelProbe { get; init; }
 
+    /// <summary>
+    /// 要在真实 authoring Inspector 中选择并稳定绘制的 GameObject stable ID。
+    /// </summary>
+    public int? ScriptedAuthoringInspectorProbeStableId { get; init; }
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -70,6 +75,7 @@ internal sealed record EditorShellOptions(
         bool scriptedGameViewProbe = false;
         bool scriptedRuntimeInspectorProbe = false;
         string? scriptedSettingsPanelProbe = null;
+        int? scriptedAuthoringInspectorProbeStableId = null;
         bool ephemeralUserState = false;
         bool reopenLastProject = true;
         string? userDataDirectory = null;
@@ -136,6 +142,15 @@ internal sealed record EditorShellOptions(
                     }
 
                     break;
+                case "--scripted-authoring-inspector-probe":
+                    string stableIdText = RequireValue(args, ref i, arg);
+                    if (!int.TryParse(stableIdText, out int stableId) || stableId <= 0)
+                    {
+                        throw new ArgumentException("scripted-authoring-inspector-probe 需要正整数 stable ID。");
+                    }
+
+                    scriptedAuthoringInspectorProbeStableId = stableId;
+                    break;
                 case "--build-output":
                     buildOutputPath = RequireValue(args, ref i, arg);
                     break;
@@ -170,7 +185,8 @@ internal sealed record EditorShellOptions(
             scriptedPreferencesProbe ||
             scriptedGameViewProbe ||
             scriptedRuntimeInspectorProbe ||
-            scriptedSettingsPanelProbe is not null;
+            scriptedSettingsPanelProbe is not null ||
+            scriptedAuthoringInspectorProbeStableId.HasValue;
         return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory)
         {
             UserDataDirectory = string.IsNullOrWhiteSpace(userDataDirectory) ? null : userDataDirectory.Trim(),
@@ -179,6 +195,7 @@ internal sealed record EditorShellOptions(
             ScriptedGameViewProbe = scriptedGameViewProbe,
             ScriptedRuntimeInspectorProbe = scriptedRuntimeInspectorProbe,
             ScriptedSettingsPanelProbe = scriptedSettingsPanelProbe,
+            ScriptedAuthoringInspectorProbeStableId = scriptedAuthoringInspectorProbeStableId,
         };
     }
 
