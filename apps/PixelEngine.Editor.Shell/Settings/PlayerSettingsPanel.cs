@@ -346,7 +346,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
             ? L.Get("settings.status.repair", "Configuration file needs repair")
             : HasDraftChanges
                 ? L.Get("settings.status.modified", "Unapplied changes")
-                : L.Get("settings.status.applied", "Settings applied");
+                : L.Get("settings.status.applied", "No pending changes");
         ImGui.TextDisabled(status);
         float actionX = startX + MathF.Max(0f, available - ((buttonWidth * 2f) + spacing));
         ImGui.SameLine(actionX);

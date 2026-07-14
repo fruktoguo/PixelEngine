@@ -18,6 +18,7 @@ internal sealed class EditorShellApp
 {
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
     private const int BuildSettingsProbeStableFrameCount = 20;
+    private const int SettingsPanelProbeStableFrameCount = 60;
     private static readonly TimeSpan ScriptedBuildProbeTimeout = TimeSpan.FromMinutes(10);
     private readonly EditorShellOptions _options;
     private readonly EditorUserDataPaths _userDataPaths;
@@ -945,7 +946,7 @@ internal sealed class EditorShellApp
             }
 
             state.FramesAfterShow++;
-            if (state.FramesAfterShow < 20)
+            if (state.FramesAfterShow < SettingsPanelProbeStableFrameCount)
             {
                 return;
             }
