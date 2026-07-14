@@ -742,6 +742,19 @@
       "notes": "The product UI lifecycle is now strictly 1->0->1 after default HUD removal; the old >=2 probe contract is rejected. Six real desktop-GL scenarios pass at commit 61124f3d. The final-output update and independent verifier now require the packaged Editor matrix, same commit, exact stack/presentation/toolbar fields and framebuffer hashes before replacement. Physical input, different-DPI/cross-screen, reviewer and the final clean-worktree refresh remain, so UI-004 stays active."
     },
     {
+      "entryId": "ui-004-canvas-draft-build-settings-20260714",
+      "taskIds": ["UI-004"],
+      "evidenceState": "local_canvas_draft_build_commit_complete_clean_final_output_pending",
+      "commit": "1f9e5b6e1d63118dcf95314ceebfbdbf9cf30e52",
+      "runSessionId": "local-20260714-ui004-canvas-draft-build-settings",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; real 1024x720 desktop GL Editor framebuffer",
+      "command": "full PixelEngine.Hosting.Tests Release; focused EditorConsoleStoreTests and HostingProjectDisciplineTests; solution Release build; commit-bound Editor scripted build-player win-x64/r2r/Release package and audit; tools/run-editor-gameview-presentation-probe.ps1 six-scenario matrix; pwsh -NoProfile -File tools/run-editor-build-settings-probe.ps1 -OutputRoot artifacts/editor-build-settings-probe/1f9e5b6e -MaxAttempts 3 -TimeoutSeconds 180; task and evidence catalog validation",
+      "reportPath": "docs/evidence-2026-07-14-ui-004-canvas-draft-build-settings.md",
+      "sha256": "a027edfbe488eda2c620a52ec8f8e62019f1e63e895b12835c285ab9d9edafa2",
+      "notes": "Invalid Canvas and CanvasScaler drafts now remain recoverable across Inspector, projection, Play, Save and scene/project open. Build and Build And Run flush, validate and save the current dirty scene before starting build-player, and a real R2R package passes audit. The narrow Build Settings panel uses a readable label/value table; an isolated 20-frame commit-bound runner verifies profile roundtrip and complete opaque framebuffer regions. Physical input, different-DPI/cross-screen, reviewer and clean final-output refresh remain, so UI-004 stays active."
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",
