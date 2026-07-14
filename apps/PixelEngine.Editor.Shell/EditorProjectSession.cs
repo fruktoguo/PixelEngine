@@ -527,6 +527,12 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.CaptureScriptedPlayerSettingsProbe();
     }
 
+    public ScriptedSettingsPanelPresentationSnapshot CaptureScriptedSettingsPanelPresentation(string target)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureScriptedSettingsPanelPresentation(target);
+    }
+
     public bool Undo()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

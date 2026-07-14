@@ -75,6 +75,22 @@ public sealed class EditorShellOptionsTests
     }
 
     /// <summary>
+    /// 验证设置面板真实窗口探针要求显式合法目标，并自动隔离用户状态。
+    /// </summary>
+    [Theory]
+    [InlineData("project")]
+    [InlineData("player")]
+    public void ParseRecognizesSettingsPanelProbe(string target)
+    {
+        EditorShellOptions options = EditorShellOptions.Parse(["--scripted-settings-panel-probe", target]);
+
+        Assert.Equal(target, options.ScriptedSettingsPanelProbe);
+        Assert.True(options.EphemeralUserState);
+        _ = Assert.Throws<ArgumentException>(() =>
+            EditorShellOptions.Parse(["--scripted-settings-panel-probe", "unknown"]));
+    }
+
+    /// <summary>
     /// 验证 CLI 用户数据目录优先于环境变量。
     /// </summary>
     [Fact]

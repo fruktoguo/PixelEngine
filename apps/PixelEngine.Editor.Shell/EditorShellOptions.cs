@@ -45,6 +45,11 @@ internal sealed record EditorShellOptions(
     /// </summary>
     public bool ScriptedRuntimeInspectorProbe { get; init; }
 
+    /// <summary>
+    /// 要打开并稳定绘制的设置面板；仅接受 project 或 player。
+    /// </summary>
+    public string? ScriptedSettingsPanelProbe { get; init; }
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -64,6 +69,7 @@ internal sealed record EditorShellOptions(
         bool scriptedPreferencesProbe = false;
         bool scriptedGameViewProbe = false;
         bool scriptedRuntimeInspectorProbe = false;
+        string? scriptedSettingsPanelProbe = null;
         bool ephemeralUserState = false;
         bool reopenLastProject = true;
         string? userDataDirectory = null;
@@ -122,6 +128,14 @@ internal sealed record EditorShellOptions(
                 case "--scripted-runtime-inspector-probe":
                     scriptedRuntimeInspectorProbe = true;
                     break;
+                case "--scripted-settings-panel-probe":
+                    scriptedSettingsPanelProbe = RequireValue(args, ref i, arg).Trim().ToLowerInvariant();
+                    if (scriptedSettingsPanelProbe is not ("project" or "player"))
+                    {
+                        throw new ArgumentException("scripted-settings-panel-probe 仅支持 project 或 player。");
+                    }
+
+                    break;
                 case "--build-output":
                     buildOutputPath = RequireValue(args, ref i, arg);
                     break;
@@ -155,7 +169,8 @@ internal sealed record EditorShellOptions(
             scriptedDefaultWorkbenchProbe ||
             scriptedPreferencesProbe ||
             scriptedGameViewProbe ||
-            scriptedRuntimeInspectorProbe;
+            scriptedRuntimeInspectorProbe ||
+            scriptedSettingsPanelProbe is not null;
         return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory)
         {
             UserDataDirectory = string.IsNullOrWhiteSpace(userDataDirectory) ? null : userDataDirectory.Trim(),
@@ -163,6 +178,7 @@ internal sealed record EditorShellOptions(
             ReopenLastProject = reopenLastProject,
             ScriptedGameViewProbe = scriptedGameViewProbe,
             ScriptedRuntimeInspectorProbe = scriptedRuntimeInspectorProbe,
+            ScriptedSettingsPanelProbe = scriptedSettingsPanelProbe,
         };
     }
 

@@ -308,6 +308,33 @@ internal sealed class EditorShellHostExtension :
     }
 
     /// <summary>
+    /// 捕获 Project/Player Settings 最近一帧的真实窗口几何与草稿状态。
+    /// </summary>
+    public ScriptedSettingsPanelPresentationSnapshot CaptureScriptedSettingsPanelPresentation(string target)
+    {
+        return target switch
+        {
+            "project" when _projectSettingsPanel is not null => new ScriptedSettingsPanelPresentationSnapshot(
+                target,
+                _projectSettingsPanel.Visible,
+                _projectSettingsPanel.LastWindowPosition,
+                _projectSettingsPanel.LastWindowSize,
+                _projectSettingsPanel.HasPendingChanges,
+                _projectSettingsPanel.ValidationMessage),
+            "player" when _playerSettingsPanel is not null => new ScriptedSettingsPanelPresentationSnapshot(
+                target,
+                _playerSettingsPanel.Visible,
+                _playerSettingsPanel.LastWindowPosition,
+                _playerSettingsPanel.LastWindowSize,
+                _playerSettingsPanel.HasPendingChanges,
+                _playerSettingsPanel.ValidationMessage),
+            "project" => throw new InvalidOperationException("Project Settings 面板尚未注册。"),
+            "player" => throw new InvalidOperationException("Player Settings 面板尚未注册。"),
+            _ => throw new ArgumentOutOfRangeException(nameof(target), target, "设置面板探针仅支持 project 或 player。"),
+        };
+    }
+
+    /// <summary>
     /// 绑定场景模型、撤销栈与 Prefab 存储，供后续面板注册使用。
     /// </summary>
     public void ConfigureAuthoring(
@@ -864,3 +891,12 @@ internal sealed class EditorShellHostExtension :
         }
     }
 }
+
+/// <summary>Project/Player Settings 提交绑定窗口探针快照。</summary>
+internal readonly record struct ScriptedSettingsPanelPresentationSnapshot(
+    string Target,
+    bool Visible,
+    System.Numerics.Vector2 WindowPosition,
+    System.Numerics.Vector2 WindowSize,
+    bool HasPendingChanges,
+    string ValidationMessage);

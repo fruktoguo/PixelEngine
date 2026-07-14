@@ -236,6 +236,7 @@ internal sealed class EditorShellApp
         ScriptedDefaultWorkbenchProbeState scriptedDefaultWorkbench = new();
         ScriptedGameViewProbeState scriptedGameView = new();
         ScriptedRuntimeInspectorProbeState scriptedRuntimeInspector = new();
+        ScriptedSettingsPanelProbeState scriptedSettingsPanel = new();
         ScriptedPlayerRunProbeResult scriptedPlayerRun = new();
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!_exitRequested)
@@ -352,6 +353,10 @@ internal sealed class EditorShellApp
                     scriptedBuildCompleted = scriptedBuildCancel.Completed;
                     scriptedBuildDiagnostic = scriptedBuildCancel.Diagnostic;
                 }
+                else if (_options.ScriptedSettingsPanelProbe is not null)
+                {
+                    RunScriptedSettingsPanelProbeActions(scriptedSettingsPanel);
+                }
                 else if (_options.ScriptedBuildSettingsProbe)
                 {
                     RunScriptedBuildSettingsProbeActions(scriptedBuildSettings);
@@ -391,6 +396,11 @@ internal sealed class EditorShellApp
             }
 
             if (_options.ScriptedBuildSettingsProbe && scriptedBuildSettings.Completed)
+            {
+                break;
+            }
+
+            if (_options.ScriptedSettingsPanelProbe is not null && scriptedSettingsPanel.Completed)
             {
                 break;
             }
@@ -491,6 +501,11 @@ internal sealed class EditorShellApp
         if (_options.ScriptedRuntimeInspectorProbe)
         {
             WriteScriptedRuntimeInspectorProbeSummary(scriptedRuntimeInspector);
+        }
+
+        if (_options.ScriptedSettingsPanelProbe is not null)
+        {
+            WriteScriptedSettingsPanelProbeSummary(scriptedSettingsPanel);
         }
 
         if (_options.ScriptedBuildSettingsProbe)
@@ -903,6 +918,54 @@ internal sealed class EditorShellApp
     {
         return string.Equals(typeName, DefaultWorkbenchBehaviourTypeName, StringComparison.Ordinal) ||
             typeName.EndsWith("." + DefaultWorkbenchBehaviourTypeName, StringComparison.Ordinal);
+    }
+
+    private void RunScriptedSettingsPanelProbeActions(ScriptedSettingsPanelProbeState state)
+    {
+        if (CurrentSession is null || state.Completed || _options.ScriptedSettingsPanelProbe is not { } target)
+        {
+            return;
+        }
+
+        try
+        {
+            state.Target = target;
+            if (!state.Shown)
+            {
+                bool shown = string.Equals(target, "project", StringComparison.Ordinal)
+                    ? CurrentSession.ShowProjectSettings()
+                    : CurrentSession.ShowPlayerSettings();
+                if (!shown)
+                {
+                    throw new InvalidOperationException("设置面板无法显示。");
+                }
+
+                state.Shown = true;
+                return;
+            }
+
+            state.FramesAfterShow++;
+            if (state.FramesAfterShow < 20)
+            {
+                return;
+            }
+
+            ScriptedSettingsPanelPresentationSnapshot presentation =
+                CurrentSession.CaptureScriptedSettingsPanelPresentation(target);
+            if (!presentation.Visible || presentation.WindowSize.X <= 0f || presentation.WindowSize.Y <= 0f)
+            {
+                throw new InvalidOperationException("设置面板未形成有效的真实窗口几何。");
+            }
+
+            state.Presentation = presentation;
+            state.Completed = true;
+            state.Diagnostic = "accepted";
+        }
+        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        {
+            state.Completed = true;
+            state.Diagnostic = ex.Message;
+        }
     }
 
     private void RunScriptedBuildSettingsProbeActions(ScriptedBuildSettingsProbeState state)
@@ -1329,6 +1392,27 @@ internal sealed class EditorShellApp
             $"package_archive={rerun?.PackageArchive ?? "<missing>"}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}, " +
             $"rerun_diagnostic={SanitizeSummaryValue(state.RerunDiagnostic)}");
+    }
+
+    private static void WriteScriptedSettingsPanelProbeSummary(ScriptedSettingsPanelProbeState state)
+    {
+        ScriptedSettingsPanelPresentationSnapshot? presentation = state.Presentation;
+        Console.WriteLine(
+            "editor_settings_panel_probe " +
+            "schema=pixelengine.editor-settings-panel-probe/v1, " +
+            $"target={state.Target}, " +
+            $"shown={state.Shown}, " +
+            $"frames_after_show={state.FramesAfterShow}, " +
+            $"completed={state.Completed}, " +
+            $"visible={presentation?.Visible.ToString() ?? "<missing>"}, " +
+            $"locale={EditorLocalization.CurrentLocale}, " +
+            $"window_pos={presentation?.WindowPosition.X.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}," +
+            $"{presentation?.WindowPosition.Y.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"window_size={presentation?.WindowSize.X.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}x" +
+            $"{presentation?.WindowSize.Y.ToString("F0", System.Globalization.CultureInfo.InvariantCulture) ?? "<missing>"}, " +
+            $"pending_changes={presentation?.HasPendingChanges.ToString() ?? "<missing>"}, " +
+            $"validation_empty={string.IsNullOrWhiteSpace(presentation?.ValidationMessage)}, " +
+            $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
     }
 
     private static void WriteScriptedBuildSettingsProbeSummary(ScriptedBuildSettingsProbeState state)
@@ -2920,6 +3004,17 @@ internal sealed class ScriptedBuildSettingsProbeState
     public ScriptedBuildSettingsProbeSnapshot After = new();
     public ScriptedBuildSettingsFooterProbeSnapshot Footer = new();
     public bool OverflowRequested;
+}
+
+/// <summary>Project/Player Settings 真实窗口绘制探针状态。</summary>
+internal sealed class ScriptedSettingsPanelProbeState
+{
+    public string Target = string.Empty;
+    public bool Shown;
+    public int FramesAfterShow;
+    public bool Completed;
+    public ScriptedSettingsPanelPresentationSnapshot? Presentation;
+    public string Diagnostic = string.Empty;
 }
 
 /// <summary>
