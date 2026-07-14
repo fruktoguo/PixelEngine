@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj" />
+  </ItemGroup>
+</Project>

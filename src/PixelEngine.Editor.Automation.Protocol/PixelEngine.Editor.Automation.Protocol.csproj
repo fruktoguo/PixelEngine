@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <None Include="../../schema/editor-automation-protocol.v1.schema.json"
+          Link="schema/editor-automation-protocol.v1.schema.json"
+          CopyToOutputDirectory="PreserveNewest"
+          Pack="true"
+          PackagePath="schema/" />
+  </ItemGroup>
+</Project>

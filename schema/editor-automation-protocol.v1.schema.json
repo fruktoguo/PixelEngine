@@ -1,0 +1,211 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixelengine.local/schema/editor-automation-protocol.v1.schema.json",
+  "title": "PixelEngine Editor Automation Protocol v1",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/envelope" },
+    { "$ref": "#/$defs/instanceDescriptor" }
+  ],
+  "$defs": {
+    "protocolVersion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["major", "minor"],
+      "properties": {
+        "major": { "type": "integer", "minimum": 1 },
+        "minor": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "helloRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "clientName", "clientVersion", "supportedVersions", "clientNonce", "requestedScopes"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "clientName": { "type": "string", "minLength": 1 },
+        "clientVersion": { "type": "string", "minLength": 1 },
+        "supportedVersions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/protocolVersion" }
+        },
+        "clientNonce": { "type": "string", "contentEncoding": "base64" },
+        "requestedScopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "helloChallenge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instanceId",
+        "schemaVersion",
+        "selectedVersion",
+        "serverNonce",
+        "supportedScopes",
+        "authenticationAlgorithm",
+        "maxFrameBytes"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "instanceId": { "type": "string", "minLength": 1 },
+        "selectedVersion": { "$ref": "#/$defs/protocolVersion" },
+        "serverNonce": { "type": "string", "contentEncoding": "base64" },
+        "supportedScopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "authenticationAlgorithm": { "const": "hmac-sha256" },
+        "maxFrameBytes": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "authenticateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "clientNonce", "serverNonce", "proof", "requestedScopes"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "clientNonce": { "type": "string", "contentEncoding": "base64" },
+        "serverNonce": { "type": "string", "contentEncoding": "base64" },
+        "proof": { "type": "string", "contentEncoding": "base64" },
+        "requestedScopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "sessionInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sessionId", "grantedScopes", "serverVersion", "protocol"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "sessionId": { "type": "string", "minLength": 1 },
+        "grantedScopes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "serverVersion": { "type": "string", "minLength": 1 },
+        "protocol": { "$ref": "#/$defs/protocolVersion" }
+      }
+    },
+    "cancelRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "targetRequestId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "targetRequestId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "pingResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "serverTimeUtc", "instanceId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "serverTimeUtc": { "type": "string", "format": "date-time" },
+        "instanceId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "code", "category", "message", "transient"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "code": { "type": "string", "minLength": 1 },
+        "category": {
+          "enum": ["Validation", "Authentication", "Authorization", "Cancellation", "Conflict", "Availability", "Internal"]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "details": {},
+        "transient": { "type": "boolean" },
+        "retryAfterMilliseconds": { "type": "integer", "minimum": 0 },
+        "currentRevision": { "type": "integer", "minimum": 0 },
+        "correlationId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "envelope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "protocol", "messageId", "kind"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "protocol": { "$ref": "#/$defs/protocolVersion" },
+        "messageId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "enum": ["Request", "Response", "Event", "Cancel"] },
+        "correlationId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "method": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "sessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "deadlineUtc": { "type": "string", "format": "date-time" },
+        "payload": {},
+        "error": { "$ref": "#/$defs/error" }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "kind", "address"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "kind": { "enum": ["WindowsNamedPipe", "UnixDomainSocket"] },
+        "address": { "type": "string", "minLength": 1 }
+      }
+    },
+    "projectSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "projectId", "name", "rootPath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectId": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "rootPath": { "type": "string", "minLength": 1 },
+        "sceneId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "instanceDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "instanceId",
+        "processId",
+        "processStartUtc",
+        "publishedAtUtc",
+        "editorVersion",
+        "protocolVersions",
+        "endpoint",
+        "credentialPath",
+        "capabilityDigest",
+        "livenessMode"
+      ],
+      "properties": {
+        "schema": { "const": "pixelengine.editor-automation-instance/v1" },
+        "instanceId": { "type": "string", "minLength": 1 },
+        "processId": { "type": "integer", "minimum": 1 },
+        "processStartUtc": { "type": "string", "format": "date-time" },
+        "publishedAtUtc": { "type": "string", "format": "date-time" },
+        "editorVersion": { "type": "string", "minLength": 1 },
+        "protocolVersions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/protocolVersion" }
+        },
+        "endpoint": { "$ref": "#/$defs/endpoint" },
+        "credentialPath": { "type": "string", "minLength": 1 },
+        "capabilityDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "livenessMode": { "const": "processIdentity" },
+        "project": { "$ref": "#/$defs/projectSummary" }
+      }
+    }
+  }
+}
