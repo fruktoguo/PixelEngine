@@ -60,8 +60,8 @@ internal sealed class EditorMainMenuBar
             : default;
         bool isPlaying = hasSession && playSession.Mode == Hosting.EditorMode.Play;
         bool isPaused = hasSession && playSession.Mode == Hosting.EditorMode.Paused;
-        string projectName = app.CurrentProject?.Name ?? "No Project";
-        string sceneName = session?.CurrentSceneDisplayName ?? "No Scene";
+        string projectName = app.CurrentProject?.Name ?? L.Get("status.noProject", "No Project");
+        string sceneName = session?.CurrentSceneDisplayName ?? L.Get("status.noScene", "No Scene");
         int objectCount = session?.SceneModel.Count ?? 0;
 
         return new EditorMainToolbarState(
@@ -73,7 +73,15 @@ internal sealed class EditorMainMenuBar
             projectName,
             sceneName,
             objectCount,
-            hasSession ? playSession.Mode.ToString() : "No Project");
+            hasSession
+                ? playSession.Mode switch
+                {
+                    Hosting.EditorMode.Edit => L.Get("mode.edit", "Edit"),
+                    Hosting.EditorMode.Play => L.Get("mode.play", "Play"),
+                    Hosting.EditorMode.Paused => L.Get("mode.paused", "Paused"),
+                    _ => playSession.Mode.ToString(),
+                }
+                : L.Get("status.noProject", "No Project"));
     }
 
     private static void DrawToolbar(EditorShellApp app)
@@ -175,7 +183,9 @@ internal sealed class EditorMainMenuBar
             : state.IsDirty
                 ? new Vector4(0xE0 / 255f, 0xA5 / 255f, 0x43 / 255f, 1f)
                 : ImGui.GetStyle().Colors[(int)ImGuiCol.TextDisabled];
-        ImGui.TextColored(modeColor, state.Mode);
+        ImGui.PushStyleColor(ImGuiCol.Text, modeColor);
+        ImGui.TextUnformatted(state.Mode);
+        ImGui.PopStyleColor();
         ImGui.SameLine();
         ImGui.TextUnformatted(state.StatusText);
         ImGui.End();
@@ -183,7 +193,7 @@ internal sealed class EditorMainMenuBar
 
     private static void DrawComponentMenu(EditorShellApp app)
     {
-        if (!ImGui.BeginMenu("Component"))
+        if (!ImGui.BeginMenu(L.Get("menu.component", "Component")))
         {
             return;
         }
@@ -192,7 +202,11 @@ internal sealed class EditorMainMenuBar
         string[] behaviours = app.GetBehaviourTypeNames();
         if (behaviours.Length == 0)
         {
-            _ = ImGui.MenuItem("No Components Available", string.Empty, selected: false, enabled: false);
+            _ = ImGui.MenuItem(
+                L.Get("component.noneAvailable", "No Components Available"),
+                string.Empty,
+                selected: false,
+                enabled: false);
         }
         else
         {
@@ -276,7 +290,9 @@ internal sealed class EditorMainMenuBar
 
         if (hovered)
         {
-            ImGui.SetTooltip(tooltip);
+            _ = ImGui.BeginTooltip();
+            ImGui.TextUnformatted(tooltip);
+            ImGui.EndTooltip();
         }
 
         return clicked && enabled;
@@ -317,7 +333,7 @@ internal sealed class EditorMainMenuBar
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
 
-        if (ImGui.BeginMenu("Open Recent", app.RecentProjects.Entries.Count != 0))
+        if (ImGui.BeginMenu(L.Get("file.openRecent", "Open Recent"), app.RecentProjects.Entries.Count != 0))
         {
             foreach (RecentProjectEntry entry in app.RecentProjects.Entries)
             {
@@ -332,12 +348,16 @@ internal sealed class EditorMainMenuBar
         }
 
         ImGui.Separator();
-        if (ImGui.MenuItem("New Scene", string.Empty, selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            L.Get("file.newScene", "New Scene"),
+            string.Empty,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             _ = app.NewScene();
         }
 
-        if (ImGui.BeginMenu("Open Scene", app.CurrentProject?.Scenes.Count > 0))
+        if (ImGui.BeginMenu(L.Get("file.openScene", "Open Scene"), app.CurrentProject?.Scenes.Count > 0))
         {
             foreach (EditorProjectSceneEntry scene in app.CurrentProject!.Scenes)
             {
@@ -360,7 +380,7 @@ internal sealed class EditorMainMenuBar
         }
 
         if (ImGui.MenuItem(
-            "Save Scene As...",
+            L.Get("file.saveSceneAs", "Save Scene As..."),
             EditorShortcutCatalog.Get(EditorShortcutCommand.SaveSceneAs).DisplayText,
             selected: false,
             enabled: app.HasOpenProject))
@@ -368,18 +388,26 @@ internal sealed class EditorMainMenuBar
             _ = app.SaveSceneAs();
         }
         ImGui.Separator();
-        if (ImGui.MenuItem("Project Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            L.Get("window.projectSettings", "Project Settings..."),
+            string.Empty,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             app.ShowProjectSettings();
         }
 
-        if (ImGui.MenuItem("Player Settings...", string.Empty, selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            L.Get("window.playerSettings", "Player Settings..."),
+            string.Empty,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             app.ShowPlayerSettings();
         }
 
         if (ImGui.MenuItem(
-            "Build Settings...",
+            L.Get("window.buildSettings", "Build Settings..."),
             EditorShortcutCatalog.Get(EditorShortcutCommand.OpenBuildSettings).DisplayText,
             selected: false,
             enabled: app.HasOpenProject))
@@ -388,7 +416,7 @@ internal sealed class EditorMainMenuBar
         }
 
         if (ImGui.MenuItem(
-            "Build And Run",
+            L.Get("build.action.buildAndRun", "Build And Run"),
             EditorShortcutCatalog.Get(EditorShortcutCommand.BuildAndRun).DisplayText,
             selected: false,
             enabled: app.HasOpenProject))
@@ -396,12 +424,16 @@ internal sealed class EditorMainMenuBar
             _ = app.TryStartBuild(runAfterBuild: true, out _);
         }
         ImGui.Separator();
-        if (ImGui.MenuItem("Close Project", string.Empty, selected: false, enabled: app.HasOpenProject))
+        if (ImGui.MenuItem(
+            L.Get("file.closeProject", "Close Project"),
+            string.Empty,
+            selected: false,
+            enabled: app.HasOpenProject))
         {
             app.CloseProject();
         }
 
-        if (ImGui.MenuItem("Exit"))
+        if (ImGui.MenuItem(L.Get("file.exit", "Exit")))
         {
             app.RequestExit();
         }
@@ -450,7 +482,7 @@ internal sealed class EditorMainMenuBar
 
         ImGui.Separator();
         if (ImGui.MenuItem(
-            "Preferences...",
+            L.Get("window.preferences", "Preferences") + "...",
             EditorShortcutCatalog.Get(EditorShortcutCommand.OpenPreferences).DisplayText))
         {
             app.ShowPreferences();
@@ -466,22 +498,36 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        if (ImGui.MenuItem("Create Empty", string.Empty, selected: false, enabled: app.CurrentSession is not null))
+        if (ImGui.MenuItem(
+            L.Get("gameObject.createEmpty", "Create Empty"),
+            string.Empty,
+            selected: false,
+            enabled: app.CurrentSession is not null))
         {
             app.CreateGameObject();
         }
 
-        if (ImGui.MenuItem("Create Empty Child", string.Empty, selected: false, enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
+        if (ImGui.MenuItem(
+            L.Get("gameObject.createEmptyChild", "Create Empty Child"),
+            string.Empty,
+            selected: false,
+            enabled: app.CurrentSession?.SceneModel.SelectedStableId is not null))
         {
             app.CreateChildGameObject();
         }
 
-        if (ImGui.BeginMenu("Create with Component", app.CurrentSession is not null))
+        if (ImGui.BeginMenu(
+            L.Get("gameObject.createWithComponent", "Create with Component"),
+            app.CurrentSession is not null))
         {
             string[] behaviours = app.GetBehaviourTypeNames();
             if (behaviours.Length == 0)
             {
-                _ = ImGui.MenuItem("No Behaviour", string.Empty, selected: false, enabled: false);
+                _ = ImGui.MenuItem(
+                    L.Get("component.noBehaviour", "No Behaviour"),
+                    string.Empty,
+                    selected: false,
+                    enabled: false);
             }
             else
             {
@@ -538,53 +584,53 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        if (ImGui.MenuItem("Project Picker"))
+        if (ImGui.MenuItem(L.Get("window.projectPicker", "Project Picker")))
         {
             app.FocusProjectPicker(ProjectPickerMode.OpenProject);
         }
 
-        if (ImGui.BeginMenu("General"))
+        if (ImGui.BeginMenu(L.Get("window.group.general", "General")))
         {
-            DrawPanelMenuItem(app, "Hierarchy", EditorDockSpace.SceneHierarchyWindowTitle);
-            DrawPanelMenuItem(app, "Scene View", EditorDockSpace.ViewportWindowTitle);
-            DrawPanelMenuItem(app, "Game View", EditorDockSpace.GameViewWindowTitle);
-            DrawPanelMenuItem(app, "Inspector", EditorDockSpace.InspectorWindowTitle);
-            DrawPanelMenuItem(app, "Project", EditorDockSpace.AssetBrowserWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.hierarchy", "Hierarchy"), EditorDockSpace.SceneHierarchyWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.scene", "Scene"), EditorDockSpace.ViewportWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.game", "Game View"), EditorDockSpace.GameViewWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.inspector", "Inspector"), EditorDockSpace.InspectorWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.project", "Project"), EditorDockSpace.AssetBrowserWindowTitle);
             ImGui.EndMenu();
         }
 
-        if (ImGui.BeginMenu("Analysis"))
+        if (ImGui.BeginMenu(L.Get("window.group.analysis", "Analysis")))
         {
-            DrawPanelMenuItem(app, "Console", EditorDockSpace.ConsoleDiagnosticsWindowTitle);
-            DrawPanelMenuItem(app, "Profiler", EditorDockSpace.PerformanceHudWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.console", "Console"), EditorDockSpace.ConsoleDiagnosticsWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.profiler", "Profiler"), EditorDockSpace.PerformanceHudWindowTitle);
             ImGui.EndMenu();
         }
 
-        if (ImGui.BeginMenu("Settings"))
+        if (ImGui.BeginMenu(L.Get("window.group.settings", "Settings")))
         {
-            DrawPanelMenuItem(app, "UI Manifest", UiManifestPanel.PanelTitle);
-            DrawPanelMenuItem(app, "Project Settings...", ProjectSettingsPanel.PanelTitle);
-            DrawPanelMenuItem(app, "Player Settings...", PlayerSettingsPanel.PanelTitle);
-            DrawPanelMenuItem(app, "Build Settings...", BuildSettingsPanel.PanelTitle);
+            DrawPanelMenuItem(app, L.Get("window.uiManifest", "UI Manifest"), UiManifestPanel.PanelTitle);
+            DrawPanelMenuItem(app, L.Get("window.projectSettings", "Project Settings..."), ProjectSettingsPanel.PanelTitle);
+            DrawPanelMenuItem(app, L.Get("window.playerSettings", "Player Settings..."), PlayerSettingsPanel.PanelTitle);
+            DrawPanelMenuItem(app, L.Get("window.buildSettings", "Build Settings..."), BuildSettingsPanel.PanelTitle);
             ImGui.EndMenu();
         }
 
-        if (ImGui.BeginMenu("Tools"))
+        if (ImGui.BeginMenu(L.Get("window.group.tools", "Tools")))
         {
-            DrawPanelMenuItem(app, "Materials", EditorDockSpace.MaterialReactionEditorWindowTitle);
-            DrawPanelMenuItem(app, "Brush", EditorDockSpace.MaterialBrushWindowTitle);
-            DrawPanelMenuItem(app, "World Inspector", EditorDockSpace.WorldInspectorWindowTitle);
-            DrawPanelMenuItem(app, "Overlays", EditorDockSpace.DebugOverlayWindowTitle);
-            DrawPanelMenuItem(app, "Simulation", EditorDockSpace.SimulationControlWindowTitle);
-            DrawPanelMenuItem(app, "Play Mode", EditorDockSpace.EditorModeWindowTitle);
-            DrawPanelMenuItem(app, "Save / Load", EditorDockSpace.SaveLoadWindowTitle);
-            DrawPanelMenuItem(app, "Physics", EditorDockSpace.PhysicsTuningWindowTitle);
-            DrawPanelMenuItem(app, "Particles", EditorDockSpace.ParticleTuningWindowTitle);
-            DrawPanelMenuItem(app, "Lighting", EditorDockSpace.LightingTuningWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.materials", "Materials"), EditorDockSpace.MaterialReactionEditorWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.brush", "Brush"), EditorDockSpace.MaterialBrushWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.worldInspector", "World Inspector"), EditorDockSpace.WorldInspectorWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.overlays", "Overlays"), EditorDockSpace.DebugOverlayWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.simulation", "Simulation"), EditorDockSpace.SimulationControlWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.playMode", "Play Mode"), EditorDockSpace.EditorModeWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.saveLoad", "Save / Load"), EditorDockSpace.SaveLoadWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.physics", "Physics"), EditorDockSpace.PhysicsTuningWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.particles", "Particles"), EditorDockSpace.ParticleTuningWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.lighting", "Lighting"), EditorDockSpace.LightingTuningWindowTitle);
             ImGui.EndMenu();
         }
         ImGui.Separator();
-        if (ImGui.MenuItem("Reset Layout"))
+        if (ImGui.MenuItem(L.Get("action.resetLayout", "Reset Layout")))
         {
             app.ResetLayout();
         }
@@ -646,14 +692,16 @@ internal sealed class EditorMainMenuBar
         }
 
         ImGui.TextUnformatted("PixelEngine Editor");
-        ImGui.TextUnformatted(app.HasOpenProject ? app.CurrentProject!.Name : "No Project");
+        ImGui.TextUnformatted(app.HasOpenProject
+            ? app.CurrentProject!.Name
+            : L.Get("status.noProject", "No Project"));
         ImGui.Separator();
-        if (ImGui.MenuItem("About"))
+        if (ImGui.MenuItem(L.Get("help.about", "About")))
         {
             ImGui.OpenPopup("About PixelEngine Editor");
         }
 
-        if (ImGui.MenuItem("Shortcuts"))
+        if (ImGui.MenuItem(L.Get("help.shortcuts", "Shortcuts")))
         {
             app.ShowPreferences(EditorPreferencesCategory.Shortcuts);
         }
@@ -661,7 +709,7 @@ internal sealed class EditorMainMenuBar
         if (ImGui.BeginPopup("About PixelEngine Editor"))
         {
             ImGui.TextUnformatted("PixelEngine Editor");
-            ImGui.TextUnformatted("Standalone editor shell");
+            ImGui.TextUnformatted(L.Get("help.description", "Standalone editor shell"));
             ImGui.EndPopup();
         }
 
@@ -754,6 +802,12 @@ internal readonly record struct EditorMainToolbarState(
 
     public string StatusText =>
         HasOpenProject
-            ? $"{ProjectName}  |  {SceneName}{(IsDirty ? "*" : string.Empty)}  |  {ObjectCount} GameObjects"
-            : "Open or create a project";
+            ? L.Format(
+                "status.projectSummary",
+                "{0}  |  {1}{2}  |  {3} GameObjects",
+                ProjectName,
+                SceneName,
+                IsDirty ? "*" : string.Empty,
+                ObjectCount)
+            : L.Get("status.openOrCreateProject", "Open or create a project");
 }

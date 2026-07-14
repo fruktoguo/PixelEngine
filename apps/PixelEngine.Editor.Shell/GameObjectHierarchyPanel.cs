@@ -31,7 +31,8 @@ internal sealed class GameObjectHierarchyPanel(
 
     public void Draw(in EditorContext context)
     {
-        if (!ImGui.Begin(Title))
+        string windowTitle = $"{EditorLocalization.Get("window.hierarchy", "Hierarchy")}###{Title}";
+        if (!ImGui.Begin(windowTitle))
         {
             ImGui.End();
             return;

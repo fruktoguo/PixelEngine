@@ -46,7 +46,15 @@ public sealed class EditorMainToolbarStateTests
             ObjectCount = 3,
         };
 
-        Assert.Equal("Demo  |  Scene*  |  3 GameObjects", state.StatusText);
+        Assert.Equal(
+            PixelEngine.Editor.EditorLocalization.Format(
+                "status.projectSummary",
+                "{0}  |  {1}{2}  |  {3} GameObjects",
+                "Demo",
+                "Scene",
+                "*",
+                3),
+            state.StatusText);
         Assert.DoesNotContain("Play", state.StatusText, StringComparison.Ordinal);
     }
 

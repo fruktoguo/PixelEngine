@@ -17,6 +17,7 @@ public sealed partial class EditorLocalizationSurfaceTests
     {
         string root = FindRepositoryRoot();
         string shellRoot = Path.Combine(root, "apps", "PixelEngine.Editor.Shell");
+        string editorRoot = Path.Combine(root, "src", "PixelEngine.Editor");
         JsonObject english = LoadStrings(Path.Combine(shellRoot, "Localization", "en-US.json"));
         JsonObject chinese = LoadStrings(Path.Combine(shellRoot, "Localization", "zh-CN.json"));
 
@@ -35,6 +36,12 @@ public sealed partial class EditorLocalizationSurfaceTests
             Path.Combine(shellRoot, "Settings", "PlayerSettingsPanel.cs"),
             Path.Combine(shellRoot, "Build", "BuildSettingsPanel.cs"),
             Path.Combine(shellRoot, "GameObjectInspectorPanel.cs"),
+            Path.Combine(shellRoot, "EditorMainMenuBar.cs"),
+            Path.Combine(shellRoot, "SceneViewPanel.cs"),
+            Path.Combine(shellRoot, "GameViewPanel.cs"),
+            Path.Combine(shellRoot, "GameObjectHierarchyPanel.cs"),
+            Path.Combine(shellRoot, "EditorConsolePanel.cs"),
+            Path.Combine(editorRoot, "AssetBrowserPanel.cs"),
         ];
         foreach (string sourcePath in localizedSurfaces)
         {
@@ -71,6 +78,28 @@ public sealed partial class EditorLocalizationSurfaceTests
         Assert.Contains("playerSettings.help", player, StringComparison.Ordinal);
         Assert.Contains("build.action.preflight", build, StringComparison.Ordinal);
         Assert.Contains("inspector.empty", inspector, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 本地化页签必须用 ### 保留 canonical window ID，避免切换语言破坏 dock 布局与 Window 菜单查找。
+    /// </summary>
+    [Fact]
+    public void LocalizedCorePanelTitlesKeepStableDockIds()
+    {
+        string root = FindRepositoryRoot();
+        string[] panels =
+        [
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "SceneViewPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameViewPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameObjectHierarchyPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "GameObjectInspectorPanel.cs"),
+            Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorConsolePanel.cs"),
+            Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs"),
+        ];
+
+        Assert.All(
+            panels,
+            path => Assert.Contains("###", File.ReadAllText(path), StringComparison.Ordinal));
     }
 
     /// <summary>

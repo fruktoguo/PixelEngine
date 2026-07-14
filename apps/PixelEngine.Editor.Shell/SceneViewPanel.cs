@@ -162,7 +162,8 @@ internal sealed class SceneViewPanel(
     public void Draw(in EditorContext context)
     {
         PrepareFrame(context.Selection.GameObjectStableId ?? _scene.SelectedStableId, _preparedMode);
-        if (!ImGui.Begin(Title, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
+        string windowTitle = $"{EditorLocalization.Get("window.scene", "Scene")}###{Title}";
+        if (!ImGui.Begin(windowTitle, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
             InputFocused = false;
             _webCanvasPreview?.Request(null, false, false, 0f, 0f);

@@ -54,7 +54,8 @@ internal sealed class EditorConsolePanel : IEditorPanel
     {
         _ = context;
         ObservePlayTransitions();
-        if (!ImGui.Begin(Title))
+        string windowTitle = $"{L.Get("window.console", "Console")}###{Title}";
+        if (!ImGui.Begin(windowTitle))
         {
             ImGui.End();
             return;

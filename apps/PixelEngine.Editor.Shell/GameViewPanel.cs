@@ -218,9 +218,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             _focusRequested = false;
         }
 
+        string visibleTitle = EditorLocalization.Get("window.game", "Game View");
         string windowTitle = IsMaximized
-            ? $"{Title}###PixelEngineGameViewMaximized"
-            : Title;
+            ? $"{visibleTitle}###PixelEngineGameViewMaximized"
+            : $"{visibleTitle}###{Title}";
         ImGuiWindowFlags flags = ImGuiWindowFlags.NoScrollbar |
             ImGuiWindowFlags.NoScrollWithMouse |
             ImGuiWindowFlags.NoNavInputs;

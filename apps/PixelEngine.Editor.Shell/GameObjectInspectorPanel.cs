@@ -130,7 +130,8 @@ internal sealed class GameObjectInspectorPanel(
             _focusRequested = false;
         }
 
-        if (!ImGui.Begin(Title))
+        string windowTitle = $"{L.Get("window.inspector", "Inspector")}###{Title}";
+        if (!ImGui.Begin(windowTitle))
         {
             CommitPendingEdits();
             ImGui.End();
