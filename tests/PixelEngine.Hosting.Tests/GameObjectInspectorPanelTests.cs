@@ -1330,6 +1330,8 @@ public sealed class GameObjectInspectorPanelTests
         Assert.True(invalidPath.HasConflict);
         Assert.False(invalidPath.IsRuntimeEnabled);
         Assert.Contains("不能逃逸", invalidPath.Diagnostic, StringComparison.Ordinal);
+        Assert.False(EditorProjectSession.TryValidateAuthoringScene(scene, out string pathDiagnostic));
+        Assert.Contains("不能逃逸", pathDiagnostic, StringComparison.Ordinal);
 
         canvas.WebCanvas.ManifestPath = "ui/ui-manifest.json";
         canvas.CanvasScaler.Settings = UiCanvasScalerSettings.Default with
@@ -1343,6 +1345,12 @@ public sealed class GameObjectInspectorPanelTests
         Assert.True(invalidScaler.HasConflict);
         Assert.False(invalidScaler.IsRuntimeEnabled);
         Assert.Contains("有限正数", invalidScaler.Diagnostic, StringComparison.Ordinal);
+        Assert.False(EditorProjectSession.TryValidateAuthoringScene(scene, out string scalerDiagnostic));
+        Assert.Contains("有限正数", scalerDiagnostic, StringComparison.Ordinal);
+
+        canvas.CanvasScaler.Settings = UiCanvasScalerSettings.Default;
+        Assert.True(EditorProjectSession.TryValidateAuthoringScene(scene, out string validDiagnostic));
+        Assert.Empty(validDiagnostic);
     }
 
     /// <summary>

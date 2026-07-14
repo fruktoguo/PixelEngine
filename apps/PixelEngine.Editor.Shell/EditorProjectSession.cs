@@ -16,6 +16,7 @@ internal sealed class EditorProjectSession : IDisposable
     private const int DefaultEditorWorldHeight = 480;
     private const int DefaultParticleCapacity = 32768;
     private readonly EditorShellHostExtension _editorHost;
+    private readonly IEditorConsoleSink _console;
     private readonly EngineWorldSnapshotStore _snapshotStore;
     private readonly EngineEditorPlaySessionService _playSession;
     private readonly EngineSimulationControlService _simulationControl;
@@ -23,12 +24,14 @@ internal sealed class EditorProjectSession : IDisposable
     private readonly EditorScriptAssetOpenService _scriptAssetOpenService;
     private readonly EditorCodeWorkspaceOpenService _codeWorkspaceOpenService;
     private int _runtimeProjectionVersion;
+    private bool _authoringProjectionFailureActive;
     private bool _disposed;
 
     private EditorProjectSession(
         EditorProject project,
         Engine engine,
         EditorShellHostExtension editorHost,
+        IEditorConsoleSink console,
         EditorSceneModel sceneModel,
         EditorUndoStack undoStack,
         EditorSceneRuntimeProjection runtimeProjection,
@@ -41,6 +44,7 @@ internal sealed class EditorProjectSession : IDisposable
         Project = project;
         Engine = engine;
         _editorHost = editorHost;
+        _console = console ?? throw new ArgumentNullException(nameof(console));
         SceneModel = sceneModel;
         UndoStack = undoStack;
         RuntimeProjection = runtimeProjection;
@@ -158,7 +162,7 @@ internal sealed class EditorProjectSession : IDisposable
                 app.ConsoleStore.AddUiBackendSelection(uiBackendSelection);
             }
 
-            return new EditorProjectSession(project, engine, editorHost, sceneModel, undoStack, projection, authoringWorld, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
+            return new EditorProjectSession(project, engine, editorHost, app.ConsoleStore, sceneModel, undoStack, projection, authoringWorld, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
         }
         catch
         {
@@ -229,7 +233,9 @@ internal sealed class EditorProjectSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         _editorHost.FlushPendingAuthoringEdits();
         RefreshEditProjectionIfNeeded();
-        return _playSession.EnterPlayCurrent();
+        return !TryValidateAuthoringScene(SceneModel, out string diagnostic)
+            ? RejectPlayForInvalidAuthoringScene(diagnostic)
+            : _playSession.EnterPlayCurrent();
     }
 
     public Hosting.EditorPlaySessionResult EnterPlayTemporary()
@@ -237,7 +243,9 @@ internal sealed class EditorProjectSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         _editorHost.FlushPendingAuthoringEdits();
         RefreshEditProjectionIfNeeded();
-        return _playSession.EnterPlayTemporary();
+        return !TryValidateAuthoringScene(SceneModel, out string diagnostic)
+            ? RejectPlayForInvalidAuthoringScene(diagnostic)
+            : _playSession.EnterPlayTemporary();
     }
 
     public Hosting.EditorPlaySessionResult ExitEditorPlay()
@@ -673,11 +681,13 @@ internal sealed class EditorProjectSession : IDisposable
 
     private static EditorSceneRuntimeProjection ProjectAuthoringScene(Engine engine, EditorSceneModel sceneModel)
     {
+        EngineSceneDocument document = sceneModel.ToDocument();
+        _ = EngineSceneCanvasResolver.Resolve(document);
         EditorSceneRuntimeProjection projection = EditorSceneRuntimeProjection.Build(
             sceneModel,
             engine.Context.GetService<ScriptAssemblyRegistry>());
         engine.AttachScriptScene(projection.Scene);
-        engine.ApplySceneCanvasDocument(sceneModel.ToDocument());
+        engine.ApplySceneCanvasDocument(document);
         engine.Context.RegisterService(sceneModel);
         engine.Context.RegisterService(projection);
         return projection;
@@ -721,6 +731,22 @@ internal sealed class EditorProjectSession : IDisposable
         }
 
         Prefabs.RefreshPrefabInstances(SceneModel);
+        int targetVersion = SceneModel.Version;
+        if (!TryValidateAuthoringScene(SceneModel, out string diagnostic))
+        {
+            if (!_authoringProjectionFailureActive)
+            {
+                _console.AddProjectError(
+                    "scene-authoring",
+                    $"场景草稿校验失败，继续保留上一份有效预览：{diagnostic}");
+            }
+
+            _authoringProjectionFailureActive = true;
+            _runtimeProjectionVersion = targetVersion;
+            return;
+        }
+
+        _authoringProjectionFailureActive = false;
         RuntimeProjection = ProjectAuthoringScene(Engine, SceneModel);
         AuthoringWorldRefreshResult refresh = _authoringWorld.Refresh(
             RuntimeProjection.Scene,
@@ -731,6 +757,35 @@ internal sealed class EditorProjectSession : IDisposable
         }
 
         _runtimeProjectionVersion = SceneModel.Version;
+    }
+
+    internal static bool TryValidateAuthoringScene(EditorSceneModel scene, out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(scene);
+        try
+        {
+            _ = EngineSceneCanvasResolver.Resolve(scene.ToDocument());
+            diagnostic = string.Empty;
+            return true;
+        }
+        catch (Exception exception) when (IsRecoverableAuthoringSceneValidationFailure(exception))
+        {
+            diagnostic = exception.Message;
+            return false;
+        }
+    }
+
+    internal static bool IsRecoverableAuthoringSceneValidationFailure(Exception exception)
+    {
+        return exception is InvalidOperationException or
+            InvalidDataException or
+            ArgumentOutOfRangeException;
+    }
+
+    private Hosting.EditorPlaySessionResult RejectPlayForInvalidAuthoringScene(string diagnostic)
+    {
+        string message = $"无法进入 Play：请先修复场景草稿。{diagnostic}";
+        return new Hosting.EditorPlaySessionResult(false, _playSession.Capture(), message);
     }
 
     private string AllocateCopyScenePath(string sourceRelativePath)

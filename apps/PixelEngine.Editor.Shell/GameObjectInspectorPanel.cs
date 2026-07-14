@@ -2920,7 +2920,7 @@ internal sealed class GameObjectInspectorPanel(
                 derivedId,
                 string.Join(Environment.NewLine, messages));
         }
-        catch (Exception exception) when (IsCanvasInspectorValidationFailure(exception))
+        catch (Exception exception) when (EditorProjectSession.IsRecoverableAuthoringSceneValidationFailure(exception))
         {
             return new CanvasInspectorSnapshot(
                 HasExplicitCanvases: hasWebCanvas || HasExplicitWebCanvas(),
@@ -2935,13 +2935,6 @@ internal sealed class GameObjectInspectorPanel(
                 DerivedCanvasId: derivedId,
                 Diagnostic: exception.Message);
         }
-    }
-
-    private static bool IsCanvasInspectorValidationFailure(Exception exception)
-    {
-        return exception is InvalidOperationException or
-            InvalidDataException or
-            ArgumentOutOfRangeException;
     }
 
     private bool HasExplicitWebCanvas()

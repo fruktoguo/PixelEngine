@@ -15,6 +15,21 @@ namespace PixelEngine.Hosting.Tests;
 public sealed class EditorShellProjectTests
 {
     /// <summary>
+    /// 验证 Save/Save As/dirty transition 会把 Canvas 草稿校验失败当作可恢复产品错误，
+    /// 同时不吞掉与场景操作无关的程序缺陷。
+    /// </summary>
+    [Fact]
+    public void SceneOperationFailureClassifierIncludesCanvasDraftValidation()
+    {
+        Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new IOException("disk")));
+        Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new UnauthorizedAccessException("acl")));
+        Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new InvalidDataException("manifest")));
+        Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new ArgumentOutOfRangeException("scaler")));
+        Assert.True(EditorShellApp.IsRecoverableSceneOperationFailure(new InvalidOperationException("primary")));
+        Assert.False(EditorShellApp.IsRecoverableSceneOperationFailure(new NullReferenceException("bug")));
+    }
+
+    /// <summary>
     /// 验证项目选择器 Browse 成功时用文件夹选择器结果回填路径，并清理旧诊断。
     /// </summary>
     [Fact]

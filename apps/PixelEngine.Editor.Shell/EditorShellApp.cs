@@ -2133,7 +2133,7 @@ internal sealed class EditorShellApp
             LastProjectError = null;
             return true;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception exception) when (IsRecoverableSceneOperationFailure(exception))
         {
             LastProjectError = $"保存场景失败：{exception.Message}";
             ConsoleStore.AddProjectError("scene-save", LastProjectError);
@@ -2155,7 +2155,7 @@ internal sealed class EditorShellApp
             LastProjectError = null;
             return true;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception exception) when (IsRecoverableSceneOperationFailure(exception))
         {
             LastProjectError = $"另存场景失败：{exception.Message}";
             ConsoleStore.AddProjectError("scene-save-as", LastProjectError);
@@ -2388,7 +2388,7 @@ internal sealed class EditorShellApp
             RecordCurrentWorkspace();
             LastProjectError = null;
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception exception) when (IsRecoverableSceneOperationFailure(exception))
         {
             LastProjectError = $"新建场景失败：{exception.Message}";
             ConsoleStore.AddProjectError("scene-new", LastProjectError);
@@ -2469,12 +2469,18 @@ internal sealed class EditorShellApp
             CurrentSession.SaveScene();
             return EditorTransitionSaveResult.Success();
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+        catch (Exception exception) when (IsRecoverableSceneOperationFailure(exception))
         {
             LastProjectError = $"保存场景失败：{exception.Message}";
             ConsoleStore.AddProjectError("scene-save", LastProjectError);
             return EditorTransitionSaveResult.Failure(LastProjectError);
         }
+    }
+
+    internal static bool IsRecoverableSceneOperationFailure(Exception exception)
+    {
+        return exception is IOException or UnauthorizedAccessException ||
+            EditorProjectSession.IsRecoverableAuthoringSceneValidationFailure(exception);
     }
 
     private void HandleTransitionResult(EditorTransitionResult result)
