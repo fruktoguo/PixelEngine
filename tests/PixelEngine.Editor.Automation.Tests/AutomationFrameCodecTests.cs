@@ -72,10 +72,41 @@ public sealed class AutomationFrameCodecTests
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(8, 4), maximum + 1);
         await using MemoryStream stream = new(header);
 
-        AutomationProtocolException exception = await Assert.ThrowsAsync<AutomationProtocolException>(
+        AutomationFrameSizeException exception = await Assert.ThrowsAsync<AutomationFrameSizeException>(
             async () => await AutomationFrameCodec.ReadAsync(stream, maximum));
 
         Assert.Contains("1..64", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>验证配置本身不能绕过 v1 控制面绝对上限诱导巨量分配。</summary>
+    [Fact]
+    public async Task FrameRejectsConfiguredMaximumAboveProtocolAbsoluteLimit()
+    {
+        await using MemoryStream stream = new();
+
+        _ = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            async () => await AutomationFrameCodec.ReadAsync(
+                stream,
+                AutomationProtocolConstants.AbsoluteMaxFrameBytes + 1));
+    }
+
+    /// <summary>验证 write preflight 与实际 frame 写入共享同一 payload 边界。</summary>
+    [Fact]
+    public void ValidateWritableRejectsOversizedSemanticResponseBeforeIo()
+    {
+        AutomationEnvelope envelope = new()
+        {
+            SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+            Protocol = AutomationProtocolConstants.CurrentVersion,
+            MessageId = "large-response",
+            Kind = AutomationMessageKind.Response,
+            CorrelationId = "large-request",
+            Method = "test.large",
+            Payload = JsonSerializer.SerializeToElement(new { value = new string('x', 4096) }),
+        };
+
+        _ = Assert.Throws<AutomationFrameSizeException>(
+            () => AutomationFrameCodec.ValidateWritable(envelope, 1024));
     }
 
     /// <summary>验证截断 payload 不会产生部分 envelope。</summary>

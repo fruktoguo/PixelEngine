@@ -63,6 +63,12 @@ internal sealed class AutomationDiscoveryPublisher
             AutomationJsonContext.Default.AutomationInstanceDescriptor);
         try
         {
+            if (json.Length is <= 0 or > AutomationProtocolConstants.MaxDiscoveryDescriptorBytes)
+            {
+                throw new InvalidDataException(
+                    $"Automation discovery descriptor 超过 {AutomationProtocolConstants.MaxDiscoveryDescriptorBytes} 字节上限。");
+            }
+
             await File.WriteAllBytesAsync(temporaryPath, json, cancellationToken).ConfigureAwait(false);
             AutomationSecureStorage.EnsurePrivateFile(temporaryPath);
             File.Move(temporaryPath, path, overwrite: true);
@@ -76,7 +82,7 @@ internal sealed class AutomationDiscoveryPublisher
 
     public void Remove(string instanceId)
     {
-        TryDelete(GetDescriptorPath(instanceId));
+        RetireDescriptor(GetDescriptorPath(instanceId));
         TryDelete(GetCredentialPath(instanceId));
     }
 
@@ -105,6 +111,32 @@ internal sealed class AutomationDiscoveryPublisher
         }
         catch (UnauthorizedAccessException)
         {
+        }
+    }
+
+    private static void RetireDescriptor(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        string retiredPath = $"{path}.{Guid.NewGuid():N}.retired";
+        try
+        {
+            // 先原子移出 *.json discovery 集合；后续删除失败也不会继续宣告一个已停机实例。
+            File.Move(path, retiredPath);
+            TryDelete(retiredPath);
+        }
+        catch (IOException)
+        {
+            TryDelete(path);
+            TryDelete(retiredPath);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            TryDelete(path);
+            TryDelete(retiredPath);
         }
     }
 }

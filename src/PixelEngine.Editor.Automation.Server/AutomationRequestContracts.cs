@@ -14,6 +14,42 @@ public sealed record AutomationMethodDescriptor
 
     /// <summary>执行该 method 所需全部 scopes。</summary>
     public required string[] RequiredScopes { get; init; }
+
+    /// <summary>只读、写入或非事务 command。</summary>
+    public required AutomationOperationKind OperationKind { get; init; }
+
+    /// <summary>允许访问权威对象的唯一 safe phase。</summary>
+    public required AutomationExecutionPhase ExecutionPhase { get; init; }
+
+    /// <summary>transaction 参与策略。</summary>
+    public required AutomationTransactionMode TransactionMode { get; init; }
+
+    /// <summary>是否强制写请求携带 expected revision。</summary>
+    public bool RequiresExpectedRevision { get; init; }
+
+    /// <summary>是否强制请求携带跨连接 idempotency key。</summary>
+    public bool RequiresIdempotencyKey { get; init; }
+}
+
+/// <summary>
+/// 认证 session 的稳定身份上下文。
+/// </summary>
+public sealed record AutomationSessionContext
+{
+    /// <summary>短命 pipe session id。</summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>credential 派生 principal id。</summary>
+    public required string PrincipalId { get; init; }
+
+    /// <summary>外部进程在重连期间保持不变的 client instance id。</summary>
+    public required string ClientInstanceId { get; init; }
+
+    /// <summary>hello 声明的客户端名称。</summary>
+    public required string ClientName { get; init; }
+
+    /// <summary>实际授予 scopes。</summary>
+    public required string[] GrantedScopes { get; init; }
 }
 
 /// <summary>
@@ -27,16 +63,26 @@ public sealed class AutomationRequestContext
         string requestId,
         string correlationId,
         string sessionId,
+        string principalId,
+        string clientInstanceId,
         string clientName,
         IEnumerable<string> grantedScopes,
-        DateTimeOffset? deadlineUtc)
+        DateTimeOffset? deadlineUtc,
+        AutomationRevisionPrecondition? expectedRevision,
+        string? idempotencyKey,
+        string? transactionId)
     {
         RequestId = requestId;
         CorrelationId = correlationId;
         SessionId = sessionId;
+        PrincipalId = principalId;
+        ClientInstanceId = clientInstanceId;
         ClientName = clientName;
         _grantedScopes = grantedScopes.ToFrozenSet(StringComparer.Ordinal);
         DeadlineUtc = deadlineUtc;
+        ExpectedRevision = expectedRevision;
+        IdempotencyKey = idempotencyKey;
+        TransactionId = transactionId;
     }
 
     /// <summary>request message id。</summary>
@@ -48,11 +94,26 @@ public sealed class AutomationRequestContext
     /// <summary>认证 session id。</summary>
     public string SessionId { get; }
 
+    /// <summary>credential 派生 principal id。</summary>
+    public string PrincipalId { get; }
+
+    /// <summary>重连期间稳定的 client instance id。</summary>
+    public string ClientInstanceId { get; }
+
     /// <summary>hello 声明的客户端名称。</summary>
     public string ClientName { get; }
 
     /// <summary>请求 deadline。</summary>
     public DateTimeOffset? DeadlineUtc { get; }
+
+    /// <summary>optimistic concurrency 前置条件。</summary>
+    public AutomationRevisionPrecondition? ExpectedRevision { get; }
+
+    /// <summary>跨连接幂等 key。</summary>
+    public string? IdempotencyKey { get; }
+
+    /// <summary>可逆写操作要并入的 transaction id。</summary>
+    public string? TransactionId { get; }
 
     /// <summary>
     /// 检查会话是否拥有 scope。
@@ -63,6 +124,43 @@ public sealed class AutomationRequestContext
     {
         return _grantedScopes.Contains(scope);
     }
+
+    internal AutomationRequestContext SnapshotForTransactionStaging()
+    {
+        AutomationRevisionPrecondition? expected = ExpectedRevision is null
+            ? null
+            : ExpectedRevision with
+            {
+                Resources =
+                [
+                    .. ExpectedRevision.Resources.Select(static resource => resource with { }),
+                ],
+            };
+        return new AutomationRequestContext(
+            RequestId,
+            CorrelationId,
+            SessionId,
+            PrincipalId,
+            ClientInstanceId,
+            ClientName,
+            _grantedScopes,
+            null,
+            expected,
+            IdempotencyKey,
+            TransactionId);
+    }
+}
+
+/// <summary>
+/// semantic handler 返回的 payload 与同一安全点 revision。
+/// </summary>
+public sealed record AutomationHandlerResult
+{
+    /// <summary>小型 JSON payload。</summary>
+    public JsonElement? Payload { get; init; }
+
+    /// <summary>执行后或 snapshot 对应的 revision。</summary>
+    public AutomationRevisionSnapshot? Revision { get; init; }
 }
 
 /// <summary>
@@ -86,11 +184,42 @@ public interface IAutomationRequestHandler
     /// <param name="payload">请求 payload。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>响应 payload；无 payload 时为 null。</returns>
-    ValueTask<JsonElement?> HandleAsync(
+    ValueTask<AutomationHandlerResult> HandleAsync(
         AutomationRequestContext context,
         string method,
         JsonElement? payload,
         CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// 需要在认证成功和连接关闭时管理 transaction/subscription 的 handler 生命周期扩展。
+/// </summary>
+public interface IAutomationSessionLifecycleHandler
+{
+    /// <summary>认证成功后通知。</summary>
+    /// <param name="session">session 身份。</param>
+    /// <param name="eventSink">该连接的有界 event 输出端。</param>
+    void OnSessionOpened(AutomationSessionContext session, IAutomationEventSink eventSink);
+
+    /// <summary>连接关闭后通知；实现只能排队清理，不得在 I/O 线程访问 Editor 对象。</summary>
+    /// <param name="session">已关闭 session。</param>
+    void OnSessionClosed(AutomationSessionContext session);
+}
+
+/// <summary>
+/// Server connection 提供给 semantic event hub 的非阻塞、有界输出端。
+/// </summary>
+public interface IAutomationEventSink
+{
+    /// <summary>
+    /// 尝试按顺序排入一条事件；false 表示连接消费速度不足或已经关闭。
+    /// </summary>
+    /// <param name="eventRecord">不可变 event record。</param>
+    /// <returns>是否成功进入连接队列。</returns>
+    bool TryPublish(AutomationEventRecord eventRecord);
+
+    /// <summary>立即中止连接，使客户端通过 resume/replay 恢复。</summary>
+    void Abort();
 }
 
 /// <summary>
@@ -113,7 +242,7 @@ internal sealed class EmptyAutomationRequestHandler : IAutomationRequestHandler
         return false;
     }
 
-    public ValueTask<JsonElement?> HandleAsync(
+    public ValueTask<AutomationHandlerResult> HandleAsync(
         AutomationRequestContext context,
         string method,
         JsonElement? payload,

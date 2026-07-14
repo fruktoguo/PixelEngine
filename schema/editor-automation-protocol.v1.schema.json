@@ -20,21 +20,25 @@
     "helloRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "clientName", "clientVersion", "supportedVersions", "clientNonce", "requestedScopes"],
+      "required": ["schemaVersion", "clientInstanceId", "clientName", "clientVersion", "supportedVersions", "clientNonce", "requestedScopes"],
       "properties": {
         "schemaVersion": { "const": 1 },
-        "clientName": { "type": "string", "minLength": 1 },
-        "clientVersion": { "type": "string", "minLength": 1 },
+        "clientInstanceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "clientName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "clientVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
         "supportedVersions": {
           "type": "array",
           "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
           "items": { "$ref": "#/$defs/protocolVersion" }
         },
-        "clientNonce": { "type": "string", "contentEncoding": "base64" },
+        "clientNonce": { "type": "string", "minLength": 44, "maxLength": 44, "contentEncoding": "base64" },
         "requestedScopes": {
           "type": "array",
+          "maxItems": 32,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" }
         }
       }
     },
@@ -46,22 +50,25 @@
         "schemaVersion",
         "selectedVersion",
         "serverNonce",
+        "serverProof",
         "supportedScopes",
         "authenticationAlgorithm",
         "maxFrameBytes"
       ],
       "properties": {
         "schemaVersion": { "const": 1 },
-        "instanceId": { "type": "string", "minLength": 1 },
+        "instanceId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
         "selectedVersion": { "$ref": "#/$defs/protocolVersion" },
-        "serverNonce": { "type": "string", "contentEncoding": "base64" },
+        "serverNonce": { "type": "string", "minLength": 44, "maxLength": 44, "contentEncoding": "base64" },
+        "serverProof": { "type": "string", "minLength": 44, "maxLength": 44, "contentEncoding": "base64" },
         "supportedScopes": {
           "type": "array",
+          "maxItems": 32,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" }
         },
         "authenticationAlgorithm": { "const": "hmac-sha256" },
-        "maxFrameBytes": { "type": "integer", "minimum": 1 }
+        "maxFrameBytes": { "type": "integer", "minimum": 1, "maximum": 16777216 }
       }
     },
     "authenticateRequest": {
@@ -70,29 +77,32 @@
       "required": ["schemaVersion", "clientNonce", "serverNonce", "proof", "requestedScopes"],
       "properties": {
         "schemaVersion": { "const": 1 },
-        "clientNonce": { "type": "string", "contentEncoding": "base64" },
-        "serverNonce": { "type": "string", "contentEncoding": "base64" },
-        "proof": { "type": "string", "contentEncoding": "base64" },
+        "clientNonce": { "type": "string", "minLength": 44, "maxLength": 44, "contentEncoding": "base64" },
+        "serverNonce": { "type": "string", "minLength": 44, "maxLength": 44, "contentEncoding": "base64" },
+        "proof": { "type": "string", "minLength": 44, "maxLength": 44, "contentEncoding": "base64" },
         "requestedScopes": {
           "type": "array",
+          "maxItems": 32,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" }
         }
       }
     },
     "sessionInfo": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "sessionId", "grantedScopes", "serverVersion", "protocol"],
+      "required": ["schemaVersion", "sessionId", "principalId", "grantedScopes", "serverVersion", "protocol"],
       "properties": {
         "schemaVersion": { "const": 1 },
-        "sessionId": { "type": "string", "minLength": 1 },
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "principalId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "grantedScopes": {
           "type": "array",
+          "maxItems": 32,
           "uniqueItems": true,
-          "items": { "type": "string", "minLength": 1 }
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,63}$" }
         },
-        "serverVersion": { "type": "string", "minLength": 1 },
+        "serverVersion": { "type": "string", "minLength": 1, "maxLength": 128 },
         "protocol": { "$ref": "#/$defs/protocolVersion" }
       }
     },
@@ -133,6 +143,340 @@
         "correlationId": { "type": "string", "minLength": 1 }
       }
     },
+    "expectedResourceRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "resourceId", "revision"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "revision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "revisionPrecondition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "resources"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "globalRevision": { "type": "integer", "minimum": 0 },
+        "resources": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/expectedResourceRevision" }
+        }
+      }
+    },
+    "resourceRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "resourceId", "revision"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "revision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "revisionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "globalRevision", "resources"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "globalRevision": { "type": "integer", "minimum": 0 },
+        "resources": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/resourceRevision" }
+        }
+      }
+    },
+    "resourceRevisionConflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "resourceId", "expectedRevision", "currentRevision"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "expectedRevision": { "type": "integer", "minimum": 0 },
+        "currentRevision": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "revisionConflictDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "currentGlobalRevision", "resourceConflicts"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "expectedGlobalRevision": { "type": "integer", "minimum": 0 },
+        "currentGlobalRevision": { "type": "integer", "minimum": 0 },
+        "resourceConflicts": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/resourceRevisionConflict" }
+        }
+      }
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "artifactId",
+        "path",
+        "relativePath",
+        "mediaType",
+        "byteLength",
+        "sha256",
+        "createdAtUtc",
+        "sourceRevision"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "path": { "type": "string", "minLength": 1 },
+        "relativePath": { "type": "string", "minLength": 1 },
+        "mediaType": { "type": "string", "minLength": 3, "maxLength": 128 },
+        "byteLength": { "type": "integer", "minimum": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "createdAtUtc": { "type": "string", "format": "date-time" },
+        "sourceRevision": { "$ref": "#/$defs/revisionSnapshot" },
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "encoding": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "metadata": {}
+      }
+    },
+    "transactionBeginRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "name", "leaseMilliseconds"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "leaseMilliseconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "transactionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "transactionId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "transactionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" }
+      }
+    },
+    "transactionInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "transactionId",
+        "sessionId",
+        "name",
+        "status",
+        "createdAtUtc",
+        "expiresAtUtc",
+        "operationCount",
+        "resourceIds",
+        "baseRevision"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "transactionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "sessionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "status": { "enum": ["Active", "Committed", "RolledBack", "Expired"] },
+        "createdAtUtc": { "type": "string", "format": "date-time" },
+        "expiresAtUtc": { "type": "string", "format": "date-time" },
+        "operationCount": { "type": "integer", "minimum": 0 },
+        "resourceIds": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        },
+        "baseRevision": { "$ref": "#/$defs/revisionSnapshot" }
+      }
+    },
+    "transactionStagedOperationInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "transactionId",
+        "ordinal",
+        "method",
+        "acceptedAtUtc"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "operationId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "transactionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "method": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "acceptedAtUtc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "transactionOperationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "operationId", "requestId", "method", "resourceIds"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "operationId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "requestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "method": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "payload": {},
+        "resourceIds": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        }
+      }
+    },
+    "transactionCommitResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "transaction", "operations"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "transaction": { "$ref": "#/$defs/transactionInfo" },
+        "operations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/transactionOperationResult" }
+        }
+      }
+    },
+    "transactionFailureDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "transactionId", "rollbackSucceeded", "cause"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "transactionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "operationId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "ordinal": { "type": "integer", "minimum": 0 },
+        "method": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "rollbackSucceeded": { "type": "boolean" },
+        "cause": { "$ref": "#/$defs/error" }
+      }
+    },
+    "eventRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "subscriptionId",
+        "sequence",
+        "eventType",
+        "stateRevision",
+        "publishedAtUtc"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subscriptionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "eventType": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+        "stateRevision": { "$ref": "#/$defs/revisionSnapshot" },
+        "causationRequestId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "publishedAtUtc": { "type": "string", "format": "date-time" },
+        "payload": {}
+      }
+    },
+    "eventSubscribeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "subscriptionKey", "eventTypes", "backlogLimit"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subscriptionKey": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "eventTypes": {
+          "type": "array",
+          "maxItems": 256,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" }
+        },
+        "resumeToken": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "afterSequence": { "type": "integer", "minimum": 0 },
+        "backlogLimit": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "subscriptionInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "subscriptionId",
+        "resumeToken",
+        "status",
+        "nextSequence",
+        "acknowledgedSequence",
+        "backlogCount",
+        "resumeExpiresAtUtc"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subscriptionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "resumeToken": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "status": { "enum": ["Active", "Disconnected", "Removed"] },
+        "nextSequence": { "type": "integer", "minimum": 1 },
+        "acknowledgedSequence": { "type": "integer", "minimum": 0 },
+        "backlogCount": { "type": "integer", "minimum": 0 },
+        "replayFromSequence": { "type": "integer", "minimum": 1 },
+        "resumeExpiresAtUtc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "eventAckRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "subscriptionId", "sequence"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subscriptionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "sequence": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "eventSubscriptionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "subscriptionId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subscriptionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" }
+      }
+    },
+    "eventResyncDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "reason"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subscriptionId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "acknowledgedSequence": { "type": "integer", "minimum": 0 },
+        "lostSequence": { "type": "integer", "minimum": 1 },
+        "reason": { "enum": ["backlog_overflow", "resume_state_unavailable"] }
+      }
+    },
+    "stateChangedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "method", "resourceIds", "changeKind"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "method": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "resourceIds": {
+          "type": "array",
+          "maxItems": 4096,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 256 }
+        },
+        "changeKind": { "enum": ["execute", "commit", "rollback", "expired", "undo", "redo"] },
+        "transactionId": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
     "envelope": {
       "type": "object",
       "additionalProperties": false,
@@ -146,6 +490,10 @@
         "method": { "type": "string", "minLength": 1, "maxLength": 256 },
         "sessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
         "deadlineUtc": { "type": "string", "format": "date-time" },
+        "expectedRevision": { "$ref": "#/$defs/revisionPrecondition" },
+        "revision": { "$ref": "#/$defs/revisionSnapshot" },
+        "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "transactionId": { "type": "string", "minLength": 1, "maxLength": 128 },
         "payload": {},
         "error": { "$ref": "#/$defs/error" }
       }
@@ -166,10 +514,10 @@
       "required": ["schemaVersion", "projectId", "name", "rootPath"],
       "properties": {
         "schemaVersion": { "const": 1 },
-        "projectId": { "type": "string", "minLength": 1 },
-        "name": { "type": "string", "minLength": 1 },
-        "rootPath": { "type": "string", "minLength": 1 },
-        "sceneId": { "type": "string", "minLength": 1 }
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "rootPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "sceneId": { "type": "string", "minLength": 1, "maxLength": 128 }
       }
     },
     "instanceDescriptor": {

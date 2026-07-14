@@ -8,7 +8,12 @@ internal static class AutomationSecureStorage
 {
     public static void EnsurePrivateDirectory(string path)
     {
-        DirectoryInfo directory = Directory.CreateDirectory(path);
+        string canonical = Path.GetFullPath(path);
+        RejectRemoteOrDevicePath(canonical);
+        // 先检查现存 ancestor，再创建最后几级目录，避免在 junction/symlink 目标中产生副作用后才拒绝。
+        RejectReparseAncestors(canonical);
+        DirectoryInfo directory = Directory.CreateDirectory(canonical);
+        RejectReparseAncestors(directory.FullName);
         RejectReparsePoint(directory.FullName, directory.Attributes);
         if (OperatingSystem.IsWindows())
         {
@@ -24,14 +29,19 @@ internal static class AutomationSecureStorage
 
     public static void EnsurePrivateFile(string path)
     {
-        RejectReparsePoint(path, File.GetAttributes(path));
+        string canonical = Path.GetFullPath(path);
+        RejectRemoteOrDevicePath(canonical);
+        string parent = Path.GetDirectoryName(canonical)
+            ?? throw new IOException($"Automation secure storage 文件没有父目录：{canonical}");
+        RejectReparseAncestors(parent);
+        RejectReparsePoint(canonical, File.GetAttributes(canonical));
         if (OperatingSystem.IsWindows())
         {
-            ApplyWindowsFileAcl(new FileInfo(path));
+            ApplyWindowsFileAcl(new FileInfo(canonical));
         }
         else
         {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            File.SetUnixFileMode(canonical, UnixFileMode.UserRead | UnixFileMode.UserWrite);
         }
     }
 
@@ -77,6 +87,35 @@ internal static class AutomationSecureStorage
         if ((attributes & FileAttributes.ReparsePoint) != 0)
         {
             throw new IOException($"Automation secure storage 拒绝 reparse point：{path}");
+        }
+    }
+
+    private static void RejectReparseAncestors(string path)
+    {
+        DirectoryInfo? current = new(Path.GetFullPath(path));
+        while (current is not null)
+        {
+            if (current.Exists)
+            {
+                RejectReparsePoint(current.FullName, current.Attributes);
+            }
+
+            current = current.Parent;
+        }
+    }
+
+    private static void RejectRemoteOrDevicePath(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string? root = Path.GetPathRoot(path);
+        if (path.StartsWith(@"\\", StringComparison.Ordinal) || root is null ||
+            new DriveInfo(root).DriveType == DriveType.Network)
+        {
+            throw new IOException($"Automation secure storage 拒绝 UNC/device path：{path}");
         }
     }
 }

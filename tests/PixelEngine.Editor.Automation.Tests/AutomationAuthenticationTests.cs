@@ -20,6 +20,9 @@ public sealed class AutomationAuthenticationTests
             string proof = AutomationAuthentication.ComputeProof(
                 secret,
                 "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 AutomationProtocolConstants.CurrentVersion,
@@ -28,6 +31,9 @@ public sealed class AutomationAuthenticationTests
             Assert.True(AutomationAuthentication.VerifyProof(
                 secret,
                 "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 AutomationProtocolConstants.CurrentVersion,
@@ -36,6 +42,9 @@ public sealed class AutomationAuthenticationTests
             Assert.False(AutomationAuthentication.VerifyProof(
                 secret,
                 "instance-b",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 AutomationProtocolConstants.CurrentVersion,
@@ -44,6 +53,42 @@ public sealed class AutomationAuthenticationTests
             Assert.False(AutomationAuthentication.VerifyProof(
                 secret,
                 "instance-a",
+                "different-client-instance",
+                "test-client",
+                "1.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                proof));
+            Assert.False(AutomationAuthentication.VerifyProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "different-client",
+                "1.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                proof));
+            Assert.False(AutomationAuthentication.VerifyProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "test-client",
+                "2.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                proof));
+            Assert.False(AutomationAuthentication.VerifyProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 new AutomationProtocolVersion(1, 1),
@@ -52,6 +97,9 @@ public sealed class AutomationAuthenticationTests
             Assert.False(AutomationAuthentication.VerifyProof(
                 secret,
                 "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 AutomationProtocolConstants.CurrentVersion,
@@ -60,6 +108,9 @@ public sealed class AutomationAuthenticationTests
             Assert.False(AutomationAuthentication.VerifyProof(
                 secret,
                 "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 AutomationProtocolConstants.CurrentVersion,
@@ -68,11 +119,64 @@ public sealed class AutomationAuthenticationTests
             Assert.False(AutomationAuthentication.VerifyProof(
                 secret,
                 "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
                 "client-nonce",
                 "server-nonce",
                 AutomationProtocolConstants.CurrentVersion,
                 [AutomationScopes.EditorRead],
                 string.Empty));
+
+            string serverProof = AutomationAuthentication.ComputeServerProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                AutomationScopes.All,
+                AutomationProtocolConstants.DefaultMaxFrameBytes);
+            Assert.True(AutomationAuthentication.VerifyServerProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                AutomationScopes.All,
+                AutomationProtocolConstants.DefaultMaxFrameBytes,
+                serverProof));
+            Assert.False(AutomationAuthentication.VerifyProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                serverProof));
+            Assert.False(AutomationAuthentication.VerifyServerProof(
+                secret,
+                "instance-a",
+                "client-instance",
+                "test-client",
+                "1.0",
+                "client-nonce",
+                "server-nonce",
+                AutomationProtocolConstants.CurrentVersion,
+                [AutomationScopes.EditorRead],
+                AutomationScopes.All,
+                AutomationProtocolConstants.DefaultMaxFrameBytes + 1,
+                serverProof));
         }
         finally
         {

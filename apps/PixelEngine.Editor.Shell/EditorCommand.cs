@@ -12,6 +12,14 @@ internal interface IEditorCommand
     void Undo(EditorSceneModel scene);
 }
 
+/// <summary>Undo history 中一次已经应用到 scene 的变化方向。</summary>
+internal enum EditorUndoMutationKind
+{
+    Execute,
+    Undo,
+    Redo,
+}
+
 /// <summary>
 /// 编辑器场景操作的 Undo/Redo 栈。
 /// </summary>
@@ -32,6 +40,9 @@ internal sealed class EditorUndoStack
     /// 作为菜单、面板与脚本化入口之外的最后一道统一写屏障。
     /// </summary>
     public Func<bool>? CanModifyScene { get; set; }
+
+    /// <summary>手动命令 execute/undo/redo 完成后的 revision/event 通知。</summary>
+    public Action<IEditorCommand, EditorUndoMutationKind>? HistoryApplied { get; set; }
 
     public bool CanUndo => IsModificationAllowed() && _undo.Count != 0;
 
@@ -54,6 +65,7 @@ internal sealed class EditorUndoStack
         command.Execute(scene);
         _undo.Push(command);
         _redo.Clear();
+        HistoryApplied?.Invoke(command, EditorUndoMutationKind.Execute);
     }
 
     public bool Undo(EditorSceneModel scene)
@@ -73,6 +85,7 @@ internal sealed class EditorUndoStack
         IEditorCommand command = _undo.Pop();
         command.Undo(scene);
         _redo.Push(command);
+        HistoryApplied?.Invoke(command, EditorUndoMutationKind.Undo);
         return true;
     }
 
@@ -93,7 +106,21 @@ internal sealed class EditorUndoStack
         IEditorCommand command = _redo.Pop();
         command.Execute(scene);
         _undo.Push(command);
+        HistoryApplied?.Invoke(command, EditorUndoMutationKind.Redo);
         return true;
+    }
+
+    /// <summary>
+    /// 登记一个已经在同一 Editor 主线程执行完毕的命令，供 automation scheduler
+    /// 与手动编辑共用唯一 Undo/Redo 历史。
+    /// </summary>
+    public void RecordExecuted(IEditorCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        // 这里只接受 scheduler 已经在同一主线程完成并校验过的命令。transaction commit
+        // 记录 composite 时写租约仍处于 active，不能复用面向手动入口的 CanModifyScene 屏障。
+        _undo.Push(command);
+        _redo.Clear();
     }
 
     public void Clear()

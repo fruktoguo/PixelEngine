@@ -25,17 +25,7 @@ public static class AutomationFrameCodec
     {
         ArgumentNullException.ThrowIfNull(stream);
         ArgumentNullException.ThrowIfNull(envelope);
-        ValidateMaxFrameBytes(maxFrameBytes);
-        ValidateEnvelope(envelope);
-
-        byte[] payload = JsonSerializer.SerializeToUtf8Bytes(
-            envelope,
-            AutomationJsonContext.Default.AutomationEnvelope);
-        if (payload.Length == 0 || payload.Length > maxFrameBytes)
-        {
-            throw new AutomationProtocolException(
-                $"Automation frame payload 必须位于 1..{maxFrameBytes} 字节，实际为 {payload.Length}。");
-        }
+        byte[] payload = SerializeEnvelope(envelope, maxFrameBytes);
 
         byte[] header = GC.AllocateUninitializedArray<byte>(AutomationProtocolConstants.FrameHeaderSize);
         BinaryPrimitives.WriteUInt32LittleEndian(header.AsSpan(0, 4), Magic);
@@ -47,6 +37,21 @@ public static class AutomationFrameCodec
         await stream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
         await stream.WriteAsync(payload, cancellationToken).ConfigureAwait(false);
         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 在不写入 stream 的前提下执行与 <see cref="WriteAsync" /> 相同的 envelope 与
+    /// payload 大小校验。Server 用它在持久化 success audit 前拒绝超限 semantic response。
+    /// </summary>
+    /// <param name="envelope">待编码 envelope。</param>
+    /// <param name="maxFrameBytes">控制面 payload 上限。</param>
+    /// <returns>实际 JSON payload 字节数。</returns>
+    public static int ValidateWritable(
+        AutomationEnvelope envelope,
+        int maxFrameBytes = AutomationProtocolConstants.DefaultMaxFrameBytes)
+    {
+        ArgumentNullException.ThrowIfNull(envelope);
+        return SerializeEnvelope(envelope, maxFrameBytes).Length;
     }
 
     /// <summary>
@@ -88,7 +93,7 @@ public static class AutomationFrameCodec
         uint payloadLength = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(8, 4));
         if (payloadLength == 0 || payloadLength > maxFrameBytes)
         {
-            throw new AutomationProtocolException(
+            throw new AutomationFrameSizeException(
                 $"Automation frame payload 必须位于 1..{maxFrameBytes} 字节，实际为 {payloadLength}。");
         }
 
@@ -111,10 +116,25 @@ public static class AutomationFrameCodec
 
     private static void ValidateMaxFrameBytes(int maxFrameBytes)
     {
-        if (maxFrameBytes <= 0)
+        if (maxFrameBytes is <= 0 or > AutomationProtocolConstants.AbsoluteMaxFrameBytes)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxFrameBytes), "最大 frame 字节数必须为正数。");
+            throw new ArgumentOutOfRangeException(
+                nameof(maxFrameBytes),
+                $"最大 frame 字节数必须位于 1..{AutomationProtocolConstants.AbsoluteMaxFrameBytes}。");
         }
+    }
+
+    private static byte[] SerializeEnvelope(AutomationEnvelope envelope, int maxFrameBytes)
+    {
+        ValidateMaxFrameBytes(maxFrameBytes);
+        ValidateEnvelope(envelope);
+        byte[] payload = JsonSerializer.SerializeToUtf8Bytes(
+            envelope,
+            AutomationJsonContext.Default.AutomationEnvelope);
+        return payload.Length == 0 || payload.Length > maxFrameBytes
+            ? throw new AutomationFrameSizeException(
+                $"Automation frame payload 必须位于 1..{maxFrameBytes} 字节，实际为 {payload.Length}。")
+            : payload;
     }
 
     private static void ValidateEnvelope(AutomationEnvelope envelope)
@@ -133,6 +153,8 @@ public static class AutomationFrameCodec
         ValidateIdentifier(envelope.CorrelationId, "correlationId", 128, required: false);
         ValidateIdentifier(envelope.Method, "method", 256, required: false);
         ValidateIdentifier(envelope.SessionId, "sessionId", 128, required: false);
+        ValidateIdentifier(envelope.IdempotencyKey, "idempotencyKey", 128, required: false);
+        ValidateIdentifier(envelope.TransactionId, "transactionId", 128, required: false);
         if (!Enum.IsDefined(envelope.Kind))
         {
             throw new AutomationProtocolException("Automation envelope kind 无效。");
@@ -148,6 +170,22 @@ public static class AutomationFrameCodec
             throw new AutomationProtocolException("Automation response 不得同时携带 payload 与 error。");
         }
 
+        if (envelope.Kind != AutomationMessageKind.Request &&
+            (envelope.ExpectedRevision is not null || envelope.IdempotencyKey is not null ||
+             envelope.TransactionId is not null))
+        {
+            throw new AutomationProtocolException(
+                "只有 Request envelope 可携带 expectedRevision、idempotencyKey 或 transactionId。");
+        }
+
+        if (envelope.Kind == AutomationMessageKind.Request && envelope.Revision is not null)
+        {
+            throw new AutomationProtocolException("Request envelope 不得携带 response revision。");
+        }
+
+        ValidateRevisionPrecondition(envelope.ExpectedRevision);
+        ValidateRevisionSnapshot(envelope.Revision);
+
         if (envelope.Error is not null &&
             (envelope.Error.SchemaVersion != AutomationProtocolConstants.WireSchemaVersion ||
              string.IsNullOrWhiteSpace(envelope.Error.Code) || string.IsNullOrWhiteSpace(envelope.Error.Message) ||
@@ -160,7 +198,7 @@ public static class AutomationFrameCodec
 
     private static void ValidateIdentifier(string? value, string field, int maxLength, bool required)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (value is null)
         {
             if (required)
             {
@@ -170,9 +208,69 @@ public static class AutomationFrameCodec
             return;
         }
 
-        if (value.Length > maxLength || value.Any(char.IsControl))
+        if (string.IsNullOrWhiteSpace(value) || value.Length > maxLength || value.Any(char.IsControl))
         {
             throw new AutomationProtocolException($"Automation envelope {field} 长度或字符无效。");
         }
+    }
+
+    private static void ValidateRevisionPrecondition(AutomationRevisionPrecondition? precondition)
+    {
+        if (precondition is null)
+        {
+            return;
+        }
+
+        if (precondition.SchemaVersion != AutomationProtocolConstants.WireSchemaVersion ||
+            precondition.GlobalRevision < 0 || !ValidateExpectedResources(precondition.Resources))
+        {
+            throw new AutomationProtocolException("Automation expectedRevision contract 无效。");
+        }
+    }
+
+    private static void ValidateRevisionSnapshot(AutomationRevisionSnapshot? snapshot)
+    {
+        if (snapshot is null)
+        {
+            return;
+        }
+
+        if (snapshot.SchemaVersion != AutomationProtocolConstants.WireSchemaVersion ||
+            snapshot.GlobalRevision < 0 || !ValidateResourceRevisions(snapshot.Resources))
+        {
+            throw new AutomationProtocolException("Automation revision snapshot contract 无效。");
+        }
+    }
+
+    private static bool ValidateExpectedResources(AutomationExpectedResourceRevision[]? resources)
+    {
+        if (resources is null || resources.Length > AutomationProtocolConstants.MaxRevisionResources)
+        {
+            return false;
+        }
+
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        return resources.All(resource => resource is not null &&
+            resource.SchemaVersion == AutomationProtocolConstants.WireSchemaVersion &&
+            IsResourceId(resource.ResourceId) && resource.Revision >= 0 && ids.Add(resource.ResourceId));
+    }
+
+    private static bool ValidateResourceRevisions(AutomationResourceRevision[]? resources)
+    {
+        if (resources is null || resources.Length > AutomationProtocolConstants.MaxRevisionResources)
+        {
+            return false;
+        }
+
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        return resources.All(resource => resource is not null &&
+            resource.SchemaVersion == AutomationProtocolConstants.WireSchemaVersion &&
+            IsResourceId(resource.ResourceId) && resource.Revision >= 0 && ids.Add(resource.ResourceId));
+    }
+
+    private static bool IsResourceId(string? resourceId)
+    {
+        return resourceId is { Length: >= 1 and <= AutomationProtocolConstants.MaxResourceIdLength } &&
+            !string.IsNullOrWhiteSpace(resourceId) && !resourceId.Any(char.IsControl);
     }
 }

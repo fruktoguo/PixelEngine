@@ -197,6 +197,61 @@ internal sealed class EditorShellHostExtension :
         _ = _sceneViewPanel?.CommitGizmoTransform();
     }
 
+    internal EditorAutomationSelectionSnapshot CaptureAutomationSelection()
+    {
+        EditorSelection selection = _editor.Selection;
+        return new EditorAutomationSelectionSnapshot(
+            selection.CellX,
+            selection.CellY,
+            selection.MaterialId,
+            selection.AssetId,
+            selection.AssetPath,
+            selection.FolderPath,
+            selection.EntityHandle,
+            selection.GameObjectStableId,
+            selection.BodyId);
+    }
+
+    internal void RestoreAutomationSelection(in EditorAutomationSelectionSnapshot snapshot)
+    {
+        EditorSelection selection = _editor.Selection;
+        selection.Clear();
+        if (snapshot.CellX is { } cellX && snapshot.CellY is { } cellY)
+        {
+            selection.SelectCell(cellX, cellY);
+        }
+
+        if (snapshot.MaterialId is { } materialId)
+        {
+            selection.SelectMaterial(materialId);
+        }
+
+        if (!string.IsNullOrWhiteSpace(snapshot.AssetId) && !string.IsNullOrWhiteSpace(snapshot.AssetPath))
+        {
+            selection.SelectAsset(snapshot.AssetId, snapshot.AssetPath);
+        }
+        else if (!string.IsNullOrWhiteSpace(snapshot.AssetPath))
+        {
+            selection.SelectAsset(snapshot.AssetPath);
+        }
+        else if (snapshot.FolderPath is not null)
+        {
+            selection.SelectFolder(snapshot.FolderPath);
+        }
+        else if (!string.IsNullOrWhiteSpace(snapshot.EntityHandle))
+        {
+            selection.SelectEntity(snapshot.EntityHandle);
+        }
+        else if (snapshot.GameObjectStableId is { } stableId)
+        {
+            selection.SelectGameObject(stableId);
+        }
+        else if (snapshot.BodyId is { } bodyId)
+        {
+            selection.SelectBody(bodyId);
+        }
+    }
+
     public void RequestGameViewFocus()
     {
         if (_gameViewPanel is not null)
@@ -350,7 +405,8 @@ internal sealed class EditorShellHostExtension :
 
         _sceneModel = sceneModel ?? throw new ArgumentNullException(nameof(sceneModel));
         _undoStack = undoStack ?? throw new ArgumentNullException(nameof(undoStack));
-        _undoStack.CanModifyScene = () => CapturePlayMode() == EditorMode.Edit;
+        _undoStack.CanModifyScene = () =>
+            CapturePlayMode() == EditorMode.Edit && !_app.IsAutomationTransactionActive;
         _prefabs = prefabs ?? throw new ArgumentNullException(nameof(prefabs));
         _authoringWorld = authoringWorld ?? throw new ArgumentNullException(nameof(authoringWorld));
     }

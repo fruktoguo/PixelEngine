@@ -16,6 +16,7 @@ internal sealed class EditorProjectSession : IDisposable
     private const int DefaultEditorWorldHeight = 480;
     private const int DefaultParticleCapacity = 32768;
     private readonly EditorShellHostExtension _editorHost;
+    private readonly EditorShellApp _app;
     private readonly IEditorConsoleSink _console;
     private readonly EngineWorldSnapshotStore _snapshotStore;
     private readonly EngineEditorPlaySessionService _playSession;
@@ -29,6 +30,7 @@ internal sealed class EditorProjectSession : IDisposable
 
     private EditorProjectSession(
         EditorProject project,
+        EditorShellApp app,
         Engine engine,
         EditorShellHostExtension editorHost,
         IEditorConsoleSink console,
@@ -42,6 +44,7 @@ internal sealed class EditorProjectSession : IDisposable
         string currentSceneRelativePath)
     {
         Project = project;
+        _app = app ?? throw new ArgumentNullException(nameof(app));
         Engine = engine;
         _editorHost = editorHost;
         _console = console ?? throw new ArgumentNullException(nameof(console));
@@ -106,6 +109,28 @@ internal sealed class EditorProjectSession : IDisposable
         _editorHost.FlushPendingAuthoringEdits();
     }
 
+    internal EditorAutomationTransactionState CaptureAutomationTransactionState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new EditorAutomationTransactionState(
+            this,
+            SceneModel.SelectedStableId,
+            SceneModel.IsDirty,
+            _editorHost.CaptureAutomationSelection());
+    }
+
+    internal void RestoreAutomationTransactionState(EditorAutomationTransactionState state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(state);
+        int? selectedStableId = state.SceneSelectedStableId;
+        SceneModel.Select(selectedStableId is { } stableId && SceneModel.TryGet(stableId, out _)
+            ? stableId
+            : null);
+        SceneModel.RestoreDirtyState(state.SceneWasDirty);
+        _editorHost.RestoreAutomationSelection(state.Selection);
+    }
+
     public static EditorProjectSession Open(EditorProject project, RenderWindow window, EditorShellApp app)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -120,13 +145,18 @@ internal sealed class EditorProjectSession : IDisposable
             app.ConsoleStore.AddProjectError("player-settings", playerSettingsDiagnostic);
         }
         // 按 PlayerSettings 构造 Engine，并挂载 Editor 扩展与内容包
-        Engine engine = new EngineBuilder()
+        EngineBuilder engineBuilder = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
             .ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)
             .UseGuiRuntime()
             .EnableGameUi()
-            .AddEditorHostExtension(editorHost)
-            .Build();
+            .AddEditorHostExtension(editorHost);
+        if (app.AutomationScheduler is { } automationScheduler)
+        {
+            _ = engineBuilder.AddPhaseDriver(new EditorAutomationPhaseDriver(automationScheduler));
+        }
+
+        Engine engine = engineBuilder.Build();
         try
         {
             AttachContentAndWorld(engine);
@@ -134,6 +164,7 @@ internal sealed class EditorProjectSession : IDisposable
             _ = engine.AttachPhysics();
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = new();
+            app.ConfigureAutomationUndoStack(undoStack);
             EditorAssetManifestStore assets = new(project);
             engine.Context.RegisterService<IGameUiManifestAssetResolver>(
                 new EditorGameUiManifestAssetResolver(assets, project.ContentRootPath));
@@ -162,7 +193,7 @@ internal sealed class EditorProjectSession : IDisposable
                 app.ConsoleStore.AddUiBackendSelection(uiBackendSelection);
             }
 
-            return new EditorProjectSession(project, engine, editorHost, app.ConsoleStore, sceneModel, undoStack, projection, authoringWorld, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
+            return new EditorProjectSession(project, app, engine, editorHost, app.ConsoleStore, sceneModel, undoStack, projection, authoringWorld, prefabs, scriptAssetOpenService, codeWorkspaceOpenService, sceneRelativePath);
         }
         catch
         {
@@ -565,6 +596,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void SaveScene()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureSceneTransitionAllowed("保存场景");
         _editorHost.FlushPendingAuthoringEdits();
         Prefabs.RefreshPrefabInstances(SceneModel);
         Engine.SaveSceneDocument(SceneModel.ToDocument(), SceneFilePath);
@@ -582,6 +614,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void SaveSceneAs(string sceneRelativePath, bool makeStartScene)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureSceneTransitionAllowed("另存场景");
         _editorHost.FlushPendingAuthoringEdits();
         string normalized = Project.ResolveSceneRelativePath(sceneRelativePath);
         Prefabs.RefreshPrefabInstances(SceneModel);
@@ -590,11 +623,13 @@ internal sealed class EditorProjectSession : IDisposable
         CurrentSceneRelativePath = normalized;
         SceneModel.Name = Project.ResolveDisplaySceneName(normalized);
         SceneModel.MarkSaved();
+        _app.NotifyAutomationProjectChanged();
     }
 
     public string NewSceneAuto()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureSceneTransitionAllowed("新建场景");
         _editorHost.FlushPendingAuthoringEdits();
         string relative = AllocateNewScenePath();
         EditorSceneModel empty = EditorSceneModel.Empty(Path.GetFileNameWithoutExtension(relative) ?? "scene");
@@ -604,6 +639,7 @@ internal sealed class EditorProjectSession : IDisposable
         SceneModel.ReplaceWith(empty, markDirty: false);
         UndoStack.Clear();
         CurrentSceneRelativePath = normalized;
+        _app.NotifyAutomationProjectChanged();
         return CurrentSceneRelativePath;
     }
 
@@ -613,6 +649,7 @@ internal sealed class EditorProjectSession : IDisposable
     public void OpenScene(string sceneRelativePath)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        EnsureSceneTransitionAllowed("打开场景");
         _editorHost.FlushPendingAuthoringEdits();
         string normalized = Project.ResolveSceneRelativePath(sceneRelativePath);
         EditorSceneModel loaded = LoadSceneModel(Project, normalized);
@@ -620,6 +657,16 @@ internal sealed class EditorProjectSession : IDisposable
         UndoStack.Clear();
         CurrentSceneRelativePath = normalized;
         Project.RegisterScene(normalized);
+        _app.NotifyAutomationProjectChanged();
+    }
+
+    private void EnsureSceneTransitionAllowed(string operation)
+    {
+        if (_app.IsAutomationTransactionActive)
+        {
+            throw new InvalidOperationException(
+                $"{operation}已被拒绝：外部 automation transaction 正持有 Editor 写租约。");
+        }
     }
 
     public void Dispose()

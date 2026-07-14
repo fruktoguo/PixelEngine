@@ -24,6 +24,28 @@ public sealed class AutomationSchemaTests
         Assert.True(definitions.TryGetProperty("sessionInfo", out _));
         Assert.True(definitions.TryGetProperty("cancelRequest", out _));
         Assert.True(definitions.TryGetProperty("pingResponse", out _));
+        string[] stateDefinitions =
+        [
+            "revisionPrecondition",
+            "revisionSnapshot",
+            "revisionConflictDetails",
+            "artifactReference",
+            "transactionBeginRequest",
+            "transactionRequest",
+            "transactionInfo",
+            "transactionStagedOperationInfo",
+            "transactionOperationResult",
+            "transactionCommitResult",
+            "transactionFailureDetails",
+            "eventRecord",
+            "eventSubscribeRequest",
+            "subscriptionInfo",
+            "eventAckRequest",
+            "eventSubscriptionRequest",
+            "eventResyncDetails",
+            "stateChangedEvent",
+        ];
+        Assert.All(stateDefinitions, name => Assert.True(definitions.TryGetProperty(name, out _), name));
         Assert.Contains(
             "schemaVersion",
             definitions.GetProperty("envelope").GetProperty("required")
@@ -35,6 +57,13 @@ public sealed class AutomationSchemaTests
             .GetProperty("enum");
         Assert.Contains("WindowsNamedPipe", transports.EnumerateArray().Select(static item => item.GetString()));
         Assert.Contains("UnixDomainSocket", transports.EnumerateArray().Select(static item => item.GetString()));
+        JsonElement envelopeProperties = definitions.GetProperty("envelope").GetProperty("properties");
+        Assert.True(envelopeProperties.TryGetProperty("expectedRevision", out _));
+        Assert.True(envelopeProperties.TryGetProperty("revision", out _));
+        Assert.True(envelopeProperties.TryGetProperty("idempotencyKey", out _));
+        Assert.True(envelopeProperties.TryGetProperty("transactionId", out _));
+        Assert.True(definitions.GetProperty("helloChallenge").GetProperty("properties")
+            .TryGetProperty("serverProof", out _));
     }
 
     /// <summary>验证 source-generated descriptor 使用 schema 的 camelCase 名称。</summary>

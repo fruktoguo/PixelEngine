@@ -38,6 +38,28 @@ public sealed class EditorShellOptionsTests
         Assert.Null(options.UserDataDirectory);
         Assert.False(options.EphemeralUserState);
         Assert.True(options.ReopenLastProject);
+        Assert.True(options.AutomationEnabled);
+    }
+
+    /// <summary>验证 automation Server 可显式关闭，并 canonicalize 三个安全路径覆盖。</summary>
+    [Fact]
+    public void ParseRecognizesAutomationSecurityAndStorageOptions()
+    {
+        EditorShellOptions options = EditorShellOptions.Parse(
+        [
+            "--disable-automation",
+            "--automation-discovery-root",
+            " automation-discovery ",
+            "--automation-artifact-root",
+            " automation-artifacts ",
+            "--automation-credential",
+            " automation.token ",
+        ]);
+
+        Assert.False(options.AutomationEnabled);
+        Assert.Equal(Path.GetFullPath("automation-discovery"), options.AutomationDiscoveryRoot);
+        Assert.Equal(Path.GetFullPath("automation-artifacts"), options.AutomationArtifactRoot);
+        Assert.Equal(Path.GetFullPath("automation.token"), options.AutomationCredentialPath);
     }
 
     /// <summary>

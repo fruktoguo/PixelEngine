@@ -85,7 +85,7 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证独立编辑器壳位于 apps 层，只引用 Hosting、Editor 与 Gui 三个公开装配入口。
+    /// 验证独立编辑器壳位于 apps 层，只引用 Hosting、Editor、Gui 与 automation 公共装配入口。
     /// </summary>
     [Fact]
     public void EditorShellProjectReferencesOnlyShellEntryProjects()
@@ -94,7 +94,13 @@ public sealed class HostingProjectDisciplineTests
         XDocument project = XDocument.Load(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "PixelEngine.Editor.Shell.csproj"));
 
         Assert.Equal(
-            ["PixelEngine.Hosting", "PixelEngine.Editor", "PixelEngine.Gui"],
+            [
+                "PixelEngine.Hosting",
+                "PixelEngine.Editor",
+                "PixelEngine.Gui",
+                "PixelEngine.Editor.Automation.Protocol",
+                "PixelEngine.Editor.Automation.Server",
+            ],
             [
                 .. ReadIncludes(project, "ProjectReference")
                     .Select(GetIncludedProjectName),

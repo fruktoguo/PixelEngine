@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Hexa.NET.ImGui;
+using PixelEngine.Editor.Automation.Server;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
@@ -31,6 +32,7 @@ internal sealed class EditorShellApp
     private bool _closeProjectRequested;
     private bool _exitRequested;
     private bool _allowDirtyShutdown;
+    private EditorAutomationRuntime? _automation;
 
     private EditorShellApp(
         EditorShellOptions options,
@@ -130,6 +132,20 @@ internal sealed class EditorShellApp
 
     public EditorProjectSession? CurrentSession { get; private set; }
 
+    internal AutomationMainThreadScheduler? AutomationScheduler => _automation?.Scheduler;
+
+    internal bool IsAutomationTransactionActive => _automation?.Scheduler.HasActiveTransaction == true;
+
+    internal void ConfigureAutomationUndoStack(EditorUndoStack undoStack)
+    {
+        _automation?.ConfigureUndoStack(undoStack);
+    }
+
+    internal void NotifyAutomationProjectChanged()
+    {
+        _automation?.UpdateProject(CurrentSession);
+    }
+
     private ProjectPickerWindow ProjectPicker { get; }
 
     private EditorShellLayout Layout { get; }
@@ -143,14 +159,22 @@ internal sealed class EditorShellApp
             options = EditorShellOptions.Parse(args);
             EditorUserDataPaths userDataPaths = EditorUserDataPaths.Resolve(options);
             string? preferencesOverride = Environment.GetEnvironmentVariable("PIXELENGINE_EDITOR_PREFERENCES_PATH");
-            return new EditorShellApp(
+            EditorShellApp app = new(
                 options,
                 userDataPaths,
                 EditorPreferencesStore.Load(string.IsNullOrWhiteSpace(preferencesOverride)
                     ? userDataPaths.PreferencesPath
                     : preferencesOverride),
                 RecentProjectsStore.Load(userDataPaths.RecentProjectsPath),
-                EditorWorkspaceStore.Load(userDataPaths.WorkspacePath)).Run();
+                EditorWorkspaceStore.Load(userDataPaths.WorkspacePath));
+            try
+            {
+                return app.Run();
+            }
+            finally
+            {
+                app.DisposeAutomation();
+            }
         }
         catch (Exception exception)
         {
@@ -162,6 +186,7 @@ internal sealed class EditorShellApp
 
     private int Run()
     {
+        _automation = EditorAutomationRuntime.Start(this, _options, _userDataPaths);
         bool previousShutdownWasClean = Workspace.Current.LastCleanShutdown;
         if (!Workspace.TrySetShutdownState(cleanShutdown: false, out string startupStateDiagnostic))
         {
@@ -244,6 +269,7 @@ internal sealed class EditorShellApp
         // 主循环：无项目时显示 ProjectPicker；有项目时由 Session 驱动 Engine tick
         while (!_exitRequested)
         {
+            _automation?.DrainEditorIngress();
             bool nativeCloseRequested = shellWindow.Window.IsClosing;
             bool isDirty = nativeCloseRequested && IsCurrentSceneDirtyAfterFlushing();
             if (EditorNativeCloseGuard.ShouldExit(
@@ -574,6 +600,7 @@ internal sealed class EditorShellApp
         }
 
         bool cleanShutdown = CurrentSession?.SceneModel.IsDirty != true || _allowDirtyShutdown;
+        DisposeAutomation();
         CurrentSession?.Dispose();
         CurrentSession = null;
         if (cleanShutdown && !Workspace.TrySetShutdownState(cleanShutdown: true, out string shutdownStateDiagnostic))
@@ -2068,6 +2095,11 @@ internal sealed class EditorShellApp
 
     public void OpenProjectPath(string projectRootOrFile)
     {
+        if (RejectProjectTransitionDuringAutomation("打开工程"))
+        {
+            return;
+        }
+
         try
         {
             OpenProject(EditorProject.Load(projectRootOrFile));
@@ -2085,6 +2117,11 @@ internal sealed class EditorShellApp
     public void OpenProject(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
+        if (RejectProjectTransitionDuringAutomation("打开工程"))
+        {
+            return;
+        }
+
         HandleTransitionResult(_transitions.Request(
             EditorTransitionKind.OpenProject,
             () => QueueProject(project),
@@ -2093,6 +2130,11 @@ internal sealed class EditorShellApp
 
     public void CloseProject()
     {
+        if (RejectProjectTransitionDuringAutomation("关闭工程"))
+        {
+            return;
+        }
+
         HandleTransitionResult(_transitions.Request(
             EditorTransitionKind.CloseProject,
             QueueCloseProject,
@@ -2797,7 +2839,7 @@ internal sealed class EditorShellApp
     // 帧末创建 EditorProjectSession，接管 Engine tick 与 ImGui 面板
     private void ApplyPendingProject(EditorShellWindow shellWindow)
     {
-        if (_pendingProject is null)
+        if (_pendingProject is null || IsAutomationTransactionActive)
         {
             return;
         }
@@ -2839,6 +2881,7 @@ internal sealed class EditorShellApp
             }
 
             CurrentProject = project;
+            _automation?.UpdateProject(CurrentSession);
             ProjectPicker.Close();
             RecordCurrentWorkspace();
             SceneOverridePath = null;
@@ -2860,6 +2903,7 @@ internal sealed class EditorShellApp
             CurrentSession?.Dispose();
             CurrentSession = null;
             CurrentProject = null;
+            _automation?.UpdateProject(session: null);
             SceneOverridePath = null;
             _pendingSceneOverrideFromWorkspace = false;
             FocusProjectPicker(ProjectPickerMode.OpenProject);
@@ -2868,7 +2912,7 @@ internal sealed class EditorShellApp
 
     private void ApplyDeferredClose()
     {
-        if (!_closeProjectRequested)
+        if (!_closeProjectRequested || IsAutomationTransactionActive)
         {
             return;
         }
@@ -2876,8 +2920,29 @@ internal sealed class EditorShellApp
         CurrentSession?.Dispose();
         CurrentSession = null;
         CurrentProject = null;
+        _automation?.UpdateProject(session: null);
         ProjectPicker.Focus(ProjectPickerMode.RecentProjects);
         _closeProjectRequested = false;
+    }
+
+    private bool RejectProjectTransitionDuringAutomation(string operation)
+    {
+        if (!IsAutomationTransactionActive)
+        {
+            return false;
+        }
+
+        ConsoleStore.AddProjectError(
+            "automation-transaction",
+            $"{operation}已被拒绝：外部 automation transaction 正持有 Editor 写租约。");
+        return true;
+    }
+
+    private void DisposeAutomation()
+    {
+        EditorAutomationRuntime? automation = _automation;
+        _automation = null;
+        automation?.Dispose();
     }
 
     private void UpdateTitle(EditorShellWindow shellWindow)

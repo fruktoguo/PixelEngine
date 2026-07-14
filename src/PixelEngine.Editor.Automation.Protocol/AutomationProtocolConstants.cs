@@ -23,11 +23,26 @@ public static class AutomationProtocolConstants
     /// <summary>默认控制面最大 payload 字节数。</summary>
     public const int DefaultMaxFrameBytes = 1024 * 1024;
 
+    /// <summary>
+    /// v1 控制面允许配置的绝对 frame 上限。更大的截图、快照与构建数据必须写入 artifact，
+    /// 防止错误配置或恶意对端诱导单帧巨量分配。
+    /// </summary>
+    public const int AbsoluteMaxFrameBytes = 16 * 1024 * 1024;
+
     /// <summary>单个 discovery descriptor 的最大字节数。</summary>
     public const int MaxDiscoveryDescriptorBytes = 64 * 1024;
 
     /// <summary>base64 credential 文件的最大字节数。</summary>
     public const int MaxCredentialFileBytes = 4096;
+
+    /// <summary>单个 revision snapshot/precondition 最多包含的资源数。</summary>
+    public const int MaxRevisionResources = 4096;
+
+    /// <summary>稳定 resource id 的最大字符数。</summary>
+    public const int MaxResourceIdLength = 256;
+
+    /// <summary>单个 event subscription 最多声明的 event type filter 数。</summary>
+    public const int MaxEventFilterTypes = 256;
 
     /// <summary>实例 descriptor schema id。</summary>
     public const string InstanceDescriptorSchema = "pixelengine.editor-automation-instance/v1";
@@ -49,6 +64,36 @@ public static class AutomationProtocolConstants
 
     /// <summary>实例描述读取方法。</summary>
     public const string DescribeMethod = "system.describe";
+
+    /// <summary>开始可逆 transaction。</summary>
+    public const string TransactionBeginMethod = "transaction.begin";
+
+    /// <summary>提交 transaction 并合并为一个 Undo item。</summary>
+    public const string TransactionCommitMethod = "transaction.commit";
+
+    /// <summary>回滚 transaction。</summary>
+    public const string TransactionRollbackMethod = "transaction.rollback";
+
+    /// <summary>读取 transaction 状态。</summary>
+    public const string TransactionStatusMethod = "transaction.status";
+
+    /// <summary>创建或恢复 event subscription。</summary>
+    public const string EventSubscribeMethod = "event.subscribe";
+
+    /// <summary>确认事件 sequence。</summary>
+    public const string EventAckMethod = "event.ack";
+
+    /// <summary>删除 event subscription。</summary>
+    public const string EventUnsubscribeMethod = "event.unsubscribe";
+
+    /// <summary>Server→Client 的 event envelope method。</summary>
+    public const string EventNotificationMethod = "event.notification";
+
+    /// <summary>任意已提交权威状态写入后的通用事件类型。</summary>
+    public const string StateChangedEventType = "editor.state.changed";
+
+    /// <summary>transaction commit/rollback/expiry 事件类型。</summary>
+    public const string TransactionChangedEventType = "editor.transaction.changed";
 
     /// <summary>当前协议版本。</summary>
     public static AutomationProtocolVersion CurrentVersion { get; } = new(CurrentMajor, CurrentMinor);
@@ -91,4 +136,40 @@ public static class AutomationErrorCodes
 
     /// <summary>服务端执行失败。</summary>
     public const string Internal = "internal_error";
+
+    /// <summary>optimistic concurrency 前置 revision 已过期。</summary>
+    public const string RevisionConflict = "revision_conflict";
+
+    /// <summary>幂等 key 被不同请求复用。</summary>
+    public const string IdempotencyConflict = "idempotency_conflict";
+
+    /// <summary>transaction 不存在、不属于当前 session 或已结束。</summary>
+    public const string TransactionInvalid = "transaction_invalid";
+
+    /// <summary>另一个 transaction 正持有互斥写租约。</summary>
+    public const string TransactionConflict = "transaction_conflict";
+
+    /// <summary>transaction commit 的预校验或某个 staged operation 失败且已回滚。</summary>
+    public const string TransactionFailed = "transaction_failed";
+
+    /// <summary>transaction commit 失败后无法完整恢复 before image。</summary>
+    public const string TransactionRollbackFailed = "transaction_rollback_failed";
+
+    /// <summary>event replay window 已淘汰所需 sequence。</summary>
+    public const string ResyncRequired = "resync_required";
+
+    /// <summary>慢消费者超过订阅 backlog。</summary>
+    public const string EventOverflow = "event_overflow";
+
+    /// <summary>artifact session 或单文件配额不足。</summary>
+    public const string ArtifactQuotaExceeded = "artifact_quota_exceeded";
+
+    /// <summary>canonical path 越过获准 root 或包含链接逃逸。</summary>
+    public const string PathNotAllowed = "path_not_allowed";
+
+    /// <summary>请求在当前 Editor/项目/Play 状态不可执行。</summary>
+    public const string StateUnavailable = "state_unavailable";
+
+    /// <summary>semantic handler 返回了本应写入 artifact 的超限控制面响应。</summary>
+    public const string ResponseTooLarge = "response_too_large";
 }

@@ -180,6 +180,103 @@ public sealed class AutomationDiscoveryTests
         Assert.True(File.Exists(otherToken));
     }
 
+    /// <summary>验证 discovery 对 descriptor 做硬字节上限读取并给出可剪枝诊断。</summary>
+    [Fact]
+    public async Task DiscoveryRejectsOversizedDescriptorWithoutUnboundedRead()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        string instances = Directory.CreateDirectory(Path.Combine(temporary.Path, "instances")).FullName;
+        string descriptorPath = Path.Combine(instances, "oversized.json");
+        await File.WriteAllBytesAsync(
+            descriptorPath,
+            new byte[AutomationProtocolConstants.MaxDiscoveryDescriptorBytes + 1]);
+
+        AutomationDiscoverySnapshot snapshot = await AutomationDiscovery.DiscoverAsync(temporary.Path);
+
+        Assert.Empty(snapshot.Instances);
+        AutomationDiscoveryDiagnostic diagnostic = Assert.Single(snapshot.Diagnostics);
+        Assert.Equal("invalid_descriptor", diagnostic.Code);
+        Assert.Contains("大小", diagnostic.Message, StringComparison.Ordinal);
+        Assert.Equal(1, await AutomationDiscovery.PruneStaleAsync(temporary.Path));
+        Assert.False(File.Exists(descriptorPath));
+    }
+
+    /// <summary>验证 v1 discovery 能安全识别预留 UDS descriptor，并明确报告 transport 尚未发布。</summary>
+    [Fact]
+    public async Task DiscoveryReportsReservedUnixDomainSocketAsUnsupportedTransport()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        string instances = Directory.CreateDirectory(Path.Combine(temporary.Path, "instances")).FullName;
+        string credentials = Directory.CreateDirectory(Path.Combine(temporary.Path, "credentials")).FullName;
+        string credentialPath = Path.Combine(credentials, "uds.token");
+        await File.WriteAllTextAsync(credentialPath, Convert.ToBase64String(new byte[32]));
+        AutomationInstanceDescriptor descriptor = CreateDescriptor(
+            "uds",
+            Environment.ProcessId,
+            Process.GetCurrentProcess().StartTime.ToUniversalTime(),
+            credentialPath) with
+        {
+            Endpoint = new AutomationEndpointDescriptor
+            {
+                SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                Kind = AutomationTransportKind.UnixDomainSocket,
+                Address = Path.Combine(temporary.Path, "editor.sock"),
+            },
+        };
+        await File.WriteAllBytesAsync(
+            Path.Combine(instances, "uds.json"),
+            JsonSerializer.SerializeToUtf8Bytes(
+                descriptor,
+                AutomationJsonContext.Default.AutomationInstanceDescriptor));
+
+        AutomationDiscoverySnapshot snapshot = await AutomationDiscovery.DiscoverAsync(temporary.Path);
+
+        Assert.Empty(snapshot.Instances);
+        AutomationDiscoveryDiagnostic diagnostic = Assert.Single(snapshot.Diagnostics);
+        Assert.Equal("invalid_descriptor", diagnostic.Code);
+        Assert.Contains("Unix Domain Socket", diagnostic.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>验证 public Client 对伪造/损坏 discovered instance 给出参数错误而不是 NRE 或 I/O 副作用。</summary>
+    [Fact]
+    public async Task ClientRejectsMalformedDiscoveredInstanceBeforeConnecting()
+    {
+        AutomationInstanceDescriptor malformed = CreateDescriptor(
+            "malformed",
+            Environment.ProcessId,
+            DateTimeOffset.UtcNow,
+            Path.GetFullPath("missing.token")) with
+        {
+            Endpoint = null!,
+        };
+        AutomationDiscoveredInstance instance = new()
+        {
+            Descriptor = malformed,
+            DescriptorPath = Path.GetFullPath("malformed.json"),
+            CredentialPath = Path.GetFullPath("missing.token"),
+        };
+
+        _ = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await EditorAutomationClient.ConnectAsync(
+                instance,
+                new AutomationClientOptions
+                {
+                    ClientName = "malformed-test",
+                    ClientVersion = "1.0",
+                    RequestedScopes = [AutomationScopes.EditorRead],
+                }));
+    }
+
     private static EditorAutomationServer CreateServer(string root)
     {
         return new EditorAutomationServer(new AutomationServerOptions

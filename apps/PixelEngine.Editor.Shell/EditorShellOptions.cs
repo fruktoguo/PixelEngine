@@ -55,6 +55,18 @@ internal sealed record EditorShellOptions(
     /// </summary>
     public int? ScriptedAuthoringInspectorProbeStableId { get; init; }
 
+    /// <summary>是否启动默认开启的本地 Editor automation Server。</summary>
+    public bool AutomationEnabled { get; init; } = true;
+
+    /// <summary>覆盖 current-user automation discovery root。</summary>
+    public string? AutomationDiscoveryRoot { get; init; }
+
+    /// <summary>覆盖 automation artifact root。</summary>
+    public string? AutomationArtifactRoot { get; init; }
+
+    /// <summary>可选预置 current-user credential 文件。</summary>
+    public string? AutomationCredentialPath { get; init; }
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -79,6 +91,10 @@ internal sealed record EditorShellOptions(
         bool ephemeralUserState = false;
         bool reopenLastProject = true;
         string? userDataDirectory = null;
+        bool automationEnabled = true;
+        string? automationDiscoveryRoot = null;
+        string? automationArtifactRoot = null;
+        string? automationCredentialPath = null;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -169,6 +185,18 @@ internal sealed record EditorShellOptions(
                 case "--no-reopen-last-project":
                     reopenLastProject = false;
                     break;
+                case "--disable-automation":
+                    automationEnabled = false;
+                    break;
+                case "--automation-discovery-root":
+                    automationDiscoveryRoot = RequireValue(args, ref i, arg);
+                    break;
+                case "--automation-artifact-root":
+                    automationArtifactRoot = RequireValue(args, ref i, arg);
+                    break;
+                case "--automation-credential":
+                    automationCredentialPath = RequireValue(args, ref i, arg);
+                    break;
                 default:
                     throw new ArgumentException($"未知参数：{arg}");
             }
@@ -196,7 +224,16 @@ internal sealed record EditorShellOptions(
             ScriptedRuntimeInspectorProbe = scriptedRuntimeInspectorProbe,
             ScriptedSettingsPanelProbe = scriptedSettingsPanelProbe,
             ScriptedAuthoringInspectorProbeStableId = scriptedAuthoringInspectorProbeStableId,
+            AutomationEnabled = automationEnabled,
+            AutomationDiscoveryRoot = NormalizeOptionalPath(automationDiscoveryRoot),
+            AutomationArtifactRoot = NormalizeOptionalPath(automationArtifactRoot),
+            AutomationCredentialPath = NormalizeOptionalPath(automationCredentialPath),
         };
+    }
+
+    private static string? NormalizeOptionalPath(string? path)
+    {
+        return string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path.Trim());
     }
 
     private static string RequireValue(string[] args, ref int index, string option)

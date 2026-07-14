@@ -3,7 +3,7 @@ namespace PixelEngine.Editor.Automation.Protocol;
 /// <summary>
 /// frame 或 wire contract 无效时抛出的协议异常。
 /// </summary>
-public sealed class AutomationProtocolException : Exception
+public class AutomationProtocolException : Exception
 {
     /// <summary>
     /// 创建协议异常。
@@ -23,4 +23,9 @@ public sealed class AutomationProtocolException : Exception
         : base(message, innerException)
     {
     }
+}
+
+/// <summary>frame 配置或实际 JSON payload 超出有界控制面大小时抛出的协议异常。</summary>
+public sealed class AutomationFrameSizeException(string message) : AutomationProtocolException(message)
+{
 }

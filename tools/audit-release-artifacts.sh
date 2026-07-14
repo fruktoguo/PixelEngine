@@ -109,24 +109,56 @@ assert_file_exists() {
   fi
 }
 
+emit_sha256_hash() {
+  local hash="${1%$'\r'}"
+  if [[ "$hash" =~ ^[[:xdigit:]]{64}$ ]]; then
+    printf '%s\n' "${hash,,}"
+    return 0
+  fi
+
+  return 1
+}
+
 sha256_file() {
   local file="$1"
-  if command -v sha256sum >/dev/null 2>&1; then
-    sha256sum "$file" | awk '{print tolower($1)}'
-    return
+  local output=""
+  local hash=""
+  local ignored=""
+  local fields=()
+  output="$(mktemp "${TMPDIR:-/tmp}/pixelengine-sha.XXXXXXXX")" ||
+    fail_audit "无法创建安全的 SHA256 临时输出。"
+
+  # Git-for-Windows coreutils 在长测试进程继承的 pipe 上偶发 _setmode(1) EBADF。
+  # 让 hash 工具写普通文件，再由 Bash builtin 解析，既保留 fallback 也不依赖脆弱管线。
+  if command -v sha256sum >/dev/null 2>&1 && sha256sum "$file" > "$output" 2>/dev/null; then
+    IFS=' ' read -r hash ignored < "$output" || true
+    if emit_sha256_hash "$hash"; then
+      rm -f "$output"
+      return
+    fi
   fi
 
-  if command -v shasum >/dev/null 2>&1; then
-    shasum -a 256 "$file" | awk '{print tolower($1)}'
-    return
+  if command -v shasum >/dev/null 2>&1 && shasum -a 256 "$file" > "$output" 2>/dev/null; then
+    IFS=' ' read -r hash ignored < "$output" || true
+    if emit_sha256_hash "$hash"; then
+      rm -f "$output"
+      return
+    fi
   fi
 
-  if command -v openssl >/dev/null 2>&1; then
-    openssl dgst -sha256 "$file" | awk '{print tolower($NF)}'
-    return
+  if command -v openssl >/dev/null 2>&1 && openssl dgst -sha256 "$file" > "$output" 2>/dev/null; then
+    IFS=' ' read -r -a fields < "$output" || true
+    if (( ${#fields[@]} > 0 )); then
+      hash="${fields[${#fields[@]} - 1]}"
+      if emit_sha256_hash "$hash"; then
+        rm -f "$output"
+        return
+      fi
+    fi
   fi
 
-  fail_audit "找不到 SHA256 工具：需要 sha256sum、shasum 或 openssl。"
+  rm -f "$output"
+  fail_audit "找不到可用 SHA256 工具：需要 sha256sum、shasum 或 openssl。"
 }
 
 read_active_rids_from_json() {

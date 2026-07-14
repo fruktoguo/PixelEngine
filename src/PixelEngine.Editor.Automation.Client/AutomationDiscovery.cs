@@ -66,6 +66,7 @@ public static class AutomationDiscovery
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(discoveryRoot);
         string root = Path.GetFullPath(discoveryRoot);
+        RejectRemoteOrDeviceRoot(root);
         string instancesRoot = Path.Combine(root, "instances");
         string credentialsRoot = Path.Combine(root, "credentials");
         if (!Directory.Exists(instancesRoot))
@@ -73,7 +74,11 @@ public static class AutomationDiscovery
             return new AutomationDiscoverySnapshot { Instances = [], Diagnostics = [] };
         }
 
-        if (TryContainsReparsePoint(instancesRoot, root))
+        string volumeRoot = Path.GetPathRoot(root)
+            ?? throw new ArgumentException("Automation discovery root 没有 volume root。", nameof(discoveryRoot));
+        if (TryContainsReparsePoint(root, volumeRoot) ||
+            TryContainsReparsePoint(instancesRoot, root) ||
+            (Directory.Exists(credentialsRoot) && TryContainsReparsePoint(credentialsRoot, root)))
         {
             return new AutomationDiscoverySnapshot
             {
@@ -104,27 +109,7 @@ public static class AutomationDiscovery
                     continue;
                 }
 
-                long descriptorLength = new FileInfo(path).Length;
-                if (descriptorLength is <= 0 or > AutomationProtocolConstants.MaxDiscoveryDescriptorBytes)
-                {
-                    AddDiagnostic(
-                        diagnostics,
-                        path,
-                        "invalid_descriptor",
-                        $"descriptor 大小必须位于 1..{AutomationProtocolConstants.MaxDiscoveryDescriptorBytes} 字节。");
-                    continue;
-                }
-
-                byte[] json = await File.ReadAllBytesAsync(path, cancellationToken).ConfigureAwait(false);
-                if (json.Length is <= 0 or > AutomationProtocolConstants.MaxDiscoveryDescriptorBytes)
-                {
-                    AddDiagnostic(
-                        diagnostics,
-                        path,
-                        "invalid_descriptor",
-                        $"descriptor 大小必须位于 1..{AutomationProtocolConstants.MaxDiscoveryDescriptorBytes} 字节。");
-                    continue;
-                }
+                byte[] json = await ReadBoundedDescriptorAsync(path, cancellationToken).ConfigureAwait(false);
 
                 AutomationInstanceDescriptor? descriptor = JsonSerializer.Deserialize(
                     json,
@@ -163,6 +148,10 @@ public static class AutomationDiscovery
             catch (JsonException exception)
             {
                 AddDiagnostic(diagnostics, path, "invalid_json", exception.Message);
+            }
+            catch (InvalidDataException exception)
+            {
+                AddDiagnostic(diagnostics, path, "invalid_descriptor", exception.Message);
             }
             catch (IOException exception)
             {
@@ -247,13 +236,15 @@ public static class AutomationDiscovery
             return $"不支持 descriptor schema '{descriptor.Schema}'。";
         }
 
-        if (string.IsNullOrWhiteSpace(descriptor.InstanceId) || descriptor.ProcessId <= 0 ||
-            descriptor.ProtocolVersions is null || descriptor.ProtocolVersions.Length == 0 ||
+        if (!IsIdentifier(descriptor.InstanceId, 128) || descriptor.ProcessId <= 0 ||
+            descriptor.ProcessStartUtc == default || descriptor.PublishedAtUtc == default ||
+            descriptor.ProtocolVersions is not { Length: >= 1 and <= 16 } ||
             descriptor.ProtocolVersions.Any(static version => version is null || version.Major <= 0 || version.Minor < 0) ||
+            descriptor.ProtocolVersions.Distinct().Count() != descriptor.ProtocolVersions.Length ||
             descriptor.Endpoint is null ||
             descriptor.Endpoint.SchemaVersion != AutomationProtocolConstants.WireSchemaVersion ||
-            string.IsNullOrWhiteSpace(descriptor.Endpoint.Address) ||
-            string.IsNullOrWhiteSpace(descriptor.CredentialPath) || string.IsNullOrWhiteSpace(descriptor.EditorVersion) ||
+            !IsBoundedText(descriptor.Endpoint.Address, 32767) ||
+            !IsBoundedText(descriptor.CredentialPath, 32767) || !IsBoundedText(descriptor.EditorVersion, 128) ||
             string.IsNullOrWhiteSpace(descriptor.CapabilityDigest))
         {
             return "descriptor identity/version/endpoint 不完整。";
@@ -280,9 +271,11 @@ public static class AutomationDiscovery
 
         if (descriptor.Project is not null &&
             (descriptor.Project.SchemaVersion != AutomationProtocolConstants.WireSchemaVersion ||
-             string.IsNullOrWhiteSpace(descriptor.Project.ProjectId) ||
-             string.IsNullOrWhiteSpace(descriptor.Project.Name) ||
-             string.IsNullOrWhiteSpace(descriptor.Project.RootPath)))
+             !IsBoundedText(descriptor.Project.ProjectId, 128) ||
+             !IsBoundedText(descriptor.Project.Name, 256) ||
+             !IsBoundedText(descriptor.Project.RootPath, 32767) ||
+             !Path.IsPathFullyQualified(descriptor.Project.RootPath) ||
+             (descriptor.Project.SceneId is not null && !IsBoundedText(descriptor.Project.SceneId, 128))))
         {
             return "descriptor project summary 不完整或 schema 不受支持。";
         }
@@ -297,10 +290,14 @@ public static class AutomationDiscovery
             ? "credentialPath 越出 discovery credentials root。"
             : !File.Exists(credentialPath)
             ? "credential 文件不存在。"
+            : new FileInfo(credentialPath).Length is <= 0 or > AutomationProtocolConstants.MaxCredentialFileBytes
+            ? "credential 文件大小无效。"
             : TryContainsReparsePoint(credentialPath, Path.GetFullPath(credentialsRoot))
             ? "credentialPath 包含 reparse point。"
             : descriptor.Endpoint.Kind switch
             {
+                AutomationTransportKind.WindowsNamedPipe when !IsIdentifier(descriptor.Endpoint.Address, 128) =>
+                    "Windows Named Pipe address 无效。",
                 AutomationTransportKind.WindowsNamedPipe when OperatingSystem.IsWindows() => null,
                 AutomationTransportKind.WindowsNamedPipe => "当前平台不能连接 Windows Named Pipe。",
                 AutomationTransportKind.UnixDomainSocket => "v1 尚未发布 Unix Domain Socket transport。",
@@ -327,6 +324,55 @@ public static class AutomationDiscovery
         catch (System.ComponentModel.Win32Exception)
         {
             return false;
+        }
+    }
+
+    private static async ValueTask<byte[]> ReadBoundedDescriptorAsync(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        await using FileStream file = new(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read | FileShare.Delete,
+            bufferSize: 16 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        if (file.Length is <= 0 or > AutomationProtocolConstants.MaxDiscoveryDescriptorBytes)
+        {
+            throw new InvalidDataException(
+                $"descriptor 大小必须位于 1..{AutomationProtocolConstants.MaxDiscoveryDescriptorBytes} 字节。");
+        }
+
+        byte[] json = new byte[checked((int)file.Length)];
+        await file.ReadExactlyAsync(json, cancellationToken).ConfigureAwait(false);
+        return json;
+    }
+
+    private static bool IsIdentifier(string? value, int maxLength)
+    {
+        return value is { Length: >= 1 } && value.Length <= maxLength && value.All(static character =>
+            char.IsAsciiLetterOrDigit(character) || character is '-' or '_');
+    }
+
+    private static bool IsBoundedText(string? value, int maxLength)
+    {
+        return value is { Length: >= 1 } && value.Length <= maxLength &&
+            !string.IsNullOrWhiteSpace(value) && !value.Any(char.IsControl);
+    }
+
+    private static void RejectRemoteOrDeviceRoot(string root)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string? volumeRoot = Path.GetPathRoot(root);
+        if (root.StartsWith(@"\\", StringComparison.Ordinal) || volumeRoot is null ||
+            new DriveInfo(volumeRoot).DriveType == DriveType.Network)
+        {
+            throw new NotSupportedException("Automation discovery 只允许本机文件系统 root。");
         }
     }
 

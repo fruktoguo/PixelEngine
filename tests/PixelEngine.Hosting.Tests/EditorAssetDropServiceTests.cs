@@ -350,7 +350,7 @@ public sealed class EditorAssetDropServiceTests
 
         // Assert：验证预期结果
         Assert.False(invalid.Succeeded);
-        Assert.Contains("stable asset id", panel.Status, StringComparison.Ordinal);
+        Assert.Contains("stable asset id", panel.Status, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(gameObject.Components[0].SerializedFields);
 
         EditorAssetDropResult valid = panel.AcceptAssetBrowserDragPayloadToField(

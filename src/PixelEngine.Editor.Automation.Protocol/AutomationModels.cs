@@ -99,6 +99,18 @@ public sealed record AutomationEnvelope
     /// <summary>服务端开始执行前必须检查的绝对 deadline。</summary>
     public DateTimeOffset? DeadlineUtc { get; init; }
 
+    /// <summary>写请求的 global/resource optimistic concurrency 前置条件。</summary>
+    public AutomationRevisionPrecondition? ExpectedRevision { get; init; }
+
+    /// <summary>响应或事件观察到的权威 revision。</summary>
+    public AutomationRevisionSnapshot? Revision { get; init; }
+
+    /// <summary>跨连接重试仍稳定的幂等 key。</summary>
+    public string? IdempotencyKey { get; init; }
+
+    /// <summary>可逆写操作要并入的 transaction id。</summary>
+    public string? TransactionId { get; init; }
+
     /// <summary>方法对应的 JSON payload。</summary>
     public JsonElement? Payload { get; init; }
 
@@ -147,6 +159,9 @@ public sealed record AutomationHelloRequest
     /// <summary>hello request DTO schema version。</summary>
     public required int SchemaVersion { get; init; }
 
+    /// <summary>同一外部进程在重连期间保持不变的稳定客户端实例 id。</summary>
+    public required string ClientInstanceId { get; init; }
+
     /// <summary>客户端名称。</summary>
     public required string ClientName { get; init; }
 
@@ -179,6 +194,9 @@ public sealed record AutomationHelloChallenge
 
     /// <summary>服务端随机 nonce。</summary>
     public required string ServerNonce { get; init; }
+
+    /// <summary>角色域分离的 base64 Server HMAC proof，证明实例持有 discovery credential。</summary>
+    public required string ServerProof { get; init; }
 
     /// <summary>服务端可授予的 scopes。</summary>
     public required string[] SupportedScopes { get; init; }
@@ -221,6 +239,9 @@ public sealed record AutomationSessionInfo
 
     /// <summary>会话 id。</summary>
     public required string SessionId { get; init; }
+
+    /// <summary>由 credential 派生、不可逆且不泄漏 secret 的稳定 principal id。</summary>
+    public required string PrincipalId { get; init; }
 
     /// <summary>实际授予的 scopes。</summary>
     public required string[] GrantedScopes { get; init; }

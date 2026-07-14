@@ -22,6 +22,15 @@ public sealed record AutomationServerOptions
     /// <summary>调用方注入的 credential 文件；为空时安全生成。</summary>
     public string? CredentialInputPath { get; init; }
 
+    /// <summary>current-user 审计日志根目录；为空时使用 discovery root 下的 audit 目录。</summary>
+    public string? AuditRoot { get; init; }
+
+    /// <summary>单个 JSONL 审计文件的字节上限，达到后在写入下一条记录前轮转。</summary>
+    public long MaxAuditFileBytes { get; init; } = 64L * 1024 * 1024;
+
+    /// <summary>包括当前文件在内保留的审计文件数。</summary>
+    public int MaxAuditFiles { get; init; } = 8;
+
     /// <summary>服务端允许授予的 scopes。</summary>
     public string[] SupportedScopes { get; init; } = AutomationScopes.All;
 
@@ -30,6 +39,9 @@ public sealed record AutomationServerOptions
 
     /// <summary>单连接最大并发请求数。</summary>
     public int MaxConcurrentRequestsPerConnection { get; init; } = 64;
+
+    /// <summary>单连接尚未写入 pipe 的 event record 上限；满时断开并要求 resume。</summary>
+    public int MaxQueuedEventsPerConnection { get; init; } = 4096;
 
     /// <summary>同时连接上限。</summary>
     public int MaxConnections { get; init; } = 16;

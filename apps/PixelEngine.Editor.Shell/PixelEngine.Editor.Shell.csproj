@@ -12,6 +12,8 @@
     <ProjectReference Include="..\..\src\PixelEngine.Hosting\PixelEngine.Hosting.csproj" />
     <ProjectReference Include="..\..\src\PixelEngine.Editor\PixelEngine.Editor.csproj" />
     <ProjectReference Include="..\..\src\PixelEngine.Gui\PixelEngine.Gui.csproj" />
+    <ProjectReference Include="..\..\src\PixelEngine.Editor.Automation.Protocol\PixelEngine.Editor.Automation.Protocol.csproj" />
+    <ProjectReference Include="..\..\src\PixelEngine.Editor.Automation.Server\PixelEngine.Editor.Automation.Server.csproj" />
   </ItemGroup>
 
   <ItemGroup>
