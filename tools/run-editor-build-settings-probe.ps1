@@ -379,17 +379,42 @@ for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
     Assert-SummaryValue $summary.Values 'build_settings_focused' 'True'
     Assert-SummaryValue $summary.Values 'captured' 'True'
     Assert-SummaryValue $summary.Values 'matches' 'True'
-    Assert-SummaryValue $summary.Values 'footer_density' 'Overflow'
-    Assert-SummaryValue $summary.Values 'footer_primary_fit' 'True'
     Assert-SummaryValue $summary.Values 'footer_actions_accessible' 'True'
-    Assert-SummaryValue $summary.Values 'footer_build_visible' 'True'
-    Assert-SummaryValue $summary.Values 'footer_build_and_run_visible' 'True'
-    Assert-SummaryValue $summary.Values 'footer_overflow_visible' 'True'
-    Assert-SummaryValue $summary.Values 'footer_overflow_popup_open' 'True'
     Assert-SummaryValue $summary.Values 'footer_secondary_accessible' 'True'
-    Assert-SummaryValue $summary.Values 'footer_overflow_requested' 'True'
     Assert-MinimumSummaryInteger $summary.Values 'frames_after_focus' 20
-    Assert-MinimumSummaryInteger $summary.Values 'frames_after_overflow_request' 1
+    $footerDensity = $summary.Values['footer_density']
+    switch ($footerDensity) {
+      'Inline' {
+        Assert-SummaryValue $summary.Values 'footer_primary_fit' 'True'
+        Assert-SummaryValue $summary.Values 'footer_build_visible' 'True'
+        Assert-SummaryValue $summary.Values 'footer_build_and_run_visible' 'True'
+        Assert-SummaryValue $summary.Values 'footer_overflow_visible' 'False'
+        Assert-SummaryValue $summary.Values 'footer_overflow_popup_open' 'False'
+        Assert-SummaryValue $summary.Values 'footer_overflow_requested' 'False'
+        Assert-SummaryValue $summary.Values 'frames_after_overflow_request' '0'
+      }
+      'Overflow' {
+        Assert-SummaryValue $summary.Values 'footer_primary_fit' 'True'
+        Assert-SummaryValue $summary.Values 'footer_build_visible' 'True'
+        Assert-SummaryValue $summary.Values 'footer_build_and_run_visible' 'True'
+        Assert-SummaryValue $summary.Values 'footer_overflow_visible' 'True'
+        Assert-SummaryValue $summary.Values 'footer_overflow_popup_open' 'True'
+        Assert-SummaryValue $summary.Values 'footer_overflow_requested' 'True'
+        Assert-MinimumSummaryInteger $summary.Values 'frames_after_overflow_request' 1
+      }
+      'AllOverflow' {
+        Assert-SummaryValue $summary.Values 'footer_primary_fit' 'False'
+        Assert-SummaryValue $summary.Values 'footer_build_visible' 'False'
+        Assert-SummaryValue $summary.Values 'footer_build_and_run_visible' 'False'
+        Assert-SummaryValue $summary.Values 'footer_overflow_visible' 'True'
+        Assert-SummaryValue $summary.Values 'footer_overflow_popup_open' 'True'
+        Assert-SummaryValue $summary.Values 'footer_overflow_requested' 'True'
+        Assert-MinimumSummaryInteger $summary.Values 'frames_after_overflow_request' 1
+      }
+      default {
+        throw "未知 Build Settings footer density：$footerDensity"
+      }
+    }
     $framebuffer = Get-BmpEvidence $capturePath
 
     $acceptedAttempt = [ordered]@{

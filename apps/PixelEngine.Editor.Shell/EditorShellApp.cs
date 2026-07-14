@@ -954,22 +954,40 @@ internal sealed class EditorShellApp
                 return;
             }
 
-            if (!state.OverflowRequested)
-            {
-                state.OverflowRequested = CurrentSession.RequestScriptedBuildSettingsActionsOverflow();
-                if (!state.OverflowRequested)
-                {
-                    state.Diagnostic = "构建设置探针无法打开窄 footer 的动作菜单。";
-                    state.Completed = true;
-                }
-
-                return;
-            }
-
-            state.FramesAfterOverflowRequest++;
-
             try
             {
+                ScriptedBuildSettingsFooterProbeSnapshot currentFooter =
+                    CurrentSession.CaptureScriptedBuildSettingsFooterProbe();
+                if (!currentFooter.ActionsAccessible)
+                {
+                    throw new InvalidOperationException("构建设置 footer 的动作当前不可达。");
+                }
+
+                // 字体、语言和 panel 宽度都会改变实际按钮预算。Inline 已经同时绘制全部动作，
+                // 此时强行要求 overflow 反而会把更紧凑的正确布局判成失败；只有响应式布局
+                // 确实产生 overflow 时才打开 popup 并额外等待一个完整帧。
+                if (currentFooter.Density == BuildSettingsFooterDensity.Inline)
+                {
+                    state.After = CurrentSession.CaptureScriptedBuildSettingsProbe();
+                    state.Footer = currentFooter;
+                    state.Captured = true;
+                    state.Completed = true;
+                    state.Diagnostic = "构建设置探针重启恢复完成；全部动作 inline 可达。";
+                    return;
+                }
+
+                if (!state.OverflowRequested)
+                {
+                    state.OverflowRequested = CurrentSession.RequestScriptedBuildSettingsActionsOverflow();
+                    if (!state.OverflowRequested)
+                    {
+                        throw new InvalidOperationException("构建设置探针无法打开 footer 动作菜单。");
+                    }
+
+                    return;
+                }
+
+                state.FramesAfterOverflowRequest++;
                 state.After = CurrentSession.CaptureScriptedBuildSettingsProbe();
                 state.Footer = CurrentSession.CaptureScriptedBuildSettingsFooterProbe();
                 if (!state.Footer.OverflowPopupOpen)
