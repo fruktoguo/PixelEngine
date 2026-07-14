@@ -482,7 +482,7 @@ internal sealed class EditorMainMenuBar
 
         ImGui.Separator();
         if (ImGui.MenuItem(
-            L.Get("window.preferences", "Preferences") + "...",
+            L.Get("window.preferencesDialog", "Preferences..."),
             EditorShortcutCatalog.Get(EditorShortcutCommand.OpenPreferences).DisplayText))
         {
             app.ShowPreferences();
@@ -592,7 +592,7 @@ internal sealed class EditorMainMenuBar
         if (ImGui.BeginMenu(L.Get("window.group.general", "General")))
         {
             DrawPanelMenuItem(app, L.Get("window.hierarchy", "Hierarchy"), EditorDockSpace.SceneHierarchyWindowTitle);
-            DrawPanelMenuItem(app, L.Get("window.scene", "Scene"), EditorDockSpace.ViewportWindowTitle);
+            DrawPanelMenuItem(app, L.Get("window.sceneView", "Scene View"), EditorDockSpace.ViewportWindowTitle);
             DrawPanelMenuItem(app, L.Get("window.game", "Game View"), EditorDockSpace.GameViewWindowTitle);
             DrawPanelMenuItem(app, L.Get("window.inspector", "Inspector"), EditorDockSpace.InspectorWindowTitle);
             DrawPanelMenuItem(app, L.Get("window.project", "Project"), EditorDockSpace.AssetBrowserWindowTitle);

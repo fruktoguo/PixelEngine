@@ -11,7 +11,7 @@
     "action.undo": "撤销", "action.redo": "重做", "action.create": "创建", "action.delete": "删除", "action.duplicate": "复制", "action.rename": "重命名", "action.openCSharpProject": "打开 C# 工程", "action.layout": "布局", "action.resetLayout": "重置布局",
     "file.openRecent": "最近打开", "file.newScene": "新建场景", "file.openScene": "打开场景", "file.saveSceneAs": "场景另存为...", "file.closeProject": "关闭工程", "file.exit": "退出",
     "gameObject.createEmpty": "创建空对象", "gameObject.createEmptyChild": "创建空子对象", "gameObject.createWithComponent": "创建并添加组件",
-    "window.preferences": "偏好设置", "window.hierarchy": "层级", "window.project": "工程", "window.inspector": "检查器", "window.scene": "场景", "window.game": "游戏视图", "window.console": "控制台", "window.projectPicker": "工程选择器",
+    "window.preferences": "偏好设置", "window.preferencesDialog": "偏好设置...", "window.hierarchy": "层级", "window.project": "工程", "window.inspector": "检查器", "window.scene": "场景", "window.sceneView": "场景视图", "window.game": "游戏视图", "window.console": "控制台", "window.projectPicker": "工程选择器",
     "window.group.general": "常规", "window.group.analysis": "分析", "window.group.settings": "设置", "window.group.tools": "工具",
     "window.profiler": "性能分析器", "window.uiManifest": "UI 清单", "window.projectSettings": "工程设置...", "window.playerSettings": "玩家设置...", "window.buildSettings": "构建设置...",
     "window.materials": "材质", "window.brush": "笔刷", "window.worldInspector": "世界检查器", "window.overlays": "叠加层", "window.simulation": "模拟", "window.playMode": "运行模式", "window.saveLoad": "保存 / 读取", "window.physics": "物理", "window.particles": "粒子", "window.lighting": "光照",

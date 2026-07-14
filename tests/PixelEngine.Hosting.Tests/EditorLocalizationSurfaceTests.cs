@@ -81,10 +81,10 @@ public sealed partial class EditorLocalizationSurfaceTests
     }
 
     /// <summary>
-    /// 本地化页签必须用 ### 保留 canonical window ID，避免切换语言破坏 dock 布局与 Window 菜单查找。
+    /// 本地化页签与 DockBuilder 必须共享 ###canonical ID，避免 fresh layout 中出现空 tab 和重叠浮窗。
     /// </summary>
     [Fact]
-    public void LocalizedCorePanelTitlesKeepStableDockIds()
+    public void LocalizedCorePanelTitlesSharePersistentIdsWithDockBuilder()
     {
         string root = FindRepositoryRoot();
         string[] panels =
@@ -99,7 +99,24 @@ public sealed partial class EditorLocalizationSurfaceTests
 
         Assert.All(
             panels,
-            path => Assert.Contains("###", File.ReadAllText(path), StringComparison.Ordinal));
+            path => Assert.Contains("GetWindowTitle(", File.ReadAllText(path), StringComparison.Ordinal));
+
+        string dockSpace = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorDockSpace.cs"));
+        string[] canonicalIds =
+        [
+            "ViewportWindowTitle",
+            "GameViewWindowTitle",
+            "SceneHierarchyWindowTitle",
+            "AssetBrowserWindowTitle",
+            "InspectorWindowTitle",
+            "ConsoleDiagnosticsWindowTitle",
+        ];
+        Assert.All(
+            canonicalIds,
+            id => Assert.Contains(
+                $"CreatePersistentWindowTitle(string.Empty, {id})",
+                dockSpace,
+                StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -158,6 +175,6 @@ public sealed partial class EditorLocalizationSurfaceTests
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
     }
 
-    [GeneratedRegex("(?:EditorLocalization|L)\\.(?:Get|Format)\\(\\s*\"(?<key>[^\"]+)\"")]
+    [GeneratedRegex("(?:EditorLocalization|L)\\.(?:Get|Format|GetWindowTitle)\\(\\s*\"(?<key>[^\"]+)\"")]
     private static partial Regex LocalizationKeyCall();
 }

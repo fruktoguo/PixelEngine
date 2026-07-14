@@ -7,7 +7,7 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal sealed class EditorShellLayout
 {
-    internal const int CurrentLayoutVersion = 2;
+    internal const int CurrentLayoutVersion = 3;
     private const int MinimumSavedDockSpaceWidth = 800;
     private const int MinimumSavedDockSpaceHeight = 450;
     private readonly EditorDockSpace _dockSpace = new();

@@ -31,11 +31,18 @@ internal sealed partial class EditorLocalizationJsonContext : JsonSerializerCont
 /// </summary>
 public static class EditorLocalization
 {
+    private readonly record struct WindowTitleCacheKey(
+        string Locale,
+        string Key,
+        string Fallback,
+        string CanonicalId);
+
     private sealed record LoadedLanguagePack(EditorLanguageInfo Info, IReadOnlyDictionary<string, string> Strings);
 
     private static readonly Lock Gate = new();
     private static IReadOnlyDictionary<string, LoadedLanguagePack> _packs =
         new ReadOnlyDictionary<string, LoadedLanguagePack>(new Dictionary<string, LoadedLanguagePack>(StringComparer.OrdinalIgnoreCase));
+    private static readonly Dictionary<WindowTitleCacheKey, string> WindowTitleCache = [];
     private static string _locale = "en-US";
 
     /// <summary>当前 locale。</summary>
@@ -86,6 +93,7 @@ public static class EditorLocalization
         {
             _packs = new ReadOnlyDictionary<string, LoadedLanguagePack>(packs);
             _locale = ResolveLocale(locale, packs);
+            WindowTitleCache.Clear();
         }
     }
 
@@ -116,15 +124,34 @@ public static class EditorLocalization
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         lock (Gate)
         {
-            return _packs.TryGetValue(_locale, out LoadedLanguagePack? current) &&
-                current.Strings.TryGetValue(key, out string? localized) &&
-                !string.IsNullOrWhiteSpace(localized)
-                ? localized
-                : _packs.TryGetValue("en-US", out LoadedLanguagePack? english) &&
-                english.Strings.TryGetValue(key, out string? englishText) &&
-                !string.IsNullOrWhiteSpace(englishText)
-                ? englishText
-                : fallback;
+            return ResolveTextLocked(key, fallback);
+        }
+    }
+
+    /// <summary>
+    /// 返回可本地化且跨语言保持稳定 dock ID 的窗口标题，并缓存组合结果以避免每帧字符串分配。
+    /// </summary>
+    /// <param name="key">语言包 key。</param>
+    /// <param name="fallback">语言包缺失时的可见标题。</param>
+    /// <param name="canonicalId">不随语言变化的 canonical 窗口 ID。</param>
+    /// <returns>供 ImGui Begin 使用的可见标题与隐藏 ID。</returns>
+    public static string GetWindowTitle(string key, string fallback, string canonicalId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalId);
+        lock (Gate)
+        {
+            WindowTitleCacheKey cacheKey = new(_locale, key, fallback, canonicalId);
+            if (WindowTitleCache.TryGetValue(cacheKey, out string? cached))
+            {
+                return cached;
+            }
+
+            string title = EditorDockSpace.CreatePersistentWindowTitle(
+                ResolveTextLocked(key, fallback),
+                canonicalId);
+            WindowTitleCache.Add(cacheKey, title);
+            return title;
         }
     }
 
@@ -132,6 +159,19 @@ public static class EditorLocalization
     public static string Format(string key, string fallback, params object?[] arguments)
     {
         return string.Format(System.Globalization.CultureInfo.CurrentCulture, Get(key, fallback), arguments);
+    }
+
+    private static string ResolveTextLocked(string key, string fallback)
+    {
+        return _packs.TryGetValue(_locale, out LoadedLanguagePack? current) &&
+            current.Strings.TryGetValue(key, out string? localized) &&
+            !string.IsNullOrWhiteSpace(localized)
+            ? localized
+            : _packs.TryGetValue("en-US", out LoadedLanguagePack? english) &&
+            english.Strings.TryGetValue(key, out string? englishText) &&
+            !string.IsNullOrWhiteSpace(englishText)
+            ? englishText
+            : fallback;
     }
 
     private static void TryLoad(string path, Dictionary<string, LoadedLanguagePack> packs)

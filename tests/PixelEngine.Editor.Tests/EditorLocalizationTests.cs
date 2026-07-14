@@ -32,11 +32,20 @@ public sealed class EditorLocalizationTests
 
             Assert.Equal("zh-CN", EditorLocalization.CurrentLocale);
             Assert.Equal("文件", EditorLocalization.Get("menu.file", "fallback"));
+            Assert.Equal(
+                "文件###File",
+                EditorLocalization.GetWindowTitle("menu.file", "fallback", "File"));
             Assert.Equal("English fallback", EditorLocalization.Get("english.only", "fallback"));
             Assert.Equal("fallback", EditorLocalization.Get("missing", "fallback"));
             Assert.Equal(2, EditorLocalization.AvailableLanguages.Count);
             Assert.True(EditorLocalization.TrySetLocale("en-US"));
             Assert.Equal("File", EditorLocalization.Get("menu.file", "fallback"));
+            Assert.Equal(
+                "File###File",
+                EditorLocalization.GetWindowTitle("menu.file", "fallback", "File"));
+            Assert.Equal(
+                "###File",
+                EditorDockSpace.CreatePersistentWindowTitle(string.Empty, "File"));
             Assert.False(EditorLocalization.TrySetLocale("missing"));
         }
         finally

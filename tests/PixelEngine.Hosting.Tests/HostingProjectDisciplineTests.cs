@@ -1120,9 +1120,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("UiManifestWindowTitle = \"UI Manifest\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("PerformanceHudWindowTitle = \"Profiler\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
-        Assert.Contains("DockBuilderDockWindow(AssetBrowserWindowTitle, projectNode)", dockSpace, StringComparison.Ordinal);
-        Assert.Contains("DockBuilderDockWindow(SceneHierarchyWindowTitle, hierarchyNode)", dockSpace, StringComparison.Ordinal);
-        Assert.Contains("DockBuilderDockWindow(InspectorWindowTitle, inspectorNode)", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("CreatePersistentWindowTitle(string.Empty, AssetBrowserWindowTitle), projectNode", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("CreatePersistentWindowTitle(string.Empty, SceneHierarchyWindowTitle), hierarchyNode", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("CreatePersistentWindowTitle(string.Empty, InspectorWindowTitle), inspectorNode", dockSpace, StringComparison.Ordinal);
         Assert.Contains("DockBuilderDockWindow(UiManifestWindowTitle, projectNode)", dockSpace, StringComparison.Ordinal);
         Assert.Contains("File.Delete(LayoutPath)", layout, StringComparison.Ordinal);
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
@@ -1202,7 +1202,10 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("public IReadOnlyList<EditorUiManifestScreenEntry> ListUiManifestScreens", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("public EditorUiManifestSyncResult SyncUiManifestScreens", shellAssetManifestStore, StringComparison.Ordinal);
         Assert.Contains("TrySetUiManifestScreenPreload", shellAssetManifestStore, StringComparison.Ordinal);
-        Assert.Contains("DrawPanelMenuItem(app, \"UI Manifest\", UiManifestPanel.PanelTitle)", menu, StringComparison.Ordinal);
+        Assert.Contains(
+            "DrawPanelMenuItem(app, L.Get(\"window.uiManifest\", \"UI Manifest\"), UiManifestPanel.PanelTitle)",
+            menu,
+            StringComparison.Ordinal);
         Assert.Contains("EditorAssetType.Material", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("EditorAssetType.UiScreen", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("UpsertUiScreenManifestEntry", shellAssetManifestStore, StringComparison.Ordinal);

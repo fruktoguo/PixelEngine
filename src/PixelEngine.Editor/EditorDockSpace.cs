@@ -165,6 +165,20 @@ public sealed class EditorDockSpace
     }
 
     /// <summary>
+    /// 生成可本地化且跨语言保持稳定 ImGui ID 的窗口标题。
+    /// <c>###</c> 之后的 canonical ID 必须同时用于 DockBuilder；只给 Begin 使用会导致窗口无法进入默认 dock tree。
+    /// </summary>
+    /// <param name="visibleTitle">用户可见标题；为空时生成供 DockBuilder 使用的隐藏标题。</param>
+    /// <param name="canonicalId">不随语言变化的 canonical 窗口 ID。</param>
+    /// <returns>形如 <c>场景###Scene</c> 或 <c>###Scene</c> 的 ImGui 窗口标题。</returns>
+    public static string CreatePersistentWindowTitle(string visibleTitle, string canonicalId)
+    {
+        ArgumentNullException.ThrowIfNull(visibleTitle);
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalId);
+        return string.Concat(visibleTitle, "###", canonicalId);
+    }
+
+    /// <summary>
     /// 重置默认布局初始化状态。
     /// </summary>
     /// <param name="buildDefaultLayout">是否在下一帧构建默认布局。</param>
@@ -207,12 +221,14 @@ public sealed class EditorDockSpace
         _ = ImGuiP.DockBuilderSplitNode(rightRegion, ImGuiDir.Right, 0.52f, &inspectorNode, &middleRightNode);
         _ = ImGuiP.DockBuilderSplitNode(middleRightNode, ImGuiDir.Down, 0.48f, &projectNode, &hierarchyNode);
 
-        ImGuiP.DockBuilderDockWindow(ViewportWindowTitle, centerNode);
-        ImGuiP.DockBuilderDockWindow(GameViewWindowTitle, centerNode);
-        ImGuiP.DockBuilderDockWindow(SceneHierarchyWindowTitle, hierarchyNode);
-        ImGuiP.DockBuilderDockWindow(AssetBrowserWindowTitle, projectNode);
-        ImGuiP.DockBuilderDockWindow(InspectorWindowTitle, inspectorNode);
-        ImGuiP.DockBuilderDockWindow(ConsoleDiagnosticsWindowTitle, inspectorNode);
+        // 本地化窗口的 ImGui ID 是 "###canonical" 的 hash，而不是 canonical 本身。
+        // DockBuilder 必须使用同一个隐藏标题，否则 fresh layout 会留下空 tab，真实窗口全部浮在左上角。
+        ImGuiP.DockBuilderDockWindow(CreatePersistentWindowTitle(string.Empty, ViewportWindowTitle), centerNode);
+        ImGuiP.DockBuilderDockWindow(CreatePersistentWindowTitle(string.Empty, GameViewWindowTitle), centerNode);
+        ImGuiP.DockBuilderDockWindow(CreatePersistentWindowTitle(string.Empty, SceneHierarchyWindowTitle), hierarchyNode);
+        ImGuiP.DockBuilderDockWindow(CreatePersistentWindowTitle(string.Empty, AssetBrowserWindowTitle), projectNode);
+        ImGuiP.DockBuilderDockWindow(CreatePersistentWindowTitle(string.Empty, InspectorWindowTitle), inspectorNode);
+        ImGuiP.DockBuilderDockWindow(CreatePersistentWindowTitle(string.Empty, ConsoleDiagnosticsWindowTitle), inspectorNode);
         ImGuiP.DockBuilderDockWindow(WorldInspectorWindowTitle, inspectorNode);
         ImGuiP.DockBuilderDockWindow(MaterialReactionEditorWindowTitle, projectNode);
         ImGuiP.DockBuilderDockWindow(DebugOverlayWindowTitle, projectNode);

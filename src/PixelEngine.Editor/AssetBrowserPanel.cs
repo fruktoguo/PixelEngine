@@ -1134,7 +1134,7 @@ public sealed class AssetBrowserPanel(
         {
             _trackedSelection = context.Selection;
             _ = ApplyPendingChanges();
-            string windowTitle = $"{EditorLocalization.Get("window.project", "Project")}###{Title}";
+            string windowTitle = EditorLocalization.GetWindowTitle("window.project", "Project", Title);
             if (!ImGui.Begin(windowTitle))
             {
                 ImGui.End();
