@@ -2,6 +2,20 @@
 
 本轨道不重复已经由自动化证明的能力。每项状态代表“真实用户工作流是否完整闭合”，因此当前多数任务等待真实设备和人工 reviewer，而不是继续堆 scripted probe。
 
+## 外部编辑器自动化
+
+- [~] `AUTO-001` 实现覆盖全部编辑器数据与人工操作的版本化外部自动化公共 API，并以全新外部进程闭合 author→play→debug→build→run。
+  - 优先级：P0。
+  - 依赖：`BASE-013`、`BASE-014`、`BASE-015`、`EDITOR-010`。
+  - 设计来源：`docs/PixelEngine-核心目标与产品定位.md` §5.7；`docs/PixelEngine-架构与需求设计.md` §17.5；`plan/19-standalone-editor-app.md` §外部编辑器自动化公共 API（2026-07-14）。
+  - 交付：版本化 Protocol/JSON Schema、Windows Named Pipe Server（wire 预留 Unix Domain Socket）、实例/能力发现、公开 .NET Client、独立 CLI、Editor Shell semantic adapter、机器可读能力矩阵、开发者文档、自动化/性能/安全/E2E 测试、clean final-output，以及由 `$skill-creator` 生成并验证、直接调用 CLI 的 `$CODEX_HOME/skills/pixelengine-editor`。
+  - 协议验收：稳定作用域 ID；结构化 filter/sort/分页 cursor；事件订阅、sequence、ack、resume/resync；deadline/timeout/cancel；结构化错误；current-user ACL + challenge/HMAC + scope permission；global/resource revision 与 optimistic concurrency；幂等 key；事务租期、commit/rollback/disconnect rollback；与唯一 Editor Undo/Redo 历史合并；截图/preview/profile/log/export 等大型数据写原子 artifact 并返回 canonical path、媒体类型、长度、SHA256、来源 revision 和尺寸/编码元数据。
+  - 调度与性能验收：I/O、解析、序列化、hash、编码在后台异步执行；Editor/ImGui/GL/authoring/Engine 权威对象只在主线程或声明的 Engine safe phase 访问；只读快照在安全点冻结；有界 queue/backpressure/quota；自动化空闲时无 timer/socket/frame 扫描轮询且稳态每帧 0 托管分配，长连接、慢消费者、取消、Server restart 与客户端重连均有可重跑证据。
+  - 能力验收：覆盖 instance/project；window/panel/focus/dock/layout；Scene/Game/capture；Hierarchy/selection/GameObject；Inspector/Transform/component/field schema；Project/folder/asset/import/reference/preview；Console；Play/Pause/Step/Stop；runtime entity/component/world/debug data；Canvas/CanvasScaler/Game View presentation；tool/gizmo/grid/snap/brush；Preferences/Project/Player/Build Settings；Profiler/debug overlay；build/preflight/cancel/result；player launch/wait/terminate；artifact/event/transaction。每个菜单、快捷键、面板、工具栏与上下文人工操作必须双向映射真实 capability/command id、schema、权限、revision、事务模式和执行 phase；未映射、空 handler、test-only 或声明大于实现均由验证器失败。
+  - 安全与一致性验收：UI 与 API 复用同一 semantic command、转场/校验/dirty guard、asset/build/play service 和 Undo stack；禁止 UI 私有状态旁路、影子场景/选择/设置、路径/reparse-point 逃逸、secret 进入 argv/log/descriptor、无界消息/事件/artifact、player 包携带 Server/Editor automation 闭包；所有失败保持内存、磁盘、选择、dirty、revision 和可重试状态一致。
+  - 最终验收：从 detached clean worktree 构建并发布 Editor、SDK、CLI、schema、文档与 Skill；在空 user-data/discovery/artifact root 中启动全新 Editor，由另一个全新 OS 进程仅通过 CLI 完成“编辑场景→运行→读取 runtime/Console/Profiler 并 Pause/Step→停止→再次运行→停止→继续修改并保存→构建→启动/验证/终止产物”，全程不调用 MCP、Computer Use、OCR、屏幕坐标或 `--scripted-*` probe。能力矩阵、schema compatibility、权限、路径安全、revision 冲突、事务/Undo、事件重连、性能、clean final-output 与 Skill forward test 必需 scope 必须全部 passed，任何 skipped/not-executed 都不得转 `[x]`。
+  - 提交节点：一，canonical task、产品目标、架构和详细设计；二，Protocol/Schema/发现/认证与 Server/Client transport；三，主线程/Engine phase scheduler、revision、事务、Undo、事件与 artifact；四，workspace/window/layout/scene/hierarchy/inspector/tool 能力；五，project/asset/preview/settings/console/profiler/runtime/canvas 能力；六，build/player、.NET Client、CLI 与文档；七，能力矩阵闭包、性能/安全/重连测试和 `pixelengine-editor` Skill；八，clean final-output 与全新外部进程 E2E 证据。每个节点完成即按 `AGENTS.md §6` 中文提交，不跨节点攒提交。
+
 ## Unity-like Editor
 
 - [x] `EDITOR-004` 建立 Editor workspace 恢复、转场数据安全与用户状态隔离。
@@ -65,7 +79,7 @@
   - 优先级：P1。
   - 验收：resize/DPI 切换无一帧旧坐标；面板空白区阻断；图像透明区透传；交互区捕获；IME caret/candidate 锚点位于实际控件。
 
-- [~] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。2026-07-12 起已在 Windows 真实运行 Unity 6.5 `6000.5.3f1`、Unity Hub 3.19.4 与当前 Editor，建立默认布局、Hierarchy→Inspector、Play Mode、Project/Console、Project Browser 和窗口捕获的差异基线，并持续收敛全局 chrome、Scene 工具/dock、Hierarchy/Inspector、Project/Console、Project Browser、Windows 捕获/平台输入、外部 file-drop/布局恢复、Scene/IME/Build/有序拖拽、运行态字段、Preferences 和字体密度。当前进程已确认 per-monitor DPI aware、150% DPI、resize 重建、真实中文 IME candidate/focus 清理、Project/Inspector undock→move→redock、Reset Layout 与跨 session persistence，以及完整 Play/Pause/Step/Build And Run→独立 Player 路线。循环 13 又发现并修复了可复现的本地 Preferences 信息层级、文本 format-string 和字体密度差异，默认工作台仍有 Inspector/Settings 等表面的本地化与信息层级问题待继续巡检；不同物理 DPI/200% 显示器跨屏、Explorer→Editor 人工 pointer drag、runtime 数值物理拖拽和独立 reviewer 仍是外部证据缺口，现有自动化不得冒充这些证据。
+- [!] `EDITOR-003` 完成默认工作台 author→play→edit→build→run 产品验收。阻塞：不同物理 DPI/200% 显示器跨屏、Explorer→Editor 人工 pointer drag、runtime 数值物理拖拽和独立 reviewer 仍缺当前 HEAD 同源证据；本地可复现差异仍可继续修复，但在外部条件具备前不得转 `[x]`，也不再占用唯一进行中状态。2026-07-12 起已在 Windows 真实运行 Unity 6.5 `6000.5.3f1`、Unity Hub 3.19.4 与当前 Editor，建立默认布局、Hierarchy→Inspector、Play Mode、Project/Console、Project Browser 和窗口捕获的差异基线，并持续收敛全局 chrome、Scene 工具/dock、Hierarchy/Inspector、Project/Console、Project Browser、Windows 捕获/平台输入、外部 file-drop/布局恢复、Scene/IME/Build/有序拖拽、运行态字段、Preferences 和字体密度。当前进程已确认 per-monitor DPI aware、150% DPI、resize 重建、真实中文 IME candidate/focus 清理、Project/Inspector undock→move→redock、Reset Layout 与跨 session persistence，以及完整 Play/Pause/Step/Build And Run→独立 Player 路线。循环 13 又发现并修复了可复现的本地 Preferences 信息层级、文本 format-string 和字体密度差异，默认工作台仍有 Inspector/Settings 等表面的本地化与信息层级问题待继续巡检；现有自动化不得冒充外部证据。
   - 优先级：P1。
   - 验收：Hierarchy/Inspector/Scene View/gizmo/Undo/Redo/Console/Prefab/Settings/外部脚本编辑/Build And Run 可理解、可恢复；720p 和高 DPI 无标签截断或工具区溢出。对 PixelEngine 已支持的编辑器表面，以 Windows Unity 6.5 `6000.5.3f1` 默认工作台为交互与视觉参照：菜单/顶栏/底部状态栏、Play/Pause/Step 状态、面板停靠与切换、选择高亮、Hierarchy→Inspector 联动、Scene/Game 模式切换、Project/Console 密度、Project Picker、resize/DPI/键盘鼠标焦点以及系统录屏捕获均须达到相同心智模型和等价反馈；不得用未接线按钮或不支持的 Unity 子系统占位冒充对标。
   - 完成证据：必须同时包含可重跑自动化、PixelEngine framebuffer 证据、真实窗口输入路线和与同机 Unity 参照图的逐项差异表；仅 source-contract 测试、静态截图或“观感接近”均不能关闭本任务。每轮若仍发现可复现差异，保持 `[~]` 并继续修复。

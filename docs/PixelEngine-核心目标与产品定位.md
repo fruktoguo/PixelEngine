@@ -168,6 +168,12 @@ Settings 是正式产品面，不是后期补丁。至少应有：
 9. 点击 Build 得到不含编辑器的玩家包；
 10. 独立运行玩家包并进入同一游戏内容。
 
+### 5.7 外部编辑器自动化公共 API
+
+Editor 的全部语义数据和全部人工可达操作必须同时通过一套版本化、本地优先的公共自动化 API 暴露，使 Codex、Claude Code、普通脚本和 CI 在不依赖 MCP、屏幕坐标、OCR 或 Computer Use 的条件下完成与开发者相同的 authoring、运行、调试和构建工作流。这里的“全部”以机器可读能力矩阵为闭包：每个菜单项、快捷键、面板、工具栏动作和上下文操作都必须映射到稳定的 capability / command id、请求与响应 schema、权限、线程或引擎阶段、revision 与事务语义；新增可见操作若没有真实语义 API，验证必须失败。
+
+自动化不是第二套编辑器状态，也不是测试专用后门。UI 与外部调用必须复用同一命令、校验、dirty guard、事务和 Undo/Redo 路径；读取必须来自安全点捕获的权威快照，写入必须调度到 Editor 主线程或明确的 Engine phase。公共交付面包括协议、Server、.NET Client、CLI、JSON Schema、能力矩阵、文档、测试、clean final-output 和 `$CODEX_HOME/skills/pixelengine-editor` Skill。最终验收必须由全新外部进程仅通过 CLI 完成“编辑场景→运行→调试→停止→再次运行→修改→构建→启动产物”，并证明权限、取消、超时、revision 冲突、事务回滚、Undo/Redo、事件断线续订、性能和制品完整性均成立。
+
 ---
 
 ## 6. 产品支柱三：Web-first 透明 HTML UI Runtime
