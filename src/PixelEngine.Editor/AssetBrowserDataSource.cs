@@ -151,6 +151,21 @@ public enum AssetBrowserViewMode
 }
 
 /// <summary>
+/// Project Window 搜索、过滤、排序与展示控件的完整共享状态。
+/// </summary>
+/// <param name="Search">当前搜索文本。</param>
+/// <param name="KindFilter">当前资产类型过滤；null 表示全部类型。</param>
+/// <param name="SortMode">当前排序模式。</param>
+/// <param name="ViewMode">当前网格或列表展示模式。</param>
+/// <param name="ThumbnailSize">网格缩略图边长。</param>
+public readonly record struct AssetBrowserViewState(
+    string Search,
+    AssetBrowserItemKind? KindFilter,
+    AssetBrowserSortMode SortMode,
+    AssetBrowserViewMode ViewMode,
+    float ThumbnailSize);
+
+/// <summary>
 /// Project Window 的稳定矢量图标语义；UI 可据此绘制图标而不依赖字体 glyph。
 /// </summary>
 public enum AssetBrowserIconKind

@@ -127,6 +127,8 @@ internal sealed class EditorAssetManifestStore
 {
     public const int CurrentFormatVersion = 1;
     public const string ManifestRelativePath = ".pixelengine/assets.json";
+    private const int MaximumManifestFiles = 262144;
+    private const int MaximumReferenceDocuments = 8192;
 
     private readonly record struct RefreshIdentitySignature(
         EditorAssetType AssetType,
@@ -813,6 +815,12 @@ internal sealed class EditorAssetManifestStore
                 continue;
             }
 
+            if (screens[i].Preload == preload)
+            {
+                diagnostic = $"UI screen {screens[i].Id} preload 已是 {preload}。";
+                return true;
+            }
+
             screens[i] = new EditorUiManifestScreenDocument
             {
                 Id = screens[i].Id,
@@ -1106,7 +1114,11 @@ internal sealed class EditorAssetManifestStore
         return BuildDeletePreflight(asset, activeScene);
     }
 
-    public EditorAssetDeleteResult DeleteAsset(string logicalPath, EditorSceneModel? activeScene = null, bool confirmed = false)
+    public EditorAssetDeleteResult DeleteAsset(
+        string logicalPath,
+        EditorSceneModel? activeScene = null,
+        bool confirmed = false,
+        string? retainArchivePath = null)
     {
         string normalized = NormalizeLogicalPath(logicalPath, nameof(logicalPath));
         EditorAssetRecord asset = EnsureAsset(normalized);
@@ -1132,14 +1144,50 @@ internal sealed class EditorAssetManifestStore
         }
 
         string fullPath = ResolveFullPath(asset.LogicalPath);
-        File.Delete(fullPath);
-        SaveDocument(RemoveRecord(LoadDocument(), asset.Id));
+        string archivePath = PrepareDeleteArchivePath(fullPath, retainArchivePath);
+        FileRollbackSnapshot manifestSnapshot = CaptureFileSnapshot(ManifestPath);
+        FileRollbackSnapshot? uiManifestSnapshot = asset.AssetType == EditorAssetType.UiScreen
+            ? CaptureFileSnapshot(GetUiManifestPath())
+            : null;
+        try
+        {
+            File.Move(fullPath, archivePath);
+            SaveDocument(RemoveRecord(LoadDocument(), asset.Id));
+            if (asset.AssetType == EditorAssetType.UiScreen)
+            {
+                RemoveUiManifestScreenEntries([asset]);
+            }
+        }
+        catch (Exception operationException)
+        {
+            Exception? rollbackException = TryRollBackDelete(
+                fullPath,
+                archivePath,
+                manifestSnapshot,
+                uiManifestSnapshot,
+                directory: false);
+            if (rollbackException is not null)
+            {
+                throw new AggregateException(
+                    "资产删除提交失败，且文件/manifest before-image 回滚未完整完成。",
+                    operationException,
+                    rollbackException);
+            }
+
+            throw;
+        }
+
+        string cleanupDiagnostic = retainArchivePath is null
+            ? TryCleanDeleteArchive(archivePath, directory: false)
+            : string.Empty;
         return new EditorAssetDeleteResult(
             asset,
             true,
             false,
             preflight,
-            $"已删除资产 {asset.LogicalPath}。");
+            string.IsNullOrEmpty(cleanupDiagnostic)
+                ? $"已删除资产 {asset.LogicalPath}。"
+                : $"已删除资产 {asset.LogicalPath}；{cleanupDiagnostic}");
     }
 
     public EditorAssetFolderDeletePreflight PreflightDeleteFolder(string logicalFolderPath, EditorSceneModel? activeScene = null)
@@ -1151,7 +1199,11 @@ internal sealed class EditorAssetManifestStore
             : BuildFolderDeletePreflight(normalized, CollectFolderAssets(normalized), activeScene);
     }
 
-    public EditorAssetFolderDeleteResult DeleteFolder(string logicalFolderPath, EditorSceneModel? activeScene = null, bool confirmed = false)
+    public EditorAssetFolderDeleteResult DeleteFolder(
+        string logicalFolderPath,
+        EditorSceneModel? activeScene = null,
+        bool confirmed = false,
+        string? retainArchivePath = null)
     {
         string normalized = NormalizeLogicalPath(logicalFolderPath, nameof(logicalFolderPath));
         string fullPath = ResolveFullPath(normalized);
@@ -1184,16 +1236,49 @@ internal sealed class EditorAssetManifestStore
                 BuildFolderDeleteConfirmationDiagnostic(preflight));
         }
 
-        Directory.Delete(fullPath, recursive: true);
-        SaveDocument(RemoveRecords(LoadDocument(), [.. assets.Select(static asset => asset.Id)]));
-        RemoveUiManifestScreenEntries(assets);
+        string archivePath = PrepareDeleteArchivePath(fullPath, retainArchivePath);
+        FileRollbackSnapshot manifestSnapshot = CaptureFileSnapshot(ManifestPath);
+        bool hasUiScreens = assets.Any(static asset => asset.AssetType == EditorAssetType.UiScreen);
+        FileRollbackSnapshot? uiManifestSnapshot = hasUiScreens
+            ? CaptureFileSnapshot(GetUiManifestPath())
+            : null;
+        try
+        {
+            Directory.Move(fullPath, archivePath);
+            SaveDocument(RemoveRecords(LoadDocument(), [.. assets.Select(static asset => asset.Id)]));
+            RemoveUiManifestScreenEntries(assets);
+        }
+        catch (Exception operationException)
+        {
+            Exception? rollbackException = TryRollBackDelete(
+                fullPath,
+                archivePath,
+                manifestSnapshot,
+                uiManifestSnapshot,
+                directory: true);
+            if (rollbackException is not null)
+            {
+                throw new AggregateException(
+                    "文件夹删除提交失败，且目录/manifest before-image 回滚未完整完成。",
+                    operationException,
+                    rollbackException);
+            }
+
+            throw;
+        }
+
+        string cleanupDiagnostic = retainArchivePath is null
+            ? TryCleanDeleteArchive(archivePath, directory: true)
+            : string.Empty;
         return new EditorAssetFolderDeleteResult(
             normalized,
             assets.Count,
             true,
             false,
             preflight,
-            $"已删除文件夹 {normalized}，包含 {assets.Count.ToString(CultureInfo.InvariantCulture)} 个资产。");
+            string.IsNullOrEmpty(cleanupDiagnostic)
+                ? $"已删除文件夹 {normalized}，包含 {assets.Count.ToString(CultureInfo.InvariantCulture)} 个资产。"
+                : $"已删除文件夹 {normalized}，包含 {assets.Count.ToString(CultureInfo.InvariantCulture)} 个资产；{cleanupDiagnostic}");
     }
 
     internal static EditorAssetType Classify(string logicalPath)
@@ -1226,8 +1311,18 @@ internal sealed class EditorAssetManifestStore
         List<ScannedAsset> scanned = [];
         if (Directory.Exists(ContentRoot))
         {
-            foreach (string fullPath in Directory.EnumerateFiles(ContentRoot, "*", SearchOption.AllDirectories).Order(StringComparer.OrdinalIgnoreCase))
+            string[] files = EditorAssetFileTraversal.EnumerateFiles(
+                ContentRoot,
+                EditorAssetFileTraversalSelection.AllFiles,
+                MaximumManifestFiles,
+                "资产 manifest 扫描");
+            foreach (string fullPath in files)
             {
+                if (IsInternalProjectPath(fullPath))
+                {
+                    continue;
+                }
+
                 string logicalPath = NormalizeLogicalPath(Path.GetRelativePath(ContentRoot, fullPath), "content file");
                 FileInfo info = new(fullPath);
                 scanned.Add(new ScannedAsset(
@@ -1380,6 +1475,13 @@ internal sealed class EditorAssetManifestStore
             item.AssetType,
             item.SizeBytes,
             item.LastModifiedUtc))];
+    }
+
+    private bool IsInternalProjectPath(string fullPath)
+    {
+        string relative = Path.GetRelativePath(ProjectRoot, Path.GetFullPath(fullPath)).Replace('\\', '/');
+        return relative.Equals(".pixelengine", StringComparison.OrdinalIgnoreCase) ||
+            relative.StartsWith(".pixelengine/", StringComparison.OrdinalIgnoreCase);
     }
 
     private string ResolveFullPath(string logicalPath)
@@ -1557,6 +1659,119 @@ internal sealed class EditorAssetManifestStore
         return new FileRollbackSnapshot(
             fullPath,
             File.Exists(fullPath) ? File.ReadAllBytes(fullPath) : null);
+    }
+
+    private string PrepareDeleteArchivePath(string sourcePath, string? retainArchivePath)
+    {
+        string archiveRoot = Path.GetFullPath(Path.Combine(
+            ProjectRoot,
+            ".pixelengine",
+            retainArchivePath is null ? "delete-staging" : "automation-undo"));
+        string candidate = retainArchivePath is null
+            ? Path.Combine(
+                archiveRoot,
+                Guid.NewGuid().ToString("N"),
+                Path.GetFileName(sourcePath))
+            : Path.GetFullPath(retainArchivePath);
+        string rootWithSeparator = Path.EndsInDirectorySeparator(archiveRoot)
+            ? archiveRoot
+            : archiveRoot + Path.DirectorySeparatorChar;
+        if (!candidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase) ||
+            File.Exists(candidate) || Directory.Exists(candidate))
+        {
+            throw new InvalidOperationException("资产删除 archive 必须是工程内部专用根下尚不存在的路径。");
+        }
+
+        string parent = Path.GetDirectoryName(candidate)
+            ?? throw new InvalidOperationException("资产删除 archive 缺少父目录。");
+        _ = Directory.CreateDirectory(parent);
+        EnsureDeleteArchiveHasNoReparsePoint(archiveRoot, parent);
+        return candidate;
+    }
+
+    private static void EnsureDeleteArchiveHasNoReparsePoint(string archiveRoot, string parent)
+    {
+        string current = parent;
+        while (current.Length >= archiveRoot.Length)
+        {
+            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidOperationException("资产删除 archive 路径不得包含 reparse point。");
+            }
+
+            if (string.Equals(current, archiveRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            current = Path.GetDirectoryName(current)
+                ?? throw new InvalidOperationException("资产删除 archive 无法回溯到专用根。");
+        }
+    }
+
+    private static Exception? TryRollBackDelete(
+        string originalPath,
+        string archivePath,
+        FileRollbackSnapshot manifestSnapshot,
+        FileRollbackSnapshot? uiManifestSnapshot,
+        bool directory)
+    {
+        List<Exception>? failures = null;
+        TryRollBack(
+            () =>
+            {
+                bool archiveExists = directory ? Directory.Exists(archivePath) : File.Exists(archivePath);
+                bool originalExists = directory ? Directory.Exists(originalPath) : File.Exists(originalPath);
+                if (archiveExists && !originalExists)
+                {
+                    if (directory)
+                    {
+                        Directory.Move(archivePath, originalPath);
+                    }
+                    else
+                    {
+                        File.Move(archivePath, originalPath);
+                    }
+                }
+            },
+            ref failures);
+        TryRollBack(() => RestoreFileSnapshot(manifestSnapshot), ref failures);
+        if (uiManifestSnapshot is FileRollbackSnapshot snapshot)
+        {
+            TryRollBack(() => RestoreFileSnapshot(snapshot), ref failures);
+        }
+
+        return failures is null
+            ? null
+            : new AggregateException("回滚删除 staging 或 manifest 时发生错误。", failures);
+    }
+
+    private static string TryCleanDeleteArchive(string archivePath, bool directory)
+    {
+        try
+        {
+            if (directory)
+            {
+                Directory.Delete(archivePath, recursive: true);
+            }
+            else
+            {
+                File.Delete(archivePath);
+            }
+
+            string? parent = Path.GetDirectoryName(archivePath);
+            if (!string.IsNullOrEmpty(parent) && Directory.Exists(parent) &&
+                !Directory.EnumerateFileSystemEntries(parent).Any())
+            {
+                Directory.Delete(parent);
+            }
+
+            return string.Empty;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return $"删除内容已从工程隔离，但 staging 清理失败：{exception.Message}";
+        }
     }
 
     private static Exception? TryRollBackCreatedAsset(
@@ -2069,12 +2284,7 @@ internal sealed class EditorAssetManifestStore
         }
 
         int referencedDocuments = 0;
-        string[] files =
-        [
-            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
-                .Order(StringComparer.OrdinalIgnoreCase),
-        ];
+        string[] files = EnumerateReferenceDocuments();
         bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
         for (int i = 0; i < files.Length; i++)
         {
@@ -2106,7 +2316,11 @@ internal sealed class EditorAssetManifestStore
         return referencedDocuments;
     }
 
-    private static void CollectReferenceLocations(EditorSceneModel scene, string documentName, EditorAssetRecord asset, List<string> locations)
+    internal static void CollectReferenceLocations(
+        EditorSceneModel scene,
+        string documentName,
+        EditorAssetRecord asset,
+        List<string> locations)
     {
         EditorGameObject[] objects = [.. scene.EnumerateDepthFirst()];
         for (int i = 0; i < objects.Length; i++)
@@ -2116,7 +2330,9 @@ internal sealed class EditorAssetManifestStore
                 gameObject.PrefabLink is { } prefabLink &&
                 MatchesPrefabReference(prefabLink, asset.LogicalPath, asset.Id))
             {
-                locations.Add($"{documentName}:{gameObject.Name}.Prefab");
+                locations.Add(
+                    $"{documentName}:gameObject:{gameObject.StableId.ToString(CultureInfo.InvariantCulture)}:" +
+                    $"{gameObject.Name}.Prefab");
             }
 
             for (int componentIndex = 0; componentIndex < gameObject.Components.Count; componentIndex++)
@@ -2126,7 +2342,9 @@ internal sealed class EditorAssetManifestStore
                 {
                     if (MatchesAssetReference(field.Value, asset.LogicalPath, asset.Id, asset.AssetType))
                     {
-                        locations.Add($"{documentName}:{gameObject.Name}.{component.TypeName}.{field.Key}");
+                        locations.Add(
+                            $"{documentName}:gameObject:{gameObject.StableId.ToString(CultureInfo.InvariantCulture)}:" +
+                            $"{gameObject.Name}.{component.TypeName}.{field.Key}");
                     }
                 }
             }
@@ -2174,12 +2392,7 @@ internal sealed class EditorAssetManifestStore
             return [];
         }
 
-        string[] files =
-        [
-            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
-                .Order(StringComparer.OrdinalIgnoreCase),
-        ];
+        string[] files = EnumerateReferenceDocuments();
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
         {
@@ -2209,12 +2422,7 @@ internal sealed class EditorAssetManifestStore
             return [];
         }
 
-        string[] files =
-        [
-            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
-                .Order(StringComparer.OrdinalIgnoreCase),
-        ];
+        string[] files = EnumerateReferenceDocuments();
         bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
@@ -2241,12 +2449,7 @@ internal sealed class EditorAssetManifestStore
             return [];
         }
 
-        string[] files =
-        [
-            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
-                .Order(StringComparer.OrdinalIgnoreCase),
-        ];
+        string[] files = EnumerateReferenceDocuments();
         bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
@@ -2280,12 +2483,7 @@ internal sealed class EditorAssetManifestStore
             return [];
         }
 
-        string[] files =
-        [
-            .. Directory.EnumerateFiles(ReferenceDocumentRoot, "*.scene", SearchOption.AllDirectories)
-                .Concat(Directory.EnumerateFiles(ReferenceDocumentRoot, "*.prefab", SearchOption.AllDirectories))
-                .Order(StringComparer.OrdinalIgnoreCase),
-        ];
+        string[] files = EnumerateReferenceDocuments();
         bool sharedRoot = PathsEqual(ContentRoot, ReferenceDocumentRoot);
         EditorAssetReferenceDocumentMovePlan[] plans = new EditorAssetReferenceDocumentMovePlan[files.Length];
         for (int i = 0; i < files.Length; i++)
@@ -2305,6 +2503,15 @@ internal sealed class EditorAssetManifestStore
         }
 
         return plans;
+    }
+
+    private string[] EnumerateReferenceDocuments()
+    {
+        return EditorAssetFileTraversal.EnumerateFiles(
+            ReferenceDocumentRoot,
+            EditorAssetFileTraversalSelection.ReferenceDocuments,
+            MaximumReferenceDocuments,
+            "资产引用文档扫描");
     }
 
     private int RewriteReferencesInReferenceDocuments(

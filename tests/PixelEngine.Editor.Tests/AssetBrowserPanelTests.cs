@@ -64,6 +64,37 @@ public sealed class AssetBrowserPanelTests
     }
 
     /// <summary>
+    /// 验证 Project Window 五个视图控件只发布一次原子事件，幂等应用无事件，订阅失败恢复完整 before state。
+    /// </summary>
+    [Fact]
+    public void ViewStateIsAtomicIdempotentAndRollsBackWhenNotificationFails()
+    {
+        AssetBrowserPanel panel = new(new RecordingAssetSource([]));
+        AssetBrowserViewState before = panel.CaptureViewState();
+        AssetBrowserViewState target = new(
+            "script",
+            AssetBrowserItemKind.Script,
+            AssetBrowserSortMode.SizeDescending,
+            AssetBrowserViewMode.Grid,
+            96f);
+        List<AssetBrowserViewState> notifications = [];
+        panel.ViewStateChanged += notifications.Add;
+
+        Assert.True(panel.ApplyViewState(target));
+        Assert.Equal(target, panel.CaptureViewState());
+        Assert.Equal(target, Assert.Single(notifications));
+        Assert.False(panel.ApplyViewState(target));
+        _ = Assert.Single(notifications);
+
+        panel.ViewStateChanged += static _ => throw new InvalidOperationException("revision unavailable");
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            panel.ApplyViewState(before));
+        Assert.Equal("revision unavailable", failure.Message);
+        Assert.Equal(target, panel.CaptureViewState());
+        Assert.Equal(before, notifications[^1]);
+    }
+
+    /// <summary>
     /// 验证默认右下窄停靠区自动使用单栏导航，足够宽时才恢复 folder tree 双栏。
     /// </summary>
     [Theory]

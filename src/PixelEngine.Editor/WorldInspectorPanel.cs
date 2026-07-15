@@ -28,6 +28,61 @@ public sealed class WorldInspectorPanel(ISimulationInspectApi source) : IEditorP
     /// </summary>
     public SimulationCellInspection? LastInspection { get; private set; }
 
+    /// <summary>捕获跟随模式、锁定坐标与最近检视结果。</summary>
+    /// <returns>可供 Undo/Redo 恢复的完整面板状态。</returns>
+    public WorldInspectorPanelState CaptureState()
+    {
+        return new WorldInspectorPanelState(FollowMouse, _x, _y, LastInspection);
+    }
+
+    /// <summary>判断当前面板状态是否仍与快照完全一致。</summary>
+    /// <param name="state">待比较状态。</param>
+    /// <returns>全部可观察字段一致时为 true。</returns>
+    public bool StateEquals(WorldInspectorPanelState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return FollowMouse == state.FollowSelection &&
+            _x == state.WorldX &&
+            _y == state.WorldY &&
+            LastInspection == state.LastInspection;
+    }
+
+    /// <summary>恢复完整面板 before/after-image，不重新读取 simulation。</summary>
+    /// <param name="state">目标状态。</param>
+    public void RestoreState(WorldInspectorPanelState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        FollowMouse = state.FollowSelection;
+        _x = state.WorldX;
+        _y = state.WorldY;
+        LastInspection = state.LastInspection;
+    }
+
+    /// <summary>应用与人工 checkbox/坐标输入相同的跟随或锁定语义，并立即刷新结果。</summary>
+    /// <param name="followSelection">是否跟随跨面板 cell 选择。</param>
+    /// <param name="worldX">锁定模式的世界 X。</param>
+    /// <param name="worldY">锁定模式的世界 Y。</param>
+    /// <param name="selection">当前 Editor 跨面板选择。</param>
+    public void ApplyState(
+        bool followSelection,
+        int worldX,
+        int worldY,
+        EditorSelection selection)
+    {
+        ArgumentNullException.ThrowIfNull(selection);
+        _x = worldX;
+        _y = worldY;
+        if (followSelection)
+        {
+            FollowMouse = true;
+            _ = RefreshFromSelection(selection);
+            return;
+        }
+
+        LockCell(worldX, worldY);
+        _ = InspectAt(worldX, worldY);
+    }
+
     /// <summary>
     /// 锁定检视坐标。
     /// </summary>
@@ -59,7 +114,13 @@ public sealed class WorldInspectorPanel(ISimulationInspectApi source) : IEditorP
     public bool RefreshFromSelection(EditorSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
-        return selection.CellX is int x && selection.CellY is int y && InspectAt(x, y);
+        if (selection.CellX is int x && selection.CellY is int y)
+        {
+            return InspectAt(x, y);
+        }
+
+        LastInspection = null;
+        return false;
     }
 
     /// <inheritdoc />
@@ -115,3 +176,10 @@ public sealed class WorldInspectorPanel(ISimulationInspectApi source) : IEditorP
         ImGui.TextUnformatted($"Chunk state={inspection.ChunkState} parity={inspection.ChunkParity}");
     }
 }
+
+/// <summary>World Inspector 的完整可逆面板状态。</summary>
+public sealed record WorldInspectorPanelState(
+    bool FollowSelection,
+    int WorldX,
+    int WorldY,
+    SimulationCellInspection? LastInspection);

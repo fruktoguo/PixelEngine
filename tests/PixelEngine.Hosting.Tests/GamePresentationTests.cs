@@ -202,6 +202,81 @@ public sealed class GamePresentationTests
         Assert.True(restored.MaximizeOnPlay);
     }
 
+    /// <summary>验证 automation 以完整状态原子替换 preset、pan 与最大化，并持久化独立副本。</summary>
+    [Fact]
+    public void GameViewAutomationStateRoundTripsWithoutAliasingCallerArrays()
+    {
+        string projectPath = Path.Combine(Path.GetTempPath(), "PixelEngine", "GameViewAutomationState");
+        EditorWorkspaceStore workspace = EditorWorkspaceStore.CreateInMemory();
+        GameViewPanel panel = CreatePanel(workspace, projectPath);
+        EditorGameViewCustomPreset[] custom =
+        [
+            new EditorGameViewCustomPreset
+            {
+                Id = "custom-ci",
+                Name = "CI Capture",
+                Width = 1024,
+                Height = 576,
+            },
+        ];
+        EditorGameViewAutomationState target = new()
+        {
+            PresetId = "custom-ci",
+            ScalePercent = 125f,
+            PanX = 12.5f,
+            PanY = -8.25f,
+            MaximizeOnPlay = true,
+            IsMaximized = true,
+            CustomPresets = custom,
+            Diagnostic = string.Empty,
+        };
+
+        Assert.True(panel.TryApplyAutomationState(target, out string diagnostic), diagnostic);
+        custom[0] = custom[0] with { Name = "Mutated caller" };
+        EditorGameViewAutomationState actual = panel.CaptureAutomationState();
+        Assert.Equal("custom-ci", actual.PresetId);
+        Assert.Equal(125f, actual.ScalePercent);
+        Assert.Equal((12.5f, -8.25f), (actual.PanX, actual.PanY));
+        Assert.True(actual.MaximizeOnPlay);
+        Assert.True(actual.IsMaximized);
+        Assert.Equal("CI Capture", Assert.Single(actual.CustomPresets).Name);
+
+        GameViewPanel restored = CreatePanel(workspace, projectPath);
+        EditorGameViewAutomationState persisted = restored.CaptureAutomationState();
+        Assert.Equal("custom-ci", persisted.PresetId);
+        Assert.Equal("CI Capture", Assert.Single(persisted.CustomPresets).Name);
+        Assert.False(persisted.IsMaximized);
+    }
+
+    /// <summary>验证 workspace 持久化失败时 automation 不发布任何内存中间态。</summary>
+    [Fact]
+    public void GameViewAutomationStatePreservesBeforeImageWhenWorkspaceWriteFails()
+    {
+        using TempDirectory temporary = new();
+        string blockedParent = Path.Combine(temporary.Path, "not-a-directory");
+        File.WriteAllText(blockedParent, "blocked");
+        EditorWorkspaceStore workspace = EditorWorkspaceStore.Load(
+            Path.Combine(blockedParent, "workspace.json"));
+        GameViewPanel panel = CreatePanel(workspace, Path.Combine(temporary.Path, "Project"));
+        EditorGameViewAutomationState before = panel.CaptureAutomationState();
+        EditorGameViewAutomationState target = before with
+        {
+            PresetId = "resolution-1280-720",
+            ScalePercent = 100f,
+        };
+
+        Assert.False(panel.TryApplyAutomationState(target, out string diagnostic));
+        Assert.Contains("保存 Editor workspace 失败", diagnostic, StringComparison.Ordinal);
+        EditorGameViewAutomationState after = panel.CaptureAutomationState();
+        Assert.Equal(before.PresetId, after.PresetId);
+        Assert.Equal(before.ScalePercent, after.ScalePercent);
+        Assert.Equal(before.PanX, after.PanX);
+        Assert.Equal(before.PanY, after.PanY);
+        Assert.Equal(before.MaximizeOnPlay, after.MaximizeOnPlay);
+        Assert.Equal(before.IsMaximized, after.IsMaximized);
+        Assert.Empty(after.CustomPresets);
+    }
+
     /// <summary>
     /// 验证 Game View 工具栏按真实控件预算逐级转入 overflow，且任何合法宽度都不会把最后的菜单入口裁出面板。
     /// </summary>
@@ -373,6 +448,33 @@ public sealed class GamePresentationTests
         {
             request = Request.GetValueOrDefault();
             return Request.HasValue;
+        }
+    }
+
+    private sealed class TempDirectory : IDisposable
+    {
+        public TempDirectory()
+        {
+            Path = System.IO.Path.Combine(
+                System.IO.Path.GetTempPath(),
+                "pixelengine-game-view-" + Guid.NewGuid().ToString("N"));
+            _ = Directory.CreateDirectory(Path);
+        }
+
+        public string Path { get; }
+
+        public void Dispose()
+        {
+            try
+            {
+                Directory.Delete(Path, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 }

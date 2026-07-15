@@ -9,6 +9,8 @@ internal sealed class UiManifestPanel(EditorAssetManifestStore assets) : IEditor
 {
     public const string PanelTitle = "UI Manifest";
     private readonly EditorAssetManifestStore _assets = assets ?? throw new ArgumentNullException(nameof(assets));
+    private IReadOnlyList<EditorUiManifestScreenEntry> _screens = [];
+    private bool _loaded;
 
     public string Title => PanelTitle;
 
@@ -16,22 +18,54 @@ internal sealed class UiManifestPanel(EditorAssetManifestStore assets) : IEditor
 
     internal string Status { get; private set; } = "就绪";
 
+    internal event Action? Changed;
+
     internal IReadOnlyList<EditorUiManifestScreenEntry> CaptureScreens()
     {
-        return _assets.ListUiManifestScreens();
+        if (!_loaded)
+        {
+            _screens = _assets.ListUiManifestScreens();
+            _loaded = true;
+        }
+
+        return _screens;
+    }
+
+    internal IReadOnlyList<EditorUiManifestScreenEntry> RefreshScreens()
+    {
+        _screens = _assets.ListUiManifestScreens();
+        _loaded = true;
+        return _screens;
     }
 
     internal EditorUiManifestSyncResult SyncScreens()
     {
         EditorUiManifestSyncResult result = _assets.SyncUiManifestScreens();
         Status = result.Diagnostic;
+        _ = RefreshScreens();
+        if (result.RegisteredScreens > 0)
+        {
+            Changed?.Invoke();
+        }
+
         return result;
     }
 
     internal bool TrySetPreload(string screenId, bool preload)
     {
+        EditorUiManifestScreenEntry? before = CaptureScreens().FirstOrDefault(screen =>
+            string.Equals(screen.Id, screenId, StringComparison.OrdinalIgnoreCase));
         bool updated = _assets.TrySetUiManifestScreenPreload(screenId, preload, out string diagnostic);
         Status = diagnostic;
+        if (updated)
+        {
+            _ = RefreshScreens();
+            if (before is { } previous && previous.Preload != preload)
+            {
+                Changed?.Invoke();
+            }
+        }
+
         return updated;
     }
 
@@ -50,6 +84,12 @@ internal sealed class UiManifestPanel(EditorAssetManifestStore assets) : IEditor
         if (ImGui.Button("同步 UI Screens"))
         {
             _ = SyncScreens();
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button("刷新"))
+        {
+            _ = RefreshScreens();
         }
 
         ImGui.SameLine();

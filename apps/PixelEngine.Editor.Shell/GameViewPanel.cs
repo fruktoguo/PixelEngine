@@ -151,6 +151,63 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
 
     internal string LastDiagnostic { get; private set; } = string.Empty;
 
+    /// <summary>冻结可由自动化原子替换并参与 Undo/Redo 的完整 Game View 状态。</summary>
+    internal EditorGameViewAutomationState CaptureAutomationState()
+    {
+        return new EditorGameViewAutomationState
+        {
+            PresetId = SelectedPresetId,
+            ScalePercent = ScalePercent,
+            PanX = _pan.X,
+            PanY = _pan.Y,
+            MaximizeOnPlay = MaximizeOnPlay,
+            IsMaximized = IsMaximized,
+            CustomPresets = CloneCustomPresets(_customPresets),
+            Diagnostic = LastDiagnostic,
+        };
+    }
+
+    /// <summary>先持久化完整 workspace before/after，再无失败地发布到面板内存。</summary>
+    internal bool TryApplyAutomationState(
+        EditorGameViewAutomationState state,
+        out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (!TryValidateAutomationState(state, out diagnostic))
+        {
+            return false;
+        }
+
+        EditorGameViewAutomationState before = CaptureAutomationState();
+        EditorGameViewWorkspaceState workspaceState = ToWorkspaceState(state);
+        if (!WorkspaceStatesEqual(before, state) &&
+            _workspace is not null &&
+            _projectPath is not null &&
+            !_workspace.TrySetGameViewState(_projectPath, workspaceState, out diagnostic))
+        {
+            LastDiagnostic = diagnostic;
+            return false;
+        }
+
+        SelectedPresetId = state.PresetId;
+        ScalePercent = state.ScalePercent;
+        _pan = new Vector2(state.PanX, state.PanY);
+        MaximizeOnPlay = state.MaximizeOnPlay;
+        bool maximizedChanged = IsMaximized != state.IsMaximized;
+        IsMaximized = state.IsMaximized;
+        _customPresets = CloneCustomPresets(state.CustomPresets);
+        _autoMaximizedOnPlay = false;
+        if (maximizedChanged)
+        {
+            _focusRequested = true;
+            ClearInputState();
+        }
+
+        LastDiagnostic = string.Empty;
+        diagnostic = string.Empty;
+        return true;
+    }
+
     /// <summary>捕获 toolbar 请求、已提交 presentation 与当前可见 viewport 的同帧探针快照。</summary>
     internal ScriptedGameViewPresentationSnapshot CaptureScriptedPresentationSnapshot()
     {
@@ -1163,6 +1220,138 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
+    private bool TryValidateAutomationState(
+        EditorGameViewAutomationState state,
+        out string diagnostic)
+    {
+        if (string.IsNullOrWhiteSpace(state.PresetId) ||
+            state.PresetId.Length > 128 ||
+            state.PresetId.Any(static character =>
+                !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')))
+        {
+            diagnostic = "Game View presetId 必须是 1..128 位 ASCII semantic ID。";
+            return false;
+        }
+
+        if (!float.IsFinite(state.ScalePercent) || state.ScalePercent is < 0f or > 2000f ||
+            !float.IsFinite(state.PanX) || !float.IsFinite(state.PanY) ||
+            MathF.Abs(state.PanX) > 1_000_000_000f || MathF.Abs(state.PanY) > 1_000_000_000f)
+        {
+            diagnostic = "Game View scalePercent 必须在 0..2000，pan 必须是公共安全范围内的有限数。";
+            return false;
+        }
+
+        if (state.IsMaximized && !Visible)
+        {
+            diagnostic = "隐藏的 Game View panel 不能进入 maximized 状态；请先显示 panel.game。";
+            return false;
+        }
+
+        EditorGameViewCustomPreset[] customPresets = state.CustomPresets ?? [];
+        if (customPresets.Length > 32)
+        {
+            diagnostic = "Game View custom preset 不得超过 32 个。";
+            return false;
+        }
+
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        for (int i = 0; i < GameViewPresentationPreset.BuiltIns.Length; i++)
+        {
+            _ = ids.Add(GameViewPresentationPreset.BuiltIns[i].Id);
+        }
+
+        for (int i = 0; i < customPresets.Length; i++)
+        {
+            EditorGameViewCustomPreset? preset = customPresets[i];
+            if (preset is null ||
+                string.IsNullOrWhiteSpace(preset.Id) ||
+                preset.Id.Length > 128 ||
+                preset.Id.Any(static character =>
+                    !(char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or '-')) ||
+                string.IsNullOrWhiteSpace(preset.Name) ||
+                preset.Name.Length > 128 ||
+                preset.Name.Any(char.IsControl) ||
+                preset.Width is < 1 or > 32768 ||
+                preset.Height is < 1 or > 32768 ||
+                !ids.Add(preset.Id))
+            {
+                diagnostic = $"Game View customPresets[{i}] 的 ID、名称、尺寸无效或与其它 preset 重复。";
+                return false;
+            }
+        }
+
+        if (!GameViewPresentationPreset.TryResolve(
+                state.PresetId,
+                customPresets,
+                out GameViewPresentationPreset selected))
+        {
+            diagnostic = $"未知 Game View preset '{state.PresetId}'。";
+            return false;
+        }
+
+        if (selected.Kind == GameViewPresentationPresetKind.FixedResolution &&
+            (selected.ValueA > _maximumTextureSize || selected.ValueB > _maximumTextureSize))
+        {
+            diagnostic =
+                $"选中的 Game View preset {selected.ValueA}x{selected.ValueB} 超过 renderer 上限 {_maximumTextureSize}。";
+            return false;
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    private static EditorGameViewWorkspaceState ToWorkspaceState(EditorGameViewAutomationState state)
+    {
+        return new EditorGameViewWorkspaceState
+        {
+            PresetId = state.PresetId,
+            ScalePercent = state.ScalePercent,
+            PanX = state.PanX,
+            PanY = state.PanY,
+            MaximizeOnPlay = state.MaximizeOnPlay,
+            CustomPresets = CloneCustomPresets(state.CustomPresets),
+        };
+    }
+
+    private static bool WorkspaceStatesEqual(
+        EditorGameViewAutomationState left,
+        EditorGameViewAutomationState right)
+    {
+        if (!string.Equals(left.PresetId, right.PresetId, StringComparison.Ordinal) ||
+            left.ScalePercent != right.ScalePercent ||
+            left.PanX != right.PanX ||
+            left.PanY != right.PanY ||
+            left.MaximizeOnPlay != right.MaximizeOnPlay ||
+            left.CustomPresets.Length != right.CustomPresets.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < left.CustomPresets.Length; i++)
+        {
+            if (left.CustomPresets[i] != right.CustomPresets[i])
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static EditorGameViewCustomPreset[] CloneCustomPresets(
+        IReadOnlyList<EditorGameViewCustomPreset> presets)
+    {
+        EditorGameViewCustomPreset[] result = new EditorGameViewCustomPreset[presets.Count];
+        for (int i = 0; i < presets.Count; i++)
+        {
+            EditorGameViewCustomPreset preset = presets[i];
+            result[i] = preset with { };
+        }
+
+        return result;
+    }
+
     private void ClearInputState()
     {
         KeyboardFocused = false;
@@ -1187,6 +1376,26 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     {
         return float.IsFinite(scale) && scale > 0f ? scale : 1f;
     }
+}
+
+/// <summary>Game View workspace 与瞬时最大化状态的自动化 before/after image。</summary>
+internal sealed record EditorGameViewAutomationState
+{
+    public required string PresetId { get; init; }
+
+    public required float ScalePercent { get; init; }
+
+    public required float PanX { get; init; }
+
+    public required float PanY { get; init; }
+
+    public required bool MaximizeOnPlay { get; init; }
+
+    public required bool IsMaximized { get; init; }
+
+    public required EditorGameViewCustomPreset[] CustomPresets { get; init; }
+
+    public required string Diagnostic { get; init; }
 }
 
 /// <summary>Game View 工具栏响应式密度。</summary>
@@ -1299,6 +1508,7 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
     int PresentationWidth,
     int PresentationHeight,
     long PresentationRevision,
+    long RequestRevision,
     PresentationViewport WorldContentRect,
     GameViewRect DisplayAreaRect,
     GameViewRect ImageRect,
@@ -1320,6 +1530,7 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
         PresentationWidth: 0,
         PresentationHeight: 0,
         PresentationRevision: 0,
+        RequestRevision: 0,
         WorldContentRect: default,
         DisplayAreaRect: default,
         ImageRect: default,
@@ -1386,6 +1597,7 @@ internal readonly record struct ScriptedGameViewPresentationSnapshot(
             descriptor.PresentationWidth,
             descriptor.PresentationHeight,
             descriptor.PresentationRevision,
+            descriptor.RequestRevision,
             descriptor.WorldContentRect,
             viewport.DisplayAreaRect,
             viewport.ImageRect,

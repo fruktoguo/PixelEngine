@@ -15,14 +15,16 @@ public sealed class ReactionEngine(
     private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
     private readonly IReactionSideEffectSink? _sideEffects = sideEffects;
     private readonly ICellDestructionSink _cellDestructionSink = cellDestructionSink ?? ICellDestructionSink.Null;
-    private ReactionTable _reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
+    /// <summary>当前 immutable packed reaction table，供热重载失败回滚捕获。</summary>
+    public ReactionTable Reactions { get; private set; } =
+        reactions ?? throw new ArgumentNullException(nameof(reactions));
 
     /// <summary>
     /// 替换 packed reaction table；由内容热重载在帧边界调用。
     /// </summary>
     public void ReloadReactions(ReactionTable reactions)
     {
-        _reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
+        Reactions = reactions ?? throw new ArgumentNullException(nameof(reactions));
     }
 
     /// <inheritdoc />
@@ -46,13 +48,13 @@ public sealed class ReactionEngine(
 
         // packed 表按 materialA 索引查找与 neighbor 的匹配反应。
         ref readonly MaterialDef def = ref _materials.Get(materialA);
-        int reactionIndex = _reactions.Find(materialA, materialB, in def);
+        int reactionIndex = Reactions.Find(materialA, materialB, in def);
         if (reactionIndex < 0)
         {
             return false;
         }
 
-        ref readonly Reaction reaction = ref _reactions.At(reactionIndex);
+        ref readonly Reaction reaction = ref Reactions.At(reactionIndex);
         if (!PassesProbability(reaction.Probability, randomByte))
         {
             return false;

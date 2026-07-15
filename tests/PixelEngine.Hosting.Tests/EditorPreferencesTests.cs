@@ -45,6 +45,29 @@ public sealed class EditorPreferencesTests
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp"));
     }
 
+    /// <summary>相同 Preferences 不重复写盘或发布 Changed，实际变化与显式修复只发布一次。</summary>
+    [Fact]
+    public void PreferencesChangedEventIgnoresNoChangeUpdates()
+    {
+        using TempDir temp = new();
+        string path = System.IO.Path.Combine(temp.Path, "preferences.json");
+        EditorPreferencesStore store = EditorPreferencesStore.Load(path);
+        int changedCount = 0;
+        store.Changed += () => changedCount++;
+
+        Assert.True(store.TryUpdate(store.Current, out string repairedDiagnostic), repairedDiagnostic);
+        Assert.Equal(1, changedCount);
+        DateTime repairedTimestamp = File.GetLastWriteTimeUtc(path);
+        Assert.True(store.TryUpdate(store.Current, out string unchangedDiagnostic), unchangedDiagnostic);
+        Assert.Equal(1, changedCount);
+        Assert.Equal(repairedTimestamp, File.GetLastWriteTimeUtc(path));
+
+        Assert.True(store.TryUpdate(
+            store.Current with { UiScale = 1.5f },
+            out string changedDiagnostic), changedDiagnostic);
+        Assert.Equal(2, changedCount);
+    }
+
     /// <summary>
     /// UI Scale 被夹取并量化到受支持的 5% 档位。
     /// </summary>
@@ -332,14 +355,22 @@ public sealed class EditorPreferencesTests
         ReadOnlySpan<EditorShortcutDefinition> shortcuts = EditorShortcutCatalog.All;
         HashSet<int> chords = [];
         HashSet<EditorShortcutCommand> commands = [];
+        HashSet<string> uiCommandIds = new(StringComparer.Ordinal);
         for (int i = 0; i < shortcuts.Length; i++)
         {
             Assert.True(chords.Add(shortcuts[i].KeyChord));
             Assert.True(commands.Add(shortcuts[i].Command));
+            Assert.True(uiCommandIds.Add(shortcuts[i].UiCommandId));
+            Assert.StartsWith("shortcut.", shortcuts[i].UiCommandId, StringComparison.Ordinal);
+            Assert.False(string.IsNullOrWhiteSpace(shortcuts[i].Key));
             Assert.False(string.IsNullOrWhiteSpace(shortcuts[i].DisplayText));
         }
 
-        Assert.Equal("Ctrl+S", EditorShortcutCatalog.Get(EditorShortcutCommand.SaveScene).DisplayText);
+        EditorShortcutDefinition save = EditorShortcutCatalog.Get(EditorShortcutCommand.SaveScene);
+        Assert.Equal("Ctrl+S", save.DisplayText);
+        Assert.True(save.Control);
+        Assert.False(save.Shift);
+        Assert.Equal("S", save.Key);
         Assert.Equal("Ctrl+Shift+B", EditorShortcutCatalog.Get(EditorShortcutCommand.OpenBuildSettings).DisplayText);
         Assert.Equal("Ctrl+B", EditorShortcutCatalog.Get(EditorShortcutCommand.BuildAndRun).DisplayText);
         Assert.Equal("Ctrl+,", EditorShortcutCatalog.Get(EditorShortcutCommand.OpenPreferences).DisplayText);

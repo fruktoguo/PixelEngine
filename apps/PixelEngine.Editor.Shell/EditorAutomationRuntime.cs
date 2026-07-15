@@ -32,6 +32,8 @@ internal sealed class EditorAutomationRuntime : IDisposable
         Scheduler = scheduler;
         Artifacts = artifacts;
         _server = server;
+        _app.ConsoleStore.Changed += OnConsoleChanged;
+        _app.ConsoleOptions.Changed += OnConsoleOptionsChanged;
     }
 
     public AutomationMainThreadScheduler Scheduler { get; }
@@ -54,12 +56,6 @@ internal sealed class EditorAutomationRuntime : IDisposable
             return null;
         }
 
-        EditorAutomationAuthoringApi authoringApi = new(app);
-        AutomationMainThreadScheduler scheduler = new(
-            authoringApi.CreateRegistrations(),
-            new AutomationRevisionStore(),
-            new EditorAutomationUndoSink(app),
-            new EditorAutomationTransactionParticipant(app));
         string instanceId = Guid.NewGuid().ToString("N");
         string discoveryRoot = ResolveRoot(
             options.AutomationDiscoveryRoot,
@@ -70,6 +66,8 @@ internal sealed class EditorAutomationRuntime : IDisposable
             ArtifactRootEnvironmentVariable,
             Path.Combine(userDataPaths.RootDirectory, "automation-artifacts"));
         AutomationArtifactStore? artifacts = null;
+        EditorAutomationAuthoringApi? authoringApi = null;
+        AutomationMainThreadScheduler? scheduler = null;
         EditorAutomationServer? server = null;
         try
         {
@@ -77,6 +75,16 @@ internal sealed class EditorAutomationRuntime : IDisposable
             {
                 RootPath = Path.Combine(artifactRoot, instanceId),
             });
+            authoringApi = new EditorAutomationAuthoringApi(
+                app,
+                artifacts,
+                options.AutomationImportRoots);
+            scheduler = new AutomationMainThreadScheduler(
+                authoringApi.CreateRegistrations(),
+                new AutomationRevisionStore(),
+                new EditorAutomationUndoSink(app),
+                new EditorAutomationTransactionParticipant(app));
+            authoringApi.AttachEventHub(scheduler.Events);
             server = new EditorAutomationServer(
                 new AutomationServerOptions
                 {
@@ -89,6 +97,7 @@ internal sealed class EditorAutomationRuntime : IDisposable
                 },
                 scheduler);
             EditorAutomationRuntime runtime = new(app, authoringApi, scheduler, artifacts, server);
+            runtime.ConfigureUndoStack(app.SharedUndoStack);
             server.StartAsync().AsTask().GetAwaiter().GetResult();
             return runtime;
         }
@@ -115,14 +124,14 @@ internal sealed class EditorAutomationRuntime : IDisposable
 
             try
             {
-                scheduler.Dispose();
+                scheduler?.Dispose();
             }
             catch (Exception cleanupException)
             {
                 failures.Add(cleanupException);
             }
 
-            authoringApi.Dispose();
+            authoringApi?.Dispose();
 
             if (failures.Count > 1)
             {
@@ -147,6 +156,184 @@ internal sealed class EditorAutomationRuntime : IDisposable
     {
         ArgumentNullException.ThrowIfNull(undoStack);
         undoStack.HistoryApplied = OnManualHistoryApplied;
+    }
+
+    internal void NotifyPlayChanged(
+        string method,
+        EditorProjectSession session,
+        string? previousPlaySessionId = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        ArgumentNullException.ThrowIfNull(session);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        List<string> resources =
+        [
+            "editor:play",
+            "editor:profiler",
+            CreateSceneResourceId(session),
+        ];
+        if (!string.IsNullOrWhiteSpace(previousPlaySessionId))
+        {
+            resources.Add(CreateRuntimeResourceId(previousPlaySessionId));
+        }
+
+        if (!string.IsNullOrWhiteSpace(session.AutomationPlaySessionId))
+        {
+            resources.Add(CreateRuntimeResourceId(session.AutomationPlaySessionId));
+        }
+
+        string[] normalized =
+        [
+            .. resources.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
+        ];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(normalized);
+        PublishStateChanged(method, normalized, "execute", revision);
+    }
+
+    internal void NotifyAssetsChanged(EditorProjectSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources =
+        [
+            "editor:project",
+            "editor:project:assets",
+            CreateSceneResourceId(session),
+        ];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("project.assets.external.changed", resources, "execute", revision);
+    }
+
+    internal void NotifyUiManifestChanged(EditorProjectSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources =
+        [
+            "editor:project",
+            "editor:project:assets",
+            "editor:project:ui-manifest",
+        ];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("project.ui-manifest.changed", resources, "execute", revision);
+    }
+
+    internal void NotifyProfilerChanged()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = ["editor:profiler"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("profiler.vsync.changed", resources, "execute", revision);
+    }
+
+    internal void NotifyConsoleSelectionChanged()
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = ["editor:console:selection"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("console.selection.changed", resources, "execute", revision);
+    }
+
+    internal void NotifyConsoleCleared(EditorConsoleClearResult result)
+    {
+        if (!result.StateChanged || Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = result.SelectionChanged
+            ? ["editor:console", "editor:console:selection"]
+            : ["editor:console"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("console.cleared", resources, "execute", revision);
+    }
+
+    internal void NotifySettingsChanged(string method, IReadOnlyList<string> resources)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        ArgumentNullException.ThrowIfNull(resources);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] normalized =
+        [
+            .. resources
+                .Where(static resource => !string.IsNullOrWhiteSpace(resource))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+        if (normalized.Length == 0)
+        {
+            throw new ArgumentException("Settings mutation 至少需要一个稳定 resource ID。", nameof(resources));
+        }
+
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(normalized);
+        PublishStateChanged(method, normalized, "execute", revision);
+    }
+
+    internal void NotifySimulationChanged(EditorProjectSession session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        List<string> resources = ["editor:simulation", "editor:profiler"];
+        if (!string.IsNullOrWhiteSpace(session.AutomationPlaySessionId))
+        {
+            resources.Add(CreateRuntimeResourceId(session.AutomationPlaySessionId));
+        }
+
+        string[] normalized = [.. resources.Order(StringComparer.Ordinal)];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(normalized);
+        PublishStateChanged("runtime.simulation.changed", normalized, "execute", revision);
+    }
+
+    internal void NotifyRuntimeTuningChanged(
+        EditorProjectSession session,
+        string method,
+        string resourceId)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+        ArgumentException.ThrowIfNullOrWhiteSpace(resourceId);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        List<string> resources = [resourceId, "editor:profiler"];
+        if (!string.IsNullOrWhiteSpace(session.AutomationPlaySessionId))
+        {
+            resources.Add(CreateRuntimeResourceId(session.AutomationPlaySessionId));
+        }
+
+        string[] normalized = [.. resources.Order(StringComparer.Ordinal)];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(normalized);
+        PublishStateChanged(method, normalized, "execute", revision);
     }
 
     /// <summary>项目/场景切换后原子更新 discovery，并推进对应 stable resources。</summary>
@@ -193,6 +380,9 @@ internal sealed class EditorAutomationRuntime : IDisposable
         {
             return;
         }
+
+        _app.ConsoleStore.Changed -= OnConsoleChanged;
+        _app.ConsoleOptions.Changed -= OnConsoleOptionsChanged;
 
         List<Exception> failures = [];
         try
@@ -249,8 +439,8 @@ internal sealed class EditorAutomationRuntime : IDisposable
             return;
         }
 
-        string[] resources = [CreateSceneResourceId(session)];
-        AutomationRevisionSnapshot revision = command is AutomationEditorCommand
+        string[] resources = ResolveHistoryResources(session, command);
+        AutomationRevisionSnapshot revision = command is IEditorResourceScopedCommand
             ? Scheduler.Revisions.Capture(resources)
             : Scheduler.Revisions.Advance(resources);
         PublishStateChanged(
@@ -264,6 +454,48 @@ internal sealed class EditorAutomationRuntime : IDisposable
                 _ => throw new ArgumentOutOfRangeException(nameof(mutation), mutation, null),
             },
             revision);
+    }
+
+    private void OnConsoleChanged(EditorConsoleStoreChange change)
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = ["editor:console"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged(
+            change.Kind == EditorConsoleStoreChangeKind.Added
+                ? "console.entry.added"
+                : "console.cleared",
+            resources,
+            "execute",
+            revision);
+    }
+
+    private void OnConsoleOptionsChanged(EditorConsoleOptionsSnapshot options)
+    {
+        _ = options;
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = ["editor:console:options"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("console.options.changed", resources, "execute", revision);
+    }
+
+    internal static string[] ResolveHistoryResources(
+        EditorProjectSession session,
+        IEditorCommand command)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(command);
+        return command is IEditorResourceScopedCommand { ResourceIds.Count: > 0 } scoped
+            ? [.. scoped.ResourceIds]
+            : [CreateSceneResourceId(session)];
     }
 
     private void PublishStateChanged(
@@ -285,6 +517,16 @@ internal sealed class EditorAutomationRuntime : IDisposable
             payload: JsonSerializer.SerializeToElement(
                 stateChanged,
                 AutomationJsonContext.Default.AutomationStateChangedEvent));
+        string[] domainEvents = EditorAutomationEventRouting.ForManualMutation(method, resourceIds);
+        for (int i = 0; i < domainEvents.Length; i++)
+        {
+            _ = Scheduler.Events.Publish(
+                domainEvents[i],
+                revision,
+                payload: JsonSerializer.SerializeToElement(
+                    stateChanged,
+                    AutomationJsonContext.Default.AutomationStateChangedEvent));
+        }
     }
 
     private static AutomationProjectSummary CreateProjectSummary(EditorProjectSession session)
@@ -305,6 +547,12 @@ internal sealed class EditorAutomationRuntime : IDisposable
     {
         ArgumentNullException.ThrowIfNull(session);
         return $"scene:{StableProjectId(session.Project.ProjectRoot)}:{StableSceneId(session.Project.ProjectRoot, session.CurrentSceneRelativePath)}";
+    }
+
+    internal static string CreateRuntimeResourceId(string? playSessionId)
+    {
+        string id = string.IsNullOrWhiteSpace(playSessionId) ? "edit" : playSessionId;
+        return $"play:{id}:runtime";
     }
 
     internal static string StableProjectId(string projectRoot)
@@ -354,9 +602,7 @@ internal sealed class EditorAutomationRuntime : IDisposable
         public void RecordExecuted(IAutomationUndoAction action)
         {
             ArgumentNullException.ThrowIfNull(action);
-            EditorProjectSession session = app.CurrentSession
-                ?? throw StateUnavailable("当前没有打开的 Editor project session，无法登记 Undo。");
-            session.UndoStack.RecordExecuted(new AutomationEditorCommand(action));
+            app.SharedUndoStack.RecordExecuted(new AutomationEditorCommand(action));
         }
     }
 
@@ -384,9 +630,16 @@ internal sealed class EditorAutomationRuntime : IDisposable
         }
     }
 
-    private sealed class AutomationEditorCommand(IAutomationUndoAction action) : IEditorCommand
+    private sealed class AutomationEditorCommand(IAutomationUndoAction action)
+        : IEditorResourceScopedCommand, IDisposable
     {
+        private readonly string[] _resourceIds = action is IAutomationResourceScopedUndoAction scoped
+            ? [.. scoped.ResourceIds]
+            : [];
+
         public string Name => action.Name;
+
+        public IReadOnlyList<string> ResourceIds => _resourceIds;
 
         public void Execute(EditorSceneModel scene)
         {
@@ -398,6 +651,11 @@ internal sealed class EditorAutomationRuntime : IDisposable
         {
             ArgumentNullException.ThrowIfNull(scene);
             action.Undo();
+        }
+
+        public void Dispose()
+        {
+            (action as IDisposable)?.Dispose();
         }
     }
 

@@ -48,6 +48,8 @@ public sealed class PerformanceHudPanel : IEditorPanel
     private readonly float[] _destructionEventsHistory = new float[HistoryLength];
     private readonly float[] _customMetricKHistory = new float[HistoryLength];
     private readonly float[] _simHzHistory = new float[HistoryLength];
+    private readonly long[] _frameIndexHistory = new long[HistoryLength];
+    private readonly PerformanceHudSample[] _sampleHistory = new PerformanceHudSample[HistoryLength];
     private readonly float[] _phaseBars = new float[PhaseBarCount];
     private readonly float[] _statsScratch = new float[HistoryLength];
     private Rendering.IRenderPresentationControl? _presentationControl;
@@ -102,6 +104,11 @@ public sealed class PerformanceHudPanel : IEditorPanel
     /// </summary>
     public PerformanceHudStatistics FixedOverheadStatistics { get; private set; }
 
+    /// <summary>
+    /// 用户通过 HUD 切换真实 present VSync 后触发；宿主可据此同步 revision 与外部观察者。
+    /// </summary>
+    public event Action<bool>? VSyncChanged;
+
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
@@ -139,8 +146,35 @@ public sealed class PerformanceHudPanel : IEditorPanel
         }
 
         _lastCapturedFrame = context.FrameIndex;
-        WriteHistory(sample);
+        WriteHistory(context.FrameIndex, sample);
         return sample;
+    }
+
+    /// <summary>按时间顺序复制当前环形历史与滚动统计。</summary>
+    /// <returns>不引用面板内部可变数组的完整快照。</returns>
+    public PerformanceHudHistorySnapshot CaptureHistory()
+    {
+        PerformanceHudFrameSample[] samples = new PerformanceHudFrameSample[_historyCount];
+        int start = (_historyOffset - _historyCount + HistoryLength) % HistoryLength;
+        for (int i = 0; i < samples.Length; i++)
+        {
+            int source = (start + i) % HistoryLength;
+            samples[i] = new PerformanceHudFrameSample(
+                _frameIndexHistory[source],
+                _sampleHistory[source]);
+        }
+
+        return new PerformanceHudHistorySnapshot(
+            HistoryLength,
+            _capturedSampleCount,
+            samples,
+            FrameStatistics,
+            CpuStatistics,
+            GpuStatistics,
+            WaitStatistics,
+            EffectiveStatistics,
+            VariableWorkStatistics,
+            FixedOverheadStatistics);
     }
 
     /// <summary>
@@ -363,9 +397,11 @@ public sealed class PerformanceHudPanel : IEditorPanel
     }
 
     // 环形缓冲写入本帧样本；_historyOffset 作为 ImPlot 环形曲线起点。
-    private void WriteHistory(PerformanceHudSample sample)
+    private void WriteHistory(long frameIndex, PerformanceHudSample sample)
     {
         int index = _historyOffset;
+        _frameIndexHistory[index] = frameIndex;
+        _sampleHistory[index] = sample;
         _frameHistory[index] = (float)sample.TotalFrameMs;
         _caHistory[index] = (float)sample.CaMs;
         _physicsHistory[index] = (float)(sample.PhysicsMs + sample.ShapeRebuildMs);
@@ -417,6 +453,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
             if (ImGui.Checkbox("VSync", ref vSync))
             {
                 _presentationControl.VSyncEnabled = vSync;
+                VSyncChanged?.Invoke(vSync);
             }
         }
         else

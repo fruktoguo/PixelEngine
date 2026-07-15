@@ -35,6 +35,70 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
     /// </summary>
     public MaterialLegendPreview LegendPreview => _legendPreview;
 
+    /// <summary>捕获草稿、状态与当前行选择的完整 before-image。</summary>
+    /// <returns>可供 Undo/Redo 恢复的游离面板状态。</returns>
+    public MaterialReactionEditorPanelState CaptureState()
+    {
+        return new MaterialReactionEditorPanelState(
+            Document.Clone(),
+            Status,
+            _selectedMaterial,
+            _selectedReaction);
+    }
+
+    /// <summary>检查面板草稿、状态和当前行选择是否仍与快照一致。</summary>
+    /// <param name="state">待验证的面板状态。</param>
+    /// <returns>全部可观察状态未变化时为 true。</returns>
+    public bool StateEquals(MaterialReactionEditorPanelState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        return _selectedMaterial == state.SelectedMaterial &&
+            _selectedReaction == state.SelectedReaction &&
+            string.Equals(Status, state.Status, StringComparison.Ordinal) &&
+            Document.ContentEquals(state.Document);
+    }
+
+    /// <summary>恢复完整面板 before/after-image。</summary>
+    /// <param name="state">由 <see cref="CaptureState"/> 捕获的状态。</param>
+    public void RestoreState(MaterialReactionEditorPanelState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        Document = state.Document.Clone();
+        Status = state.Status;
+        _selectedMaterial = ClampSelection(state.SelectedMaterial, Document.Materials.Count);
+        _selectedReaction = ClampSelection(state.SelectedReaction, Document.Reactions.Count);
+        _legendPreview.Rebuild(Document);
+    }
+
+    /// <summary>捕获当前可编辑文档的深副本。</summary>
+    /// <returns>不共享面板行对象的文档。</returns>
+    public MaterialReactionEditorDocument CaptureDocument()
+    {
+        return Document.Clone();
+    }
+
+    /// <summary>原子替换面板草稿并更新可观察状态。</summary>
+    /// <param name="document">目标完整文档。</param>
+    /// <param name="status">新的状态文本。</param>
+    public void ReplaceDocument(MaterialReactionEditorDocument document, string status)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(status);
+        Document = document.Clone();
+        _selectedMaterial = ClampSelection(_selectedMaterial, Document.Materials.Count);
+        _selectedReaction = ClampSelection(_selectedReaction, Document.Reactions.Count);
+        Status = status;
+        _legendPreview.Rebuild(Document);
+    }
+
+    /// <summary>更新面板最近一次操作状态。</summary>
+    /// <param name="status">完整状态文本。</param>
+    public void SetStatus(string status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        Status = status;
+    }
+
     /// <summary>
     /// 重新加载文件文档。
     /// </summary>
@@ -62,7 +126,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
     public MaterialReactionApplyResult Apply()
     {
         MaterialReactionApplyResult result = _content.Apply(Document);
-        Status = $"{result.DiagnosticMessage}；新增 {result.MaterialReload.AddedCount}，保留 {result.MaterialReload.PreservedCount}，packed reaction {result.PackedReactionCount}";
+        Status = FormatApplyStatus(result);
         return result;
     }
 
@@ -107,6 +171,23 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         {
             _ = Apply();
         }
+    }
+
+    /// <summary>构建人工面板与 automation 共用的 Apply 状态文本。</summary>
+    /// <param name="result">热重载结果。</param>
+    /// <returns>完整状态文本。</returns>
+    public static string FormatApplyStatus(MaterialReactionApplyResult result)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        string status = $"{result.DiagnosticMessage}；新增 {result.MaterialReload.AddedCount}，保留 {result.MaterialReload.PreservedCount}，packed reaction {result.PackedReactionCount}";
+        return result.CleanupPending
+            ? $"{status}；journal 清理待处理：{result.RetainedJournalPath}"
+            : status;
+    }
+
+    private static int ClampSelection(int selection, int count)
+    {
+        return count == 0 ? 0 : Math.Clamp(selection, 0, count - 1);
     }
 
     private void DrawMaterials()
@@ -375,6 +456,30 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
 
         return changed;
     }
+}
+
+/// <summary>材质/反应面板 Undo/Redo 使用的完整不可变 before/after-image。</summary>
+public sealed class MaterialReactionEditorPanelState
+{
+    internal MaterialReactionEditorPanelState(
+        MaterialReactionEditorDocument document,
+        string status,
+        int selectedMaterial,
+        int selectedReaction)
+    {
+        Document = document;
+        Status = status;
+        SelectedMaterial = selectedMaterial;
+        SelectedReaction = selectedReaction;
+    }
+
+    internal MaterialReactionEditorDocument Document { get; }
+
+    internal string Status { get; }
+
+    internal int SelectedMaterial { get; }
+
+    internal int SelectedReaction { get; }
 }
 
 #pragma warning restore IDE0032, IDE0290

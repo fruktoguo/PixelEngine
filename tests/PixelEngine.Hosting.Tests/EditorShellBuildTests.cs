@@ -503,7 +503,10 @@ public sealed class EditorShellBuildTests
         Assert.Equal(project.StartScene, fallbackProject.StartScene);
 
         ProjectSettingsPanel projectPanel = new(project);
+        int projectAppliedCount = 0;
+        projectPanel.SettingsApplied += () => projectAppliedCount++;
         ScriptedProjectSettingsProbeSnapshot projectSnapshot = projectPanel.ApplyScriptedProjectSettingsProbe();
+        Assert.Equal(1, projectAppliedCount);
         ProjectSettingsDto reloadedProject = projectStore.Load();
         Assert.Equal(projectSnapshot.Name, reloadedProject.Name);
         Assert.Equal(projectSnapshot.Name, project.Name);
@@ -519,15 +522,22 @@ public sealed class EditorShellBuildTests
         Assert.True(projectSnapshot.RequireStableMaterialNames);
 
         Assert.False(projectPanel.TryApplyProjectSettings(reloadedProject with { ContentRoot = "../outside" }, out string projectDiagnostic));
+        Assert.Equal(1, projectAppliedCount);
         Assert.Contains("ContentRoot", projectDiagnostic, StringComparison.Ordinal);
         Assert.Equal("content", projectStore.Load().ContentRoot);
         Assert.True(projectPanel.TryApplyProjectSettings(reloadedProject with { DefaultUiBackend = UiBackendKind.Ultralight }, out string ultralightDiagnostic));
+        Assert.Equal(2, projectAppliedCount);
         Assert.Equal(string.Empty, ultralightDiagnostic);
         ScriptedProjectSettingsProbeSnapshot ultralightProjectSnapshot = projectPanel.CaptureScriptedProjectSettingsProbe();
         Assert.Equal(UiBackendKind.Ultralight, ultralightProjectSnapshot.DefaultUiBackend);
         Assert.Contains("Ultralight optional profile inactive", ultralightProjectSnapshot.DefaultUiBackendDiagnostic, StringComparison.Ordinal);
         Assert.Contains(UltralightOptionalProfileGate.FallbackBackend.ToString(), UltralightOptionalProfileGate.InactiveDisplayLabel, StringComparison.Ordinal);
         Assert.Equal(UiBackendKind.Ultralight, projectStore.Load().DefaultUiBackend);
+        Assert.True(projectPanel.TryApplyProjectSettings(
+            projectPanel.AppliedSettings,
+            out string unchangedProjectDiagnostic));
+        Assert.Equal(string.Empty, unchangedProjectDiagnostic);
+        Assert.Equal(2, projectAppliedCount);
 
         PlayerSettingsStore playerStore = new(project);
         PlayerSettingsDto fallbackPlayer = playerStore.Load();
@@ -535,7 +545,10 @@ public sealed class EditorShellBuildTests
         Assert.Equal(project.StartScene, fallbackPlayer.StartupScene);
 
         PlayerSettingsPanel playerPanel = new(project);
+        int playerAppliedCount = 0;
+        playerPanel.SettingsApplied += () => playerAppliedCount++;
         ScriptedPlayerSettingsProbeSnapshot playerSnapshot = playerPanel.ApplyScriptedPlayerSettingsProbe();
+        Assert.Equal(1, playerAppliedCount);
         PlayerSettingsDto reloadedPlayer = playerStore.Load();
         Assert.Equal(playerSnapshot.WindowTitle, reloadedPlayer.WindowTitle);
         Assert.Equal(1600, reloadedPlayer.WindowWidth);
@@ -548,8 +561,14 @@ public sealed class EditorShellBuildTests
         Assert.Equal(PlayerReleaseChannel.Production, reloadedPlayer.ReleaseChannel);
 
         Assert.False(playerPanel.TryApplyPlayerSettings(reloadedPlayer with { WindowWidth = 0 }, out string playerDiagnostic));
+        Assert.Equal(1, playerAppliedCount);
         Assert.Contains("窗口尺寸", playerDiagnostic, StringComparison.Ordinal);
         Assert.Equal(1600, playerStore.Load().WindowWidth);
+        Assert.True(playerPanel.TryApplyPlayerSettings(
+            playerPanel.AppliedSettings,
+            out string unchangedPlayerDiagnostic));
+        Assert.Equal(string.Empty, unchangedPlayerDiagnostic);
+        Assert.Equal(1, playerAppliedCount);
     }
 
     /// <summary>
@@ -666,6 +685,8 @@ public sealed class EditorShellBuildTests
         ProjectSettingsPanel projectPanel = new(project);
         PlayerSettingsPanel playerPanel = new(project);
         BuildSettingsPanel buildPanel = new(project, new ImmediateBuildService());
+        int buildAppliedCount = 0;
+        buildPanel.SettingsApplied += () => buildAppliedCount++;
 
         // Assert：工程使用 project.pixelproj/default 回退值继续打开，坏文件仍原样保留并明确要求修复。
         Assert.Equal("Recovery Project", project.Name);
@@ -687,6 +708,9 @@ public sealed class EditorShellBuildTests
         Assert.True(projectPanel.TryApplyDraft(out string projectDiagnostic), projectDiagnostic);
         Assert.True(playerPanel.TryApplyDraft(out string playerDiagnostic), playerDiagnostic);
         Assert.True(buildPanel.TryRepairSettings(out string buildDiagnostic), buildDiagnostic);
+        Assert.Equal(1, buildAppliedCount);
+        Assert.True(buildPanel.TryRepairSettings(out string unchangedBuildDiagnostic), unchangedBuildDiagnostic);
+        Assert.Equal(1, buildAppliedCount);
 
         // Assert：恢复标记清空，三份文件均可由严格入口重新加载。
         Assert.False(projectPanel.RequiresRepair);

@@ -23,6 +23,69 @@ public sealed class MaterialReactionEditorDocument
     /// </summary>
     public List<ReactionEditorRow> Reactions { get; } = [];
 
+    /// <summary>创建不共享任何可变行或集合的完整副本。</summary>
+    /// <returns>可独立修改的编辑文档。</returns>
+    public MaterialReactionEditorDocument Clone()
+    {
+        MaterialReactionEditorDocument clone = new();
+        for (int i = 0; i < Materials.Count; i++)
+        {
+            clone.Materials.Add(Materials[i].Clone());
+        }
+
+        for (int i = 0; i < TagRepresentatives.Count; i++)
+        {
+            clone.TagRepresentatives.Add(TagRepresentatives[i].Clone());
+        }
+
+        for (int i = 0; i < Reactions.Count; i++)
+        {
+            clone.Reactions.Add(Reactions[i].Clone());
+        }
+
+        return clone;
+    }
+
+    /// <summary>按面板可观察的原始草稿值比较两份文档。</summary>
+    /// <param name="other">另一份完整文档。</param>
+    /// <returns>全部行、顺序与原始编辑值都相同时为 true。</returns>
+    public bool ContentEquals(MaterialReactionEditorDocument? other)
+    {
+        if (other is null ||
+            Materials.Count != other.Materials.Count ||
+            TagRepresentatives.Count != other.TagRepresentatives.Count ||
+            Reactions.Count != other.Reactions.Count)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < Materials.Count; i++)
+        {
+            if (!Materials[i].ContentEquals(other.Materials[i]))
+            {
+                return false;
+            }
+        }
+
+        for (int i = 0; i < TagRepresentatives.Count; i++)
+        {
+            if (!TagRepresentatives[i].ContentEquals(other.TagRepresentatives[i]))
+            {
+                return false;
+            }
+        }
+
+        for (int i = 0; i < Reactions.Count; i++)
+        {
+            if (!Reactions[i].ContentEquals(other.Reactions[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// 从 Content DTO 构建可变编辑文档。
     /// </summary>
@@ -301,6 +364,64 @@ public sealed class MaterialEditorRow
     /// <summary>环境循环音效 cue id。</summary>
     public int AmbientCue { get; set; }
 
+    /// <summary>复制全部可编辑字段与只读 runtime 诊断 ID。</summary>
+    /// <returns>不共享可变状态的材质行。</returns>
+    public MaterialEditorRow Clone()
+    {
+        return (MaterialEditorRow)MemberwiseClone();
+    }
+
+    /// <summary>比较全部原始面板字段，包括只读 runtime ID。</summary>
+    /// <param name="other">另一材质行。</param>
+    /// <returns>所有字段相同时为 true。</returns>
+    public bool ContentEquals(MaterialEditorRow? other)
+    {
+        return other is not null &&
+            RuntimeId == other.RuntimeId &&
+            string.Equals(Name, other.Name, StringComparison.Ordinal) &&
+            string.Equals(Type, other.Type, StringComparison.Ordinal) &&
+            Density == other.Density &&
+            Dispersion == other.Dispersion &&
+            LiquidStatic == other.LiquidStatic &&
+            LiquidSand == other.LiquidSand &&
+            Flammability == other.Flammability &&
+            AutoIgnitionTemp == other.AutoIgnitionTemp &&
+            FireHp == other.FireHp &&
+            TemperatureOfFire == other.TemperatureOfFire &&
+            GeneratesSmoke == other.GeneratesSmoke &&
+            MeltPoint == other.MeltPoint &&
+            string.Equals(MeltTarget, other.MeltTarget, StringComparison.Ordinal) &&
+            FreezePoint == other.FreezePoint &&
+            string.Equals(FreezeTarget, other.FreezeTarget, StringComparison.Ordinal) &&
+            BoilPoint == other.BoilPoint &&
+            string.Equals(BoilTarget, other.BoilTarget, StringComparison.Ordinal) &&
+            HeatConduct == other.HeatConduct &&
+            HeatCapacity == other.HeatCapacity &&
+            DefaultLifetime == other.DefaultLifetime &&
+            Durability == other.Durability &&
+            Integrity == other.Integrity &&
+            string.Equals(DestroyedTarget, other.DestroyedTarget, StringComparison.Ordinal) &&
+            DebrisCount == other.DebrisCount &&
+            MineYield == other.MineYield &&
+            TextureId == other.TextureId &&
+            BaseColor == other.BaseColor &&
+            ColorNoise == other.ColorNoise &&
+            string.Equals(RenderStyle, other.RenderStyle, StringComparison.Ordinal) &&
+            string.Equals(LegendCategory, other.LegendCategory, StringComparison.Ordinal) &&
+            EdgeColorBGRA == other.EdgeColorBGRA &&
+            Opacity == other.Opacity &&
+            HighlightColorBGRA == other.HighlightColorBGRA &&
+            string.Equals(DisplayName, other.DisplayName, StringComparison.Ordinal) &&
+            LegendVisible == other.LegendVisible &&
+            string.Equals(Tags, other.Tags, StringComparison.Ordinal) &&
+            ImpactCue == other.ImpactCue &&
+            FireCue == other.FireCue &&
+            SplashCue == other.SplashCue &&
+            ExplosionCue == other.ExplosionCue &&
+            ShatterCue == other.ShatterCue &&
+            AmbientCue == other.AmbientCue;
+    }
+
     /// <summary>
     /// 从 Content DTO 构建材质行。
     /// </summary>
@@ -436,6 +557,23 @@ public sealed class TagRepresentativeEditorRow
 
     /// <summary>该 tag 展开时使用的代表材质 name。</summary>
     public string Material { get; set; } = string.Empty;
+
+    /// <summary>复制 tag 代表材质行。</summary>
+    /// <returns>独立副本。</returns>
+    public TagRepresentativeEditorRow Clone()
+    {
+        return (TagRepresentativeEditorRow)MemberwiseClone();
+    }
+
+    /// <summary>比较 tag 与代表材质原始文本。</summary>
+    /// <param name="other">另一行。</param>
+    /// <returns>两个字段都相同时为 true。</returns>
+    public bool ContentEquals(TagRepresentativeEditorRow? other)
+    {
+        return other is not null &&
+            string.Equals(Tag, other.Tag, StringComparison.Ordinal) &&
+            string.Equals(Material, other.Material, StringComparison.Ordinal);
+    }
 }
 
 /// <summary>
@@ -460,6 +598,27 @@ public sealed class ReactionEditorRow
 
     /// <summary>逗号分隔的反应 flags。</summary>
     public string Flags { get; set; } = string.Empty;
+
+    /// <summary>复制反应规则行。</summary>
+    /// <returns>独立副本。</returns>
+    public ReactionEditorRow Clone()
+    {
+        return (ReactionEditorRow)MemberwiseClone();
+    }
+
+    /// <summary>比较全部反应规则原始面板字段。</summary>
+    /// <param name="other">另一反应规则。</param>
+    /// <returns>全部字段相同时为 true。</returns>
+    public bool ContentEquals(ReactionEditorRow? other)
+    {
+        return other is not null &&
+            string.Equals(InputA, other.InputA, StringComparison.Ordinal) &&
+            string.Equals(InputB, other.InputB, StringComparison.Ordinal) &&
+            string.Equals(OutputA, other.OutputA, StringComparison.Ordinal) &&
+            string.Equals(OutputB, other.OutputB, StringComparison.Ordinal) &&
+            Probability == other.Probability &&
+            string.Equals(Flags, other.Flags, StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// 从 Content DTO 构建反应编辑行。

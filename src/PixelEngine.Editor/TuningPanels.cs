@@ -180,7 +180,7 @@ public sealed class RenderPipelineLightingTuningService(RenderPipelineSettings s
             bloom.Intensity > 0f,
             bloom.Threshold,
             bloom.Intensity,
-            _settings.QualityLevel != LightingQualityLevel.FogOfWarEmissiveOnly,
+            _settings.EnableFogOfWar,
             _settings.EnableDither,
             _settings.Gamma,
             _settings.RadianceCascades.Enabled);
@@ -190,17 +190,24 @@ public sealed class RenderPipelineLightingTuningService(RenderPipelineSettings s
     public void Apply(LightingTuningState state)
     {
         ArgumentNullException.ThrowIfNull(state);
-        _settings.QualityLevel = state.QualityLevel;
-        BloomSettings bloom = _settings.Bloom with
+        if (!Enum.IsDefined(state.QualityLevel) ||
+            !float.IsFinite(state.Gamma) || state.Gamma <= 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(state), "Lighting quality 与 gamma 必须有效。");
+        }
+
+        BloomSettings bloom = (_settings.Bloom with
         {
             Threshold = state.BloomThreshold,
             Intensity = state.BloomEnabled ? state.BloomIntensity : 0f,
-        };
-        _settings.Bloom = bloom.Normalize();
+        }).Normalize();
+        _ = (_settings.RadianceCascades with { Enabled = state.RadianceCascadesEnabled }).Validate();
+        _settings.QualityLevel = state.QualityLevel;
+        _settings.Bloom = bloom;
+        _settings.EnableFogOfWar = state.FogOfWarEnabled;
         _settings.EnableDither = state.DitherEnabled;
         _settings.Gamma = state.Gamma;
         _settings.RadianceCascades = _settings.RadianceCascades with { Enabled = state.RadianceCascadesEnabled };
-        _settings.Validate();
     }
 }
 
@@ -320,6 +327,7 @@ public sealed class LightingTuningPanel(ILightingTuningService service) : Tuning
     /// <inheritdoc />
     protected override LightingTuningState DrawState(LightingTuningState state)
     {
+        LightingQualityLevel quality = state.QualityLevel;
         bool bloom = state.BloomEnabled;
         bool fog = state.FogOfWarEnabled;
         bool dither = state.DitherEnabled;
@@ -327,6 +335,19 @@ public sealed class LightingTuningPanel(ILightingTuningService service) : Tuning
         float threshold = state.BloomThreshold;
         float intensity = state.BloomIntensity;
         float gamma = state.Gamma;
+        if (ImGui.BeginCombo("quality", quality.ToString()))
+        {
+            foreach (LightingQualityLevel candidate in Enum.GetValues<LightingQualityLevel>())
+            {
+                if (ImGui.Selectable(candidate.ToString(), candidate == quality))
+                {
+                    quality = candidate;
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
         _ = ImGui.Checkbox("bloom", ref bloom);
         _ = ImGui.InputFloat("bloom threshold", ref threshold);
         _ = ImGui.InputFloat("bloom intensity", ref intensity);
@@ -336,6 +357,7 @@ public sealed class LightingTuningPanel(ILightingTuningService service) : Tuning
         _ = ImGui.Checkbox("Radiance Cascades", ref rc);
         return state with
         {
+            QualityLevel = quality,
             BloomEnabled = bloom,
             BloomThreshold = threshold,
             BloomIntensity = Math.Max(0f, intensity),
@@ -364,6 +386,11 @@ public abstract class TuningPanelBase<TState>(string title) : IEditorPanel
     /// </summary>
     public TState? LastState { get; private set; }
 
+    /// <summary>
+    /// 用户通过面板实际改变运行时调参后触发。
+    /// </summary>
+    public event Action<TState>? StateApplied;
+
     /// <inheritdoc />
     public void Draw(in EditorContext context)
     {
@@ -391,8 +418,13 @@ public abstract class TuningPanelBase<TState>(string title) : IEditorPanel
     public void ApplyNow(TState state)
     {
         ArgumentNullException.ThrowIfNull(state);
+        TState before = Capture();
         Apply(state);
         LastState = Capture();
+        if (!EqualityComparer<TState>.Default.Equals(before, LastState))
+        {
+            StateApplied?.Invoke(LastState);
+        }
     }
 
     /// <summary>

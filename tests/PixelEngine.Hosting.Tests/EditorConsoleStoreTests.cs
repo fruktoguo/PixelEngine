@@ -115,6 +115,43 @@ public sealed class EditorConsoleStoreTests
         Assert.True(EditorConsolePanel.RowMatchesSelection(b, collapse: true, selectedB.Sequence, selectedB.Entry.CollapseKey));
     }
 
+    /// <summary>验证共享选择、Copy 文本与 Store before-image 可精确恢复稳定 sequence。</summary>
+    [Fact]
+    public void ConsoleInteractionStateAndClearBeforeImageAreReversible()
+    {
+        EditorConsoleStore store = new();
+        store.Add(new EditorConsoleEntry(
+            DateTimeOffset.UnixEpoch,
+            EditorConsoleCategory.Script,
+            EditorConsoleSeverity.Error,
+            "compiler",
+            "compile failed",
+            "stack line",
+            "ScriptSource/Player.cs",
+            Line: 12,
+            Column: 3));
+        EditorConsoleRow row = Assert.Single(store.SnapshotRows());
+        EditorConsoleSelectionState selection = new();
+        Assert.True(selection.Select(row));
+        Assert.False(selection.Select(row));
+        EditorConsoleSelectionSnapshot selected = selection.Capture();
+        EditorConsoleStoreState before = store.CaptureState();
+
+        store.Clear(notifyChanged: false);
+        Assert.True(selection.Clear());
+        store.RestoreState(before);
+        Assert.True(selection.Restore(selected));
+
+        EditorConsoleRow restored = Assert.Single(store.SnapshotRows());
+        Assert.Equal(row.Sequence, restored.Sequence);
+        Assert.Equal(row.Entry, restored.Entry);
+        Assert.Equal(selected, selection.Capture());
+        string copy = EditorConsoleActions.BuildClipboardText(restored.Entry);
+        Assert.Contains("compile failed", copy, StringComparison.Ordinal);
+        Assert.Contains("stack line", copy, StringComparison.Ordinal);
+        Assert.Contains("ScriptSource/Player.cs:12:3", copy, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// 验证 Console 搜索覆盖消息、来源、详情与文件位置。
     /// </summary>

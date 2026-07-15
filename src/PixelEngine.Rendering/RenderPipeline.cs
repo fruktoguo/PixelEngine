@@ -177,6 +177,12 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     public RenderViewportTexture CurrentViewportTexture { get; private set; }
 
     /// <summary>
+    /// <see cref="CurrentViewportTexture"/> 所属的权威 presentation framebuffer；
+    /// 只允许同一 OpenGL context 在 render safe phase 临时绑定为 read framebuffer。
+    /// </summary>
+    public uint CurrentViewportFramebuffer => _presentation.FramebufferHandle;
+
+    /// <summary>
     /// 已合成进 <see cref="CurrentViewportTexture" /> 的 overlay 命令数量。
     /// </summary>
     /// <remarks>
@@ -715,7 +721,7 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
     // 构建 visibility mask：无 fog 时全可见，再叠加点光源 reveal 贡献。
     private void UploadVisibility(FogOfWarBuffer? fogOfWar, ReadOnlySpan<LightSource> pointLights)
     {
-        if (fogOfWar is null)
+        if (!Settings.EnableFogOfWar || fogOfWar is null)
         {
             _visibilityMask.AsSpan().Fill(byte.MaxValue);
             ApplyPointLights(_visibilityMask, pointLights);

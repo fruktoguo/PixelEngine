@@ -111,6 +111,14 @@ public sealed class EditorSelection
         AssetPath = null;
     }
 
+    /// <summary>清除 Project Window 的资产与文件夹选择，不影响其他可并存选择域。</summary>
+    public void ClearProject()
+    {
+        AssetId = null;
+        AssetPath = null;
+        FolderPath = null;
+    }
+
     /// <summary>
     /// 设置 Project Window 文件夹选择。
     /// </summary>

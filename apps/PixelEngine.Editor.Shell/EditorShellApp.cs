@@ -32,6 +32,7 @@ internal sealed class EditorShellApp
     private string? _commandLineSceneOverride;
     private bool _closeProjectRequested;
     private bool _exitRequested;
+    private int _automationExitCountdown;
     private bool _allowDirtyShutdown;
     private EditorAutomationRuntime? _automation;
     private RenderWindow? _activeWindow;
@@ -49,10 +50,16 @@ internal sealed class EditorShellApp
             ? userDataPaths.LayoutPath
             : EditorShellWindow.DefaultLayoutPath;
         Preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
+        Preferences.Changed += () => NotifyAutomationSettingsChanged(
+            "settings.preferences.changed",
+            ["editor:preferences"]);
         EditorLocalization.Configure(
             [Path.Combine(AppContext.BaseDirectory, "Localization"), userDataPaths.LocalizationDirectory],
             Preferences.Current.Language);
         RecentProjects = recentProjects ?? throw new ArgumentNullException(nameof(recentProjects));
+        RecentProjects.Changed += () => NotifyAutomationSettingsChanged(
+            "workspace.recent.changed",
+            ["editor:workspace:recent-projects"]);
         Workspace = workspace ?? throw new ArgumentNullException(nameof(workspace));
         _commandLineSceneOverride = options.ScenePath;
         ProjectPicker = new ProjectPickerWindow(options);
@@ -103,6 +110,14 @@ internal sealed class EditorShellApp
 
     public EditorConsoleStore ConsoleStore { get; } = new();
 
+    internal EditorConsoleOptionsState ConsoleOptions { get; } = new();
+
+    internal EditorConsoleSelectionState ConsoleSelection { get; } = new();
+
+    internal EditorUndoStack SharedUndoStack { get; } = new();
+
+    internal EditorSceneModel SharedUndoScene { get; } = EditorSceneModel.Empty("editor-global-history");
+
     public EditorPreferencesStore Preferences { get; }
 
     public EditorPreferencesWindow PreferencesWindow { get; }
@@ -126,6 +141,10 @@ internal sealed class EditorShellApp
 
     internal string LayoutPath { get; }
 
+    internal string RuntimeGuiLayoutPath => Path.Combine(
+        _userDataPaths.RootDirectory,
+        "engine-runtime-imgui.ini");
+
     public string? LastProjectError { get; private set; }
 
     public string? LastAssetOpenDiagnostic { get; private set; }
@@ -146,6 +165,75 @@ internal sealed class EditorShellApp
     internal void NotifyAutomationProjectChanged()
     {
         _automation?.UpdateProject(CurrentSession);
+    }
+
+    internal void NotifyAutomationAssetsChanged()
+    {
+        if (CurrentSession is { } session)
+        {
+            _automation?.NotifyAssetsChanged(session);
+        }
+    }
+
+    internal void NotifyAutomationUiManifestChanged()
+    {
+        if (CurrentSession is { } session)
+        {
+            _automation?.NotifyUiManifestChanged(session);
+        }
+    }
+
+    internal void NotifyAutomationProfilerChanged()
+    {
+        _automation?.NotifyProfilerChanged();
+    }
+
+    internal void NotifyAutomationConsoleSelectionChanged()
+    {
+        _automation?.NotifyConsoleSelectionChanged();
+    }
+
+    internal EditorConsoleClearResult ClearConsole(bool notifyAutomation)
+    {
+        EditorConsoleClearResult result = new(
+            ConsoleStore.Count != 0,
+            ConsoleSelection.Capture().Sequence.HasValue);
+        if (!result.StateChanged)
+        {
+            return result;
+        }
+
+        ConsoleStore.Clear(notifyChanged: false);
+        _ = ConsoleSelection.Clear();
+        if (notifyAutomation)
+        {
+            _automation?.NotifyConsoleCleared(result);
+        }
+
+        return result;
+    }
+
+    internal void NotifyAutomationSettingsChanged(
+        string method,
+        IReadOnlyList<string> resources)
+    {
+        _automation?.NotifySettingsChanged(method, resources);
+    }
+
+    internal void NotifyAutomationSimulationChanged()
+    {
+        if (CurrentSession is { } session)
+        {
+            _automation?.NotifySimulationChanged(session);
+        }
+    }
+
+    internal void NotifyAutomationRuntimeTuningChanged(string method, string resourceId)
+    {
+        if (CurrentSession is { } session)
+        {
+            _automation?.NotifyRuntimeTuningChanged(session, method, resourceId);
+        }
     }
 
     private ProjectPickerWindow ProjectPicker { get; }
@@ -429,6 +517,11 @@ internal sealed class EditorShellApp
             }
 
             executed++;
+            if (_automationExitCountdown > 0 && --_automationExitCountdown == 0)
+            {
+                _exitRequested = true;
+            }
+
             if (_options.ScriptedBuildCancelProbe && scriptedBuildCancel.Completed)
             {
                 break;
@@ -605,6 +698,7 @@ internal sealed class EditorShellApp
         }
 
         bool cleanShutdown = CurrentSession?.SceneModel.IsDirty != true || _allowDirtyShutdown;
+        _transitions.ReleasePendingPreparation();
         DisposeAutomation();
         CurrentSession?.Dispose();
         CurrentSession = null;
@@ -2098,6 +2192,96 @@ internal sealed class EditorShellApp
             projectRoot));
     }
 
+    internal EditorTransitionResult RequestAutomationCreateProject(
+        EditorAutomationProjectCreatePrepared prepared)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        if (IsAutomationTransactionActive)
+        {
+            prepared.Dispose();
+            return AutomationTransactionTransitionRejected("创建工程");
+        }
+
+        EditorTransitionResult result;
+        try
+        {
+            result = _transitions.Request(
+                EditorTransitionKind.CreateProject,
+                () =>
+                {
+                    try
+                    {
+                        QueueProject(prepared.Commit());
+                    }
+                    finally
+                    {
+                        prepared.Dispose();
+                    }
+                },
+                prepared.TargetRoot,
+                prepared.Dispose);
+        }
+        catch
+        {
+            prepared.Dispose();
+            throw;
+        }
+
+        if (result.Status == EditorTransitionStatus.PendingTransitionExists)
+        {
+            prepared.Dispose();
+        }
+
+        HandleTransitionResult(result);
+        return result;
+    }
+
+    internal EditorTransitionResult RequestAutomationOpenProject(
+        EditorAutomationProjectOpenPrepared prepared)
+    {
+        ArgumentNullException.ThrowIfNull(prepared);
+        if (IsAutomationTransactionActive)
+        {
+            return AutomationTransactionTransitionRejected("打开工程");
+        }
+
+        EditorTransitionResult result = _transitions.Request(
+            EditorTransitionKind.OpenProject,
+            () => QueueProject(prepared.Project),
+            prepared.Project.ProjectRoot);
+        HandleTransitionResult(result);
+        return result;
+    }
+
+    internal EditorTransitionResult RequestAutomationCloseProject()
+    {
+        if (IsAutomationTransactionActive)
+        {
+            return AutomationTransactionTransitionRejected("关闭工程");
+        }
+
+        EditorTransitionResult result = _transitions.Request(
+            EditorTransitionKind.CloseProject,
+            QueueCloseProject,
+            CurrentProject?.ProjectRoot);
+        HandleTransitionResult(result);
+        return result;
+    }
+
+    internal EditorTransitionResult RequestAutomationExit()
+    {
+        if (IsAutomationTransactionActive)
+        {
+            return AutomationTransactionTransitionRejected("退出 Editor");
+        }
+
+        EditorTransitionResult result = _transitions.Request(
+            EditorTransitionKind.Exit,
+            () => _automationExitCountdown = 2);
+        HandleTransitionResult(result);
+        return result;
+    }
+
     public void OpenProjectPath(string projectRootOrFile)
     {
         if (RejectProjectTransitionDuringAutomation("打开工程"))
@@ -2154,14 +2338,14 @@ internal sealed class EditorShellApp
     public void SetRecentProjectFavorite(string projectPath, bool favorite)
     {
         PersistRecentProjectsChange(
-            RecentProjects.SetFavorite(projectPath, favorite),
+            () => RecentProjects.SetFavoriteAndSave(projectPath, favorite),
             "更新工程收藏状态失败");
     }
 
     public void RemoveRecentProject(string projectPath)
     {
         PersistRecentProjectsChange(
-            RecentProjects.Remove(projectPath),
+            () => RecentProjects.RemoveAndSave(projectPath),
             "移除最近工程失败");
     }
 
@@ -2551,17 +2735,16 @@ internal sealed class EditorShellApp
         int Height,
         RenderWindowState State);
 
-    private void PersistRecentProjectsChange(bool changed, string failurePrefix)
+    private void PersistRecentProjectsChange(Func<bool> persist, string failurePrefix)
     {
-        if (!changed)
-        {
-            return;
-        }
+        ArgumentNullException.ThrowIfNull(persist);
 
         try
         {
-            RecentProjects.Save();
-            LastProjectError = null;
+            if (persist())
+            {
+                LastProjectError = null;
+            }
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -2572,17 +2755,65 @@ internal sealed class EditorShellApp
 
     public void EnterPlayMode()
     {
-        CurrentSession?.EnterPlayMode();
+        if (CurrentSession is not { } session)
+        {
+            return;
+        }
+
+        Hosting.EditorMode before = session.CaptureEditorPlaySession().Mode;
+        string? previousPlaySessionId = session.AutomationPlaySessionId;
+        session.EnterPlayMode();
+        Hosting.EditorMode after = session.CaptureEditorPlaySession().Mode;
+        if (after != before)
+        {
+            _automation?.NotifyPlayChanged(
+                after == Hosting.EditorMode.Play && before == Hosting.EditorMode.Paused
+                    ? AutomationProtocolConstants.PlayResumeMethod
+                    : AutomationProtocolConstants.PlayEnterMethod,
+                session,
+                previousPlaySessionId);
+        }
     }
 
     public void EnterEditMode()
     {
-        CurrentSession?.EnterEditMode();
+        if (CurrentSession is not { } session)
+        {
+            return;
+        }
+
+        Hosting.EditorMode before = session.CaptureEditorPlaySession().Mode;
+        string? previousPlaySessionId = session.AutomationPlaySessionId;
+        session.EnterEditMode();
+        if (session.CaptureEditorPlaySession().Mode != before)
+        {
+            _automation?.NotifyPlayChanged(
+                AutomationProtocolConstants.PlayStopMethod,
+                session,
+                previousPlaySessionId);
+        }
     }
 
     public void TogglePauseMode()
     {
-        CurrentSession?.TogglePauseMode();
+        if (CurrentSession is not { } session)
+        {
+            return;
+        }
+
+        Hosting.EditorMode before = session.CaptureEditorPlaySession().Mode;
+        string? previousPlaySessionId = session.AutomationPlaySessionId;
+        session.TogglePauseMode();
+        Hosting.EditorMode after = session.CaptureEditorPlaySession().Mode;
+        if (after != before)
+        {
+            _automation?.NotifyPlayChanged(
+                after == Hosting.EditorMode.Paused
+                    ? AutomationProtocolConstants.PlayPauseMethod
+                    : AutomationProtocolConstants.PlayResumeMethod,
+                session,
+                previousPlaySessionId);
+        }
     }
 
     public void StepOnce()
@@ -2602,6 +2833,10 @@ internal sealed class EditorShellApp
         if (_deferredFrameActions.TryConsumeStepOnce(session))
         {
             session!.StepOnce();
+            _automation?.NotifyPlayChanged(
+                AutomationProtocolConstants.PlayStepMethod,
+                session,
+                session.AutomationPlaySessionId);
         }
     }
 
@@ -2717,6 +2952,26 @@ internal sealed class EditorShellApp
         return result.Success;
     }
 
+    internal bool TryOpenConsoleSource(in EditorConsoleEntry entry, out string diagnostic)
+    {
+        if (CurrentProject is not { } project)
+        {
+            diagnostic = "当前没有打开的工程，无法打开 Console 源码位置。";
+            return false;
+        }
+
+        return EditorConsoleActions.TryResolveScriptBrowserPath(
+                project,
+                entry,
+                out string browserPath,
+                out diagnostic) &&
+            OpenScriptAsset(
+                browserPath,
+                Math.Max(1, entry.Line),
+                Math.Max(1, entry.Column),
+                out diagnostic);
+    }
+
     public bool OpenCSharpProject(out string diagnostic)
     {
         if (CurrentSession is null)
@@ -2727,10 +2982,15 @@ internal sealed class EditorShellApp
         }
 
         EditorCodeWorkspaceOpenResult result = CurrentSession.OpenCodeProject();
+        RecordCodeWorkspaceOpenResult(result);
         diagnostic = result.Diagnostic;
-        LastAssetOpenDiagnostic = diagnostic;
-        ConsoleStore.AddCodeWorkspaceOpenResult(result);
         return result.Success;
+    }
+
+    internal void RecordCodeWorkspaceOpenResult(in EditorCodeWorkspaceOpenResult result)
+    {
+        LastAssetOpenDiagnostic = result.Diagnostic;
+        ConsoleStore.AddCodeWorkspaceOpenResult(result);
     }
 
     public void ShowProjectSettings()
@@ -3266,10 +3526,9 @@ internal sealed class EditorShellApp
             RecordCurrentWorkspace();
             SceneOverridePath = null;
             _pendingSceneOverrideFromWorkspace = false;
-            RecentProjects.AddOrUpdate(project);
             try
             {
-                RecentProjects.Save();
+                RecentProjects.AddOrUpdateAndSave(project);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {
@@ -3316,6 +3575,15 @@ internal sealed class EditorShellApp
             "automation-transaction",
             $"{operation}已被拒绝：外部 automation transaction 正持有 Editor 写租约。");
         return true;
+    }
+
+    private EditorTransitionResult AutomationTransactionTransitionRejected(string operation)
+    {
+        string diagnostic = $"{operation}已被拒绝：外部 automation transaction 正持有 Editor 写租约。";
+        ConsoleStore.AddProjectError("automation-transaction", diagnostic);
+        return new EditorTransitionResult(
+            EditorTransitionStatus.PendingTransitionExists,
+            diagnostic);
     }
 
     private void DisposeAutomation()

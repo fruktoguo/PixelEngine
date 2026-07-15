@@ -7,7 +7,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// 资产浏览器面板的数据源，对接 manifest 与拖放。
 /// </summary>
-internal sealed class EditorAssetBrowserDataSource :
+internal sealed partial class EditorAssetBrowserDataSource :
     IAssetBrowserDataSource,
     IAssetBrowserRefreshableDataSource,
     IAssetBrowserDiagnosticDataSource,
@@ -166,6 +166,46 @@ internal sealed class EditorAssetBrowserDataSource :
         return false;
     }
 
+    /// <summary>
+    /// 只从内存索引冻结 preview 输入；实际文件读取由 automation 后台阶段完成。
+    /// </summary>
+    internal bool TryCreateAutomationPreviewPlan(
+        string assetId,
+        out EditorAssetAutomationPreviewPlan plan)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(assetId);
+        for (int i = 0; i < _assetSnapshot.Length; i++)
+        {
+            AssetBrowserItem item = _assetSnapshot[i];
+            if (!string.Equals(item.AssetId, assetId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (TryGetRelativePath(item.Path, EditorAssetRootKind.Content, out string contentPath))
+            {
+                plan = new EditorAssetAutomationPreviewPlan(
+                    item,
+                    ResolveAssetFullPath(EditorAssetRootKind.Content, contentPath));
+                return true;
+            }
+
+            if (TryGetRelativePath(item.Path, EditorAssetRootKind.ScriptSource, out string scriptPath))
+            {
+                plan = new EditorAssetAutomationPreviewPlan(
+                    item,
+                    ResolveAssetFullPath(EditorAssetRootKind.ScriptSource, scriptPath));
+                return true;
+            }
+
+            break;
+        }
+
+        plan = default;
+        return false;
+    }
+
     /// <inheritdoc />
     public AssetBrowserBadge GetContextBadges(string assetPath)
     {
@@ -215,6 +255,55 @@ internal sealed class EditorAssetBrowserDataSource :
         }
 
         UpdateDiagnostic();
+    }
+
+    /// <summary>
+    /// 在已完成原子文件切换的同一语义提交中同步已知 Content 文件，避免 watcher 将同一写入重复记账。
+    /// </summary>
+    /// <param name="logicalPaths">相对 Content 根的文件路径。</param>
+    /// <returns>资产 manifest 或内存快照是否实际变化。</returns>
+    internal bool SynchronizeKnownContentFiles(IReadOnlyList<string> logicalPaths)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentNullException.ThrowIfNull(logicalPaths);
+        if (_changeMonitor is not null)
+        {
+            EnqueueChangeBatch(_changeMonitor.Drain());
+        }
+
+        HashSet<string> normalized = new(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < logicalPaths.Count; i++)
+        {
+            _ = normalized.Add(EditorAssetChangeMonitor.NormalizeRelativePath(logicalPaths[i]));
+        }
+
+        RemoveQueuedContentChanges(normalized);
+        _runtimeDiagnostic = string.Empty;
+        EditorAssetRecordSyncResult result = _assets.SynchronizeAssetRecords([.. normalized]);
+        bool changed = result.ManifestChanged;
+        for (int i = 0; i < result.Upserted.Length; i++)
+        {
+            changed |= UpsertSnapshot(EditorAssetRootKind.Content, result.Upserted[i]);
+        }
+
+        for (int i = 0; i < result.RemovedPaths.Length; i++)
+        {
+            changed |= RemoveSnapshot(
+                null,
+                ToBrowserPath(new EditorAssetPath(
+                    EditorAssetRootKind.Content,
+                    result.RemovedPaths[i])));
+        }
+
+        AssetBrowserFolderItem[] folders = BuildFolderSnapshot();
+        if (!folders.SequenceEqual(_folderSnapshot))
+        {
+            _folderSnapshot = folders;
+            changed = true;
+        }
+
+        UpdateDiagnostic();
+        return changed;
     }
 
     /// <inheritdoc />
@@ -294,6 +383,23 @@ internal sealed class EditorAssetBrowserDataSource :
         for (int i = 0; i < batch.FullRescanRoots.Length; i++)
         {
             _ = _pendingFullRescanRoots.Add(batch.FullRescanRoots[i]);
+        }
+    }
+
+    private void RemoveQueuedContentChanges(HashSet<string> logicalPaths)
+    {
+        int count = _pendingChanges.Count;
+        for (int i = 0; i < count; i++)
+        {
+            EditorAssetChange change = _pendingChanges.Dequeue();
+            bool currentMatches = change.Path.Root == EditorAssetRootKind.Content &&
+                logicalPaths.Contains(change.Path.RelativePath);
+            bool oldMatches = change.OldPath is { Root: EditorAssetRootKind.Content } oldPath &&
+                logicalPaths.Contains(oldPath.RelativePath);
+            if (!currentMatches && !oldMatches)
+            {
+                _pendingChanges.Enqueue(change);
+            }
         }
     }
 
@@ -785,6 +891,13 @@ internal sealed class EditorAssetBrowserDataSource :
 
         foreach (string directory in Directory.EnumerateDirectories(physicalRoot, "*", SearchOption.AllDirectories))
         {
+            if (_project is not null && IsPathInsideRoot(
+                Path.Combine(_project.ProjectRoot, ".pixelengine"),
+                directory))
+            {
+                continue;
+            }
+
             if (root == EditorAssetRootKind.Content &&
                 _scriptAssets is not null &&
                 IsPathInsideRoot(_scriptAssets.ContentRoot, directory))
@@ -832,7 +945,10 @@ internal sealed class EditorAssetBrowserDataSource :
             normalizedCandidate.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase);
     }
 
-    public AssetBrowserDeleteResult DeleteAsset(AssetBrowserDeleteRequest request, EditorSceneModel? activeScene = null)
+    public AssetBrowserDeleteResult DeleteAsset(
+        AssetBrowserDeleteRequest request,
+        EditorSceneModel? activeScene = null,
+        string? retainArchivePath = null)
     {
         if (string.IsNullOrWhiteSpace(request.AssetId) || string.IsNullOrWhiteSpace(request.Path))
         {
@@ -856,7 +972,11 @@ internal sealed class EditorAssetBrowserDataSource :
             return new AssetBrowserDeleteResult(false, false, $"删除请求与 manifest 不一致：{request.Path} / {request.Kind}。");
         }
 
-        EditorAssetDeleteResult result = store.DeleteAsset(record.LogicalPath, activeScene, request.Confirmed);
+        EditorAssetDeleteResult result = store.DeleteAsset(
+            record.LogicalPath,
+            activeScene,
+            request.Confirmed,
+            retainArchivePath);
         if (result.Deleted)
         {
             _ = RemoveSnapshot(request.AssetId, request.Path);
@@ -866,7 +986,10 @@ internal sealed class EditorAssetBrowserDataSource :
         return new AssetBrowserDeleteResult(result.Deleted, result.RequiresConfirmation, result.Diagnostic);
     }
 
-    public AssetBrowserFolderDeleteResult DeleteFolder(AssetBrowserFolderDeleteRequest request, EditorSceneModel? activeScene = null)
+    public AssetBrowserFolderDeleteResult DeleteFolder(
+        AssetBrowserFolderDeleteRequest request,
+        EditorSceneModel? activeScene = null,
+        string? retainArchivePath = null)
     {
         if (string.IsNullOrWhiteSpace(request.Path))
         {
@@ -900,7 +1023,11 @@ internal sealed class EditorAssetBrowserDataSource :
                 return new AssetBrowserFolderDeleteResult(false, false, $"文件夹删除请求与当前资产集合不一致：{request.Path}。");
             }
 
-            EditorAssetFolderDeleteResult result = store.DeleteFolder(path.RelativePath, activeScene, request.Confirmed);
+            EditorAssetFolderDeleteResult result = store.DeleteFolder(
+                path.RelativePath,
+                activeScene,
+                request.Confirmed,
+                retainArchivePath);
             if (result.Deleted)
             {
                 RebuildFullSnapshot();
@@ -1922,6 +2049,11 @@ internal sealed class EditorAssetBrowserDataSource :
         return Enum.IsDefined(type);
     }
 }
+
+/// <summary>safe phase 冻结、后台消费的资产预览输入。</summary>
+internal readonly record struct EditorAssetAutomationPreviewPlan(
+    AssetBrowserItem Item,
+    string FullPath);
 
 /// <summary>
 /// EditorAssetBrowserMoveResult 数据结构。

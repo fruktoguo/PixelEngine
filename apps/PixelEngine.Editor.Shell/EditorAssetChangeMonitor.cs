@@ -419,6 +419,12 @@ internal sealed class EditorAssetChangeMonitor : IDisposable
             : string.Join('/', normalized);
     }
 
+    internal static bool IsInternalMetadataPath(string relativePath)
+    {
+        return string.Equals(relativePath, ".pixelengine", StringComparison.OrdinalIgnoreCase) ||
+            relativePath.StartsWith(".pixelengine/", StringComparison.OrdinalIgnoreCase);
+    }
+
     private FileSystemWatcher CreateWatcher(string root, EditorAssetRootKind rootKind)
     {
         FileSystemWatcher watcher = new(root)
@@ -458,6 +464,11 @@ internal sealed class EditorAssetChangeMonitor : IDisposable
             return;
         }
 
+        if (IsInternalMetadataPath(relativePath))
+        {
+            return;
+        }
+
         switch (kind)
         {
             case EditorAssetChangeKind.Created:
@@ -490,6 +501,25 @@ internal sealed class EditorAssetChangeMonitor : IDisposable
             !TryNormalizeEventPath(physicalRoot, newFullPath, out string newRelativePath))
         {
             InvalidateRoot(rootKind);
+            return;
+        }
+
+        bool oldInternal = IsInternalMetadataPath(oldRelativePath);
+        bool newInternal = IsInternalMetadataPath(newRelativePath);
+        if (oldInternal && newInternal)
+        {
+            return;
+        }
+
+        if (oldInternal)
+        {
+            _accumulator.RecordCreated(rootKind, newRelativePath);
+            return;
+        }
+
+        if (newInternal)
+        {
+            _accumulator.RecordDeleted(rootKind, oldRelativePath);
             return;
         }
 

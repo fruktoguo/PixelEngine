@@ -16,7 +16,6 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     private static readonly string[] UiBackendLabels = [.. UiBackendOptions.Select(UltralightOptionalProfileGate.GetDisplayLabel)];
     private readonly ProjectSettingsStore _store;
     private readonly Func<float> _uiScaleProvider;
-    private ProjectSettingsDto _settings;
     private string _contentGlobsText;
     private string _persistentDiagnostic = string.Empty;
     private bool _draftIsValid = true;
@@ -27,9 +26,9 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         ArgumentNullException.ThrowIfNull(project);
         _store = new ProjectSettingsStore(project);
         _uiScaleProvider = uiScaleProvider ?? (static () => EditorUiScale.Default);
-        _settings = _store.LoadRecoverable(out _persistentDiagnostic);
+        AppliedSettings = _store.LoadRecoverable(out _persistentDiagnostic);
         RequiresRepair = !string.IsNullOrWhiteSpace(_persistentDiagnostic);
-        DraftSettings = _settings;
+        DraftSettings = AppliedSettings;
         _contentGlobsText = FormatContentGlobs(DraftSettings);
         RefreshDraftState();
     }
@@ -37,6 +36,8 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     public string Title => PanelTitle;
 
     public bool Visible { get; set; } = true;
+
+    internal event Action? SettingsApplied;
 
     public string ValidationMessage { get; private set; } = string.Empty;
 
@@ -48,20 +49,22 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
 
     internal ProjectSettingsDto DraftSettings { get; private set; }
 
+    internal ProjectSettingsDto AppliedSettings { get; private set; }
+
     internal Vector2 LastWindowPosition { get; private set; }
 
     internal Vector2 LastWindowSize { get; private set; }
 
     public ScriptedProjectSettingsProbeSnapshot ApplyScriptedProjectSettingsProbe()
     {
-        ProjectSettingsDto next = _settings with
+        ProjectSettingsDto next = AppliedSettings with
         {
             Name = "PixelEngine Project Settings Probe",
             ContentRoot = "content",
             ScriptSourceDir = "scripts/probe",
             StartScene = "scenes/settings-probe.scene",
             DefaultUiBackend = UiBackendKind.ManagedFallback,
-            ResourceRules = _settings.ResourceRules with
+            ResourceRules = AppliedSettings.ResourceRules with
             {
                 RequireStableMaterialNames = true,
                 ContentFileGlobs = ["materials.json", "reactions.json", "scenes/**/*.scene", "ui/**/*", "scripts/**/*.cs"],
@@ -76,14 +79,14 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     {
         return new ScriptedProjectSettingsProbeSnapshot
         {
-            Name = _settings.Name,
-            ContentRoot = _settings.ContentRoot,
-            ScriptSourceDir = _settings.ScriptSourceDir,
-            StartScene = _settings.StartScene,
-            DefaultUiBackend = _settings.DefaultUiBackend,
-            DefaultUiBackendDiagnostic = UltralightOptionalProfileGate.GetInactiveReason(_settings.DefaultUiBackend),
-            RequireStableMaterialNames = _settings.ResourceRules.RequireStableMaterialNames,
-            ContentFileGlobCount = _settings.ResourceRules.ContentFileGlobs?.Length ?? 0,
+            Name = AppliedSettings.Name,
+            ContentRoot = AppliedSettings.ContentRoot,
+            ScriptSourceDir = AppliedSettings.ScriptSourceDir,
+            StartScene = AppliedSettings.StartScene,
+            DefaultUiBackend = AppliedSettings.DefaultUiBackend,
+            DefaultUiBackendDiagnostic = UltralightOptionalProfileGate.GetInactiveReason(AppliedSettings.DefaultUiBackend),
+            RequireStableMaterialNames = AppliedSettings.ResourceRules.RequireStableMaterialNames,
+            ContentFileGlobCount = AppliedSettings.ResourceRules.ContentFileGlobs?.Length ?? 0,
             Diagnostic = ValidationMessage,
         };
     }
@@ -98,6 +101,12 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         }
 
         ProjectSettingsDto normalized = settings.Normalize();
+        if (!RequiresRepair && AreEquivalent(AppliedSettings, normalized))
+        {
+            diagnostic = string.Empty;
+            return true;
+        }
+
         try
         {
             _store.Save(normalized);
@@ -111,7 +120,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
             return false;
         }
 
-        _settings = normalized;
+        AppliedSettings = normalized;
         DraftSettings = normalized;
         _contentGlobsText = FormatContentGlobs(DraftSettings);
         _persistentDiagnostic = string.Empty;
@@ -121,7 +130,53 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         _draftIsValid = true;
         ValidationMessage = string.Empty;
         diagnostic = string.Empty;
+        SettingsApplied?.Invoke();
         return true;
+    }
+
+    internal ProjectSettingsPanelAutomationSnapshot CaptureAutomationState()
+    {
+        return new ProjectSettingsPanelAutomationSnapshot(
+            CloneSettings(AppliedSettings),
+            CloneSettings(DraftSettings),
+            _contentGlobsText,
+            _persistentDiagnostic,
+            _draftIsValid,
+            ValidationMessage,
+            HasPendingChanges,
+            HasDraftChanges,
+            RequiresRepair);
+    }
+
+    internal ProjectSettingsPanelAutomationSnapshot CreateAutomationAppliedState(
+        ProjectSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        ProjectSettingsDto normalized = settings.Normalize();
+        return new ProjectSettingsPanelAutomationSnapshot(
+            CloneSettings(normalized),
+            CloneSettings(normalized),
+            FormatContentGlobs(normalized),
+            string.Empty,
+            DraftIsValid: true,
+            ValidationMessage: string.Empty,
+            HasPendingChanges: false,
+            HasDraftChanges: false,
+            RequiresRepair: false);
+    }
+
+    internal void RestoreAutomationState(ProjectSettingsPanelAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        AppliedSettings = CloneSettings(snapshot.AppliedSettings);
+        DraftSettings = CloneSettings(snapshot.DraftSettings);
+        _contentGlobsText = snapshot.ContentGlobsText;
+        _persistentDiagnostic = snapshot.PersistentDiagnostic;
+        _draftIsValid = snapshot.DraftIsValid;
+        ValidationMessage = snapshot.ValidationMessage;
+        HasPendingChanges = snapshot.HasPendingChanges;
+        HasDraftChanges = snapshot.HasDraftChanges;
+        RequiresRepair = snapshot.RequiresRepair;
     }
 
     internal void StageProjectSettings(ProjectSettingsDto settings)
@@ -139,7 +194,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
 
     internal void RevertDraft()
     {
-        DraftSettings = _settings;
+        DraftSettings = AppliedSettings;
         _contentGlobsText = FormatContentGlobs(DraftSettings);
         RefreshDraftState();
     }
@@ -345,7 +400,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
     {
         _draftIsValid = DraftSettings.TryNormalize(out string diagnostic);
         ValidationMessage = _draftIsValid ? _persistentDiagnostic : diagnostic;
-        HasDraftChanges = !AreEquivalent(_settings, DraftSettings);
+        HasDraftChanges = !AreEquivalent(AppliedSettings, DraftSettings);
         HasPendingChanges = RequiresRepair || HasDraftChanges;
     }
 
@@ -368,6 +423,17 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         return string.Join(";", settings.ResourceRules.ContentFileGlobs ?? []);
     }
 
+    private static ProjectSettingsDto CloneSettings(ProjectSettingsDto settings)
+    {
+        return settings with
+        {
+            ResourceRules = settings.ResourceRules with
+            {
+                ContentFileGlobs = [.. settings.ResourceRules.ContentFileGlobs ?? []],
+            },
+        };
+    }
+
     private static void NextProperty(string label)
     {
         ImGui.TableNextRow();
@@ -386,6 +452,17 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         ImGui.PopTextWrapPos();
     }
 }
+
+internal sealed record ProjectSettingsPanelAutomationSnapshot(
+    ProjectSettingsDto AppliedSettings,
+    ProjectSettingsDto DraftSettings,
+    string ContentGlobsText,
+    string PersistentDiagnostic,
+    bool DraftIsValid,
+    string ValidationMessage,
+    bool HasPendingChanges,
+    bool HasDraftChanges,
+    bool RequiresRepair);
 
 /// <summary>
 /// 脚本化验收探针：ScriptedProjectSettingsProbeSnapshot。

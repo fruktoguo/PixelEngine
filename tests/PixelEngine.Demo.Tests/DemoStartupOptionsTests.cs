@@ -176,7 +176,7 @@ public sealed class DemoStartupOptionsTests
             Chunk chunk = new(new ChunkCoord(0, 0));
             chunk.MaterialBuffer[0] = 1;
             chunks.Add(chunk);
-            new WorldSaveService().SaveAll(
+            _ = new WorldSaveService().SaveAll(
                 new WorldSaveContext(
                     chunks,
                     new ResidencyTable(),

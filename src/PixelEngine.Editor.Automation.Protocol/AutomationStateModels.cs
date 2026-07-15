@@ -369,6 +369,9 @@ public sealed record AutomationTransactionOperationResult
 
     /// <summary>该 operation 实际修改的稳定 resource ids。</summary>
     public required string[] ResourceIds { get; init; }
+
+    /// <summary>该 operation 是否在 commit 中实际改变了权威状态。</summary>
+    public bool StateChanged { get; init; }
 }
 
 /// <summary>

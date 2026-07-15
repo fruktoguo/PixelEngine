@@ -178,6 +178,11 @@ public sealed class AutomationTransactionManager : IDisposable
             context.SessionId,
             context.TransactionId ?? string.Empty);
         EnsureLeaseActive(state);
+        if (state.PreparingRequestId is not null)
+        {
+            throw TransactionConflict("transaction.commit 已冻结 staging，不能继续接纳 write。");
+        }
+
         AutomationMethodDescriptor descriptor = registration.Descriptor;
         if (descriptor.OperationKind != AutomationOperationKind.Write ||
             descriptor.TransactionMode == AutomationTransactionMode.Forbidden ||
@@ -246,6 +251,97 @@ public sealed class AutomationTransactionManager : IDisposable
     }
 
     /// <summary>
+    /// 在 EditorIngress 冻结全部 staged preparation 输入。若至少一个 operation 需要 worker，
+    /// transaction 会进入 commit reservation，直到提交或 abort；否则调用方可在当前 safe point 直接提交。
+    /// </summary>
+    internal AutomationTransactionPreparationPlan? FreezeCommitPreparation(
+        string sessionId,
+        string transactionId,
+        string commitRequestId,
+        AutomationPreparationScope preparationScope,
+        CancellationToken cancellationToken)
+    {
+        AssertUsable();
+        ArgumentException.ThrowIfNullOrWhiteSpace(commitRequestId);
+        ArgumentNullException.ThrowIfNull(preparationScope);
+        TransactionState state = RequireActiveOwner(sessionId, transactionId);
+        EnsureLeaseActive(state);
+        if (state.PreparingRequestId is not null)
+        {
+            throw TransactionConflict("transaction.commit 已在 preparation 中。");
+        }
+
+        object commitBeforeState = _participant.CaptureState()
+            ?? throw new InvalidOperationException("Automation transaction participant 返回了 null state。");
+        List<AutomationTransactionPreparationWork> work = [];
+        List<Action> aborts = [];
+        StagedOperation? current = null;
+        try
+        {
+            for (int i = 0; i < state.StagedOperations.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                current = state.StagedOperations[i];
+                if (current.Request.ExpectedRevision is { } expected)
+                {
+                    _revisions.Validate(expected);
+                }
+            }
+
+            bool hasBackgroundWork = false;
+            for (int i = 0; i < state.StagedOperations.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                current = state.StagedOperations[i];
+                AutomationScheduledPreparation? preparationFactory = current.Registration.Preparation;
+                AutomationBackgroundPreparation? background = preparationFactory?.Invoke(
+                    new AutomationScheduledContext(
+                        current.Request,
+                        cancellationToken,
+                        _revisions,
+                        preparationScope: preparationScope),
+                    current.Payload);
+                if (background is not null)
+                {
+                    ArgumentNullException.ThrowIfNull(background.PrepareAsync);
+                    hasBackgroundWork = true;
+                    if (background.AbortAtEditorIngress is { } abort)
+                    {
+                        aborts.Add(abort);
+                    }
+                }
+
+                work.Add(new AutomationTransactionPreparationWork(
+                    current.OperationId,
+                    preparationFactory is not null,
+                    background));
+            }
+
+            if (!hasBackgroundWork)
+            {
+                state.CommitBeforeState = commitBeforeState;
+                return null;
+            }
+
+            state.PreparingRequestId = commitRequestId;
+            state.CommitBeforeState = commitBeforeState;
+            state.PreparationPlan = new AutomationTransactionPreparationPlan(
+                state.TransactionId,
+                commitRequestId,
+                [.. work],
+                [.. aborts]);
+            return state.PreparationPlan;
+        }
+        catch (Exception exception)
+        {
+            bool rollbackSucceeded = RunAbortActions(aborts) &
+                RestoreParticipantState(commitBeforeState);
+            _ = Complete(state, AutomationTransactionStatus.RolledBack);
+            throw CommitFailure(state.TransactionId, current, exception, rollbackSucceeded);
+        }
+    }
+
+    /// <summary>
     /// 在一个 EditorIngress safe point 先校验全部 precondition，再连续执行全部 staged operation。
     /// 任何失败都逆序 Undo 已执行 action 并恢复 participant before image。
     /// </summary>
@@ -253,6 +349,21 @@ public sealed class AutomationTransactionManager : IDisposable
         string sessionId,
         string transactionId,
         CancellationToken cancellationToken)
+    {
+        return CommitPrepared(
+            sessionId,
+            transactionId,
+            cancellationToken,
+            preparationsEvaluated: false,
+            preparedCommit: null);
+    }
+
+    internal (AutomationTransactionCommitResult Result, AutomationRevisionSnapshot Revision) CommitPrepared(
+        string sessionId,
+        string transactionId,
+        CancellationToken cancellationToken,
+        bool preparationsEvaluated,
+        AutomationPreparedTransactionCommit? preparedCommit)
     {
         AssertUsable();
         TransactionState state = RequireActiveOwner(sessionId, transactionId);
@@ -262,7 +373,8 @@ public sealed class AutomationTransactionManager : IDisposable
         object? commitBeforeState = null;
         try
         {
-            commitBeforeState = _participant.CaptureState()
+            ValidatePreparedCommit(state, preparationsEvaluated, preparedCommit);
+            commitBeforeState = state.CommitBeforeState ?? _participant.CaptureState()
                 ?? throw new InvalidOperationException("Automation transaction participant 返回了 null state。");
             for (int i = 0; i < state.StagedOperations.Count; i++)
             {
@@ -280,10 +392,13 @@ public sealed class AutomationTransactionManager : IDisposable
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 current = state.StagedOperations[i];
+                AutomationPreparedTransactionOperation? preparedOperation = preparedCommit?.Operations[i];
                 AutomationScheduledContext scheduledContext = new(
                     current.Request,
                     cancellationToken,
-                    _revisions);
+                    _revisions,
+                    preparedOperation?.PreparedState,
+                    current.Registration.Preparation is not null);
                 AutomationOperationResult operationResult = current.Registration.Operation(
                     scheduledContext,
                     current.Payload) ?? throw new InvalidOperationException(
@@ -331,6 +446,7 @@ public sealed class AutomationTransactionManager : IDisposable
                     Method = current.Registration.Descriptor.Method,
                     Payload = operationResult.Payload?.Clone(),
                     ResourceIds = resources,
+                    StateChanged = operationResult.WriteStateChanged,
                 };
             }
 
@@ -361,10 +477,46 @@ public sealed class AutomationTransactionManager : IDisposable
         }
         catch (Exception exception)
         {
-            bool rollbackSucceeded = RestoreBeforeImage(applied, commitBeforeState);
+            bool rollbackSucceeded = RestoreBeforeImage(applied, commitBeforeState) &
+                (state.PreparationPlan?.RunAbortActions() ?? true);
+            if (rollbackSucceeded)
+            {
+                DisposeActions(applied);
+            }
+
             _ = Complete(state, AutomationTransactionStatus.RolledBack);
             throw CommitFailure(state.TransactionId, current, exception, rollbackSucceeded);
         }
+    }
+
+    /// <summary>
+    /// 取消已经冻结的 commit preparation，并丢弃尚未执行的 transaction。
+    /// operation cleanup 即使部分失败也会全部尝试，失败通过 out 参数显式升级。
+    /// </summary>
+    internal AutomationTransactionInfo? AbortCommitPreparation(
+        AutomationTransactionPreparationPlan plan,
+        out AggregateException? cleanupFailure)
+    {
+        AssertUsable();
+        ArgumentNullException.ThrowIfNull(plan);
+        if (_active is { } active &&
+            string.Equals(active.TransactionId, plan.TransactionId, StringComparison.Ordinal) &&
+            string.Equals(active.PreparingRequestId, plan.CommitRequestId, StringComparison.Ordinal))
+        {
+            return RollbackCore(
+                active,
+                AutomationTransactionStatus.RolledBack,
+                out cleanupFailure);
+        }
+
+        List<Exception> failures = [];
+        plan.CollectAbortFailures(failures);
+        cleanupFailure = failures.Count == 0
+            ? null
+            : new AggregateException(
+                "transaction preparation 的一个或多个 owner-thread cleanup 失败。",
+                failures);
+        return null;
     }
 
     /// <summary>丢弃全部尚未执行的 staged writes。</summary>
@@ -459,11 +611,111 @@ public sealed class AutomationTransactionManager : IDisposable
         return true;
     }
 
+    private static void ValidatePreparedCommit(
+        TransactionState state,
+        bool preparationsEvaluated,
+        AutomationPreparedTransactionCommit? preparedCommit)
+    {
+        bool requiresPreparation = state.StagedOperations.Any(
+            static operation => operation.Registration.Preparation is not null);
+        if (requiresPreparation && !preparationsEvaluated)
+        {
+            throw new InvalidOperationException(
+                "transaction.commit 未冻结 staged background preparation。");
+        }
+
+        if (state.PreparingRequestId is not null)
+        {
+            if (preparedCommit is null ||
+                !string.Equals(preparedCommit.TransactionId, state.TransactionId, StringComparison.Ordinal) ||
+                !string.Equals(preparedCommit.CommitRequestId, state.PreparingRequestId, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "transaction.commit prepared state 与 active reservation 不一致。");
+            }
+        }
+        else if (preparedCommit is not null)
+        {
+            throw new InvalidOperationException(
+                "transaction.commit 收到了不属于 active reservation 的 prepared state。");
+        }
+
+        if (preparedCommit is null)
+        {
+            return;
+        }
+
+        if (preparedCommit.Operations.Length != state.StagedOperations.Count)
+        {
+            throw new InvalidOperationException(
+                "transaction.commit prepared operation 数与 staging 不一致。");
+        }
+
+        for (int i = 0; i < state.StagedOperations.Count; i++)
+        {
+            StagedOperation staged = state.StagedOperations[i];
+            AutomationPreparedTransactionOperation prepared = preparedCommit.Operations[i];
+            if (!string.Equals(prepared.OperationId, staged.OperationId, StringComparison.Ordinal) ||
+                prepared.HasPreparedState != (staged.Registration.Preparation is not null))
+            {
+                throw new InvalidOperationException(
+                    "transaction.commit prepared operation 身份或 preparation contract 不一致。");
+            }
+        }
+    }
+
+    private static bool RunAbortActions(IReadOnlyList<Action> aborts)
+    {
+        bool succeeded = true;
+        for (int i = aborts.Count - 1; i >= 0; i--)
+        {
+            try
+            {
+                aborts[i]();
+            }
+            catch (Exception)
+            {
+                succeeded = false;
+            }
+        }
+
+        return succeeded;
+    }
+
     private AutomationTransactionInfo RollbackCore(
         TransactionState state,
         AutomationTransactionStatus status)
     {
-        return Complete(state, status);
+        AutomationTransactionInfo info = RollbackCore(state, status, out AggregateException? cleanupFailure);
+        return cleanupFailure is null ? info : throw cleanupFailure;
+    }
+
+    private AutomationTransactionInfo RollbackCore(
+        TransactionState state,
+        AutomationTransactionStatus status,
+        out AggregateException? cleanupFailure)
+    {
+        List<Exception> failures = [];
+        state.PreparationPlan?.CollectAbortFailures(failures);
+        if (state.CommitBeforeState is not null)
+        {
+            try
+            {
+                _participant.RestoreState(state.CommitBeforeState);
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+            }
+        }
+
+        AutomationTransactionInfo info = Complete(state, status);
+        cleanupFailure = failures.Count == 0
+            ? null
+            : new AggregateException(
+                "transaction rollback 的一个或多个 preparation cleanup 失败。",
+                failures);
+        return info;
     }
 
     private bool RestoreBeforeImage(
@@ -498,6 +750,27 @@ public sealed class AutomationTransactionManager : IDisposable
         }
 
         return succeeded;
+    }
+
+    private bool RestoreParticipantState(object participantState)
+    {
+        try
+        {
+            _participant.RestoreState(participantState);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    private static void DisposeActions(IReadOnlyList<IAutomationUndoAction> actions)
+    {
+        for (int i = actions.Count - 1; i >= 0; i--)
+        {
+            (actions[i] as IDisposable)?.Dispose();
+        }
     }
 
     private AutomationTransactionInfo Complete(
@@ -725,6 +998,12 @@ public sealed class AutomationTransactionManager : IDisposable
 
         public int StagedBytes { get; set; }
 
+        public string? PreparingRequestId { get; set; }
+
+        public object? CommitBeforeState { get; set; }
+
+        public AutomationTransactionPreparationPlan? PreparationPlan { get; set; }
+
         public ITimer? Timer { get; set; }
     }
 
@@ -747,6 +1026,86 @@ public sealed class AutomationTransactionManager : IDisposable
     private sealed record ExpiryCallbackState(string TransactionId, Action<string> Callback);
 }
 
+internal sealed record AutomationTransactionPreparationWork(
+    string OperationId,
+    bool HasPreparedState,
+    AutomationBackgroundPreparation? BackgroundPreparation);
+
+internal sealed class AutomationTransactionPreparationPlan(
+    string transactionId,
+    string commitRequestId,
+    AutomationTransactionPreparationWork[] work,
+    Action[] abortAtEditorIngress)
+{
+    private readonly Action[] _abortAtEditorIngress = abortAtEditorIngress;
+    private int _abortConsumed;
+
+    public string TransactionId { get; } = transactionId;
+
+    public string CommitRequestId { get; } = commitRequestId;
+
+    public async ValueTask<object?> PrepareAsync(CancellationToken cancellationToken)
+    {
+        AutomationPreparedTransactionOperation[] prepared =
+            new AutomationPreparedTransactionOperation[work.Length];
+        for (int i = 0; i < work.Length; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            AutomationTransactionPreparationWork operation = work[i];
+            object? preparedState = operation.BackgroundPreparation is null
+                ? null
+                : await operation.BackgroundPreparation.PrepareAsync(cancellationToken).ConfigureAwait(false);
+            prepared[i] = new AutomationPreparedTransactionOperation(
+                operation.OperationId,
+                operation.HasPreparedState,
+                preparedState);
+        }
+
+        return new AutomationPreparedTransactionCommit(
+            TransactionId,
+            CommitRequestId,
+            prepared);
+    }
+
+    public bool RunAbortActions()
+    {
+        List<Exception> failures = [];
+        CollectAbortFailures(failures);
+        return failures.Count == 0;
+    }
+
+    public void CollectAbortFailures(List<Exception> failures)
+    {
+        ArgumentNullException.ThrowIfNull(failures);
+        if (Interlocked.Exchange(ref _abortConsumed, 1) != 0)
+        {
+            return;
+        }
+
+        for (int i = _abortAtEditorIngress.Length - 1; i >= 0; i--)
+        {
+            try
+            {
+                _abortAtEditorIngress[i]();
+            }
+            catch (Exception exception)
+            {
+                failures.Add(exception);
+            }
+        }
+    }
+}
+
+internal sealed record AutomationPreparedTransactionCommit(
+    string TransactionId,
+    string CommitRequestId,
+    AutomationPreparedTransactionOperation[] Operations);
+
+internal sealed record AutomationPreparedTransactionOperation(
+    string OperationId,
+    bool HasPreparedState,
+    object? PreparedState);
+
 internal sealed class CompositeAutomationUndoAction(
     string name,
     IAutomationUndoAction[] actions,
@@ -754,11 +1113,15 @@ internal sealed class CompositeAutomationUndoAction(
     object beforeState,
     object afterState,
     AutomationRevisionStore revisions,
-    string[] resourceIds) : IAutomationUndoAction
+    string[] resourceIds) : IAutomationResourceScopedUndoAction, IDisposable
 {
+    private readonly string[] _resourceIds = [.. resourceIds];
+
     public string Name { get; } = string.IsNullOrWhiteSpace(name)
         ? throw new ArgumentException("Undo action name 不能为空。", nameof(name))
         : name;
+
+    public IReadOnlyList<string> ResourceIds => _resourceIds;
 
     public void Undo()
     {
@@ -768,7 +1131,7 @@ internal sealed class CompositeAutomationUndoAction(
         }
 
         participant.RestoreState(beforeState);
-        _ = revisions.Advance(resourceIds);
+        _ = revisions.Advance(_resourceIds);
     }
 
     public void Redo()
@@ -779,6 +1142,14 @@ internal sealed class CompositeAutomationUndoAction(
         }
 
         participant.RestoreState(afterState);
-        _ = revisions.Advance(resourceIds);
+        _ = revisions.Advance(_resourceIds);
+    }
+
+    public void Dispose()
+    {
+        for (int i = actions.Length - 1; i >= 0; i--)
+        {
+            (actions[i] as IDisposable)?.Dispose();
+        }
     }
 }

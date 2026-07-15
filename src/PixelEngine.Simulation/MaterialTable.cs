@@ -112,6 +112,69 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
         return table;
     }
 
+    /// <summary>捕获可用于失败回滚的完整材质表 before-image。</summary>
+    /// <returns>不再引用材质定义数组、tombstone 数组或 custom-update 数组的游离快照。</returns>
+    public MaterialTableSnapshot CaptureState()
+    {
+        return new MaterialTableSnapshot(_defs, _tombstones, _customUpdates);
+    }
+
+    /// <summary>恢复由 <see cref="CaptureState" /> 捕获的完整材质表状态。</summary>
+    /// <param name="snapshot">材质表 before-image。</param>
+    public void RestoreState(MaterialTableSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        _defs = [.. snapshot.Definitions];
+        _tombstones = [.. snapshot.Tombstones];
+        _customUpdates = [.. snapshot.CustomUpdates];
+        RebuildNameIndex();
+        Hot = MaterialHotTable.FromDefinitions(_defs);
+        Visual = MaterialVisualTable.FromDefinitions(_defs);
+    }
+
+    /// <summary>判断当前材质表是否仍与捕获的 before-image 完全一致。</summary>
+    /// <param name="snapshot">待核对的材质表快照。</param>
+    /// <returns>定义、tombstone 与 custom-update 均未变化时返回 <see langword="true" />。</returns>
+    public bool StateEquals(MaterialTableSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return _defs.AsSpan().SequenceEqual(snapshot.Definitions) &&
+            _tombstones.AsSpan().SequenceEqual(snapshot.Tombstones) &&
+            _customUpdates.AsSpan().SequenceEqual(snapshot.CustomUpdates);
+    }
+
+    /// <summary>判断一次稳定热重载是否会改变定义、tombstone 或 runtime ID 分配。</summary>
+    /// <param name="newDefinitions">按稳定 name 描述的目标 live definitions。</param>
+    /// <returns>目标状态与当前材质表不同时为 true。</returns>
+    public bool WouldReloadChange(ReadOnlySpan<MaterialDef> newDefinitions)
+    {
+        Dictionary<string, MaterialDef> incoming = ValidateReloadDefinitions(newDefinitions);
+        bool[] kept = new bool[_defs.Length];
+        foreach (KeyValuePair<string, MaterialDef> entry in incoming)
+        {
+            if (!_nameToId.TryGetValue(entry.Key, out ushort existingId))
+            {
+                return true;
+            }
+
+            kept[existingId] = true;
+            if (_defs[existingId] != BindExistingDefinition(entry.Value, existingId))
+            {
+                return true;
+            }
+        }
+
+        for (int i = 0; i < _defs.Length; i++)
+        {
+            if (!_tombstones[i] && !kept[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// 根据存档头中的 savedId→name 表构建 savedId→currentId remap LUT，缺失材质映射到 fallback。
     /// </summary>
@@ -167,7 +230,7 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
         {
             if (_nameToId.TryGetValue(entry.Key, out ushort existingId))
             {
-                _defs[existingId] = entry.Value with { Id = existingId };
+                _defs[existingId] = BindExistingDefinition(entry.Value, existingId);
                 _tombstones[existingId] = false;
                 kept[existingId] = true;
                 preservedCount++;
@@ -216,6 +279,17 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
         Hot = MaterialHotTable.FromDefinitions(_defs);
         Visual = MaterialVisualTable.FromDefinitions(_defs);
         return new MaterialReloadResult([.. tombstones], appended.Count, preservedCount, fallbackReplacementCount);
+    }
+
+    private MaterialDef BindExistingDefinition(MaterialDef definition, ushort existingId)
+    {
+        MaterialDef bound = definition with { Id = existingId };
+        return _customUpdates[existingId] is null
+            ? bound
+            : bound with
+            {
+                PropertyFlags = bound.PropertyFlags | MaterialProperty.HasCustomUpdate,
+            };
     }
 
     /// <summary>
@@ -352,6 +426,30 @@ public sealed class MaterialTable : IMaterialCustomUpdateExecutor
             throw new ArgumentOutOfRangeException(parameterName, id, "材质 id 超出材质表范围或指向 tombstone。");
         }
     }
+}
+
+/// <summary>材质表失败回滚使用的不可变、游离 before-image。</summary>
+public sealed class MaterialTableSnapshot
+{
+    private readonly MaterialDef[] _definitions;
+    private readonly bool[] _tombstones;
+    private readonly MaterialCustomUpdate?[] _customUpdates;
+
+    internal MaterialTableSnapshot(
+        MaterialDef[] definitions,
+        bool[] tombstones,
+        MaterialCustomUpdate?[] customUpdates)
+    {
+        _definitions = [.. definitions];
+        _tombstones = [.. tombstones];
+        _customUpdates = [.. customUpdates];
+    }
+
+    internal ReadOnlySpan<MaterialDef> Definitions => _definitions;
+
+    internal ReadOnlySpan<bool> Tombstones => _tombstones;
+
+    internal ReadOnlySpan<MaterialCustomUpdate?> CustomUpdates => _customUpdates;
 }
 
 /// <summary>

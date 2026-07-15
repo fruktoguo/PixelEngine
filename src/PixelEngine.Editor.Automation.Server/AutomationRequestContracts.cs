@@ -42,6 +42,9 @@ public sealed record AutomationMethodDescriptor
     /// <summary>是否强制请求携带跨连接 idempotency key。</summary>
     public bool RequiresIdempotencyKey { get; init; }
 
+    /// <summary>是否声明 safe-phase freeze → background prepare → safe-phase commit。</summary>
+    public bool UsesBackgroundPreparation { get; init; }
+
     /// <summary>该 capability 可能发布的 event type。</summary>
     public string[] EventTypes { get; init; } = [];
 
@@ -68,6 +71,7 @@ public sealed record AutomationMethodDescriptor
             TransactionMode = TransactionMode,
             RequiresExpectedRevision = RequiresExpectedRevision,
             RequiresIdempotencyKey = RequiresIdempotencyKey,
+            UsesBackgroundPreparation = UsesBackgroundPreparation,
             EventTypes = [.. EventTypes],
             ArtifactBehavior = ArtifactBehavior,
             UiCommandIds = [.. UiCommandIds],
@@ -202,6 +206,11 @@ public sealed record AutomationHandlerResult
 {
     /// <summary>小型 JSON payload。</summary>
     public JsonElement? Payload { get; init; }
+
+    /// <summary>
+    /// safe phase 后需要在 Server 后台完成的 payload producer；普通 handler 应保持为空。
+    /// </summary>
+    public AutomationDeferredPayloadFactory? DeferredPayloadFactory { get; init; }
 
     /// <summary>执行后或 snapshot 对应的 revision。</summary>
     public AutomationRevisionSnapshot? Revision { get; init; }

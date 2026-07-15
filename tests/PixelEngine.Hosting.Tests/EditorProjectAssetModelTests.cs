@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Text;
 using System.Text.Json;
 using PixelEngine.Editor;
+using PixelEngine.Editor.Automation.Protocol;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
 using Xunit;
@@ -14,6 +15,391 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class EditorProjectAssetModelTests
 {
+    /// <summary>prepared ancillary 文件只通过同卷 archive 交换，并在释放 history 后保留当前态。</summary>
+    [Fact]
+    public void AutomationFileJournalSwapsBeforeAndAfterWithoutRewritingTarget()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "AssetFileJournalTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            string target = Path.Combine(root, "content", "state.json");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            byte[] beforeBytes = Encoding.UTF8.GetBytes(/*lang=json,strict*/ "{\"state\":\"before\"}\n");
+            byte[] afterBytes = Encoding.UTF8.GetBytes(/*lang=json,strict*/ "{\"state\":\"after\"}\n");
+            DateTime beforeTime = new(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc);
+            DateTime afterTime = beforeTime.AddMinutes(1);
+            File.WriteAllBytes(target, beforeBytes);
+            File.SetLastWriteTimeUtc(target, beforeTime);
+            EditorAssetAutomationFileSnapshot before = new(
+                [new EditorAssetAutomationFileState(target, beforeBytes, beforeTime)]);
+            EditorAssetAutomationFileSnapshot after = new(
+                [new EditorAssetAutomationFileState(target, afterBytes, afterTime)]);
+
+            using (EditorAssetAutomationFileJournal journal =
+                EditorAssetAutomationFileJournal.Stage(root, before, after))
+            {
+                Assert.Equal(beforeBytes, File.ReadAllBytes(target));
+                journal.ApplyAfter();
+                Assert.Equal(afterBytes, File.ReadAllBytes(target));
+                Assert.Equal(afterTime, File.GetLastWriteTimeUtc(target));
+                journal.ApplyBefore();
+                Assert.Equal(beforeBytes, File.ReadAllBytes(target));
+                Assert.Equal(beforeTime, File.GetLastWriteTimeUtc(target));
+                journal.ApplyAfter();
+            }
+
+            Assert.Equal(afterBytes, File.ReadAllBytes(target));
+            string archiveRoot = Path.Combine(root, ".pixelengine", "automation-undo");
+            Assert.False(Directory.Exists(archiveRoot));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>即使长度与 mtime 被伪装，目标内容变化时 journal 仍按 SHA256 拒绝覆盖。</summary>
+    [Fact]
+    public void AutomationFileJournalRejectsChangedBeforeImage()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "AssetFileJournalConflictTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            string target = Path.Combine(root, "content", "state.json");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            byte[] beforeBytes = Encoding.UTF8.GetBytes("before");
+            byte[] afterBytes = Encoding.UTF8.GetBytes("after!");
+            DateTime beforeTime = new(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc);
+            File.WriteAllBytes(target, beforeBytes);
+            File.SetLastWriteTimeUtc(target, beforeTime);
+            EditorAssetAutomationFileSnapshot before = new(
+                [new EditorAssetAutomationFileState(target, beforeBytes, beforeTime)]);
+            EditorAssetAutomationFileSnapshot after = new(
+                [new EditorAssetAutomationFileState(target, afterBytes, beforeTime.AddMinutes(1))]);
+            using EditorAssetAutomationFileJournal journal =
+                EditorAssetAutomationFileJournal.Stage(root, before, after);
+            byte[] externalBytes = Encoding.UTF8.GetBytes("tamper");
+            File.WriteAllBytes(target, externalBytes);
+            File.SetLastWriteTimeUtc(target, beforeTime);
+
+            AggregateException exception = Assert.Throws<AggregateException>(journal.ApplyAfter);
+            Assert.Contains("content SHA256", exception.ToString(), StringComparison.Ordinal);
+            Assert.Equal(externalBytes, File.ReadAllBytes(target));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>内容等价的原子重写只改变 metadata 时，journal 仍可安全 Undo。</summary>
+    [Fact]
+    public void AutomationFileJournalAcceptsEquivalentContentRewrite()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "AssetFileJournalEquivalentRewriteTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            string target = Path.Combine(root, "content", "state.json");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            byte[] beforeBytes = Encoding.UTF8.GetBytes("before");
+            byte[] afterBytes = Encoding.UTF8.GetBytes("after!");
+            DateTime beforeTime = new(2026, 7, 15, 0, 0, 0, DateTimeKind.Utc);
+            DateTime afterTime = beforeTime.AddMinutes(1);
+            File.WriteAllBytes(target, beforeBytes);
+            File.SetLastWriteTimeUtc(target, beforeTime);
+            EditorAssetAutomationFileSnapshot before = new(
+                [new EditorAssetAutomationFileState(target, beforeBytes, beforeTime)]);
+            EditorAssetAutomationFileSnapshot after = new(
+                [new EditorAssetAutomationFileState(target, afterBytes, afterTime)]);
+            using EditorAssetAutomationFileJournal journal =
+                EditorAssetAutomationFileJournal.Stage(root, before, after);
+            journal.ApplyAfter();
+            File.WriteAllBytes(target, afterBytes);
+            File.SetLastWriteTimeUtc(target, afterTime.AddMinutes(5));
+
+            journal.ApplyBefore();
+
+            Assert.Equal(beforeBytes, File.ReadAllBytes(target));
+            Assert.Equal(beforeTime, File.GetLastWriteTimeUtc(target));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>多文件切换的后续目标失败时，已切换目标必须逆序恢复 before-image。</summary>
+    [Fact]
+    public void AutomationFileJournalRollsBackEarlierTargetsWhenLaterTargetIsLocked()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "AssetFileJournalAtomicityTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            _ = Directory.CreateDirectory(root);
+            string firstPath = Path.Combine(root, "a.json");
+            string secondPath = Path.Combine(root, "b.json");
+            byte[] firstBefore = Encoding.UTF8.GetBytes("first-before");
+            byte[] secondBefore = Encoding.UTF8.GetBytes("second-before");
+            byte[] firstAfter = Encoding.UTF8.GetBytes("first-after");
+            byte[] secondAfter = Encoding.UTF8.GetBytes("second-after");
+            DateTime timestamp = new(2026, 7, 15, 1, 0, 0, DateTimeKind.Utc);
+            File.WriteAllBytes(firstPath, firstBefore);
+            File.WriteAllBytes(secondPath, secondBefore);
+            File.SetLastWriteTimeUtc(firstPath, timestamp);
+            File.SetLastWriteTimeUtc(secondPath, timestamp);
+            EditorAssetAutomationFileSnapshot before = new(
+            [
+                new EditorAssetAutomationFileState(firstPath, firstBefore, timestamp),
+                new EditorAssetAutomationFileState(secondPath, secondBefore, timestamp),
+            ]);
+            EditorAssetAutomationFileSnapshot after = new(
+            [
+                new EditorAssetAutomationFileState(firstPath, firstAfter, timestamp.AddMinutes(1)),
+                new EditorAssetAutomationFileState(secondPath, secondAfter, timestamp.AddMinutes(1)),
+            ]);
+            using EditorAssetAutomationFileJournal journal =
+                EditorAssetAutomationFileJournal.Stage(root, before, after);
+            using FileStream locked = new(
+                secondPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
+
+            AggregateException exception = Assert.Throws<AggregateException>(journal.ApplyAfter);
+
+            Assert.Contains("切换失败", exception.Message, StringComparison.Ordinal);
+            Assert.Equal(firstBefore, File.ReadAllBytes(firstPath));
+            Assert.Equal(secondBefore, File.ReadAllBytes(secondPath));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>资产 before-image 同时恢复隐式创建的空目录，避免 watcher 发布重复 revision。</summary>
+    [Fact]
+    public void AutomationBrowserSnapshotRestoresPhysicalFolderTopology()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "AssetFolderTopologyTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(root, "Asset Folder Topology");
+            using EditorAssetBrowserDataSource assets = new(project);
+            EditorAssetAutomationBrowserSnapshot before = assets.CaptureAutomationBrowserSnapshot();
+            string nested = Path.Combine(project.ContentRootPath, "automation", "nested");
+            _ = Directory.CreateDirectory(nested);
+            assets.RefreshAssets();
+            EditorAssetAutomationBrowserSnapshot after = assets.CaptureAutomationBrowserSnapshot();
+            Assert.Contains(
+                after.Folders,
+                folder => string.Equals(
+                    folder.Path,
+                    "Content/automation/nested",
+                    StringComparison.OrdinalIgnoreCase));
+
+            assets.RestoreAutomationBrowserSnapshot(before, after);
+            Assert.False(Directory.Exists(nested));
+            Assert.False(Directory.Exists(Path.GetDirectoryName(nested)));
+
+            assets.RestoreAutomationBrowserSnapshot(after, before);
+            Assert.True(Directory.Exists(nested));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// automation preparation 在隔离 sandbox 中支持前序 create→后序 move 依赖，commit 前不得修改真实工程。
+    /// </summary>
+    [Fact]
+    public async Task AutomationAssetPreparationSupportsDependentWritesWithoutPublishingIntermediateState()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "PreparedAssetTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(root, "Prepared Assets");
+            EditorSceneModel scene = EditorSceneModel.FromDocument(
+                EngineSceneDocumentLoader.LoadDocument(
+                    Path.Combine(project.ContentRootPath, project.StartScene)));
+            using EditorAssetAutomationPreparationWorkspace workspace =
+                EditorAssetAutomationPreparationWorkspace.Freeze(
+                    project,
+                    project.ContentRoot,
+                    project.ScriptSourceDir,
+                    project.StartScene,
+                    scene.ToDocument(),
+                    importRoots: []);
+            AutomationAssetCreateRequest createRequest = new()
+            {
+                SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                Path = "Content/data/generated.json",
+                Kind = AutomationAssetKind.Json,
+            };
+            EditorAssetAutomationPreparedMutation created =
+                (EditorAssetAutomationPreparedMutation?)await workspace.PrepareAsync(
+                    new EditorAssetAutomationMutationRequest(
+                        AutomationProtocolConstants.ProjectAssetCreateMethod,
+                        JsonSerializer.SerializeToElement(
+                            createRequest,
+                            AutomationJsonContext.Default.AutomationAssetCreateRequest)),
+                    CancellationToken.None) ??
+                throw new InvalidOperationException("create preparation 未返回结果。");
+            AssetBrowserItem createdAsset = created.Asset ??
+                throw new InvalidOperationException("create preparation 缺少 stable asset。");
+            Assert.Equal(
+                createdAsset.LastModifiedUtc.UtcDateTime,
+                File.GetLastWriteTimeUtc(created.BeforePayloadPath));
+            AutomationAssetMoveRequest moveRequest = new()
+            {
+                SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                AssetId = createdAsset.AssetId!,
+                NewPath = "Content/data/moved.json",
+            };
+            EditorAssetAutomationPreparedMutation moved =
+                (EditorAssetAutomationPreparedMutation?)await workspace.PrepareAsync(
+                    new EditorAssetAutomationMutationRequest(
+                        AutomationProtocolConstants.ProjectAssetMoveMethod,
+                        JsonSerializer.SerializeToElement(
+                            moveRequest,
+                            AutomationJsonContext.Default.AutomationAssetMoveRequest)),
+                    CancellationToken.None) ??
+                throw new InvalidOperationException("move preparation 未返回结果。");
+
+            Assert.True(created.StateChanged);
+            Assert.True(moved.StateChanged);
+            Assert.Equal(createdAsset.AssetId, moved.Asset?.AssetId);
+            Assert.EndsWith("Content/data/moved.json", moved.Asset?.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.False(File.Exists(Path.Combine(project.ContentRootPath, "data", "generated.json")));
+            Assert.False(File.Exists(Path.Combine(project.ContentRootPath, "data", "moved.json")));
+            Assert.True(File.Exists(created.BeforePayloadPath));
+
+            workspace.Dispose();
+            created.DisposeUncommittedStaging();
+            moved.DisposeUncommittedStaging();
+            Assert.False(File.Exists(created.BeforePayloadPath));
+            string preparationRoot = Path.Combine(project.ProjectRoot, ".pixelengine", "automation-preparation");
+            Assert.False(Directory.Exists(preparationRoot));
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>完整 Refresh 在 sandbox 后台准备，commit 前不得改真实 manifest 或 live catalog。</summary>
+    [Fact]
+    public async Task AutomationAssetRefreshPreparationKeepsLiveProjectUnchangedUntilCommit()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "PreparedAssetRefreshTests",
+            Guid.NewGuid().ToString("N"));
+        EditorAssetAutomationPreparedMutation? prepared = null;
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(root, "Prepared Asset Refresh");
+            EditorSceneModel scene = EditorSceneModel.FromDocument(
+                EngineSceneDocumentLoader.LoadDocument(
+                    Path.Combine(project.ContentRootPath, project.StartScene)));
+            using EditorAssetBrowserDataSource live = new(project, activeScene: scene);
+            EditorAssetAutomationBrowserSnapshot frozen = live.CaptureAutomationBrowserSnapshot();
+            string externalPath = Path.Combine(project.ContentRootPath, "data", "external.json");
+            _ = Directory.CreateDirectory(Path.GetDirectoryName(externalPath)!);
+            File.WriteAllText(externalPath, "{}\n");
+            byte[] manifestBefore = File.ReadAllBytes(
+                Path.Combine(project.ProjectRoot, EditorAssetManifestStore.ManifestRelativePath));
+            using EditorAssetAutomationPreparationWorkspace workspace =
+                EditorAssetAutomationPreparationWorkspace.Freeze(
+                    project,
+                    project.ContentRoot,
+                    project.ScriptSourceDir,
+                    project.StartScene,
+                    scene.ToDocument(),
+                    importRoots: []);
+
+            prepared = (EditorAssetAutomationPreparedMutation?)await workspace.PrepareRefreshAsync(
+                new EditorAssetAutomationMutationRequest(
+                    AutomationProtocolConstants.ProjectAssetRefreshMethod,
+                    Payload: null,
+                    FrozenBrowser: frozen),
+                CancellationToken.None) ??
+                throw new InvalidOperationException("refresh preparation 未返回结果。");
+            AutomationAssetRefreshResult response = prepared.SemanticResult as AutomationAssetRefreshResult ??
+                throw new InvalidOperationException("refresh preparation 缺少 response。");
+
+            Assert.True(prepared.StateChanged);
+            Assert.True(response.StateChanged);
+            Assert.True(response.AssetCount > frozen.Assets.Length);
+            Assert.DoesNotContain(
+                live.ListAssets(),
+                item => item.Path.EndsWith("data/external.json", StringComparison.OrdinalIgnoreCase));
+            Assert.Equal(
+                manifestBefore,
+                File.ReadAllBytes(Path.Combine(
+                    project.ProjectRoot,
+                    EditorAssetManifestStore.ManifestRelativePath)));
+        }
+        finally
+        {
+            prepared?.DisposeUncommittedStaging();
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     /// <summary>
     /// 验证 manifest 生成 stable asset id、重载后保持稳定，并能被 Project Window 数据源消费。
     /// </summary>
@@ -109,7 +495,7 @@ public sealed class EditorProjectAssetModelTests
 
             EngineSceneDocument sceneDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "scenes", "NewScene.scene"));
             EngineSceneDocument prefabDocument = EngineSceneDocumentLoader.LoadDocument(Path.Combine(contentRoot, "prefabs", "NewPrefab.prefab"));
-            Assert.Equal("{\"materials\":[]}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "materials.json")));
+            Assert.Equal(/*lang=json,strict*/ "{\"materials\":[]}" + Environment.NewLine, File.ReadAllText(Path.Combine(contentRoot, "materials.json")));
             Assert.StartsWith("材质目录：0 项", Find(assets, "materials.json").PreviewSummary, StringComparison.Ordinal);
             string uiScreenText = File.ReadAllText(Path.Combine(contentRoot, "ui", "screens", "NewScreen.xhtml"));
             Assert.Contains("<rml title=\"NewScreen\"", uiScreenText, StringComparison.Ordinal);
@@ -802,11 +1188,15 @@ public sealed class EditorProjectAssetModelTests
             EditorAssetManifestStore manifest = new(projectRoot, contentRoot);
             _ = manifest.Refresh();
             UiManifestPanel panel = new(manifest);
+            int changes = 0;
+            panel.Changed += () => changes++;
 
             IReadOnlyList<EditorUiManifestScreenEntry> before = panel.CaptureScreens();
             EditorUiManifestSyncResult sync = panel.SyncScreens();
             IReadOnlyList<EditorUiManifestScreenEntry> after = panel.CaptureScreens();
             bool toggled = panel.TrySetPreload("hud", preload: false);
+            string toggledStatus = panel.Status;
+            bool repeated = panel.TrySetPreload("hud", preload: false);
 
             // Assert：验证预期结果
             Assert.Empty(before);
@@ -821,12 +1211,41 @@ public sealed class EditorProjectAssetModelTests
             Assert.Equal("ui/screens/hud.xhtml", hud.LogicalPath);
             Assert.StartsWith("asset_", hud.AssetId, StringComparison.Ordinal);
             Assert.True(toggled);
-            Assert.Contains("preload=False", panel.Status, StringComparison.Ordinal);
+            Assert.True(repeated);
+            Assert.Equal(2, changes);
+            Assert.Contains("preload=False", toggledStatus, StringComparison.Ordinal);
+            Assert.Contains("已是 False", panel.Status, StringComparison.Ordinal);
             using JsonDocument uiManifest = JsonDocument.Parse(File.ReadAllText(Path.Combine(contentRoot, "ui", "ui-manifest.json")));
             JsonElement screen = Assert.Single(
                 uiManifest.RootElement.GetProperty("screens").EnumerateArray(),
                 item => item.GetProperty("id").GetString() == "hud");
             Assert.False(screen.GetProperty("preload").GetBoolean());
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>Automation UI Manifest 读取拒绝 screen path 穿越 content/ui root。</summary>
+    [Fact]
+    public void AutomationUiManifestRejectsTraversalBeforeReadingScreenFiles()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            string contentRoot = Path.Combine(projectRoot, "content");
+            string uiRoot = Path.Combine(contentRoot, "ui");
+            _ = Directory.CreateDirectory(uiRoot);
+            File.WriteAllText(
+                Path.Combine(uiRoot, "ui-manifest.json"),
+                /*lang=json,strict*/ """
+                {"screens":[{"id":"escape","path":"../outside.xhtml","preload":true}],"images":[]}
+                """);
+
+            InvalidDataException exception = Assert.Throws<InvalidDataException>(() =>
+                EditorUiManifestAutomation.Capture(contentRoot, []));
+            Assert.Contains("path", exception.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -952,6 +1371,55 @@ public sealed class EditorProjectAssetModelTests
             Assert.Contains("仍被 2 处引用", delete.Diagnostic, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(contentRoot, "textures", "sand.png")));
             Assert.True(manifest.TryResolveAssetId(texture.Id, out _));
+        }
+        finally
+        {
+            DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// Automation 引用查询从安全点冻结计划，并在离线扫描器中得到磁盘与 active scene 的一致结果。
+    /// </summary>
+    [Fact]
+    public void AutomationReferencePlanScansDetachedSceneDocuments()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Reference Scan Project");
+            EditorAssetManifestStore manifest = new(project);
+            EditorAssetRecord texture = manifest.CreateAsset(
+                "textures/sand.png",
+                EditorAssetType.Texture,
+                textContents: "texture");
+            string reference = EditorAssetReferenceCodec.Encode(
+                texture.Id,
+                texture.LogicalPath,
+                texture.AssetType);
+            EngineSceneDocument document = CreateSceneWithAssetReference(reference);
+            EngineSceneDocumentLoader.SaveDocument(
+                document,
+                Path.Combine(project.ContentRootPath, "scenes", "main.scene"));
+            EditorSceneModel activeScene = EditorSceneModel.FromDocument(document);
+            using EditorAssetBrowserDataSource source = new(project, activeScene: activeScene);
+
+            Assert.True(source.TryCreateAutomationAssetReferencePlan(
+                texture.Id,
+                activeScene,
+                out EditorAssetAutomationReferencePlan plan));
+            EditorAssetDeletePreflight preflight = EditorAssetAutomationReferenceScanner.Scan(
+                plan,
+                CancellationToken.None);
+
+            Assert.Equal(texture.Id, preflight.Asset.Id);
+            Assert.Equal(2, preflight.ReferenceCount);
+            Assert.Equal(1, preflight.ReferenceDocuments);
+            Assert.True(preflight.ActiveSceneHasReferences);
+            Assert.Contains(preflight.ReferenceLocations, location =>
+                location.StartsWith("scenes/main.scene:", StringComparison.Ordinal));
+            Assert.Contains(preflight.ReferenceLocations, location =>
+                location.StartsWith("active scene:", StringComparison.Ordinal));
         }
         finally
         {
@@ -1223,6 +1691,44 @@ public sealed class EditorProjectAssetModelTests
         finally
         {
             DeleteDirectory(projectRoot);
+        }
+    }
+
+    /// <summary>
+    /// Manifest 与 automation before-image 都不得沿 directory symlink 读取工程根之外的文件。
+    /// </summary>
+    [Fact]
+    public void AssetTraversalRejectsReparsePointEscape()
+    {
+        string projectRoot = CreateTempProjectRoot();
+        string outsideRoot = CreateTempProjectRoot() + "-outside";
+        string linkPath = Path.Combine(projectRoot, "content", "linked-outside");
+        try
+        {
+            EditorProject project = EditorProject.CreateNew(projectRoot, "Reparse Asset Project");
+            _ = Directory.CreateDirectory(outsideRoot);
+            File.WriteAllText(Path.Combine(outsideRoot, "outside.scene"), "{}\n");
+            using EditorAssetBrowserDataSource source = new(project);
+            _ = Directory.CreateSymbolicLink(linkPath, outsideRoot);
+
+            InvalidOperationException snapshotException = Assert.Throws<InvalidOperationException>(
+                () => source.CaptureAutomationFileSnapshot(includeReferenceDocuments: true));
+            InvalidOperationException manifestException = Assert.Throws<InvalidOperationException>(
+                () => new EditorAssetManifestStore(project).Refresh());
+
+            Assert.Contains("reparse point", snapshotException.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("reparse point", manifestException.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("{}\n", File.ReadAllText(Path.Combine(outsideRoot, "outside.scene")));
+        }
+        finally
+        {
+            if (Directory.Exists(linkPath))
+            {
+                Directory.Delete(linkPath);
+            }
+
+            DeleteDirectory(projectRoot);
+            DeleteDirectory(outsideRoot);
         }
     }
 

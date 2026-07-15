@@ -17,7 +17,13 @@ internal enum EditorShortcutCommand
 
 internal readonly record struct EditorShortcutDefinition(
     EditorShortcutCommand Command,
+    string UiCommandId,
     string Action,
+    string Key,
+    bool Control,
+    bool Shift,
+    bool Alt,
+    bool Super,
     string DisplayText,
     int KeyChord);
 
@@ -28,15 +34,15 @@ internal static class EditorShortcutCatalog
 {
     private static readonly EditorShortcutDefinition[] Definitions =
     [
-        Create(EditorShortcutCommand.SaveScene, "Save Scene", "Ctrl+S", ImGuiKey.ModCtrl | ImGuiKey.S),
-        Create(EditorShortcutCommand.SaveSceneAs, "Save Scene As", "Ctrl+Shift+S", ImGuiKey.ModCtrl | ImGuiKey.ModShift | ImGuiKey.S),
-        Create(EditorShortcutCommand.Undo, "Undo", "Ctrl+Z", ImGuiKey.ModCtrl | ImGuiKey.Z),
-        Create(EditorShortcutCommand.Redo, "Redo", "Ctrl+Y", ImGuiKey.ModCtrl | ImGuiKey.Y),
-        Create(EditorShortcutCommand.Duplicate, "Duplicate", "Ctrl+D", ImGuiKey.ModCtrl | ImGuiKey.D),
-        Create(EditorShortcutCommand.TogglePlayMode, "Play / Stop", "Ctrl+P", ImGuiKey.ModCtrl | ImGuiKey.P),
-        Create(EditorShortcutCommand.OpenBuildSettings, "Build Settings", "Ctrl+Shift+B", ImGuiKey.ModCtrl | ImGuiKey.ModShift | ImGuiKey.B),
-        Create(EditorShortcutCommand.BuildAndRun, "Build And Run", "Ctrl+B", ImGuiKey.ModCtrl | ImGuiKey.B),
-        Create(EditorShortcutCommand.OpenPreferences, "Preferences", "Ctrl+,", ImGuiKey.ModCtrl | ImGuiKey.Comma),
+        Create(EditorShortcutCommand.SaveScene, "shortcut.ctrl-s", "Save Scene", "S", ImGuiKey.S, control: true),
+        Create(EditorShortcutCommand.SaveSceneAs, "shortcut.ctrl-shift-s", "Save Scene As", "S", ImGuiKey.S, control: true, shift: true),
+        Create(EditorShortcutCommand.Undo, "shortcut.ctrl-z", "Undo", "Z", ImGuiKey.Z, control: true),
+        Create(EditorShortcutCommand.Redo, "shortcut.ctrl-y", "Redo", "Y", ImGuiKey.Y, control: true),
+        Create(EditorShortcutCommand.Duplicate, "shortcut.ctrl-d", "Duplicate", "D", ImGuiKey.D, control: true),
+        Create(EditorShortcutCommand.TogglePlayMode, "shortcut.ctrl-p", "Play / Stop", "P", ImGuiKey.P, control: true),
+        Create(EditorShortcutCommand.OpenBuildSettings, "shortcut.ctrl-shift-b", "Build Settings", "B", ImGuiKey.B, control: true, shift: true),
+        Create(EditorShortcutCommand.BuildAndRun, "shortcut.ctrl-b", "Build And Run", "B", ImGuiKey.B, control: true),
+        Create(EditorShortcutCommand.OpenPreferences, "shortcut.ctrl-comma", "Preferences", ",", ImGuiKey.Comma, control: true),
     ];
 
     public static ReadOnlySpan<EditorShortcutDefinition> All => Definitions;
@@ -63,10 +69,56 @@ internal static class EditorShortcutCatalog
 
     private static EditorShortcutDefinition Create(
         EditorShortcutCommand command,
+        string uiCommandId,
         string action,
-        string displayText,
-        ImGuiKey keyChord)
+        string keyName,
+        ImGuiKey key,
+        bool control = false,
+        bool shift = false,
+        bool alt = false,
+        bool super = false)
     {
-        return new EditorShortcutDefinition(command, action, displayText, (int)keyChord);
+        ImGuiKey keyChord = key;
+        if (control)
+        {
+            keyChord |= ImGuiKey.ModCtrl;
+        }
+
+        if (shift)
+        {
+            keyChord |= ImGuiKey.ModShift;
+        }
+
+        if (alt)
+        {
+            keyChord |= ImGuiKey.ModAlt;
+        }
+
+        if (super)
+        {
+            keyChord |= ImGuiKey.ModSuper;
+        }
+
+        string displayText = string.Join(
+            '+',
+            new[]
+            {
+                control ? "Ctrl" : null,
+                shift ? "Shift" : null,
+                alt ? "Alt" : null,
+                super ? "Super" : null,
+                keyName,
+            }.Where(static part => part is not null));
+        return new EditorShortcutDefinition(
+            command,
+            uiCommandId,
+            action,
+            keyName,
+            control,
+            shift,
+            alt,
+            super,
+            displayText,
+            (int)keyChord);
     }
 }

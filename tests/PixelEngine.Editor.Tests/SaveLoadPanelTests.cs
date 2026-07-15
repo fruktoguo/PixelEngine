@@ -12,6 +12,28 @@ namespace PixelEngine.Editor.Tests;
 /// </summary>
 public sealed class SaveLoadPanelTests
 {
+    /// <summary>slot ID 不能借助 dot-segment、分隔符或 Windows 保留名越过 save root。</summary>
+    [Theory]
+    [InlineData("..", "slot")]
+    [InlineData("../outside", "outside")]
+    [InlineData("..\\outside", "outside")]
+    [InlineData("slot one", "slot-one")]
+    [InlineData("CON.txt", "CON.txt-slot")]
+    public void SaveSlotPathNormalizesUnsafeIdsInsideRoot(string input, string expected)
+    {
+        string root = Path.Combine(Path.GetTempPath(), "PixelEngine", "SaveSlotPathTests");
+
+        string normalized = SaveSlotPath.Normalize(input);
+        string resolved = SaveSlotPath.Resolve(root, input);
+
+        Assert.Equal(expected, normalized);
+        Assert.Equal(Path.Combine(Path.GetFullPath(root), expected), resolved);
+        Assert.StartsWith(
+            Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar,
+            resolved,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// 验证面板调用存读档服务并刷新状态。
     /// </summary>

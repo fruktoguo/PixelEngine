@@ -125,6 +125,25 @@ public sealed class MaterialTableTests
         Assert.Equal([(0, "empty"), (1, "water"), (3, "fire")], table.BuildIdNameTable());
     }
 
+    /// <summary>相同 stable reload 不应被判为变化，且不能清掉既有 custom-update 热路径位。</summary>
+    [Fact]
+    public void StableReloadNoChangePreservesRegisteredCustomUpdate()
+    {
+        MaterialDef[] definitions = CreateDefinitions();
+        MaterialTable table = new(definitions);
+        table.RegisterCustomUpdate("water", NoOpCustomUpdate);
+
+        Assert.False(table.WouldReloadChange(definitions));
+
+        MaterialReloadResult result = table.ReloadStable(definitions, fallbackId: 0);
+
+        Assert.Empty(result.TombstoneIds);
+        Assert.Equal(0, result.AddedCount);
+        Assert.Equal(definitions.Length, result.PreservedCount);
+        Assert.True((table.Get(1).PropertyFlags & MaterialProperty.HasCustomUpdate) != 0);
+        Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.HasCustomUpdate) != 0);
+    }
+
     /// <summary>
     /// 验证构建期拒绝 HeatCapacity 为 0 的材质，避免温度场除零。
     /// </summary>
@@ -156,6 +175,16 @@ public sealed class MaterialTableTests
         Assert.Equal(MaterialProperty.BurnableFast, MaterialTagMap.ToProperty(MaterialTag.BurnableFast));
         Assert.Equal(1u << 11, (uint)MaterialProperty.Indestructible);
         Assert.Equal(1u << 12, (uint)MaterialProperty.Diggable);
+    }
+
+    private static void NoOpCustomUpdate(
+        ref CellCursor cell,
+        ref NeighborWindow window,
+        ref ChunkWorkContext context)
+    {
+        _ = cell;
+        _ = window;
+        _ = context;
     }
 
     private static MaterialDef[] CreateDefinitions()

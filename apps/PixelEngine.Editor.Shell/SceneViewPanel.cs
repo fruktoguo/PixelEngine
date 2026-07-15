@@ -1,5 +1,6 @@
 using Hexa.NET.ImGui;
 using Hexa.NET.ImGuizmo;
+using PixelEngine.Rendering;
 using PixelEngine.UI;
 using System.Numerics;
 
@@ -103,6 +104,46 @@ internal sealed class SceneViewPanel(
     public SceneAuthoringPreview Preview => EnsurePreview();
 
     public SceneAuthoringCameraSnapshot CameraSnapshot => _camera.Snapshot;
+
+    internal bool TryGetAutomationCaptureRect(
+        RenderWindow window,
+        out EditorFramebufferCaptureRect rect,
+        out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        if (!Visible ||
+            !float.IsFinite(_canvasMin.X) ||
+            !float.IsFinite(_canvasMin.Y) ||
+            !float.IsFinite(_canvasSize.X) ||
+            !float.IsFinite(_canvasSize.Y) ||
+            _canvasSize.X < 1f ||
+            _canvasSize.Y < 1f)
+        {
+            rect = default;
+            diagnostic = "Scene View 尚未绘制出可捕获的可见 authoring viewport。";
+            return false;
+        }
+
+        float scaleX = window.FramebufferScaleX;
+        float scaleY = window.FramebufferScaleY;
+        int left = Math.Clamp((int)MathF.Floor(_canvasMin.X * scaleX), 0, window.Width - 1);
+        int right = Math.Clamp(
+            (int)MathF.Ceiling((_canvasMin.X + _canvasSize.X) * scaleX),
+            left + 1,
+            window.Width);
+        int top = Math.Clamp((int)MathF.Floor(_canvasMin.Y * scaleY), 0, window.Height - 1);
+        int bottom = Math.Clamp(
+            (int)MathF.Ceiling((_canvasMin.Y + _canvasSize.Y) * scaleY),
+            top + 1,
+            window.Height);
+        rect = new EditorFramebufferCaptureRect(
+            left,
+            window.Height - bottom,
+            right - left,
+            bottom - top);
+        diagnostic = string.Empty;
+        return true;
+    }
 
     internal ImGuizmoOperation Operation { get; private set; } = ImGuizmoOperation.Translate;
 
@@ -948,6 +989,8 @@ internal sealed class SceneViewPanel(
         ImGui.EndChild();
         ImGui.PopStyleColor();
         ImGui.SetCursorScreenPos(resumeCursor);
+        // SetCursorScreenPos 后必须提交 item，让 ImGui 以恢复点收口父窗口 content bounds。
+        ImGui.Dummy(Vector2.Zero);
     }
 
     private void DrawSceneToolOverlayHeader(SceneToolOverlayLayout layout, MaterialBrushPalettePanel brushPanel)

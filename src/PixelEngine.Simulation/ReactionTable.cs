@@ -88,6 +88,33 @@ public sealed class ReactionTable
     /// </summary>
     public ReadOnlySpan<ReactionLookupMode> ModeByMaterial => _modeByMat;
 
+    /// <summary>比较 packed reactions、查找模式与 direct tables 的完整语义内容。</summary>
+    /// <param name="other">另一不可变反应表。</param>
+    /// <returns>所有运行时查找内容一致时为 true。</returns>
+    public bool ContentEquals(ReactionTable? other)
+    {
+        if (other is null ||
+            !_packed.AsSpan().SequenceEqual(other._packed) ||
+            !_modeByMat.AsSpan().SequenceEqual(other._modeByMat) ||
+            _directTables.Length != other._directTables.Length)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < _directTables.Length; i++)
+        {
+            ushort[]? left = _directTables[i];
+            ushort[]? right = other._directTables[i];
+            if ((left is null) != (right is null) ||
+                (left is not null && !left.AsSpan().SequenceEqual(right!)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// 在 owner=mat 的切片中查找 neighbor 反应，未命中返回 -1。
     /// </summary>

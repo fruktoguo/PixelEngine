@@ -11,42 +11,58 @@ internal sealed class EditorWorldSaveLoadService(Engine engine, string saveRoot)
 {
     private const string ManifestFileName = "manifest.bin";
     private readonly Engine _engine = engine ?? throw new ArgumentNullException(nameof(engine));
-    private readonly string _saveRoot = string.IsNullOrWhiteSpace(saveRoot)
+    internal string SaveRoot { get; } = string.IsNullOrWhiteSpace(saveRoot)
         ? throw new ArgumentException("存档根目录不能为空。", nameof(saveRoot))
         : Path.GetFullPath(saveRoot);
     private readonly ManifestCodec _manifestCodec = new();
 
     public IReadOnlyList<SaveSlotInfo> ListSaveSlots()
     {
-        if (!Directory.Exists(_saveRoot))
+        return ListSaveSlots(SaveRoot, CancellationToken.None);
+    }
+
+    internal static SaveSlotInfo[] ListSaveSlots(
+        string saveRoot,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(saveRoot);
+        string root = Path.GetFullPath(saveRoot);
+        if (!Directory.Exists(root))
         {
             return [];
         }
 
         List<SaveSlotInfo> slots = [];
-        foreach (string directory in Directory.EnumerateDirectories(_saveRoot).Order(StringComparer.OrdinalIgnoreCase))
+        ManifestCodec manifestCodec = new();
+        foreach (string directory in Directory.EnumerateDirectories(root).Order(StringComparer.OrdinalIgnoreCase))
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            SaveSlotPath.ValidateExistingDirectory(root, directory);
             string manifestPath = Path.Combine(directory, ManifestFileName);
             if (!File.Exists(manifestPath))
             {
                 continue;
             }
 
-            slots.Add(ReadSlot(Path.GetFileName(directory), directory));
+            slots.Add(ReadSlot(manifestCodec, Path.GetFileName(directory), directory));
         }
 
-        return slots;
+        cancellationToken.ThrowIfCancellationRequested();
+        return [.. slots];
     }
 
     public SaveLoadOperationResult Save(string slotId)
     {
-        string normalized = NormalizeSlotId(slotId);
+        string normalized = SaveSlotPath.Normalize(slotId);
         string path = SlotPath(normalized);
         try
         {
-            _engine.SaveWorldToDirectory(path);
+            WorldSaveWriteResult write = _engine.SaveWorldToDirectory(path);
             SaveSlotInfo slot = ReadSlot(normalized, path);
-            return new SaveLoadOperationResult(true, $"已保存 {normalized}", slot, null);
+            string message = write.CleanupPending
+                ? $"已保存 {normalized}；旧存档 journal 清理待处理：{write.RetainedJournalPath} ({write.CleanupError})"
+                : $"已保存 {normalized}";
+            return new SaveLoadOperationResult(true, message, slot, null);
         }
         catch (Exception exception) when (exception is InvalidOperationException or IOException or UnauthorizedAccessException)
         {
@@ -56,7 +72,7 @@ internal sealed class EditorWorldSaveLoadService(Engine engine, string saveRoot)
 
     public SaveLoadOperationResult Load(string slotId)
     {
-        string normalized = NormalizeSlotId(slotId);
+        string normalized = SaveSlotPath.Normalize(slotId);
         string path = SlotPath(normalized);
         if (!File.Exists(Path.Combine(path, ManifestFileName)))
         {
@@ -81,34 +97,35 @@ internal sealed class EditorWorldSaveLoadService(Engine engine, string saveRoot)
 
     private SaveSlotInfo ReadSlot(string slotId, string path)
     {
+        return ReadSlot(_manifestCodec, slotId, path);
+    }
+
+    private static SaveSlotInfo ReadSlot(ManifestCodec manifestCodec, string slotId, string path)
+    {
         string manifestPath = Path.Combine(path, ManifestFileName);
-        WorldManifest manifest = _manifestCodec.Decode(File.ReadAllBytes(manifestPath));
+        FileInfo before = new(manifestPath);
+        if (!before.Exists || before.Length > 16L * 1024 * 1024)
+        {
+            throw new InvalidDataException($"存档 manifest 大小无效：{manifestPath}");
+        }
+
+        WorldManifest manifest = manifestCodec.Decode(File.ReadAllBytes(manifestPath));
         FileInfo info = new(manifestPath);
-        return new SaveSlotInfo(
-            slotId,
-            path,
-            info.LastWriteTimeUtc,
-            manifest.FormatVersion,
-            manifest.WorldSeed,
-            manifest.GameTimeTicks,
-            manifest.ChunkIndex.Length);
+        return info.Exists && info.Length == before.Length &&
+            info.LastWriteTimeUtc == before.LastWriteTimeUtc
+                ? new SaveSlotInfo(
+                    slotId,
+                    path,
+                    info.LastWriteTimeUtc,
+                    manifest.FormatVersion,
+                    manifest.WorldSeed,
+                    manifest.GameTimeTicks,
+                    manifest.ChunkIndex.Length)
+                : throw new IOException($"读取存档 manifest 时文件发生变化：{manifestPath}");
     }
 
     private string SlotPath(string slotId)
     {
-        return Path.Combine(_saveRoot, slotId);
-    }
-
-    private static string NormalizeSlotId(string slotId)
-    {
-        string trimmed = string.IsNullOrWhiteSpace(slotId)
-            ? DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture)
-            : slotId.Trim();
-        foreach (char invalid in Path.GetInvalidFileNameChars())
-        {
-            trimmed = trimmed.Replace(invalid, '-');
-        }
-
-        return trimmed.Replace(' ', '-');
+        return SaveSlotPath.Resolve(SaveRoot, slotId);
     }
 }

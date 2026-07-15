@@ -69,6 +69,21 @@ internal readonly record struct EditorConsoleRow(
 /// </summary>
 internal readonly record struct EditorConsoleCounts(int Logs, int Warnings, int Errors);
 
+internal enum EditorConsoleStoreChangeKind
+{
+    Added,
+    Cleared,
+}
+
+internal readonly record struct EditorConsoleStoreChange(
+    EditorConsoleStoreChangeKind Kind,
+    long Sequence);
+
+internal sealed record EditorConsoleStoreState(
+    EditorConsoleRow[] Rows,
+    long NextSequence,
+    long LastRuntimeErrorSequence);
+
 /// <summary>
 /// Console 的 Play transition 边沿状态；保证 Clear on Play 与 Error Pause 不被逐帧重复触发。
 /// </summary>
@@ -382,6 +397,8 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
         _items = new Queue<ConsoleStoreItem>(_capacity);
     }
 
+    internal event Action<EditorConsoleStoreChange>? Changed;
+
     public int Count
     {
         get
@@ -424,6 +441,7 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
             Timestamp = timestamp,
         };
 
+        long sequence;
         lock (_items)
         {
             while (_items.Count >= _capacity)
@@ -431,20 +449,73 @@ internal sealed class EditorConsoleStore : IEditorConsoleSink
                 _ = _items.Dequeue();
             }
 
-            long sequence = _nextSequence++;
+            sequence = _nextSequence++;
             _items.Enqueue(new ConsoleStoreItem(sequence, normalized));
             if (normalized.Category == EditorConsoleCategory.Runtime && normalized.Severity == EditorConsoleSeverity.Error)
             {
                 Volatile.Write(ref _lastRuntimeErrorSequence, sequence);
             }
         }
+
+        Changed?.Invoke(new EditorConsoleStoreChange(EditorConsoleStoreChangeKind.Added, sequence));
     }
 
     public void Clear()
     {
+        Clear(notifyChanged: true);
+    }
+
+    internal EditorConsoleStoreState CaptureState()
+    {
+        lock (_items)
+        {
+            return new EditorConsoleStoreState(
+                [.. _items.Select(static item => new EditorConsoleRow(
+                    item.Sequence,
+                    item.Sequence,
+                    item.Entry,
+                    RepeatCount: 1))],
+                _nextSequence,
+                _lastRuntimeErrorSequence);
+        }
+    }
+
+    internal void RestoreState(EditorConsoleStoreState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (state.Rows.Length > _capacity || state.NextSequence < 0)
+        {
+            throw new ArgumentException("Console before-image 超过容量或 sequence 无效。", nameof(state));
+        }
+
         lock (_items)
         {
             _items.Clear();
+            for (int i = 0; i < state.Rows.Length; i++)
+            {
+                EditorConsoleRow row = state.Rows[i];
+                _items.Enqueue(new ConsoleStoreItem(row.Sequence, row.Entry));
+            }
+
+            _nextSequence = state.NextSequence;
+            _lastRuntimeErrorSequence = state.LastRuntimeErrorSequence;
+        }
+    }
+
+    internal void Clear(bool notifyChanged)
+    {
+        bool changed;
+        long sequence;
+        lock (_items)
+        {
+            changed = _items.Count != 0;
+            sequence = _nextSequence - 1;
+            _items.Clear();
+        }
+
+        if (changed && notifyChanged)
+        {
+            Changed?.Invoke(new EditorConsoleStoreChange(EditorConsoleStoreChangeKind.Cleared, sequence));
         }
     }
 

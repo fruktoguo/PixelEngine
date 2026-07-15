@@ -49,6 +49,10 @@ public sealed class NamedPipeAutomationTransportTests
             Enumerable.Range(0, 32),
             responses.Select(static response => response!.Value.GetProperty("index").GetInt32()).Order());
 
+        JsonElement? deferred = await client.InvokeRawAsync(TestHandler.DeferredMethod);
+        Assert.Equal("background-complete", deferred?.GetProperty("state").GetString());
+        Assert.True(handler.DeferredFactoryInvoked);
+
         string credential = (await File.ReadAllTextAsync(instance.CredentialPath)).Trim();
         string[] auditLines = await ReadAuditLinesAsync(server.AuditLogPath);
         JsonElement[] auditRecords =
@@ -160,6 +164,54 @@ public sealed class NamedPipeAutomationTransportTests
 
         Assert.Equal(AutomationErrorCodes.Internal, exception.Error.Code);
         Assert.Equal(server.InstanceId, ping.InstanceId);
+    }
+
+    /// <summary>验证 handler 异常以有界结构返回原因链，且不回传 stack trace 或请求 payload。</summary>
+    [Fact]
+    public async Task HandlerFailureReturnsBoundedInternalErrorDetailsWithoutPayloadOrStackTrace()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        await using EditorAutomationServer server = CreateServer(temporary.Path, new TestHandler());
+        await server.StartAsync();
+        AutomationDiscoveredInstance instance = await DiscoverSingleAsync(temporary.Path);
+        await using EditorAutomationClient client = await ConnectAsync(instance, [AutomationScopes.EditorRead]);
+        const string PayloadMarker = "payload-secret-must-not-return";
+
+        AutomationRemoteException exception = await Assert.ThrowsAsync<AutomationRemoteException>(
+            async () => await client.InvokeRawAsync(
+                TestHandler.InternalErrorMethod,
+                JsonSerializer.SerializeToElement(new { secret = PayloadMarker })));
+
+        Assert.Equal(AutomationErrorCodes.Internal, exception.Error.Code);
+        Assert.Equal(AutomationErrorCategory.Internal, exception.Error.Category);
+        JsonElement detailsElement = exception.Error.Details
+            ?? throw new InvalidOperationException("internal_error 缺少结构化 details。");
+        AutomationInternalErrorDetails details = detailsElement.Deserialize(
+            AutomationJsonContext.Default.AutomationInternalErrorDetails)
+            ?? throw new InvalidOperationException("internal_error details 无法反序列化。");
+        Assert.Equal(typeof(AggregateException).FullName, details.ExceptionType);
+        Assert.Contains("transport handler failure", details.Message, StringComparison.Ordinal);
+        Assert.Collection(
+            details.Causes,
+            cause =>
+            {
+                Assert.Equal(typeof(InvalidOperationException).FullName, cause.ExceptionType);
+                Assert.Equal("first bounded cause", cause.Message);
+            },
+            cause =>
+            {
+                Assert.Equal(typeof(ArgumentException).FullName, cause.ExceptionType);
+                Assert.Equal("second bounded cause", cause.Message);
+            });
+        string detailsJson = detailsElement.GetRawText();
+        Assert.DoesNotContain(PayloadMarker, detailsJson, StringComparison.Ordinal);
+        Assert.DoesNotContain("stackTrace", detailsJson, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(nameof(NamedPipeAutomationTransportTests) + ".cs", detailsJson, StringComparison.Ordinal);
     }
 
     /// <summary>验证错误 credential 无法创建 session。</summary>
@@ -686,6 +738,8 @@ public sealed class NamedPipeAutomationTransportTests
         public const string WaitMethod = "test.wait";
         public const string LargeResponseMethod = "test.large-response";
         public const string InvalidResponseMethod = "test.invalid-response";
+        public const string InternalErrorMethod = "test.internal-error";
+        public const string DeferredMethod = "test.deferred";
 
         private readonly ConcurrentDictionary<string, AutomationMethodDescriptor> _descriptors = new(
             new Dictionary<string, AutomationMethodDescriptor>(StringComparer.Ordinal)
@@ -730,7 +784,26 @@ public sealed class NamedPipeAutomationTransportTests
                     ExecutionPhase = AutomationExecutionPhase.Background,
                     TransactionMode = AutomationTransactionMode.Forbidden,
                 },
+                [InternalErrorMethod] = new AutomationMethodDescriptor
+                {
+                    Method = InternalErrorMethod,
+                    RequiredScopes = [AutomationScopes.EditorRead],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [DeferredMethod] = new AutomationMethodDescriptor
+                {
+                    Method = DeferredMethod,
+                    RequiredScopes = [AutomationScopes.EditorRead],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                    ArtifactBehavior = AutomationArtifactBehavior.Required,
+                },
             });
+
+        public bool DeferredFactoryInvoked { get; private set; }
 
         public TaskCompletionSource WaitStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -763,6 +836,30 @@ public sealed class NamedPipeAutomationTransportTests
                 };
             }
 
+            if (string.Equals(method, DeferredMethod, StringComparison.Ordinal))
+            {
+                return new AutomationHandlerResult
+                {
+                    Revision = new AutomationRevisionSnapshot
+                    {
+                        SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                        GlobalRevision = 7,
+                        Resources = [],
+                    },
+                    DeferredPayloadFactory = async (revision, token) =>
+                    {
+                        await Task.Yield();
+                        token.ThrowIfCancellationRequested();
+                        DeferredFactoryInvoked = true;
+                        return JsonSerializer.SerializeToElement(new
+                        {
+                            state = "background-complete",
+                            revision = revision.GlobalRevision,
+                        });
+                    },
+                };
+            }
+
             if (string.Equals(method, WaitMethod, StringComparison.Ordinal))
             {
                 _ = WaitStarted.TrySetResult();
@@ -777,7 +874,12 @@ public sealed class NamedPipeAutomationTransportTests
                 }
             }
 
-            return string.Equals(method, LargeResponseMethod, StringComparison.Ordinal)
+            return string.Equals(method, InternalErrorMethod, StringComparison.Ordinal)
+                ? throw new AggregateException(
+                    "transport handler failure",
+                    new InvalidOperationException("first bounded cause"),
+                    new ArgumentException("second bounded cause"))
+                : string.Equals(method, LargeResponseMethod, StringComparison.Ordinal)
                 ? new AutomationHandlerResult
                 {
                     Payload = JsonSerializer.SerializeToElement(new { value = new string('x', 16 * 1024) }),

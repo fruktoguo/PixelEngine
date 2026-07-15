@@ -55,6 +55,11 @@ internal sealed record EditorPreferencesDocument
     }
 }
 
+internal sealed record EditorPreferencesAutomationSnapshot(
+    EditorPreferencesDocument Current,
+    string LastDiagnostic,
+    bool LoadedFromDisk);
+
 /// <summary>
 /// 将用户级 Editor Preferences 原子持久化到 AppData。
 /// </summary>
@@ -85,6 +90,41 @@ internal sealed class EditorPreferencesStore
     public string? StoragePath { get; }
 
     private bool LegacyMigrationHandled { get; set; }
+
+    internal event Action? Changed;
+
+    internal EditorPreferencesAutomationSnapshot CaptureAutomationSnapshot()
+    {
+        return new EditorPreferencesAutomationSnapshot(Current, LastDiagnostic, LoadedFromDisk);
+    }
+
+    internal EditorPreferencesAutomationSnapshot CreateAutomationAppliedSnapshot(
+        EditorPreferencesDocument next)
+    {
+        ArgumentNullException.ThrowIfNull(next);
+        return next.TryNormalize(out EditorPreferencesDocument normalized, out string diagnostic)
+            ? new EditorPreferencesAutomationSnapshot(
+                normalized,
+                string.Empty,
+                StoragePath is not null)
+            : throw new InvalidOperationException(diagnostic);
+    }
+
+    internal void RestoreAutomationSnapshot(EditorPreferencesAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        Current = snapshot.Current;
+        LastDiagnostic = snapshot.LastDiagnostic;
+        LoadedFromDisk = snapshot.LoadedFromDisk;
+    }
+
+    internal static byte[] SerializeCanonical(EditorPreferencesDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return JsonSerializer.SerializeToUtf8Bytes(
+            document,
+            EditorShellJsonContext.Default.EditorPreferencesDocument);
+    }
 
     public static EditorPreferencesStore LoadDefault()
     {
@@ -160,6 +200,14 @@ internal sealed class EditorPreferencesStore
             return false;
         }
 
+        bool requiresRepair = StoragePath is not null &&
+            (!LoadedFromDisk || !string.IsNullOrWhiteSpace(LastDiagnostic));
+        if (Current == normalized && !requiresRepair)
+        {
+            diagnostic = string.Empty;
+            return true;
+        }
+
         if (!TryWrite(normalized, out diagnostic))
         {
             LastDiagnostic = diagnostic;
@@ -169,6 +217,7 @@ internal sealed class EditorPreferencesStore
         Current = normalized;
         LoadedFromDisk = StoragePath is not null;
         LastDiagnostic = string.Empty;
+        Changed?.Invoke();
         return true;
     }
 
@@ -224,9 +273,6 @@ internal sealed class EditorPreferencesStore
                 _ = Directory.CreateDirectory(directory);
             }
 
-            string json = JsonSerializer.Serialize(
-                document,
-                EditorShellJsonContext.Default.EditorPreferencesDocument);
             using (FileStream stream = new(
                 temporaryPath,
                 FileMode.CreateNew,
@@ -234,10 +280,8 @@ internal sealed class EditorPreferencesStore
                 FileShare.None,
                 bufferSize: 4096,
                 FileOptions.WriteThrough))
-            using (StreamWriter writer = new(stream, System.Text.Encoding.UTF8, bufferSize: 4096, leaveOpen: true))
             {
-                writer.Write(json);
-                writer.Flush();
+                stream.Write(SerializeCanonical(document));
                 stream.Flush(flushToDisk: true);
             }
 

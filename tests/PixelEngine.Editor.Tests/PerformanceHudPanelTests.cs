@@ -336,6 +336,14 @@ public sealed class PerformanceHudPanelTests
         Assert.Equal(20.0, panel.FrameStatistics.P50Ms, 3);
         Assert.Equal(20.0, panel.FrameStatistics.P99Ms, 3);
         Assert.Equal(20.0, panel.FrameStatistics.MaxMs, 3);
+        PerformanceHudHistorySnapshot history = panel.CaptureHistory();
+        Assert.Equal(512, history.Capacity);
+        Assert.Equal(700, history.CapturedSampleCount);
+        Assert.Equal(512, history.Samples.Length);
+        Assert.Equal(189, history.Samples[0].FrameIndex);
+        Assert.Equal(700, history.Samples[^1].FrameIndex);
+        Assert.Equal(20.0, history.Samples[0].Sample.TotalFrameMs, 3);
+        Assert.Equal(panel.FrameStatistics, history.FrameStatistics);
     }
 
     private static void CaptureFrame(PerformanceHudPanel panel, EditorSelection selection, int frame, double frameMs)

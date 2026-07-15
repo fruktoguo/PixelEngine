@@ -883,11 +883,20 @@ public sealed class SceneAndHeadlessTests
             ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
             edit.PaintCell(4, 5, 1);
             edit.SetTemperature(4, 5, 24.5f);
+            const ulong SavedWorldSeed = 0x1234_5678_9ABC_DEF0UL;
+            engine.Context.GetService<SimulationKernel>().RestoreWorldState(
+                SavedWorldSeed,
+                frameIndex: 11,
+                currentParity: CellFlags.Parity);
             engine.Context.Clock.RestoreCounters(frameIndex: 11, simTickIndex: 11);
 
-            engine.SaveWorldToDirectory(savePath);
+            _ = engine.SaveWorldToDirectory(savePath);
             edit.PaintCell(4, 5, 0);
             edit.SetTemperature(4, 5, 80f);
+            engine.Context.GetService<SimulationKernel>().RestoreWorldState(
+                worldSeed: 17,
+                frameIndex: 17,
+                currentParity: 0);
             engine.Context.Clock.RestoreCounters(frameIndex: 17, simTickIndex: 17);
             WorldLoadResult result = engine.LoadWorldFromDirectory(savePath);
 
@@ -898,6 +907,8 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal(11L, engine.Context.Clock.FrameIndex);
             Assert.Equal(11L, engine.Context.Clock.SimTickIndex);
             Assert.Equal(11u, engine.Context.GetService<SimulationKernel>().FrameIndex);
+            Assert.Equal(SavedWorldSeed, result.WorldSeed);
+            Assert.Equal(SavedWorldSeed, engine.Context.GetService<SimulationKernel>().WorldSeed);
         }
         finally
         {
@@ -925,7 +936,7 @@ public sealed class SceneAndHeadlessTests
             engine.Context.RegisterService(materials);
             _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
             _ = engine.AttachPhysics();
-            engine.SaveWorldToDirectory(savePath);
+            _ = engine.SaveWorldToDirectory(savePath);
 
             ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
             _ = edit.PaintRect(16, 16, 31, 31, material: 1);
@@ -1084,7 +1095,7 @@ public sealed class SceneAndHeadlessTests
             FakeWorldStateBridge savedState = new(
                 [new FreeParticleSnapshot(2, 3, 0.5f, -0.25f, 1, 7, 8)],
                 []);
-            new WorldSaveService().SaveAll(
+            _ = new WorldSaveService().SaveAll(
                 new WorldSaveContext(
                     savedChunks,
                     savedResidency,
@@ -1175,7 +1186,7 @@ public sealed class SceneAndHeadlessTests
                         localOriginX: 8,
                         localOriginY: 8),
                 ]);
-            new WorldSaveService().SaveAll(
+            _ = new WorldSaveService().SaveAll(
                 new WorldSaveContext(
                     savedChunks,
                     new ResidencyTable(),
@@ -1231,7 +1242,7 @@ public sealed class SceneAndHeadlessTests
             Chunk chunk = new(new ChunkCoord(0, 0));
             chunk.MaterialBuffer[0] = 1;
             savedChunks.Add(chunk);
-            new WorldSaveService().SaveAll(
+            _ = new WorldSaveService().SaveAll(
                 new WorldSaveContext(
                     savedChunks,
                     new ResidencyTable(),

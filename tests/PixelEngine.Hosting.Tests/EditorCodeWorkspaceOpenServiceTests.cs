@@ -139,6 +139,70 @@ public sealed class EditorCodeWorkspaceOpenServiceTests
     }
 
     /// <summary>
+    /// 验证 automation preparation 不提前写目标文件，commit 才原子发布，重复准备不改写，IDE 变化使旧 plan 失效。
+    /// </summary>
+    [Fact]
+    public void AutomationPreparationDefersFilesUntilCommitAndRejectsStaleEditorPreference()
+    {
+        using TempProject temp = new("Automation Workspace");
+        string preference = ExternalCodeEditorPreference.VsCode;
+        RecordingLauncher launcher = new();
+        RecordingLocator locator = new(
+            ExternalCodeEditorKind.VsCode,
+            @"C:\Program Files\Microsoft VS Code\Code.exe");
+        EditorCodeWorkspaceOpenService service = new(
+            temp.Project,
+            () => preference,
+            launcher,
+            locator,
+            AppContext.BaseDirectory);
+        EditorCodeWorkspacePreparationDescriptor descriptor = service.CapturePreparationDescriptor();
+
+        using (EditorCodeWorkspacePreparedOpen prepared = service.PrepareCodeProject(
+            descriptor,
+            CancellationToken.None))
+        {
+            Assert.True(prepared.FilesChanged);
+            Assert.Empty(Directory.GetFiles(temp.Root, "*.csproj", SearchOption.TopDirectoryOnly));
+            Assert.Empty(Directory.GetFiles(temp.Root, "*.sln", SearchOption.TopDirectoryOnly));
+            EditorCodeWorkspaceOpenResult committed = service.CommitPrepared(prepared);
+            Assert.True(committed.Success, committed.Diagnostic);
+            Assert.True(File.Exists(committed.ProjectPath));
+            Assert.True(File.Exists(committed.SolutionPath));
+        }
+
+        descriptor = service.CapturePreparationDescriptor();
+        using (EditorCodeWorkspacePreparedOpen unchanged = service.PrepareCodeProject(
+            descriptor,
+            CancellationToken.None))
+        {
+            Assert.False(unchanged.FilesChanged);
+            EditorCodeWorkspaceOpenResult committed = service.CommitPrepared(unchanged);
+            Assert.True(committed.Success, committed.Diagnostic);
+        }
+
+        using TempProject staleTemp = new("Stale Automation Workspace");
+        preference = ExternalCodeEditorPreference.VsCode;
+        EditorCodeWorkspaceOpenService staleService = new(
+            staleTemp.Project,
+            () => preference,
+            launcher,
+            locator,
+            AppContext.BaseDirectory);
+        EditorCodeWorkspacePreparationDescriptor staleDescriptor =
+            staleService.CapturePreparationDescriptor();
+        using EditorCodeWorkspacePreparedOpen stale = staleService.PrepareCodeProject(
+            staleDescriptor,
+            CancellationToken.None);
+        preference = ExternalCodeEditorPreference.Rider;
+        InvalidOperationException failure = Assert.Throws<InvalidOperationException>(() =>
+            staleService.CommitPrepared(stale));
+        Assert.Contains("失效", failure.Message, StringComparison.Ordinal);
+        Assert.Empty(Directory.GetFiles(staleTemp.Root, "*.csproj", SearchOption.TopDirectoryOnly));
+        Assert.Empty(Directory.GetFiles(staleTemp.Root, "*.sln", SearchOption.TopDirectoryOnly));
+    }
+
+    /// <summary>
     /// 验证默认脚本双击复用 VS Code workspace 并定位精确行列，同时为 standalone 工程准备项目模型。
     /// </summary>
     [Fact]

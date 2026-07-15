@@ -18,6 +18,7 @@ public sealed class AutomationMainThreadScheduler :
     private const int PhaseCount = (int)AutomationExecutionPhase.Background + 1;
     private readonly Lock _sync = new();
     private readonly PhaseQueue[] _queues = new PhaseQueue[PhaseCount];
+    private readonly HashSet<WorkItem> _preparing = [];
     private readonly int[] _phasePending = new int[PhaseCount];
     private readonly ConcurrentQueue<InternalWork> _internalEditorIngress = new();
     private readonly FrozenDictionary<string, AutomationMethodRegistration> _registrations;
@@ -27,8 +28,10 @@ public sealed class AutomationMainThreadScheduler :
     private readonly AutomationTransactionManager _transactions;
     private readonly AutomationIdempotencyCache _idempotency;
     private readonly AutomationMainThreadSchedulerOptions _options;
+    private readonly AutomationBackgroundPreparationDispatcher _backgroundPreparations;
     private readonly int _ownerThreadId;
     private int _pendingCount;
+    private int _outstandingCount;
     private int _internalPendingCount;
     private int _disposed;
 
@@ -94,6 +97,9 @@ public sealed class AutomationMainThreadScheduler :
             _options.MaxTransactionStagedBytes,
             RequestTransactionExpiryRollback,
             staticInfo => PublishImplicitRollback(staticInfo, "expired"));
+        _backgroundPreparations = new AutomationBackgroundPreparationDispatcher(
+            _options.BackgroundPreparationWorkerCount,
+            _options.Capacity);
     }
 
     /// <summary>当前排队的外部请求数。</summary>
@@ -287,6 +293,8 @@ public sealed class AutomationMainThreadScheduler :
         }
 
         List<WorkItem> cancelled = [];
+        List<CancellationTokenSource> preparationCancellations = [];
+        List<Action> preparationAborts = [];
         lock (_sync)
         {
             for (int i = 0; i < (int)AutomationExecutionPhase.Background; i++)
@@ -294,6 +302,7 @@ public sealed class AutomationMainThreadScheduler :
                 WorkItem? item;
                 while ((item = _queues[i].RemoveFirst()) is not null)
                 {
+                    CollectPreparationShutdown(item, preparationCancellations, preparationAborts);
                     item.State = WorkItemState.Cancelled;
                     cancelled.Add(item);
                 }
@@ -302,6 +311,15 @@ public sealed class AutomationMainThreadScheduler :
             }
 
             _pendingCount = 0;
+            foreach (WorkItem item in _preparing)
+            {
+                CollectPreparationShutdown(item, preparationCancellations, preparationAborts);
+                item.State = WorkItemState.Cancelled;
+                cancelled.Add(item);
+            }
+
+            _preparing.Clear();
+            _outstandingCount = 0;
             while (_internalEditorIngress.TryDequeue(out _))
             {
             }
@@ -309,16 +327,88 @@ public sealed class AutomationMainThreadScheduler :
             _internalPendingCount = 0;
         }
 
-        AutomationConnectionExceptionForServer exception = new("Automation scheduler 已关闭。");
+        List<Exception>? failures = null;
+        for (int i = 0; i < preparationCancellations.Count; i++)
+        {
+            try
+            {
+                preparationCancellations[i].Cancel();
+            }
+            catch (Exception exception)
+            {
+                (failures ??= []).Add(exception);
+            }
+        }
+
+        for (int i = 0; i < preparationAborts.Count; i++)
+        {
+            try
+            {
+                preparationAborts[i]();
+            }
+            catch (Exception exception)
+            {
+                (failures ??= []).Add(exception);
+            }
+        }
+
+        AutomationConnectionExceptionForServer closedException = new("Automation scheduler 已关闭。");
         for (int i = 0; i < cancelled.Count; i++)
         {
             cancelled[i].DisposeCancellationRegistration();
-            _ = cancelled[i].Completion.TrySetException(exception);
+            _ = cancelled[i].Completion.TrySetException(closedException);
         }
 
-        Events.Dispose();
-        _transactions.Dispose();
+        try
+        {
+            _backgroundPreparations.Dispose(_options.BackgroundPreparationShutdownTimeout);
+        }
+        catch (Exception exception)
+        {
+            (failures ??= []).Add(exception);
+        }
+
+        try
+        {
+            Events.Dispose();
+        }
+        catch (Exception exception)
+        {
+            (failures ??= []).Add(exception);
+        }
+
+        try
+        {
+            _transactions.Dispose();
+        }
+        catch (Exception exception)
+        {
+            (failures ??= []).Add(exception);
+        }
+
         CryptographicOperations.ZeroMemory(_capabilityCursorKey);
+        if (failures is not null)
+        {
+            throw new AggregateException("Automation scheduler 关闭时一个或多个资源清理失败。", failures);
+        }
+    }
+
+    private static void CollectPreparationShutdown(
+        WorkItem item,
+        List<CancellationTokenSource> cancellations,
+        List<Action> aborts)
+    {
+        if (item.PreparationCancellation is { } cancellation)
+        {
+            cancellations.Add(cancellation);
+        }
+
+        if (item.ActivePreparation?.AbortAtEditorIngress is { } abort)
+        {
+            aborts.Add(abort);
+        }
+
+        item.ActivePreparation = null;
     }
 
     private Task<AutomationHandlerResult> Schedule(
@@ -333,7 +423,7 @@ public sealed class AutomationMainThreadScheduler :
         lock (_sync)
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-            if (_pendingCount >= _options.Capacity)
+            if (_outstandingCount >= _options.Capacity)
             {
                 throw RequestError(
                     AutomationErrorCodes.Busy,
@@ -346,6 +436,7 @@ public sealed class AutomationMainThreadScheduler :
             int phaseIndex = (int)registration.Descriptor.ExecutionPhase;
             _queues[phaseIndex].AddLast(item);
             _phasePending[phaseIndex]++;
+            _outstandingCount++;
             wake = _pendingCount++ == 0 && Volatile.Read(ref _internalPendingCount) == 0;
         }
 
@@ -387,6 +478,8 @@ public sealed class AutomationMainThreadScheduler :
     private void CancelQueued(WorkItem item)
     {
         bool removed = false;
+        Action? abortAtEditorIngress = null;
+        CancellationTokenSource? preparationCancellation = null;
         lock (_sync)
         {
             if (item.State == WorkItemState.Pending)
@@ -395,6 +488,19 @@ public sealed class AutomationMainThreadScheduler :
                 _queues[phase].Remove(item);
                 _phasePending[phase]--;
                 _pendingCount--;
+                _outstandingCount--;
+                abortAtEditorIngress = item.ActivePreparation?.AbortAtEditorIngress;
+                preparationCancellation = item.PreparationCancellation;
+                item.ActivePreparation = null;
+                item.State = WorkItemState.Cancelled;
+                removed = true;
+            }
+            else if (item.State == WorkItemState.Preparing && _preparing.Remove(item))
+            {
+                _outstandingCount--;
+                abortAtEditorIngress = item.ActivePreparation?.AbortAtEditorIngress;
+                preparationCancellation = item.PreparationCancellation;
+                item.ActivePreparation = null;
                 item.State = WorkItemState.Cancelled;
                 removed = true;
             }
@@ -403,41 +509,343 @@ public sealed class AutomationMainThreadScheduler :
         if (removed)
         {
             item.UnregisterCancellationCallback();
-            _ = item.Completion.TrySetCanceled(item.CancellationToken);
+            Exception? cancellationFailure = null;
+            if (preparationCancellation is not null)
+            {
+                try
+                {
+                    preparationCancellation.Cancel();
+                }
+                catch (Exception exception)
+                {
+                    cancellationFailure = exception;
+                }
+            }
+
+            if (abortAtEditorIngress is not null)
+            {
+                EnqueueInternal(abortAtEditorIngress);
+            }
+
+            _ = cancellationFailure is null
+                ? item.Completion.TrySetCanceled(item.CancellationToken)
+                : item.Completion.TrySetException(new AutomationConnectionExceptionForServer(
+                    "Automation preparation cancellation callback 失败。",
+                    cancellationFailure));
         }
     }
 
     private void Execute(WorkItem item)
     {
-        item.DisposeCancellationRegistration();
         try
         {
+            if (!item.PreparationCompleted &&
+                item.Registration.Preparation is not null &&
+                string.IsNullOrWhiteSpace(item.Context.TransactionId))
+            {
+                if (BeginPreparation(item))
+                {
+                    return;
+                }
+            }
+
+            item.DisposeCancellationRegistration();
             AutomationHandlerResult result = ExecuteOperation(
                 item.Context,
                 item.Registration,
                 item.Payload,
                 item.StagedBytes,
-                item.CancellationToken);
+                item.CancellationToken,
+                item.PreparedState,
+                item.PreparationCompleted);
             item.State = WorkItemState.Completed;
+            item.ActivePreparation = null;
+            ReleaseOutstanding();
             _ = item.Completion.TrySetResult(result);
         }
         catch (OperationCanceledException) when (item.CancellationToken.IsCancellationRequested)
         {
+            item.DisposeCancellationRegistration();
+            AbortCompletedPreparation(item);
             item.State = WorkItemState.Cancelled;
+            ReleaseOutstanding();
             _ = item.Completion.TrySetCanceled(item.CancellationToken);
         }
         catch (Exception exception)
         {
+            item.DisposeCancellationRegistration();
+            AbortCompletedPreparation(item);
             item.State = WorkItemState.Completed;
+            ReleaseOutstanding();
             _ = item.Completion.TrySetException(exception);
         }
     }
 
-    private AutomationHandlerResult ExecuteOperation(
+    private bool BeginPreparation(WorkItem item)
+    {
+        AutomationMethodRegistration registration = item.Registration;
+        ValidateExecutionAtSafePoint(
+            item.Context,
+            registration.Descriptor,
+            item.CancellationToken);
+        AutomationPreparationScope preparationScope = new();
+        AutomationScheduledContext scheduledContext = new(
+            item.Context,
+            item.CancellationToken,
+            Revisions,
+            preparationScope: preparationScope);
+        AutomationBackgroundPreparation? preparation;
+        try
+        {
+            preparation = registration.Preparation!(scheduledContext, item.Payload);
+        }
+        catch (Exception operationException)
+        {
+            try
+            {
+                preparationScope.DisposeResources();
+            }
+            catch (Exception cleanupException)
+            {
+                throw new AggregateException(
+                    "Automation preparation freeze 失败且 workspace 无法完整清理。",
+                    operationException,
+                    cleanupException);
+            }
+
+            throw;
+        }
+
+        if (preparation is null)
+        {
+            preparationScope.DisposeResources();
+            item.PreparationCompleted = true;
+            return false;
+        }
+
+        ArgumentNullException.ThrowIfNull(preparation.PrepareAsync);
+        CancellationTokenSource preparationCancellation = new();
+        lock (_sync)
+        {
+            try
+            {
+                ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+                item.ActivePreparation = preparation;
+                item.PreparationCancellation = preparationCancellation;
+                item.State = WorkItemState.Preparing;
+                if (!_preparing.Add(item))
+                {
+                    throw new InvalidOperationException(
+                        $"Automation preparation '{registration.Descriptor.Method}' 重复进入 worker 集合。");
+                }
+            }
+            catch
+            {
+                preparationCancellation.Dispose();
+                throw;
+            }
+        }
+
+        if (item.CancellationToken.IsCancellationRequested)
+        {
+            CancelQueued(item);
+        }
+
+        if (!_backgroundPreparations.TryEnqueue(
+                () => RunPreparationAsync(
+                    item,
+                    preparation,
+                    preparationCancellation,
+                    preparationScope).GetAwaiter().GetResult()))
+        {
+            Exception failure;
+            try
+            {
+                preparationScope.DisposeResources();
+                failure = new InvalidOperationException(
+                    "Automation background preparation dispatcher 已关闭或达到容量上限。");
+            }
+            catch (Exception cleanupException)
+            {
+                failure = new AggregateException(
+                    "Automation background preparation 无法入队且 workspace 清理失败。",
+                    cleanupException);
+            }
+
+            FailPreparation(item, failure, cancelled: false);
+            lock (_sync)
+            {
+                if (ReferenceEquals(item.PreparationCancellation, preparationCancellation))
+                {
+                    item.PreparationCancellation = null;
+                }
+            }
+
+            preparationCancellation.Dispose();
+        }
+
+        return true;
+    }
+
+    private async Task RunPreparationAsync(
+        WorkItem item,
+        AutomationBackgroundPreparation preparation,
+        CancellationTokenSource preparationCancellation,
+        AutomationPreparationScope preparationScope)
+    {
+        try
+        {
+            preparationCancellation.Token.ThrowIfCancellationRequested();
+            object? preparedState = await preparation.PrepareAsync(
+                preparationCancellation.Token).ConfigureAwait(false);
+            preparationScope.DisposeResources();
+            CompletePreparation(item, preparedState);
+        }
+        catch (OperationCanceledException) when (preparationCancellation.IsCancellationRequested)
+        {
+            try
+            {
+                preparationScope.DisposeResources();
+                FailPreparation(item, exception: null, cancelled: true);
+            }
+            catch (Exception cleanupException)
+            {
+                FailPreparation(item, cleanupException, cancelled: false);
+            }
+        }
+        catch (Exception exception)
+        {
+            try
+            {
+                preparationScope.DisposeResources();
+                FailPreparation(item, exception, cancelled: false);
+            }
+            catch (Exception cleanupException)
+            {
+                FailPreparation(
+                    item,
+                    new AggregateException(
+                        "Automation preparation worker 失败且 workspace 无法完整清理。",
+                        exception,
+                        cleanupException),
+                    cancelled: false);
+            }
+        }
+        finally
+        {
+            lock (_sync)
+            {
+                if (ReferenceEquals(item.PreparationCancellation, preparationCancellation))
+                {
+                    item.PreparationCancellation = null;
+                }
+            }
+
+            preparationCancellation.Dispose();
+        }
+    }
+
+    private void CompletePreparation(WorkItem item, object? preparedState)
+    {
+        bool requeued = false;
+        bool wake = false;
+        lock (_sync)
+        {
+            if (item.State != WorkItemState.Preparing || !_preparing.Remove(item))
+            {
+                return;
+            }
+
+            if (Volatile.Read(ref _disposed) == 0)
+            {
+                item.PreparedState = preparedState;
+                item.PreparationCompleted = true;
+                item.State = WorkItemState.Pending;
+                int phase = (int)item.Registration.Descriptor.ExecutionPhase;
+                _queues[phase].AddLast(item);
+                _phasePending[phase]++;
+                wake = _pendingCount++ == 0 && Volatile.Read(ref _internalPendingCount) == 0;
+                requeued = true;
+            }
+            else
+            {
+                item.State = WorkItemState.Completed;
+                _outstandingCount--;
+            }
+        }
+
+        if (requeued)
+        {
+            if (wake)
+            {
+                SignalWake(item);
+            }
+
+            return;
+        }
+
+        item.UnregisterCancellationCallback();
+        _ = item.Completion.TrySetException(new AutomationConnectionExceptionForServer(
+            "Automation scheduler 在 background preparation 完成前已关闭。"));
+    }
+
+    private void FailPreparation(WorkItem item, Exception? exception, bool cancelled)
+    {
+        Action? abortAtEditorIngress;
+        lock (_sync)
+        {
+            if (item.State != WorkItemState.Preparing || !_preparing.Remove(item))
+            {
+                return;
+            }
+
+            abortAtEditorIngress = item.ActivePreparation?.AbortAtEditorIngress;
+            item.ActivePreparation = null;
+            item.State = cancelled ? WorkItemState.Cancelled : WorkItemState.Completed;
+            _outstandingCount--;
+        }
+
+        item.UnregisterCancellationCallback();
+        if (abortAtEditorIngress is not null)
+        {
+            EnqueueInternal(abortAtEditorIngress);
+        }
+
+        _ = cancelled
+            ? item.Completion.TrySetCanceled(item.CancellationToken)
+            : item.Completion.TrySetException(exception!);
+    }
+
+    private void ReleaseOutstanding()
+    {
+        lock (_sync)
+        {
+            _outstandingCount--;
+        }
+    }
+
+    private void AbortCompletedPreparation(WorkItem item)
+    {
+        Action? abort = item.ActivePreparation?.AbortAtEditorIngress;
+        item.ActivePreparation = null;
+        if (abort is null)
+        {
+            return;
+        }
+
+        if (item.Registration.Descriptor.ExecutionPhase == AutomationExecutionPhase.EditorIngress)
+        {
+            abort();
+        }
+        else
+        {
+            EnqueueInternal(abort);
+        }
+    }
+
+    private void ValidateExecutionAtSafePoint(
         AutomationRequestContext context,
-        AutomationMethodRegistration registration,
-        JsonElement? payload,
-        int stagedBytes,
+        AutomationMethodDescriptor descriptor,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -449,39 +857,45 @@ public sealed class AutomationMainThreadScheduler :
                 "Automation request 在执行 safe point 前已超过 deadline。");
         }
 
-        AutomationMethodDescriptor descriptor = registration.Descriptor;
         RequireScopes(context, descriptor.RequiredScopes);
         ValidateTransactionShape(context, descriptor);
-        if (descriptor.OperationKind == AutomationOperationKind.Command)
-        {
-            if (context.ExpectedRevision is not null)
-            {
-                Revisions.Validate(context.ExpectedRevision);
-            }
-            else if (descriptor.RequiresExpectedRevision)
-            {
-                throw RequestError(
-                    AutomationErrorCodes.InvalidRequest,
-                    AutomationErrorCategory.Validation,
-                    $"Automation method '{descriptor.Method}' 必须携带 expectedRevision。");
-            }
-        }
-
         if (descriptor.OperationKind == AutomationOperationKind.Write)
         {
             _transactions.EnsureWriteAllowed(context.SessionId, context.TransactionId);
-            if (context.ExpectedRevision is not null)
-            {
-                Revisions.Validate(context.ExpectedRevision);
-            }
-            else if (descriptor.RequiresExpectedRevision)
-            {
-                throw RequestError(
-                    AutomationErrorCodes.InvalidRequest,
-                    AutomationErrorCategory.Validation,
-                    $"Automation method '{descriptor.Method}' 必须携带 expectedRevision。");
-            }
+        }
 
+        if (descriptor.OperationKind is not (AutomationOperationKind.Write or AutomationOperationKind.Command))
+        {
+            return;
+        }
+
+        if (context.ExpectedRevision is not null)
+        {
+            Revisions.Validate(context.ExpectedRevision);
+        }
+        else if (descriptor.RequiresExpectedRevision)
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"Automation method '{descriptor.Method}' 必须携带 expectedRevision。");
+        }
+    }
+
+    private AutomationHandlerResult ExecuteOperation(
+        AutomationRequestContext context,
+        AutomationMethodRegistration registration,
+        JsonElement? payload,
+        int stagedBytes,
+        CancellationToken cancellationToken,
+        object? preparedState,
+        bool hasPreparedState)
+    {
+        AutomationMethodDescriptor descriptor = registration.Descriptor;
+        ValidateExecutionAtSafePoint(context, descriptor, cancellationToken);
+
+        if (descriptor.OperationKind == AutomationOperationKind.Write)
+        {
             if (!string.IsNullOrWhiteSpace(context.TransactionId))
             {
                 AutomationTransactionStagedOperationInfo staged = _transactions.Stage(
@@ -508,9 +922,27 @@ public sealed class AutomationMainThreadScheduler :
             }
         }
 
-        AutomationScheduledContext scheduledContext = new(context, cancellationToken, Revisions);
+        AutomationScheduledContext scheduledContext = new(
+            context,
+            cancellationToken,
+            Revisions,
+            preparedState,
+            hasPreparedState);
         AutomationOperationResult operationResult = registration.Operation(scheduledContext, payload)
             ?? throw new InvalidOperationException($"Automation method '{descriptor.Method}' 返回了 null result。");
+        if (operationResult.DeferredPayloadFactory is not null &&
+            descriptor.OperationKind == AutomationOperationKind.Write)
+        {
+            throw new InvalidOperationException(
+                $"可回滚 Write method 不得越过 revision/Undo 提交点延迟执行：'{descriptor.Method}'。");
+        }
+
+        if (operationResult.DeferredPayloadFactory is not null && operationResult.Payload is not null)
+        {
+            throw new InvalidOperationException(
+                $"延迟 payload method 不得同时返回立即 payload：'{descriptor.Method}'。");
+        }
+
         bool writeCommitted = false;
         try
         {
@@ -543,9 +975,7 @@ public sealed class AutomationMainThreadScheduler :
                         : NormalizeRevisionOverride(operationResult.RevisionOverride);
                     if (operationResult.StateChanged &&
                         !operationResult.StateEventAlreadyPublished &&
-                        descriptor.EventTypes.Contains(
-                        AutomationProtocolConstants.StateChangedEventType,
-                        StringComparer.Ordinal))
+                        descriptor.EventTypes.Length != 0)
                     {
                         if (resourceIds.Length == 0 || operationResult.RevisionOverride is null)
                         {
@@ -553,7 +983,8 @@ public sealed class AutomationMainThreadScheduler :
                                 $"State-changing Command '{descriptor.Method}' 必须返回 resources 与显式 revision override。");
                         }
 
-                        PublishStateChanged(
+                        PublishDescriptorEvents(
+                            descriptor,
                             descriptor.Method,
                             resourceIds,
                             "execute",
@@ -570,7 +1001,8 @@ public sealed class AutomationMainThreadScheduler :
                 operationResult.WriteStateChanged &&
                 string.IsNullOrWhiteSpace(context.TransactionId))
             {
-                PublishStateChanged(
+                PublishDescriptorEvents(
+                    descriptor,
                     descriptor.Method,
                     resourceIds,
                     "execute",
@@ -582,6 +1014,7 @@ public sealed class AutomationMainThreadScheduler :
             return new AutomationHandlerResult
             {
                 Payload = operationResult.Payload?.Clone(),
+                DeferredPayloadFactory = operationResult.DeferredPayloadFactory,
                 Revision = revision,
             };
         }
@@ -589,16 +1022,30 @@ public sealed class AutomationMainThreadScheduler :
             descriptor.OperationKind == AutomationOperationKind.Write &&
             !writeCommitted && operationResult.UndoAction is not null)
         {
+            List<Exception>? rollbackFailures = null;
             try
             {
                 operationResult.UndoAction.Undo();
             }
             catch (Exception rollbackException)
             {
+                (rollbackFailures ??= [exception]).Add(rollbackException);
+            }
+
+            try
+            {
+                (operationResult.UndoAction as IDisposable)?.Dispose();
+            }
+            catch (Exception cleanupException)
+            {
+                (rollbackFailures ??= [exception]).Add(cleanupException);
+            }
+
+            if (rollbackFailures is not null)
+            {
                 throw new AggregateException(
-                    $"Automation write '{descriptor.Method}' 提交失败，且 semantic rollback 也失败。",
-                    exception,
-                    rollbackException);
+                    $"Automation write '{descriptor.Method}' 提交失败，且 semantic rollback 或清理也失败。",
+                    rollbackFailures);
             }
 
             throw;
@@ -624,25 +1071,17 @@ public sealed class AutomationMainThreadScheduler :
                     $"No-change Write method '{descriptor.Method}' 不得返回 Undo action。");
         }
 
-        if (descriptor.TransactionMode is AutomationTransactionMode.Optional or AutomationTransactionMode.Required)
-        {
-            if (result.UndoAction is null)
-            {
-                throw new InvalidOperationException(
-                    $"Reversible write '{descriptor.Method}' 必须返回真实 Undo action。");
-            }
-
-            Revisions.EnsureCanAdvance(resourceIds);
-            _undoSink.RecordExecuted(new RevisionTrackingUndoAction(
-                result.UndoAction,
-                Revisions,
-                resourceIds));
-        }
-        else if (result.UndoAction is not null)
+        if (result.UndoAction is null)
         {
             throw new InvalidOperationException(
-                $"Transaction-forbidden write '{descriptor.Method}' 不得返回未登记的 Undo action。");
+                $"Reversible write '{descriptor.Method}' 必须返回真实 Undo action。");
         }
+
+        Revisions.EnsureCanAdvance(resourceIds);
+        _undoSink.RecordExecuted(new RevisionTrackingUndoAction(
+            result.UndoAction,
+            Revisions,
+            resourceIds));
 
         return Revisions.Advance(resourceIds);
     }
@@ -744,7 +1183,8 @@ public sealed class AutomationMainThreadScheduler :
             CreateTransactionRegistration(
                 AutomationProtocolConstants.TransactionCommitMethod,
                 requiresIdempotency: true,
-                CommitTransaction),
+                CommitTransaction,
+                PrepareTransactionCommit),
             CreateTransactionRegistration(
                 AutomationProtocolConstants.TransactionRollbackMethod,
                 requiresIdempotency: true,
@@ -928,6 +1368,7 @@ public sealed class AutomationMainThreadScheduler :
             "executionPhase" => descriptor.ExecutionPhase.ToString(),
             "transactionMode" => descriptor.TransactionMode.ToString(),
             "artifactBehavior" => descriptor.ArtifactBehavior.ToString(),
+            "usesBackgroundPreparation" => descriptor.UsesBackgroundPreparation.ToString(),
             _ => throw RequestError(
                 AutomationErrorCodes.InvalidRequest,
                 AutomationErrorCategory.Validation,
@@ -1186,7 +1627,8 @@ public sealed class AutomationMainThreadScheduler :
     private static AutomationMethodRegistration CreateTransactionRegistration(
         string method,
         bool requiresIdempotency,
-        AutomationScheduledOperation operation)
+        AutomationScheduledOperation operation,
+        AutomationScheduledPreparation? preparation = null)
     {
         bool status = string.Equals(
             method,
@@ -1224,12 +1666,14 @@ public sealed class AutomationMainThreadScheduler :
                 TransactionMode = AutomationTransactionMode.Forbidden,
                 RequiresExpectedRevision = false,
                 RequiresIdempotencyKey = requiresIdempotency,
+                UsesBackgroundPreparation = preparation is not null,
                 EventTypes = changesTransaction
                     ? [AutomationProtocolConstants.TransactionChangedEventType]
                     : [],
                 ArtifactBehavior = AutomationArtifactBehavior.None,
                 UiCommandIds = [],
             },
+            Preparation = preparation,
             Operation = operation,
         };
     }
@@ -1259,11 +1703,63 @@ public sealed class AutomationMainThreadScheduler :
         AutomationTransactionRequest request = DeserializeTransactionRequest(
             payload,
             AutomationProtocolConstants.TransactionCommitMethod);
-        (AutomationTransactionCommitResult commitResult, AutomationRevisionSnapshot revision) = _transactions.Commit(
+        AutomationPreparedTransactionCommit? preparedCommit = context.PreparedState is null
+            ? null
+            : context.RequirePreparedState<AutomationPreparedTransactionCommit>();
+        (AutomationTransactionCommitResult commitResult, AutomationRevisionSnapshot revision) = _transactions.CommitPrepared(
             context.Request.SessionId,
             request.TransactionId,
-            context.CancellationToken);
+            context.CancellationToken,
+            context.HasPreparedState,
+            preparedCommit);
         AutomationTransactionInfo info = commitResult.Transaction;
+        bool publishGeneralState = false;
+        for (int i = 0; i < commitResult.Operations.Length; i++)
+        {
+            AutomationTransactionOperationResult operation = commitResult.Operations[i];
+            if (!operation.StateChanged ||
+                !_registrations.TryGetValue(operation.Method, out AutomationMethodRegistration? registration))
+            {
+                continue;
+            }
+
+            string[] eventTypes = registration.Descriptor.EventTypes;
+            publishGeneralState |= eventTypes.Contains(
+                AutomationProtocolConstants.StateChangedEventType,
+                StringComparer.Ordinal);
+            for (int eventIndex = 0; eventIndex < eventTypes.Length; eventIndex++)
+            {
+                string eventType = eventTypes[eventIndex];
+                if (string.Equals(
+                    eventType,
+                    AutomationProtocolConstants.StateChangedEventType,
+                    StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                PublishStateChanged(
+                    operation.Method,
+                    operation.ResourceIds,
+                    "commit",
+                    info.TransactionId,
+                    operation.RequestId,
+                    revision,
+                    eventType);
+            }
+        }
+
+        if (publishGeneralState)
+        {
+            PublishStateChanged(
+                AutomationProtocolConstants.TransactionCommitMethod,
+                info.ResourceIds,
+                "commit",
+                info.TransactionId,
+                context.Request.RequestId,
+                revision);
+        }
+
         PublishStateChanged(
             AutomationProtocolConstants.TransactionCommitMethod,
             info.ResourceIds,
@@ -1279,6 +1775,43 @@ public sealed class AutomationMainThreadScheduler :
                 AutomationJsonContext.Default.AutomationTransactionCommitResult),
             RevisionOverride = revision,
         };
+    }
+
+    private AutomationBackgroundPreparation? PrepareTransactionCommit(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        AutomationTransactionRequest request = DeserializeTransactionRequest(
+            payload,
+            AutomationProtocolConstants.TransactionCommitMethod);
+        AutomationTransactionPreparationPlan? plan = _transactions.FreezeCommitPreparation(
+            context.Request.SessionId,
+            request.TransactionId,
+            context.Request.RequestId,
+            context.PreparationScope ?? throw new InvalidOperationException(
+                "transaction.commit preparation 缺少共享 workspace scope。"),
+            context.CancellationToken);
+        return plan is null
+            ? null
+            : new AutomationBackgroundPreparation
+            {
+                PrepareAsync = plan.PrepareAsync,
+                AbortAtEditorIngress = () =>
+                {
+                    AutomationTransactionInfo? info = _transactions.AbortCommitPreparation(
+                        plan,
+                        out AggregateException? cleanupFailure);
+                    if (info is not null)
+                    {
+                        PublishImplicitRollback(info, "rollback");
+                    }
+
+                    if (cleanupFailure is not null)
+                    {
+                        throw cleanupFailure;
+                    }
+                },
+            };
     }
 
     private AutomationOperationResult RollbackTransaction(
@@ -1404,6 +1937,28 @@ public sealed class AutomationMainThreadScheduler :
                 AutomationJsonContext.Default.AutomationStateChangedEvent));
     }
 
+    private void PublishDescriptorEvents(
+        AutomationMethodDescriptor descriptor,
+        string method,
+        string[] resourceIds,
+        string changeKind,
+        string? transactionId,
+        string? causationRequestId,
+        AutomationRevisionSnapshot revision)
+    {
+        for (int i = 0; i < descriptor.EventTypes.Length; i++)
+        {
+            PublishStateChanged(
+                method,
+                resourceIds,
+                changeKind,
+                transactionId,
+                causationRequestId,
+                revision,
+                descriptor.EventTypes[i]);
+        }
+    }
+
     private static AutomationTransactionRequest DeserializeTransactionRequest(
         JsonElement? payload,
         string method)
@@ -1508,6 +2063,7 @@ public sealed class AutomationMainThreadScheduler :
             }
 
             bool removed = false;
+            Action? abortAtEditorIngress = null;
             lock (_sync)
             {
                 if (item.State == WorkItemState.Pending)
@@ -1516,6 +2072,9 @@ public sealed class AutomationMainThreadScheduler :
                     _queues[phase].Remove(item);
                     _phasePending[phase]--;
                     _pendingCount--;
+                    _outstandingCount--;
+                    abortAtEditorIngress = item.ActivePreparation?.AbortAtEditorIngress;
+                    item.ActivePreparation = null;
                     item.State = WorkItemState.Completed;
                     removed = true;
                 }
@@ -1524,6 +2083,11 @@ public sealed class AutomationMainThreadScheduler :
             if (removed)
             {
                 item.UnregisterCancellationCallback();
+                if (abortAtEditorIngress is not null)
+                {
+                    EnqueueInternal(abortAtEditorIngress);
+                }
+
                 _ = item.Completion.TrySetException(new AutomationConnectionExceptionForServer(
                     "Automation Editor wake signal 失败，请求未进入主线程执行。",
                     exception));
@@ -1667,6 +2231,12 @@ public sealed class AutomationMainThreadScheduler :
             ArgumentNullException.ThrowIfNull(descriptor.SupportedModes);
             ArgumentNullException.ThrowIfNull(descriptor.EventTypes);
             ArgumentNullException.ThrowIfNull(descriptor.UiCommandIds);
+            if (descriptor.UsesBackgroundPreparation != (registration.Preparation is not null))
+            {
+                throw new ArgumentException(
+                    $"Automation method '{descriptor.Method}' 的 background preparation descriptor 与 delegate 不一致。",
+                    nameof(registrations));
+            }
             if (!IsSemanticIdentifier(descriptor.Method, 256))
             {
                 throw new ArgumentException(
@@ -1732,14 +2302,6 @@ public sealed class AutomationMainThreadScheduler :
                     nameof(registrations));
             }
 
-            if (descriptor.OperationKind == AutomationOperationKind.Write &&
-                descriptor.TransactionMode == AutomationTransactionMode.Forbidden)
-            {
-                throw new ArgumentException(
-                    $"Write capability '{descriptor.Method}' 必须可逆并声明 Optional/Required transaction mode；不可逆动作应为 Command。",
-                    nameof(registrations));
-            }
-
             if (descriptor.RequiresExpectedRevision && descriptor.OperationKind == AutomationOperationKind.Read)
             {
                 throw new ArgumentException(
@@ -1777,6 +2339,20 @@ public sealed class AutomationMainThreadScheduler :
         ArgumentNullException.ThrowIfNull(options.TimeProvider);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.Capacity);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxItemsPerDrain);
+        if (options.BackgroundPreparationWorkerCount is < 1 or > 64)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                options.BackgroundPreparationWorkerCount,
+                "Automation background preparation worker 数必须在 1..64。");
+        }
+
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(
+            options.BackgroundPreparationShutdownTimeout,
+            TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(
+            options.BackgroundPreparationShutdownTimeout,
+            TimeSpan.FromMinutes(1));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(options.DefaultTransactionLease, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(options.MaxTransactionLease, options.DefaultTransactionLease);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(options.MaxTransactionOperations);
@@ -1859,6 +2435,14 @@ public sealed class AutomationMainThreadScheduler :
         public CancellationToken CancellationToken { get; } = cancellationToken;
 
         public AutomationMainThreadScheduler Owner { get; } = owner;
+
+        public AutomationBackgroundPreparation? ActivePreparation { get; set; }
+
+        public CancellationTokenSource? PreparationCancellation { get; set; }
+
+        public object? PreparedState { get; set; }
+
+        public bool PreparationCompleted { get; set; }
 
         public TaskCompletionSource<AutomationHandlerResult> Completion { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -1982,6 +2566,7 @@ public sealed class AutomationMainThreadScheduler :
     {
         Pending,
         Executing,
+        Preparing,
         Completed,
         Cancelled,
     }
@@ -2003,19 +2588,28 @@ public sealed class AutomationMainThreadScheduler :
 internal sealed class RevisionTrackingUndoAction(
     IAutomationUndoAction action,
     AutomationRevisionStore revisions,
-    string[] resourceIds) : IAutomationUndoAction
+    string[] resourceIds) : IAutomationResourceScopedUndoAction, IDisposable
 {
+    private readonly string[] _resourceIds = [.. resourceIds];
+
     public string Name => action.Name;
+
+    public IReadOnlyList<string> ResourceIds => _resourceIds;
 
     public void Undo()
     {
         action.Undo();
-        _ = revisions.Advance(resourceIds);
+        _ = revisions.Advance(_resourceIds);
     }
 
     public void Redo()
     {
         action.Redo();
-        _ = revisions.Advance(resourceIds);
+        _ = revisions.Advance(_resourceIds);
+    }
+
+    public void Dispose()
+    {
+        (action as IDisposable)?.Dispose();
     }
 }

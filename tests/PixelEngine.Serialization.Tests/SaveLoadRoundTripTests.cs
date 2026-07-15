@@ -42,7 +42,7 @@ public sealed class SaveLoadRoundTripTests
             [new FreeParticleSnapshot(1, 2, 3, 4, 1, 7, 99)],
             [RigidBody(material: [1, 2, 0])]);
 
-        service.SaveAll(
+        _ = service.SaveAll(
             new WorldSaveContext(
                 sourceChunks,
                 sourceResidency,
@@ -127,7 +127,7 @@ public sealed class SaveLoadRoundTripTests
                 ChunkMemoryBudget.EstimatedResidentChunkBytes,
                 DirtySinceLoad: true));
 
-        service.SaveAll(
+        _ = service.SaveAll(
             new WorldSaveContext(
                 sourceChunks,
                 sourceResidency,

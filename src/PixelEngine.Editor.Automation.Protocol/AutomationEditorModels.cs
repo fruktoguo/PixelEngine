@@ -195,6 +195,9 @@ public sealed record AutomationCapabilityDescriptor
     /// <summary>是否强制请求携带跨连接 idempotency key。</summary>
     public bool RequiresIdempotencyKey { get; init; }
 
+    /// <summary>是否在 safe phase 冻结后执行有界后台 preparation，再回到同一 phase 提交。</summary>
+    public bool UsesBackgroundPreparation { get; init; }
+
     /// <summary>该 capability 可能发布的 event type。</summary>
     public string[] EventTypes { get; init; } = [];
 
@@ -279,6 +282,106 @@ public sealed record AutomationWorkspaceSnapshot
 
     /// <summary>等待转场的目标。</summary>
     public string? TransitionTarget { get; init; }
+}
+
+/// <summary>在 location 下创建名为 name 的新 PixelEngine 工程。</summary>
+public sealed record AutomationProjectCreateRequest
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>新工程父目录 canonical path。</summary>
+    public required string LocationPath { get; init; }
+
+    /// <summary>工程显示名与目标文件夹名。</summary>
+    public required string Name { get; init; }
+}
+
+/// <summary>打开已有 PixelEngine 工程。</summary>
+public sealed record AutomationProjectOpenRequest
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>工程目录或 project.pixelproj canonical path。</summary>
+    public required string Path { get; init; }
+}
+
+/// <summary>Project Picker 最近工程中的一个稳定条目。</summary>
+public sealed record AutomationRecentProjectInfo
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>由 canonical root 派生的稳定工程 ID。</summary>
+    public required string ProjectId { get; init; }
+
+    /// <summary>工程显示名。</summary>
+    public required string Name { get; init; }
+
+    /// <summary>工程 canonical root。</summary>
+    public required string RootPath { get; init; }
+
+    /// <summary>最近一次成功打开时间。</summary>
+    public required DateTimeOffset LastOpenedUtc { get; init; }
+
+    /// <summary>是否收藏。</summary>
+    public required bool Favorite { get; init; }
+
+    /// <summary>当前是否仍存在 project.pixelproj。</summary>
+    public required bool ProjectFileExists { get; init; }
+}
+
+/// <summary>Project Picker 最近工程分页结果。</summary>
+public sealed record AutomationRecentProjectListResponse
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>本页最近工程。</summary>
+    public required AutomationRecentProjectInfo[] Items { get; init; }
+
+    /// <summary>分页元数据。</summary>
+    public required AutomationPageInfo Page { get; init; }
+}
+
+/// <summary>按稳定工程 ID 设置 Project Picker 收藏状态。</summary>
+public sealed record AutomationRecentProjectFavoriteSetRequest
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>目标稳定工程 ID。</summary>
+    public required string ProjectId { get; init; }
+
+    /// <summary>目标收藏状态。</summary>
+    public required bool Favorite { get; init; }
+}
+
+/// <summary>按稳定工程 ID 移除 Project Picker 最近工程。</summary>
+public sealed record AutomationRecentProjectRemoveRequest
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>目标稳定工程 ID。</summary>
+    public required string ProjectId { get; init; }
+}
+
+/// <summary>Project Picker 最近工程收藏或移除结果。</summary>
+public sealed record AutomationRecentProjectMutationResult
+{
+    /// <summary>协议 DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>目标稳定工程 ID。</summary>
+    public required string ProjectId { get; init; }
+
+    /// <summary>该条目是否已被移除。</summary>
+    public required bool Removed { get; init; }
+
+    /// <summary>收藏更新后的状态；移除后为空。</summary>
+    public bool? Favorite { get; init; }
 }
 
 /// <summary>
@@ -1420,8 +1523,11 @@ public sealed record AutomationBrushSettings
     /// <summary>Point/Circle/Square。</summary>
     public required string Shape { get; init; }
 
-    /// <summary>运行时 material ID。</summary>
-    public required int MaterialId { get; init; }
+    /// <summary>稳定材质名称；画刷写请求以此字段作为身份。</summary>
+    public required string MaterialName { get; init; }
+
+    /// <summary>当前进程内 runtime material ID；只用于诊断，写请求可省略。</summary>
+    public int? MaterialId { get; init; }
 
     /// <summary>半径，范围 0..128。</summary>
     public required int Radius { get; init; }

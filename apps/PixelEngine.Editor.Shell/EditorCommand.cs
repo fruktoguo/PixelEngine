@@ -12,6 +12,12 @@ internal interface IEditorCommand
     void Undo(EditorSceneModel scene);
 }
 
+/// <summary>由 automation scheduler 记录、携带真实 revision resource 的 Editor command。</summary>
+internal interface IEditorResourceScopedCommand : IEditorCommand
+{
+    IReadOnlyList<string> ResourceIds { get; }
+}
+
 /// <summary>Undo history 中一次已经应用到 scene 的变化方向。</summary>
 internal enum EditorUndoMutationKind
 {
@@ -56,6 +62,14 @@ internal sealed class EditorUndoStack
 
     public int RedoCount => _redo.Count;
 
+    internal IEditorCommand? PendingUndoCommand => _undo.TryPeek(out IEditorCommand? command)
+        ? command
+        : null;
+
+    internal IEditorCommand? PendingRedoCommand => _redo.TryPeek(out IEditorCommand? command)
+        ? command
+        : null;
+
     public void Execute(EditorSceneModel scene, IEditorCommand command)
     {
         ArgumentNullException.ThrowIfNull(scene);
@@ -68,7 +82,7 @@ internal sealed class EditorUndoStack
         PrepareOperation();
         command.Execute(scene);
         _undo.Push(command);
-        _redo.Clear();
+        DisposeAndClear(_redo);
         HistoryApplied?.Invoke(command, EditorUndoMutationKind.Execute);
     }
 
@@ -144,13 +158,21 @@ internal sealed class EditorUndoStack
         // 这里只接受 scheduler 已经在同一主线程完成并校验过的命令。transaction commit
         // 记录 composite 时写租约仍处于 active，不能复用面向手动入口的 CanModifyScene 屏障。
         _undo.Push(command);
-        _redo.Clear();
+        DisposeAndClear(_redo);
     }
 
     public void Clear()
     {
-        _undo.Clear();
-        _redo.Clear();
+        DisposeAndClear(_undo);
+        DisposeAndClear(_redo);
+    }
+
+    private static void DisposeAndClear(Stack<IEditorCommand> commands)
+    {
+        while (commands.TryPop(out IEditorCommand? command))
+        {
+            (command as IDisposable)?.Dispose();
+        }
     }
 
     private bool IsModificationAllowed()

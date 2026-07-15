@@ -45,7 +45,7 @@ public sealed class SimulationKernel(
     /// <summary>
     /// 世界随机种子。
     /// </summary>
-    public ulong WorldSeed { get; } = worldSeed;
+    public ulong WorldSeed { get; private set; } = worldSeed;
 
     /// <summary>
     /// 可选帧诊断计时器。
@@ -71,6 +71,18 @@ public sealed class SimulationKernel(
     {
         FrameIndex = frameIndex;
         CurrentParity = (byte)(currentParity & CellFlags.Parity);
+    }
+
+    /// <summary>
+    /// 从整世界存档恢复随机种子、CA 帧序号与 parity；不执行任何 CA step。
+    /// </summary>
+    /// <param name="worldSeed">存档中的权威世界随机种子。</param>
+    /// <param name="frameIndex">已执行 CA tick 数。</param>
+    /// <param name="currentParity">当前 CA parity 位。</param>
+    public void RestoreWorldState(ulong worldSeed, uint frameIndex, byte currentParity)
+    {
+        WorldSeed = worldSeed;
+        RestoreFrameState(frameIndex, currentParity);
     }
 
     /// <summary>

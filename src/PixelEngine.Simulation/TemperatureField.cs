@@ -238,6 +238,27 @@ public sealed class TemperatureField
     }
 
     /// <summary>
+    /// 清空全部温度 block 与相位暂存；仅可在 world 结构性变更安全点调用。
+    /// </summary>
+    public void Clear()
+    {
+        foreach (TemperatureBlock block in _blocks.Values)
+        {
+            RecycleBlock(block);
+        }
+
+        _blocks.Clear();
+        _conductActiveCoords.Clear();
+        _activeConductChunkCount = 0;
+        _conductChunks = [];
+        _conductBlocks = [];
+        _activeConductMaterials = null;
+        LastConductStepUsedJobSystem = false;
+        LastConductStepWorkerCount = 0;
+        Volatile.Write(ref _lastConductStepVectorizedCellCount, 0);
+    }
+
+    /// <summary>
     /// 执行一次 5-point von Neumann 热传导。
     /// </summary>
     public void ConductStep(IChunkSource chunks, MaterialHotTable materials, uint frameIndex = 0, uint worldSeed = 0)

@@ -231,6 +231,35 @@ public sealed class EditorWorldToolsTests
         Assert.Equal("sand", inspection.MaterialName);
     }
 
+    /// <summary>验证跟随选择消失时清除陈旧结果，锁定状态可完整恢复。</summary>
+    [Fact]
+    public void WorldInspectorPanelStateIsReversibleAndClearsStaleSelection()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(2, 3)] = 1;
+        MaterialTable materials = CreateMaterials();
+        SimulationKernel kernel = new(new TestChunkSource(chunk), new MaterialPropsTable(materials.Hot));
+        WorldInspectorPanel panel = new(new SimulationEditApi(kernel, materials));
+        EditorSelection selection = new();
+        selection.SelectCell(2, 3);
+        panel.ApplyState(followSelection: true, worldX: 10, worldY: 20, selection);
+        WorldInspectorPanelState before = panel.CaptureState();
+
+        panel.ApplyState(followSelection: false, worldX: 100, worldY: 100, selection);
+        Assert.False(panel.FollowMouse);
+        Assert.Null(panel.LastInspection);
+
+        panel.RestoreState(before);
+        Assert.True(panel.StateEquals(before));
+        Assert.True(panel.FollowMouse);
+        Assert.True(panel.LastInspection.HasValue);
+        Assert.Equal((ushort)1, panel.LastInspection.Value.MaterialId);
+
+        selection.Clear();
+        Assert.False(panel.RefreshFromSelection(selection));
+        Assert.Null(panel.LastInspection);
+    }
+
     /// <summary>
     /// 验证 Simulation 编辑 API 的 phase [1] 写入会标记 current dirty 与边界邻居，而不是 working dirty。
     /// </summary>

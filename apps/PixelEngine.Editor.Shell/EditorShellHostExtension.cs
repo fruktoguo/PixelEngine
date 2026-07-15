@@ -9,6 +9,7 @@ using PixelEngine.Rendering;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 using PixelEngine.UI;
+using Silk.NET.OpenGL;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -24,8 +25,10 @@ internal sealed class EditorShellHostExtension :
     IGamePresentationOverride,
     IGameUiCompositionPolicy
 {
+    private const int MaximumAutomationCaptureBytes = 64 * 1024 * 1024;
     private readonly EditorProject _project;
     private readonly EditorShellApp _app;
+    private readonly RenderWindow _window;
     private readonly EditorApp _editor;
     private readonly GameViewUiPresentTargetProvider _gameUiPresentTargetProvider;
     private readonly bool _focusInspectorOnInitialLayout;
@@ -43,9 +46,20 @@ internal sealed class EditorShellHostExtension :
     private EditorConsolePanel? _consolePanel;
     private AssetBrowserPanel? _assetBrowserPanel;
     private MaterialBrushPalettePanel? _brushPanel;
+    private MaterialReactionEditorPanel? _materialReactionPanel;
+    private FileMaterialReactionContentService? _materialReactionContentService;
+    private WorldInspectorPanel? _worldInspectorPanel;
+    private PerformanceHudPanel? _performanceHudPanel;
+    private EditorWorldSaveLoadService? _saveLoadService;
     private RuntimeSceneHierarchyDataSource? _runtimeHierarchy;
+    private ISimulationInspectApi? _simulationInspectApi;
+    private IPhysicsTuningService? _physicsTuningService;
+    private IParticleTuningService? _particleTuningService;
+    private ILightingTuningService? _lightingTuningService;
     private EditorAssetBrowserDataSource? _assetBrowserDataSource;
     private EditorTextureThumbnailProvider? _textureThumbnailProvider;
+    private Engine? _engine;
+    private RenderPipeline? _pipeline;
     private EditorMode _lastPreparedMode = EditorMode.Edit;
     private bool _panelsRegistered;
 
@@ -54,6 +68,7 @@ internal sealed class EditorShellHostExtension :
         _project = project ?? throw new ArgumentNullException(nameof(project));
         _app = app ?? throw new ArgumentNullException(nameof(app));
         ArgumentNullException.ThrowIfNull(window);
+        _window = window;
         EditorFontStackPaths fonts = EditorFontAssets.ResolveRuntime();
         _focusInspectorOnInitialLayout = !File.Exists(app.LayoutPath);
         _editor = new EditorApp(
@@ -82,6 +97,266 @@ internal sealed class EditorShellHostExtension :
     {
         return _gameViewPanel?.CaptureScriptedPresentationSnapshot() ??
             ScriptedGameViewPresentationSnapshot.Missing;
+    }
+
+    internal EditorGameViewAutomationState CaptureAutomationGameViewState()
+    {
+        return (_gameViewPanel ?? throw new InvalidOperationException("Game View panel 尚未初始化。"))
+            .CaptureAutomationState();
+    }
+
+    internal bool TryApplyAutomationGameViewState(
+        EditorGameViewAutomationState state,
+        out string diagnostic)
+    {
+        if (_gameViewPanel is null)
+        {
+            diagnostic = "Game View panel 尚未初始化。";
+            return false;
+        }
+
+        return _gameViewPanel.TryApplyAutomationState(state, out diagnostic);
+    }
+
+    internal bool TryApplyAutomationRuntimeTransform(
+        string handle,
+        float x,
+        float y,
+        float rotationRadians,
+        float scaleX,
+        float scaleY,
+        out string diagnostic)
+    {
+        if (CapturePlayMode() == EditorMode.Edit || _runtimeHierarchy is null)
+        {
+            diagnostic = "Runtime Transform 只在已初始化的 Play/Paused session 中可用。";
+            return false;
+        }
+
+        bool applied = _runtimeHierarchy.TrySetEntityTransform(
+            handle,
+            x,
+            y,
+            rotationRadians,
+            scaleX,
+            scaleY);
+        diagnostic = applied ? string.Empty : "Runtime entity Transform 已失效或包含非有限值。";
+        return applied;
+    }
+
+    internal bool TryApplyAutomationRuntimeField(
+        string handle,
+        int componentIndex,
+        string fieldName,
+        object? value,
+        out string diagnostic)
+    {
+        if (CapturePlayMode() == EditorMode.Edit || _runtimeHierarchy is null)
+        {
+            diagnostic = "Runtime Behaviour field 只在已初始化的 Play/Paused session 中可用。";
+            return false;
+        }
+
+        bool applied = _runtimeHierarchy.TrySetBehaviourField(
+            handle,
+            componentIndex,
+            fieldName,
+            value);
+        diagnostic = applied ? string.Empty : "Runtime Behaviour field 已失效、不可写或值类型不兼容。";
+        return applied;
+    }
+
+    internal bool TryBeginAutomationSceneCapture(
+        out EditorAutomationFrameCapture capture,
+        out string diagnostic)
+    {
+        capture = null!;
+        if (_engine is null || _sceneViewPanel is null)
+        {
+            diagnostic = "Scene View capture runtime 尚未初始化。";
+            return false;
+        }
+
+        if (!_sceneViewPanel.TryGetAutomationCaptureRect(_window, out _, out diagnostic))
+        {
+            return false;
+        }
+
+        capture = new EditorAutomationFrameCapture();
+        EditorAutomationFrameCapture pending = capture;
+        IDisposable registration = _engine.Probe.RegisterBeforeSwapBuffers(
+            () => pending.Complete(CaptureSceneFrame));
+        capture.Attach(registration);
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryGetAutomationMaterialEditor(
+        out MaterialReactionEditorPanel panel,
+        out FileMaterialReactionContentService contentService)
+    {
+        panel = _materialReactionPanel!;
+        contentService = _materialReactionContentService!;
+        return panel is not null && contentService is not null;
+    }
+
+    internal bool TryGetAutomationWorldInspector(out WorldInspectorPanel panel)
+    {
+        panel = _worldInspectorPanel!;
+        return panel is not null;
+    }
+
+    internal void ApplyAutomationWorldInspectorState(
+        bool followSelection,
+        int worldX,
+        int worldY)
+    {
+        (_worldInspectorPanel ?? throw new InvalidOperationException("World Inspector 尚未初始化。"))
+            .ApplyState(followSelection, worldX, worldY, _editor.Selection);
+    }
+
+    internal PerformanceHudHistorySnapshot CaptureAutomationProfilerHistory()
+    {
+        return (_performanceHudPanel ??
+            throw new InvalidOperationException("Profiler 面板尚未初始化。"))
+            .CaptureHistory();
+    }
+
+    internal bool TryBeginAutomationGameCapture(
+        out EditorAutomationFrameCapture capture,
+        out string diagnostic)
+    {
+        capture = null!;
+        if (_engine is null || _pipeline is null || !_pipeline.CurrentViewportTexture.IsValid)
+        {
+            diagnostic = "Game presentation 尚未产生可捕获的完整纹理。";
+            return false;
+        }
+
+        capture = new EditorAutomationFrameCapture();
+        EditorAutomationFrameCapture pending = capture;
+        IDisposable registration = _engine.Probe.RegisterBeforeSwapBuffers(
+            () => pending.Complete(CaptureGameFrame));
+        capture.Attach(registration);
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    private EditorAutomationRawCapture CaptureSceneFrame()
+    {
+        SceneViewPanel panel = _sceneViewPanel ??
+            throw new InvalidOperationException("Scene View panel 已不可用。");
+        if (!panel.TryGetAutomationCaptureRect(_window, out EditorFramebufferCaptureRect rect, out string diagnostic))
+        {
+            throw new InvalidOperationException(diagnostic);
+        }
+
+        byte[] rgba = AllocateCaptureBuffer(rect.Width, rect.Height);
+        GL gl = _window.Gl;
+        gl.GetInteger(GLEnum.ReadFramebufferBinding, out int previousFramebuffer);
+        gl.GetInteger(GLEnum.ReadBuffer, out int previousReadBuffer);
+        try
+        {
+            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _window.PresentationFramebuffer);
+            gl.ReadBuffer(_window.PresentationFramebuffer == 0
+                ? ReadBufferMode.Back
+                : ReadBufferMode.ColorAttachment0);
+            gl.ReadPixels(
+                rect.X,
+                rect.Y,
+                (uint)rect.Width,
+                (uint)rect.Height,
+                PixelFormat.Rgba,
+                PixelType.UnsignedByte,
+                rgba);
+            ThrowIfCaptureGlError(gl, "Scene View ReadPixels");
+        }
+        finally
+        {
+            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)previousFramebuffer);
+            gl.ReadBuffer((ReadBufferMode)previousReadBuffer);
+        }
+
+        return new EditorAutomationRawCapture
+        {
+            Kind = "scene-view",
+            Width = rect.Width,
+            Height = rect.Height,
+            ContentRevision = _sceneModel?.Version ?? 0,
+            RgbaBottomUp = rgba,
+        };
+    }
+
+    private EditorAutomationRawCapture CaptureGameFrame()
+    {
+        RenderPipeline pipeline = _pipeline ??
+            throw new InvalidOperationException("Game render pipeline 已不可用。");
+        RenderViewportTexture texture = pipeline.CurrentViewportTexture;
+        if (!texture.IsValid)
+        {
+            throw new InvalidOperationException("Game presentation 尚未产生可捕获的完整纹理。");
+        }
+
+        byte[] rgba = AllocateCaptureBuffer(texture.Width, texture.Height);
+        GL gl = _window.Gl;
+        gl.GetInteger(GLEnum.ReadFramebufferBinding, out int previousFramebuffer);
+        gl.GetInteger(GLEnum.DrawFramebufferBinding, out int previousDrawFramebuffer);
+        gl.GetInteger(GLEnum.ReadBuffer, out int previousReadBuffer);
+        try
+        {
+            gl.BindFramebuffer(
+                FramebufferTarget.Framebuffer,
+                pipeline.CurrentViewportFramebuffer);
+            GLEnum status = gl.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
+            if (status != GLEnum.FramebufferComplete)
+            {
+                throw new InvalidOperationException($"Game capture framebuffer 不完整：{status}。");
+            }
+
+            gl.ReadBuffer(ReadBufferMode.ColorAttachment0);
+            gl.ReadPixels(
+                0,
+                0,
+                (uint)texture.Width,
+                (uint)texture.Height,
+                PixelFormat.Rgba,
+                PixelType.UnsignedByte,
+                rgba);
+            ThrowIfCaptureGlError(gl, "Game presentation ReadPixels");
+        }
+        finally
+        {
+            gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, (uint)previousFramebuffer);
+            gl.ReadBuffer((ReadBufferMode)previousReadBuffer);
+            gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, (uint)previousDrawFramebuffer);
+        }
+
+        return new EditorAutomationRawCapture
+        {
+            Kind = "game-presentation",
+            Width = texture.Width,
+            Height = texture.Height,
+            ContentRevision = texture.Revision,
+            RgbaBottomUp = rgba,
+        };
+    }
+
+    private static byte[] AllocateCaptureBuffer(int width, int height)
+    {
+        long length = checked((long)width * height * 4);
+        return width <= 0 || height <= 0 || length > MaximumAutomationCaptureBytes
+            ? throw new InvalidOperationException(
+                $"Capture {width}x{height} 需要 {length} bytes，超过 {MaximumAutomationCaptureBytes} bytes 上限。")
+            : GC.AllocateUninitializedArray<byte>(checked((int)length));
+    }
+
+    private static void ThrowIfCaptureGlError(GL gl, string operation)
+    {
+        GLEnum error = gl.GetError();
+        if (error != GLEnum.NoError)
+        {
+            throw new InvalidOperationException($"{operation} 失败：OpenGL {error}。");
+        }
     }
 
     /// <summary>在 Play/Paused 中选择包含指定 Behaviour 的 runtime entity，并把 Inspector 切到前台。</summary>
@@ -138,6 +413,80 @@ internal sealed class EditorShellHostExtension :
     public ScriptedRuntimeInspectorProbeSnapshot CaptureScriptedRuntimeInspectorProbe()
     {
         return _gameObjectInspectorPanel?.CaptureScriptedRuntimeInspectorProbe() ?? default;
+    }
+
+    internal SceneHierarchySnapshot CaptureAutomationRuntimeHierarchy()
+    {
+        return (_runtimeHierarchy ??
+            throw new InvalidOperationException("Runtime hierarchy 数据源尚未注册。"))
+            .Capture();
+    }
+
+    internal bool TryGetAutomationRuntimeBody(int bodyKey, out RigidBodySnapshot body)
+    {
+        if (_runtimeHierarchy is null)
+        {
+            body = default;
+            return false;
+        }
+
+        return _runtimeHierarchy.TryGetBody(bodyKey, out body);
+    }
+
+    internal bool TryInspectAutomationCell(
+        int worldX,
+        int worldY,
+        out SimulationCellInspection inspection)
+    {
+        if (_simulationInspectApi is null)
+        {
+            inspection = default;
+            return false;
+        }
+
+        return _simulationInspectApi.TryInspectCell(worldX, worldY, out inspection);
+    }
+
+    internal PhysicsTuningState CaptureAutomationPhysicsTuning()
+    {
+        return (_physicsTuningService ??
+            throw new InvalidOperationException("Physics tuning service 尚未注册。"))
+            .Capture();
+    }
+
+    internal void ApplyAutomationPhysicsTuning(PhysicsTuningState state)
+    {
+        (_physicsTuningService ??
+            throw new InvalidOperationException("Physics tuning service 尚未注册。"))
+            .Apply(state);
+    }
+
+    internal ParticleTuningState CaptureAutomationParticleTuning()
+    {
+        return (_particleTuningService ??
+            throw new InvalidOperationException("Particle tuning service 尚未注册。"))
+            .Capture();
+    }
+
+    internal void ApplyAutomationParticleTuning(ParticleTuningState state)
+    {
+        (_particleTuningService ??
+            throw new InvalidOperationException("Particle tuning service 尚未注册。"))
+            .Apply(state);
+    }
+
+    internal LightingTuningState CaptureAutomationLightingTuning()
+    {
+        return (_lightingTuningService ??
+            throw new InvalidOperationException("Lighting tuning service 尚未注册。"))
+            .Capture();
+    }
+
+    internal void ApplyAutomationLightingTuning(LightingTuningState state)
+    {
+        (_lightingTuningService ??
+            throw new InvalidOperationException("Lighting tuning service 尚未注册。"))
+            .Apply(state);
     }
 
     public EditorRenderBridge? Bridge { get; private set; }
@@ -558,12 +907,15 @@ internal sealed class EditorShellHostExtension :
         }
     }
 
-    private static AutomationBrushSettings CaptureBrushSettings(MaterialBrushSettings settings)
+    private AutomationBrushSettings CaptureBrushSettings(MaterialBrushSettings settings)
     {
+        MaterialTable materials = _engine?.Context.GetService<MaterialTable>() ??
+            throw new InvalidOperationException("Brush Tool 缺少 MaterialTable。");
         return new AutomationBrushSettings
         {
             Tool = settings.Tool.ToString(),
             Shape = settings.Shape.ToString(),
+            MaterialName = materials.GetName(settings.MaterialId),
             MaterialId = settings.MaterialId,
             Radius = settings.Radius,
             Probability = settings.Probability,
@@ -580,25 +932,32 @@ internal sealed class EditorShellHostExtension :
             return false;
         }
 
+        if (_engine is null || !_engine.Context.TryGetService(out MaterialTable materials) ||
+            string.IsNullOrWhiteSpace(settings.MaterialName) || settings.MaterialName.Length > 256 ||
+            !materials.TryGetId(settings.MaterialName.Trim(), out ushort materialId))
+        {
+            diagnostic = "画刷设置无效：materialName 必须引用当前 Engine 中的稳定 live 材质名称。";
+            return false;
+        }
+
         if (!Enum.TryParse(settings.Tool, ignoreCase: true, out EditorBrushTool tool) ||
             !Enum.IsDefined(tool) ||
             !Enum.TryParse(settings.Shape, ignoreCase: true, out EditorBrushShape shape) ||
             !Enum.IsDefined(shape) ||
             !Enum.TryParse(settings.TemperatureMode, ignoreCase: true, out TemperatureBrushMode temperatureMode) ||
             !Enum.IsDefined(temperatureMode) ||
-            settings.MaterialId is < ushort.MinValue or > ushort.MaxValue ||
             settings.Radius is < 0 or > 128 ||
             !float.IsFinite(settings.Probability) || settings.Probability is < 0f or > 1f ||
             !float.IsFinite(settings.TemperatureCelsius))
         {
-            diagnostic = "画刷设置无效：枚举、materialId、radius、probability 或 temperature 超出公共 API 契约。";
+            diagnostic = "画刷设置无效：枚举、radius、probability 或 temperature 超出公共 API 契约。";
             return false;
         }
 
         MaterialBrushSettings target = _brushPanel.Settings;
         target.Tool = tool;
         target.Shape = shape;
-        target.MaterialId = (ushort)settings.MaterialId;
+        target.MaterialId = materialId;
         target.Radius = settings.Radius;
         target.Probability = settings.Probability;
         target.TemperatureMode = temperatureMode;
@@ -618,6 +977,7 @@ internal sealed class EditorShellHostExtension :
         EditorMode mode = CapturePlayMode();
         if (_assetBrowserDataSource?.ApplyPendingChanges() == true)
         {
+            _app.NotifyAutomationAssetsChanged();
             // Project 面板被关闭时文件 watcher 仍必须推进；Scene XHTML/CSS/字体/图片预览
             // 不能依赖 Project Window 是否正在 Draw。
             _sceneWebCanvasPreview?.InvalidateAssets();
@@ -662,6 +1022,70 @@ internal sealed class EditorShellHostExtension :
             selection.EntityHandle,
             selection.GameObjectStableId,
             selection.BodyId);
+    }
+
+    internal bool TrySetAutomationProjectAssetSelection(string path)
+    {
+        return (_assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。"))
+            .SelectAsset(path, _editor.Selection);
+    }
+
+    internal bool TrySetAutomationProjectFolderSelection(string path)
+    {
+        return (_assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。"))
+            .SelectFolder(path, _editor.Selection);
+    }
+
+    internal AssetBrowserViewState CaptureAutomationProjectWindowViewState()
+    {
+        return (_assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。"))
+            .CaptureViewState();
+    }
+
+    internal string CaptureAutomationProjectWindowActiveFolderPath()
+    {
+        return (_assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。"))
+            .ActiveFolderPath;
+    }
+
+    internal bool ApplyAutomationProjectWindowViewState(
+        in AssetBrowserViewState state,
+        bool notifyChanged)
+    {
+        return (_assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。"))
+            .ApplyViewState(state, notifyChanged);
+    }
+
+    internal void ReloadAutomationAssetBrowserSnapshot()
+    {
+        _ = (_assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。"))
+            .ReloadCachedSnapshot(_editor.Selection);
+    }
+
+    internal void ClearAutomationProjectSelection()
+    {
+        _editor.Selection.ClearProject();
+    }
+
+    internal bool TryPreviewAutomationAudio(string path, out string diagnostic)
+    {
+        AssetBrowserPanel panel = _assetBrowserPanel ??
+            throw new InvalidOperationException("Project Window 面板尚未注册。");
+        bool succeeded = panel.TryPreviewAudio(path);
+        diagnostic = panel.Status;
+        return succeeded;
+    }
+
+    internal string CaptureAutomationSaveRoot()
+    {
+        return _saveLoadService?.SaveRoot ??
+            throw new InvalidOperationException("Save / Load 服务尚未注册。");
     }
 
     internal void RestoreAutomationSelection(in EditorAutomationSelectionSnapshot snapshot)
@@ -726,6 +1150,126 @@ internal sealed class EditorShellHostExtension :
     public void InvalidateAuthoringWorld()
     {
         _sceneViewPanel?.InvalidateWorldTexture();
+    }
+
+    internal EditorAssetBrowserDataSource RequireAutomationAssetDatabase()
+    {
+        return _assetBrowserDataSource ??
+            throw new InvalidOperationException("Project Window Asset Database 尚未注册。");
+    }
+
+    internal ProjectSettingsDto CaptureAutomationProjectSettings()
+    {
+        return _projectSettingsPanel?.AppliedSettings ??
+            throw new InvalidOperationException("Project Settings 面板尚未注册。");
+    }
+
+    internal EditorProjectSettingsAutomationState CaptureAutomationProjectSettingsState()
+    {
+        ProjectSettingsPanel panel = _projectSettingsPanel ??
+            throw new InvalidOperationException("Project Settings 面板尚未注册。");
+        return new EditorProjectSettingsAutomationState(
+            _project.CaptureAutomationSnapshot(),
+            panel.CaptureAutomationState());
+    }
+
+    internal EditorProjectSettingsAutomationState CreateAutomationProjectSettingsState(
+        EditorProjectSettingsAutomationState source,
+        ProjectSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ProjectSettingsPanel panel = _projectSettingsPanel ??
+            throw new InvalidOperationException("Project Settings 面板尚未注册。");
+        return new EditorProjectSettingsAutomationState(
+            EditorProject.CreateAutomationProjectSettingsSnapshot(source.Project, settings),
+            panel.CreateAutomationAppliedState(settings));
+    }
+
+    internal void RestoreAutomationProjectSettingsState(EditorProjectSettingsAutomationState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        ProjectSettingsPanel panel = _projectSettingsPanel ??
+            throw new InvalidOperationException("Project Settings 面板尚未注册。");
+        _project.RestoreAutomationSnapshot(state.Project);
+        panel.RestoreAutomationState(state.Panel);
+    }
+
+    internal bool TryApplyAutomationProjectSettings(ProjectSettingsDto settings, out string diagnostic)
+    {
+        return (_projectSettingsPanel ??
+            throw new InvalidOperationException("Project Settings 面板尚未注册。"))
+            .TryApplyProjectSettings(settings, out diagnostic);
+    }
+
+    internal PlayerSettingsDto CaptureAutomationPlayerSettings()
+    {
+        return _playerSettingsPanel?.AppliedSettings ??
+            throw new InvalidOperationException("Player Settings 面板尚未注册。");
+    }
+
+    internal PlayerSettingsPanelAutomationSnapshot CaptureAutomationPlayerSettingsState()
+    {
+        return (_playerSettingsPanel ??
+            throw new InvalidOperationException("Player Settings 面板尚未注册."))
+            .CaptureAutomationState();
+    }
+
+    internal PlayerSettingsPanelAutomationSnapshot CreateAutomationPlayerSettingsState(
+        PlayerSettingsDto settings)
+    {
+        return (_playerSettingsPanel ??
+            throw new InvalidOperationException("Player Settings 面板尚未注册."))
+            .CreateAutomationAppliedState(settings);
+    }
+
+    internal void RestoreAutomationPlayerSettingsState(PlayerSettingsPanelAutomationSnapshot state)
+    {
+        (_playerSettingsPanel ??
+            throw new InvalidOperationException("Player Settings 面板尚未注册."))
+            .RestoreAutomationState(state);
+    }
+
+    internal bool TryApplyAutomationPlayerSettings(PlayerSettingsDto settings, out string diagnostic)
+    {
+        return (_playerSettingsPanel ??
+            throw new InvalidOperationException("Player Settings 面板尚未注册。"))
+            .TryApplyPlayerSettings(settings, out diagnostic);
+    }
+
+    internal BuildProfileDto CaptureAutomationBuildSettings()
+    {
+        return (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .CaptureAutomationSettings();
+    }
+
+    internal BuildSettingsPanelAutomationSnapshot CaptureAutomationBuildSettingsState()
+    {
+        return (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .CaptureAutomationState();
+    }
+
+    internal BuildSettingsPanelAutomationSnapshot CreateAutomationBuildSettingsState(
+        BuildProfileDto settings)
+    {
+        return (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .CreateAutomationAppliedState(settings);
+    }
+
+    internal void RestoreAutomationBuildSettingsState(BuildSettingsPanelAutomationSnapshot state)
+    {
+        (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .RestoreAutomationState(state);
+    }
+
+    internal bool TryApplyAutomationBuildSettings(BuildProfileDto settings, out string diagnostic)
+    {
+        return (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .TryApplyAutomationSettings(settings, out diagnostic);
     }
 
     public bool TryStartScriptedBuildProbe(string outputDirectory, bool runAfterBuild, out string diagnostic)
@@ -881,6 +1425,13 @@ internal sealed class EditorShellHostExtension :
         ArgumentNullException.ThrowIfNull(engine);
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(pipeline);
+        if (!ReferenceEquals(window, _window))
+        {
+            throw new InvalidOperationException("Editor host 必须挂载到构造时的同一个 RenderWindow。");
+        }
+
+        _engine = engine;
+        _pipeline = pipeline;
         engine.Context.RegisterService<IEditorInputCaptureSource>(this);
         _textureThumbnailProvider ??= new EditorTextureThumbnailProvider(_project.ContentRootPath, window);
         // 注册层级/Inspector/资产浏览器/构建设置等 ImGui 面板
@@ -1157,12 +1708,17 @@ internal sealed class EditorShellHostExtension :
                 ? new AssetBrowserImportSourcePickResult(true, selectedPath, string.Empty)
                 : new AssetBrowserImportSourcePickResult(false, string.Empty, diagnostic),
             tryInstantiatePrefab: _app.InstantiatePrefab);
+        _assetBrowserPanel.ViewStateChanged += _ => _app.NotifyAutomationSettingsChanged(
+            "project.window.changed",
+            ["editor:project:window"]);
         _editor.AddPanel(EditorPanelIds.Project, _assetBrowserPanel);
-        AddHiddenPanel(EditorPanelIds.UiManifest, new UiManifestPanel(new EditorAssetManifestStore(_project)));
-        MaterialReactionEditorPanel? materialReactionPanel = TryCreateMaterialReactionPanel(engine);
-        if (materialReactionPanel is not null)
+        UiManifestPanel uiManifestPanel = new(new EditorAssetManifestStore(_project));
+        uiManifestPanel.Changed += _app.NotifyAutomationUiManifestChanged;
+        AddHiddenPanel(EditorPanelIds.UiManifest, uiManifestPanel);
+        _materialReactionPanel = TryCreateMaterialReactionPanel(engine);
+        if (_materialReactionPanel is not null)
         {
-            AddHiddenPanel(EditorPanelIds.Materials, materialReactionPanel);
+            AddHiddenPanel(EditorPanelIds.Materials, _materialReactionPanel);
         }
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project, () => _app.UiScale);
@@ -1170,15 +1726,31 @@ internal sealed class EditorShellHostExtension :
             _project,
             console: _app.ConsoleStore,
             prepareScene: _app.PrepareSceneForBuild);
+        _projectSettingsPanel.SettingsApplied += () => _app.NotifyAutomationSettingsChanged(
+            "settings.project.changed",
+            ["editor:project", "editor:project-settings"]);
+        _playerSettingsPanel.SettingsApplied += () => _app.NotifyAutomationSettingsChanged(
+            "settings.player.changed",
+            ["editor:project", "editor:player-settings"]);
+        _buildSettingsPanel.SettingsApplied += () => _app.NotifyAutomationSettingsChanged(
+            "settings.build.changed",
+            ["editor:project", "editor:build-settings"]);
         AddHiddenPanel(EditorPanelIds.ProjectSettings, _projectSettingsPanel);
         AddHiddenPanel(EditorPanelIds.PlayerSettings, _playerSettingsPanel);
         AddHiddenPanel(EditorPanelIds.BuildSettings, _buildSettingsPanel);
-        AddHiddenPanel(EditorPanelIds.Profiler, new PerformanceHudPanel());
+        _performanceHudPanel = new PerformanceHudPanel();
+        _performanceHudPanel.VSyncChanged += enabled =>
+        {
+            engine.Context.Counters.VSyncEnabled = enabled;
+            _app.NotifyAutomationProfilerChanged();
+        };
+        AddHiddenPanel(EditorPanelIds.Profiler, _performanceHudPanel);
         AddHiddenPanel(EditorPanelIds.Simulation, new SimulationControlToolbar(new EditorSimulationControlAdapter(_app)));
         AddHiddenPanel(EditorPanelIds.PlayMode, new EditorModePanel(new EditorPlaySessionAdapter(_app)));
-        AddHiddenPanel(EditorPanelIds.SaveLoad, new SaveLoadPanel(new EditorWorldSaveLoadService(
+        _saveLoadService = new EditorWorldSaveLoadService(
             engine,
-            Path.Combine(_project.ProjectRoot, "saves"))));
+            Path.Combine(_project.ProjectRoot, "saves"));
+        AddHiddenPanel(EditorPanelIds.SaveLoad, new SaveLoadPanel(_saveLoadService));
         if (engine.Context.TryGetService(out DebugOverlaySettings debugSettings))
         {
             AddHiddenPanel(EditorPanelIds.Overlays, new DebugOverlayPanel(debugSettings));
@@ -1186,7 +1758,9 @@ internal sealed class EditorShellHostExtension :
 
         if (engine.Context.TryGetService(out ISimulationInspectApi inspectApi))
         {
-            AddHiddenPanel(EditorPanelIds.WorldInspector, new WorldInspectorPanel(inspectApi));
+            _simulationInspectApi = inspectApi;
+            _worldInspectorPanel = new WorldInspectorPanel(inspectApi);
+            AddHiddenPanel(EditorPanelIds.WorldInspector, _worldInspectorPanel);
         }
 
         if (brushPanel is not null)
@@ -1196,15 +1770,30 @@ internal sealed class EditorShellHostExtension :
 
         if (engine.Context.TryGetService(out PhysicsSystem physics))
         {
-            AddHiddenPanel(EditorPanelIds.Physics, new PhysicsTuningPanel(new PhysicsSystemTuningService(physics)));
+            _physicsTuningService = new PhysicsSystemTuningService(physics);
+            PhysicsTuningPanel physicsPanel = new(_physicsTuningService);
+            physicsPanel.StateApplied += _ => _app.NotifyAutomationRuntimeTuningChanged(
+                "runtime.physics.changed",
+                "editor:runtime:physics");
+            AddHiddenPanel(EditorPanelIds.Physics, physicsPanel);
         }
 
         if (engine.Context.TryGetService(out ParticleSystem particles))
         {
-            AddHiddenPanel(EditorPanelIds.Particles, new ParticleTuningPanel(new ParticleSystemTuningService(particles)));
+            _particleTuningService = new ParticleSystemTuningService(particles);
+            ParticleTuningPanel particlePanel = new(_particleTuningService);
+            particlePanel.StateApplied += _ => _app.NotifyAutomationRuntimeTuningChanged(
+                "runtime.particles.changed",
+                "editor:runtime:particles");
+            AddHiddenPanel(EditorPanelIds.Particles, particlePanel);
         }
 
-        AddHiddenPanel(EditorPanelIds.Lighting, new LightingTuningPanel(new RenderPipelineLightingTuningService(pipeline.Settings)));
+        _lightingTuningService = new RenderPipelineLightingTuningService(pipeline.Settings);
+        LightingTuningPanel lightingPanel = new(_lightingTuningService);
+        lightingPanel.StateApplied += _ => _app.NotifyAutomationRuntimeTuningChanged(
+            "runtime.lighting.changed",
+            "editor:runtime:lighting");
+        AddHiddenPanel(EditorPanelIds.Lighting, lightingPanel);
         _panelsRegistered = true;
     }
 
@@ -1238,9 +1827,11 @@ internal sealed class EditorShellHostExtension :
             materials,
             chunks,
             fallbackMaterialId,
+            () => reactions.Reactions,
             reactions.ReloadReactions,
             kernel.ReloadMaterialHotTable,
             counters: engine.Context.Counters);
+        _materialReactionContentService = content;
         MaterialReactionEditorPanel panel = new(content);
         panel.Reload();
         return panel;
@@ -1258,7 +1849,7 @@ internal sealed class EditorShellHostExtension :
         return materials.Count != 0;
     }
 
-    private static EditorRuntimeDiagnostics BuildRuntimeDiagnostics(Engine engine)
+    internal static EditorRuntimeDiagnostics BuildRuntimeDiagnostics(Engine engine)
     {
         return engine.Context.TryGetService(out EngineOverloadController overload)
             ? new EditorRuntimeDiagnostics(
@@ -1319,6 +1910,7 @@ internal sealed class EditorShellHostExtension :
         public void SetSimHz(double simHz)
         {
             app.CurrentSession?.SetSimHz(simHz);
+            app.NotifyAutomationSimulationChanged();
         }
     }
 

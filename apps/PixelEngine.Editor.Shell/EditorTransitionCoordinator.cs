@@ -97,14 +97,27 @@ internal sealed class EditorTransitionCoordinator(
 
     public bool HasPendingTransition => _pending is not null;
 
+    /// <summary>Editor 生命周期结束时释放 pending transition 持有的未提交 preparation。</summary>
+    public void ReleasePendingPreparation()
+    {
+        PendingTransition? pending = _pending;
+        _pending = null;
+        pending?.Cancel?.Invoke();
+    }
+
     /// <summary>
     /// 请求执行一个受 dirty guard 保护的转场。
     /// </summary>
     /// <param name="kind">转场类型。</param>
     /// <param name="action">真正执行转场的委托。</param>
     /// <param name="target">可选目标，仅供 UI 展示。</param>
+    /// <param name="cancel">等待确认后被取消或协调器关闭时释放未提交 preparation 的可选回调。</param>
     /// <returns>立即执行、需要确认或已有待处理转场。</returns>
-    public EditorTransitionResult Request(EditorTransitionKind kind, Action action, string? target = null)
+    public EditorTransitionResult Request(
+        EditorTransitionKind kind,
+        Action action,
+        string? target = null,
+        Action? cancel = null)
     {
         if (!Enum.IsDefined(kind))
         {
@@ -126,7 +139,7 @@ internal sealed class EditorTransitionCoordinator(
             return new EditorTransitionResult(EditorTransitionStatus.Executed, "Editor 转场已执行。");
         }
 
-        _pending = new PendingTransition(kind, normalizedTarget, action);
+        _pending = new PendingTransition(kind, normalizedTarget, action, cancel);
         return new EditorTransitionResult(
             EditorTransitionStatus.ConfirmationRequired,
             "当前场景有未保存修改，请选择 Save、Discard 或 Cancel。");
@@ -154,6 +167,7 @@ internal sealed class EditorTransitionCoordinator(
         if (decision == EditorTransitionDecision.Cancel)
         {
             _pending = null;
+            pending.Cancel?.Invoke();
             return new EditorTransitionResult(EditorTransitionStatus.Cancelled, "Editor 转场已取消。");
         }
 
@@ -177,5 +191,6 @@ internal sealed class EditorTransitionCoordinator(
     private sealed record PendingTransition(
         EditorTransitionKind Kind,
         string? Target,
-        Action Action);
+        Action Action,
+        Action? Cancel);
 }

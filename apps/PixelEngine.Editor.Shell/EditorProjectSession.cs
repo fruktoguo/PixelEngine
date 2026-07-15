@@ -56,6 +56,8 @@ internal sealed class EditorProjectSession : IDisposable
         Prefabs = prefabs;
         _scriptAssetOpenService = scriptAssetOpenService ?? throw new ArgumentNullException(nameof(scriptAssetOpenService));
         _codeWorkspaceOpenService = codeWorkspaceOpenService ?? throw new ArgumentNullException(nameof(codeWorkspaceOpenService));
+        AutomationActiveContentRoot = project.ContentRoot;
+        AutomationActiveScriptSourceDir = project.ScriptSourceDir;
         CurrentSceneRelativePath = currentSceneRelativePath;
         _runtimeProjectionVersion = sceneModel.Version;
         _snapshotStore = new EngineWorldSnapshotStore(engine);
@@ -83,11 +85,361 @@ internal sealed class EditorProjectSession : IDisposable
 
     public long EditorBridgeFrameCount => _editorHost.BridgeFrameCount;
 
+    internal string? AutomationPlaySessionId { get; private set; }
+
+    internal string AutomationActiveContentRoot { get; }
+
+    internal string AutomationActiveScriptSourceDir { get; }
+
+    internal EditorAssetBrowserDataSource AutomationAssetDatabase =>
+        _editorHost.RequireAutomationAssetDatabase();
+
+    internal bool TrySetAutomationProjectAssetSelection(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySetAutomationProjectAssetSelection(path);
+    }
+
+    internal bool TrySetAutomationProjectFolderSelection(string path)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TrySetAutomationProjectFolderSelection(path);
+    }
+
+    internal AssetBrowserViewState CaptureAutomationProjectWindowViewState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationProjectWindowViewState();
+    }
+
+    internal string CaptureAutomationProjectWindowActiveFolderPath()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationProjectWindowActiveFolderPath();
+    }
+
+    internal bool ApplyAutomationProjectWindowViewState(
+        in AssetBrowserViewState state,
+        bool notifyChanged)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.ApplyAutomationProjectWindowViewState(state, notifyChanged);
+    }
+
+    internal void ReloadAutomationAssetBrowserSnapshot()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ReloadAutomationAssetBrowserSnapshot();
+    }
+
+    internal void ClearAutomationProjectSelection()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ClearAutomationProjectSelection();
+    }
+
+    internal bool TryPreviewAutomationAudio(string path, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryPreviewAutomationAudio(path, out diagnostic);
+    }
+
+    internal string CaptureAutomationSaveRoot()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationSaveRoot();
+    }
+
+    internal bool TryGetAutomationMaterialEditor(
+        out MaterialReactionEditorPanel panel,
+        out FileMaterialReactionContentService contentService)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryGetAutomationMaterialEditor(out panel, out contentService);
+    }
+
+    internal bool TryGetAutomationWorldInspector(out WorldInspectorPanel panel)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryGetAutomationWorldInspector(out panel);
+    }
+
+    internal void ApplyAutomationWorldInspectorState(
+        bool followSelection,
+        int worldX,
+        int worldY)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ApplyAutomationWorldInspectorState(followSelection, worldX, worldY);
+    }
+
+    internal ProjectSettingsDto CaptureAutomationProjectSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationProjectSettings();
+    }
+
+    internal EditorProjectSettingsAutomationState CaptureAutomationProjectSettingsState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationProjectSettingsState();
+    }
+
+    internal EditorProjectSettingsAutomationState CreateAutomationProjectSettingsState(
+        EditorProjectSettingsAutomationState source,
+        ProjectSettingsDto settings)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CreateAutomationProjectSettingsState(source, settings);
+    }
+
+    internal void RestoreAutomationProjectSettingsState(EditorProjectSettingsAutomationState state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.RestoreAutomationProjectSettingsState(state);
+    }
+
+    internal bool TryApplyAutomationProjectSettings(ProjectSettingsDto settings, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationProjectSettings(settings, out diagnostic);
+    }
+
+    internal PlayerSettingsDto CaptureAutomationPlayerSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPlayerSettings();
+    }
+
+    internal PlayerSettingsPanelAutomationSnapshot CaptureAutomationPlayerSettingsState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPlayerSettingsState();
+    }
+
+    internal PlayerSettingsPanelAutomationSnapshot CreateAutomationPlayerSettingsState(
+        PlayerSettingsDto settings)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CreateAutomationPlayerSettingsState(settings);
+    }
+
+    internal void RestoreAutomationPlayerSettingsState(PlayerSettingsPanelAutomationSnapshot state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.RestoreAutomationPlayerSettingsState(state);
+    }
+
+    internal bool TryApplyAutomationPlayerSettings(PlayerSettingsDto settings, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationPlayerSettings(settings, out diagnostic);
+    }
+
+    internal BuildProfileDto CaptureAutomationBuildSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuildSettings();
+    }
+
+    internal BuildSettingsPanelAutomationSnapshot CaptureAutomationBuildSettingsState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuildSettingsState();
+    }
+
+    internal BuildSettingsPanelAutomationSnapshot CreateAutomationBuildSettingsState(
+        BuildProfileDto settings)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CreateAutomationBuildSettingsState(settings);
+    }
+
+    internal void RestoreAutomationBuildSettingsState(BuildSettingsPanelAutomationSnapshot state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.RestoreAutomationBuildSettingsState(state);
+    }
+
+    internal bool TryApplyAutomationBuildSettings(BuildProfileDto settings, out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationBuildSettings(settings, out diagnostic);
+    }
+
+    internal PerformanceHudSample CaptureAutomationProfilerSample()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        IRenderPresentationControl? presentation = Engine.Context.TryGetService(
+            out IRenderPresentationControl registeredPresentation)
+                ? registeredPresentation
+                : null;
+        EditorPerformanceSnapshot snapshot = EditorPerformanceSnapshot.Create(
+            Engine.Context.Counters,
+            Engine.Context.Profiler,
+            EditorShellHostExtension.BuildRuntimeDiagnostics(Engine),
+            presentation);
+        return PerformanceHudPanel.BuildSample(snapshot);
+    }
+
+    internal PerformanceHudHistorySnapshot CaptureAutomationProfilerHistory()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationProfilerHistory();
+    }
+
+    internal RuntimeSettingsSnapshot CaptureAutomationRuntimeSettings()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Engine.Context.TryGetService(out EngineScriptRuntimeControlApi runtimeControl)
+            ? runtimeControl.CaptureSettings()
+            : throw new InvalidOperationException("Engine runtime control service 尚未注册。");
+    }
+
+    internal RuntimeControlResult SetAutomationVSyncEnabled(bool enabled)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Engine.Context.TryGetService(out EngineScriptRuntimeControlApi runtimeControl)
+            ? runtimeControl.SetVSyncEnabled(enabled)
+            : new RuntimeControlResult(false, "Engine runtime control service 尚未注册。");
+    }
+
+    internal void ReportAutomationCleanupFailure(string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _console.AddProjectError("automation-undo-cleanup", diagnostic);
+    }
+
     /// <summary>捕获 Game View 实际提交和显示的 presentation，同步性由探针快照 fail-closed 表示。</summary>
     public ScriptedGameViewPresentationSnapshot CaptureScriptedGameViewPresentation()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _editorHost.CaptureScriptedGameViewPresentation();
+    }
+
+    internal EditorGameViewAutomationState CaptureAutomationGameViewState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationGameViewState();
+    }
+
+    internal bool TryApplyAutomationGameViewState(
+        EditorGameViewAutomationState state,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationGameViewState(state, out diagnostic);
+    }
+
+    internal bool TryApplyAutomationRuntimeTransform(
+        string handle,
+        float x,
+        float y,
+        float rotationRadians,
+        float scaleX,
+        float scaleY,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationRuntimeTransform(
+            handle,
+            x,
+            y,
+            rotationRadians,
+            scaleX,
+            scaleY,
+            out diagnostic);
+    }
+
+    internal bool TryApplyAutomationRuntimeField(
+        string handle,
+        int componentIndex,
+        string fieldName,
+        object? value,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryApplyAutomationRuntimeField(
+            handle,
+            componentIndex,
+            fieldName,
+            value,
+            out diagnostic);
+    }
+
+    internal SceneHierarchySnapshot CaptureAutomationRuntimeHierarchy()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationRuntimeHierarchy();
+    }
+
+    internal bool TryGetAutomationRuntimeBody(
+        int bodyKey,
+        out PixelEngine.Physics.RigidBodySnapshot body)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryGetAutomationRuntimeBody(bodyKey, out body);
+    }
+
+    internal bool TryInspectAutomationCell(
+        int worldX,
+        int worldY,
+        out SimulationCellInspection inspection)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryInspectAutomationCell(worldX, worldY, out inspection);
+    }
+
+    internal PhysicsTuningState CaptureAutomationPhysicsTuning()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPhysicsTuning();
+    }
+
+    internal void ApplyAutomationPhysicsTuning(PhysicsTuningState state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ApplyAutomationPhysicsTuning(state);
+    }
+
+    internal ParticleTuningState CaptureAutomationParticleTuning()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationParticleTuning();
+    }
+
+    internal void ApplyAutomationParticleTuning(ParticleTuningState state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ApplyAutomationParticleTuning(state);
+    }
+
+    internal LightingTuningState CaptureAutomationLightingTuning()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationLightingTuning();
+    }
+
+    internal void ApplyAutomationLightingTuning(LightingTuningState state)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.ApplyAutomationLightingTuning(state);
+    }
+
+    internal bool TryBeginAutomationSceneCapture(
+        out EditorAutomationFrameCapture capture,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryBeginAutomationSceneCapture(out capture, out diagnostic);
+    }
+
+    internal bool TryBeginAutomationGameCapture(
+        out EditorAutomationFrameCapture capture,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryBeginAutomationGameCapture(out capture, out diagnostic);
     }
 
     /// <summary>选择包含指定 Behaviour 的 Play Mode 实体，供真实窗口 Inspector 探针使用。</summary>
@@ -161,6 +513,7 @@ internal sealed class EditorProjectSession : IDisposable
         EngineBuilder engineBuilder = new EngineBuilder()
             .WithProject(project.ToEngineProject(sceneRelativePath))
             .ApplyRuntimeDefaults(playerSettings, applyStartupScene: false)
+            .WithGuiLayoutPath(app.RuntimeGuiLayoutPath)
             .UseGuiRuntime()
             .EnableGameUi()
             .AddEditorHostExtension(editorHost);
@@ -176,7 +529,8 @@ internal sealed class EditorProjectSession : IDisposable
             AttachProjectAudio(engine);
             _ = engine.AttachPhysics();
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
-            EditorUndoStack undoStack = new();
+            EditorUndoStack undoStack = app.SharedUndoStack;
+            undoStack.Clear();
             app.ConfigureAutomationUndoStack(undoStack);
             EditorAssetManifestStore assets = new(project);
             engine.Context.RegisterService<IGameUiManifestAssetResolver>(
@@ -277,9 +631,11 @@ internal sealed class EditorProjectSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         _editorHost.FlushPendingAuthoringEdits();
         RefreshEditProjectionIfNeeded();
-        return !TryValidateAuthoringScene(SceneModel, out string diagnostic)
+        Hosting.EditorPlaySessionResult result = !TryValidateAuthoringScene(SceneModel, out string diagnostic)
             ? RejectPlayForInvalidAuthoringScene(diagnostic)
             : _playSession.EnterPlayCurrent();
+        CaptureAutomationPlayIdentity(result);
+        return result;
     }
 
     public Hosting.EditorPlaySessionResult EnterPlayTemporary()
@@ -287,9 +643,11 @@ internal sealed class EditorProjectSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         _editorHost.FlushPendingAuthoringEdits();
         RefreshEditProjectionIfNeeded();
-        return !TryValidateAuthoringScene(SceneModel, out string diagnostic)
+        Hosting.EditorPlaySessionResult result = !TryValidateAuthoringScene(SceneModel, out string diagnostic)
             ? RejectPlayForInvalidAuthoringScene(diagnostic)
             : _playSession.EnterPlayTemporary();
+        CaptureAutomationPlayIdentity(result);
+        return result;
     }
 
     public Hosting.EditorPlaySessionResult ExitEditorPlay()
@@ -306,7 +664,52 @@ internal sealed class EditorProjectSession : IDisposable
             beforeExit.TemporarySnapshotActive;
         RefreshEditProjectionIfNeeded(force: rebuildTemporaryProjection);
         _editorHost.InvalidateAuthoringWorld();
+        if (result.Succeeded && result.Snapshot.Mode == Hosting.EditorMode.Edit)
+        {
+            AutomationPlaySessionId = null;
+        }
+
         return result;
+    }
+
+    internal Hosting.EditorPlaySessionResult PauseEditorPlay()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _playSession.PausePlay();
+    }
+
+    internal Hosting.EditorPlaySessionResult ResumeEditorPlay()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _playSession.ResumePlay();
+    }
+
+    internal Hosting.EditorPlaySessionResult StepEditorPlay()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Hosting.EditorPlaySessionSnapshot before = _playSession.Capture();
+        if (before.Mode == Hosting.EditorMode.Play)
+        {
+            Hosting.EditorPlaySessionResult paused = _playSession.PausePlay();
+            if (!paused.Succeeded)
+            {
+                return paused;
+            }
+        }
+
+        if (_playSession.Capture().Mode != Hosting.EditorMode.Paused)
+        {
+            Hosting.EditorPlaySessionSnapshot snapshot = _playSession.Capture();
+            return new Hosting.EditorPlaySessionResult(
+                false,
+                snapshot,
+                "当前没有可单步的 Play session。");
+        }
+
+        _ = Engine.StepOnce();
+        _editorHost.RequestGameViewFocus();
+        Hosting.EditorPlaySessionSnapshot after = _playSession.Capture();
+        return new Hosting.EditorPlaySessionResult(true, after, "Play session 已执行一个 step。");
     }
 
     public void StepOnce()
@@ -324,6 +727,14 @@ internal sealed class EditorProjectSession : IDisposable
 
         _ = Engine.StepOnce();
         _editorHost.RequestGameViewFocus();
+    }
+
+    private void CaptureAutomationPlayIdentity(Hosting.EditorPlaySessionResult result)
+    {
+        if (result.Succeeded && result.Snapshot.Mode is Hosting.EditorMode.Play or Hosting.EditorMode.Paused)
+        {
+            AutomationPlaySessionId ??= Guid.NewGuid().ToString("N");
+        }
     }
 
     public void CreateGameObject()
@@ -451,6 +862,12 @@ internal sealed class EditorProjectSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _codeWorkspaceOpenService.OpenCodeProject();
+    }
+
+    internal EditorCodeWorkspaceAutomationWorkspace CaptureAutomationCodeWorkspacePreparation()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new EditorCodeWorkspaceAutomationWorkspace(this, _codeWorkspaceOpenService);
     }
 
     public bool ShowProjectSettings()
@@ -771,6 +1188,9 @@ internal sealed class EditorProjectSession : IDisposable
         }
 
         _editorHost.FlushPendingAuthoringEdits();
+        UndoStack.Clear();
+        UndoStack.BeforeOperation = null;
+        UndoStack.CanModifyScene = null;
         _snapshotStore.Dispose();
         Engine.Dispose();
         _disposed = true;

@@ -1,4 +1,5 @@
 using PixelEngine.Content;
+using PixelEngine.Core.Diagnostics;
 using PixelEngine.Simulation;
 using Xunit;
 
@@ -28,13 +29,15 @@ public sealed class MaterialReactionEditorPanelTests
         TestChunkSource chunks = new(chunk);
         bool hotReloaded = false;
         ReactionTable? reloadedReactions = null;
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
         FileMaterialReactionContentService service = new(
             temp.MaterialsPath,
             temp.ReactionsPath,
             materials,
             chunks,
             fallbackMaterialId: 0,
-            applyReactions: table => reloadedReactions = table,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = reloadedReactions = table,
             applyMaterialHotTable: _ => hotReloaded = true);
         MaterialReactionEditorDocument document = new();
         document.Materials.Add(new MaterialEditorRow { Name = "empty", Type = "Empty", HeatCapacity = 1, TextureId = -1 });
@@ -59,6 +62,366 @@ public sealed class MaterialReactionEditorPanelTests
     }
 
     /// <summary>
+    /// 文件发布后的下游失败必须恢复双文件、材质/反应表、live cell 与计数器 before-image。
+    /// </summary>
+    [Fact]
+    public void ApplyFailureAfterFilePublishRollsBackEveryAuthority()
+    {
+        using TempContent temp = TempContent.Create();
+        byte[] materialsBefore = File.ReadAllBytes(temp.MaterialsPath);
+        byte[] reactionsBefore = File.ReadAllBytes(temp.ReactionsPath);
+        MaterialTable materials = new(
+        [
+            new MaterialDef
+            {
+                Id = 0,
+                Name = "empty",
+                Type = CellType.Empty,
+                HeatCapacity = 1,
+                TextureId = -1,
+            },
+            new MaterialDef
+            {
+                Id = 1,
+                Name = "sand",
+                Type = CellType.Powder,
+                Density = 100,
+                HeatCapacity = 1,
+                TextureId = -1,
+            },
+        ]);
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.MaterialBuffer[17] = 1;
+        chunk.DamageBuffer[17] = 13;
+        DirtyRect workingBefore = new(1, 2, 3, 4);
+        chunk.SetWorkingDirty(workingBefore);
+        TestChunkSource chunks = new(chunk);
+        ReactionTable reactionsBeforeTable = new([], new MaterialDef[materials.Count]);
+        ReactionTable currentReactions = reactionsBeforeTable;
+        EngineCounters counters = new() { MaterialRemapFallbackHits = 77 };
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            chunks,
+            fallbackMaterialId: 0,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table,
+            applyMaterialHotTable: static _ => { },
+            assetReloadSink: new ThrowingAssetReloadSink(),
+            counters: counters);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = 9,
+        });
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "fire",
+            Type = "Fire",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() =>
+            service.Apply(document));
+
+        Assert.Contains("asset reload failure", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(materialsBefore, File.ReadAllBytes(temp.MaterialsPath));
+        Assert.Equal(reactionsBefore, File.ReadAllBytes(temp.ReactionsPath));
+        Assert.Equal(2, materials.Count);
+        Assert.True(materials.TryGetId("sand", out ushort sandId));
+        Assert.Equal(1, sandId);
+        Assert.False(materials.IsTombstone(sandId));
+        Assert.False(materials.TryGetId("fire", out _));
+        Assert.Equal(1, chunk.MaterialBuffer[17]);
+        Assert.Equal(13, chunk.DamageBuffer[17]);
+        Assert.Equal(workingBefore, chunk.WorkingDirty);
+        Assert.Same(reactionsBeforeTable, currentReactions);
+        Assert.Equal(77, counters.MaterialRemapFallbackHits);
+        Assert.Empty(EnumerateMaterialJournals(temp.Root));
+    }
+
+    /// <summary>
+    /// 后台文件准备期间若材质表已变化，旧计划必须在修改文件或 live grid 前失败并清理 journal。
+    /// </summary>
+    [Fact]
+    public void PreparedApplyRejectsChangedMaterialAuthorityAndCleansJournal()
+    {
+        using TempContent temp = TempContent.Create();
+        byte[] materialsFileBefore = File.ReadAllBytes(temp.MaterialsPath);
+        byte[] reactionsFileBefore = File.ReadAllBytes(temp.ReactionsPath);
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1 },
+        ]);
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(),
+            fallbackMaterialId: 0,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+
+        using FileMaterialReactionContentService.PreparedApply prepared = service.PrepareApply(document);
+        prepared.PrepareFiles(CancellationToken.None);
+        _ = materials.ReloadStable(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 2 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1 },
+        ]);
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(prepared.Commit);
+
+        Assert.Contains("后台准备期间发生变化", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(materialsFileBefore, File.ReadAllBytes(temp.MaterialsPath));
+        Assert.Equal(reactionsFileBefore, File.ReadAllBytes(temp.ReactionsPath));
+        Assert.True(materials.TryGetId("sand", out _));
+        Assert.Empty(EnumerateMaterialJournals(temp.Root));
+    }
+
+    /// <summary>
+    /// 后台准备期间新增待删除材质 cell 时，提交必须拒绝旧稀疏快照，不能留下 tombstone cell。
+    /// </summary>
+    [Fact]
+    public void PreparedApplyRejectsNewTombstoneCellAndPreservesAuthority()
+    {
+        using TempContent temp = TempContent.Create();
+        byte[] materialsFileBefore = File.ReadAllBytes(temp.MaterialsPath);
+        byte[] reactionsFileBefore = File.ReadAllBytes(temp.ReactionsPath);
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1 },
+        ]);
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(chunk),
+            fallbackMaterialId: 0,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+
+        using FileMaterialReactionContentService.PreparedApply prepared = service.PrepareApply(document);
+        prepared.PrepareFiles(CancellationToken.None);
+        chunk.MaterialBuffer[42] = 1;
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(prepared.Commit);
+
+        Assert.Contains("后台准备期间发生变化", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(1, chunk.MaterialBuffer[42]);
+        Assert.True(materials.TryGetId("sand", out ushort sandId));
+        Assert.False(materials.IsTombstone(sandId));
+        Assert.Equal(materialsFileBefore, File.ReadAllBytes(temp.MaterialsPath));
+        Assert.Equal(reactionsFileBefore, File.ReadAllBytes(temp.ReactionsPath));
+        Assert.Empty(EnumerateMaterialJournals(temp.Root));
+    }
+
+    /// <summary>
+    /// 已取消的后台准备不得创建 journal，也不得消费任何运行时 before-image。
+    /// </summary>
+    [Fact]
+    public void PreparedApplyCancellationLeavesNoJournalOrMutation()
+    {
+        using TempContent temp = TempContent.Create();
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+        ]);
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(),
+            fallbackMaterialId: 0,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+        using CancellationTokenSource cancellation = new();
+        cancellation.Cancel();
+
+        using FileMaterialReactionContentService.PreparedApply prepared = service.PrepareApply(document);
+        _ = Assert.Throws<OperationCanceledException>(() => prepared.PrepareFiles(cancellation.Token));
+
+        Assert.True(materials.TryGetId("empty", out _));
+        Assert.Empty(EnumerateMaterialJournals(temp.Root));
+    }
+
+    /// <summary>
+    /// 可逆提交必须在 Undo/Redo 间同步切换双文件、材质/反应表、live cell、dirty 与计数器。
+    /// </summary>
+    [Fact]
+    public void ReversibleApplyRestoresAndReappliesEveryAuthority()
+    {
+        using TempContent temp = TempContent.Create();
+        byte[] materialsBeforeFile = File.ReadAllBytes(temp.MaterialsPath);
+        byte[] reactionsBeforeFile = File.ReadAllBytes(temp.ReactionsPath);
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+            new MaterialDef { Id = 1, Name = "sand", Type = CellType.Powder, HeatCapacity = 1 },
+        ]);
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        chunk.MaterialBuffer[11] = 1;
+        chunk.DamageBuffer[11] = 9;
+        DirtyRect dirtyBefore = new(1, 1, 3, 3);
+        chunk.SetWorkingDirty(dirtyBefore);
+        ReactionTable reactionsBefore = new([], new MaterialDef[materials.Count]);
+        ReactionTable currentReactions = reactionsBefore;
+        EngineCounters counters = new() { MaterialRemapFallbackHits = 10 };
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(chunk),
+            fallbackMaterialId: 0,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table,
+            counters: counters);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "fire",
+            Type = "Fire",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+
+        using FileMaterialReactionContentService.PreparedApply prepared = service.PrepareApply(document);
+        prepared.PrepareFiles(CancellationToken.None);
+        FileMaterialReactionContentService.CommittedApply committed = prepared.CommitReversible();
+        string journal = Assert.Single(EnumerateMaterialJournals(temp.Root));
+        byte[] materialsAfterFile = File.ReadAllBytes(temp.MaterialsPath);
+        byte[] reactionsAfterFile = File.ReadAllBytes(temp.ReactionsPath);
+        ReactionTable reactionsAfter = currentReactions;
+        try
+        {
+            Assert.Equal(["sand"], committed.Result.TombstonedMaterialNames);
+            Assert.Equal(0, chunk.MaterialBuffer[11]);
+            Assert.Equal(0, chunk.DamageBuffer[11]);
+            Assert.Equal(DirtyRect.Full, chunk.WorkingDirty);
+            Assert.Equal(11, counters.MaterialRemapFallbackHits);
+            Assert.True(materials.TryGetId("fire", out _));
+
+            committed.Undo();
+
+            Assert.Equal(materialsBeforeFile, File.ReadAllBytes(temp.MaterialsPath));
+            Assert.Equal(reactionsBeforeFile, File.ReadAllBytes(temp.ReactionsPath));
+            Assert.Equal(1, chunk.MaterialBuffer[11]);
+            Assert.Equal(9, chunk.DamageBuffer[11]);
+            Assert.Equal(dirtyBefore, chunk.WorkingDirty);
+            Assert.Equal(10, counters.MaterialRemapFallbackHits);
+            Assert.True(materials.TryGetId("sand", out ushort sandId));
+            Assert.False(materials.IsTombstone(sandId));
+            Assert.False(materials.TryGetId("fire", out _));
+            Assert.Same(reactionsBefore, currentReactions);
+
+            committed.Redo();
+
+            Assert.Equal(materialsAfterFile, File.ReadAllBytes(temp.MaterialsPath));
+            Assert.Equal(reactionsAfterFile, File.ReadAllBytes(temp.ReactionsPath));
+            Assert.Equal(0, chunk.MaterialBuffer[11]);
+            Assert.Equal(0, chunk.DamageBuffer[11]);
+            Assert.Equal(DirtyRect.Full, chunk.WorkingDirty);
+            Assert.Equal(11, counters.MaterialRemapFallbackHits);
+            Assert.True(materials.TryGetId("fire", out _));
+            Assert.Same(reactionsAfter, currentReactions);
+        }
+        finally
+        {
+            committed.Dispose();
+        }
+
+        Assert.False(Directory.Exists(journal));
+    }
+
+    /// <summary>相同 canonical 双文件与运行时内容的重复 Apply 不得重写文件或制造伪变更。</summary>
+    [Fact]
+    public void RepeatedCanonicalApplyIsExplicitNoChange()
+    {
+        using TempContent temp = TempContent.Create();
+        MaterialTable materials = new(
+        [
+            new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
+        ]);
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
+        FileMaterialReactionContentService service = new(
+            temp.MaterialsPath,
+            temp.ReactionsPath,
+            materials,
+            new TestChunkSource(),
+            fallbackMaterialId: 0,
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table);
+        MaterialReactionEditorDocument document = new();
+        document.Materials.Add(new MaterialEditorRow
+        {
+            Name = "empty",
+            Type = "Empty",
+            HeatCapacity = 1,
+            TextureId = -1,
+        });
+        MaterialReactionApplyResult first = service.Apply(document);
+        byte[] materialsCanonical = File.ReadAllBytes(temp.MaterialsPath);
+        byte[] reactionsCanonical = File.ReadAllBytes(temp.ReactionsPath);
+        DateTime materialsTimestamp = File.GetLastWriteTimeUtc(temp.MaterialsPath);
+        DateTime reactionsTimestamp = File.GetLastWriteTimeUtc(temp.ReactionsPath);
+
+        using FileMaterialReactionContentService.PreparedApply prepared = service.PrepareApply(document);
+        prepared.PrepareFiles(CancellationToken.None);
+        Assert.False(prepared.StateChanged);
+        MaterialReactionApplyResult repeated = prepared.Commit();
+
+        Assert.True(first.StateChanged);
+        Assert.False(repeated.StateChanged);
+        Assert.Equal(materialsCanonical, File.ReadAllBytes(temp.MaterialsPath));
+        Assert.Equal(reactionsCanonical, File.ReadAllBytes(temp.ReactionsPath));
+        Assert.Equal(materialsTimestamp, File.GetLastWriteTimeUtc(temp.MaterialsPath));
+        Assert.Equal(reactionsTimestamp, File.GetLastWriteTimeUtc(temp.ReactionsPath));
+        Assert.Empty(EnumerateMaterialJournals(temp.Root));
+    }
+
+    /// <summary>
     /// 验证预览会展开 reaction 输入 tag，并把输出 tag 映射到代表材质。
     /// </summary>
     [Fact]
@@ -72,13 +435,15 @@ public sealed class MaterialReactionEditorPanelTests
             new MaterialDef { Id = 1, Name = "water", Type = CellType.Liquid, HeatCapacity = 1 },
             new MaterialDef { Id = 2, Name = "steam", Type = CellType.Gas, HeatCapacity = 1 },
         ]);
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
         FileMaterialReactionContentService service = new(
             temp.MaterialsPath,
             temp.ReactionsPath,
             materials,
             new TestChunkSource(),
             fallbackMaterialId: 0,
-            applyReactions: static _ => { });
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table);
         MaterialReactionEditorDocument document = new();
         document.Materials.Add(new MaterialEditorRow { Name = "empty", Type = "Empty", HeatCapacity = 1, TextureId = -1 });
         document.Materials.Add(new MaterialEditorRow { Name = "water", Type = "Liquid", HeatCapacity = 1, TextureId = -1, Tags = "Cold" });
@@ -116,13 +481,15 @@ public sealed class MaterialReactionEditorPanelTests
             },
         ]);
         RecordingAssetReloadSink assetSink = new();
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
         FileMaterialReactionContentService service = new(
             temp.MaterialsPath,
             temp.ReactionsPath,
             materials,
             new TestChunkSource(),
             fallbackMaterialId: 0,
-            applyReactions: static _ => { },
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table,
             assetReloadSink: assetSink);
         MaterialReactionEditorDocument document = new();
         document.Materials.Add(new MaterialEditorRow
@@ -162,13 +529,15 @@ public sealed class MaterialReactionEditorPanelTests
             new MaterialDef { Id = 0, Name = "empty", Type = CellType.Empty, HeatCapacity = 1 },
             new MaterialDef { Id = 1, Name = "stone", Type = CellType.Solid, HeatCapacity = 1, Integrity = 20 },
         ]);
+        ReactionTable currentReactions = new([], new MaterialDef[materials.Count]);
         FileMaterialReactionContentService service = new(
             temp.MaterialsPath,
             temp.ReactionsPath,
             materials,
             new TestChunkSource(),
             fallbackMaterialId: 0,
-            applyReactions: static _ => { });
+            captureReactions: () => currentReactions,
+            applyReactions: table => currentReactions = table);
         MaterialReactionEditorDocument document = new();
         document.Materials.Add(new MaterialEditorRow { Name = "empty", Type = "Empty", HeatCapacity = 1, TextureId = -1 });
         document.Materials.Add(new MaterialEditorRow
@@ -396,6 +765,14 @@ public sealed class MaterialReactionEditorPanelTests
         throw new DirectoryNotFoundException("无法定位 PixelEngine.sln。");
     }
 
+    private static IEnumerable<string> EnumerateMaterialJournals(string contentRoot)
+    {
+        string root = Path.Combine(contentRoot, ".pixelengine", "material-reaction-journals");
+        return Directory.Exists(root)
+            ? Directory.EnumerateDirectories(root)
+            : [];
+    }
+
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource
     {
         private readonly Dictionary<ChunkCoord, Chunk> _byCoord = chunks.ToDictionary(static chunk => chunk.Coord);
@@ -455,6 +832,15 @@ public sealed class MaterialReactionEditorPanelTests
         public void ReloadMaterialAssets(IReadOnlyList<MaterialAssetReloadRequest> requests)
         {
             Requests = requests;
+        }
+    }
+
+    private sealed class ThrowingAssetReloadSink : IMaterialAssetReloadSink
+    {
+        public void ReloadMaterialAssets(IReadOnlyList<MaterialAssetReloadRequest> requests)
+        {
+            Assert.NotEmpty(requests);
+            throw new InvalidOperationException("asset reload failure");
         }
     }
 }

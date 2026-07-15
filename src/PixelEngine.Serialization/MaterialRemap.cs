@@ -33,6 +33,50 @@ public sealed class MaterialRemap
         ArgumentNullException.ThrowIfNull(current);
 
         _ = current.GetName(fallbackId);
+        return BuildCore(
+            saved,
+            new MaterialNameTable(current.BuildIdNameTable()),
+            fallbackId);
+    }
+
+    /// <summary>
+    /// 仅用不可变 name 表构建 saved id 到目标 runtime id 的重映射表，供后台读档使用。
+    /// </summary>
+    /// <param name="saved">存档内 id 到稳定 name 的映射。</param>
+    /// <param name="current">safe phase 冻结的目标 runtime id 到 name 映射。</param>
+    /// <param name="fallbackId">目标映射缺失时使用的 material id。</param>
+    /// <returns>可在后台线程消费的重映射表。</returns>
+    public static MaterialRemap Build(
+        MaterialNameTable saved,
+        MaterialNameTable current,
+        ushort fallbackId)
+    {
+        ArgumentNullException.ThrowIfNull(saved);
+        ArgumentNullException.ThrowIfNull(current);
+        return BuildCore(saved, current, fallbackId);
+    }
+
+    private static MaterialRemap BuildCore(
+        MaterialNameTable saved,
+        MaterialNameTable current,
+        ushort fallbackId)
+    {
+        Dictionary<string, ushort> currentByName = new(StringComparer.Ordinal);
+        bool fallbackExists = false;
+        foreach ((ushort id, string name) in current.Entries)
+        {
+            currentByName.Add(name, id);
+            fallbackExists |= id == fallbackId;
+        }
+
+        if (!fallbackExists)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(fallbackId),
+                fallbackId,
+                "fallback material id 不在目标 material name 表中。");
+        }
+
         int length = Math.Max(saved.MaxSavedId + 1, 0);
         ushort[] lut = new ushort[length];
         bool[] fallbackBecauseMissing = new bool[length];
@@ -40,7 +84,7 @@ public sealed class MaterialRemap
         Array.Fill(fallbackBecauseMissing, true);
         foreach ((ushort savedId, string name) in saved.Entries)
         {
-            bool found = current.TryGetId(name, out ushort currentId);
+            bool found = currentByName.TryGetValue(name, out ushort currentId);
             lut[savedId] = found ? currentId : fallbackId;
             fallbackBecauseMissing[savedId] = !found;
         }

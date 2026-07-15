@@ -63,6 +63,35 @@ public sealed class EngineBuilderTests
     }
 
     /// <summary>
+    /// 验证 runtime GUI 布局默认写入用户状态目录，并允许宿主显式隔离布局文件。
+    /// </summary>
+    [Fact]
+    public void GuiLayoutPathNeverDefaultsIntoContentRootAndSupportsExplicitOverride()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-gui-layout-{Guid.NewGuid():N}");
+        string contentRoot = Path.Combine(root, "content");
+        string explicitLayoutPath = Path.Combine(root, "user-data", "runtime-layout.ini");
+
+        using Engine defaultPath = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithWindowTitle("..")
+            .WithContentRoot(contentRoot)
+            .Build();
+        using Engine explicitPath = new EngineBuilder()
+            .WithWorkerCount(1)
+            .WithContentRoot(contentRoot)
+            .WithGuiLayoutPath(explicitLayoutPath)
+            .Build();
+
+        string canonicalContentRoot = Path.GetFullPath(contentRoot) + Path.DirectorySeparatorChar;
+        string canonicalDefaultPath = Path.GetFullPath(defaultPath.Context.Options.GuiLayoutPath);
+        Assert.False(canonicalDefaultPath.StartsWith(canonicalContentRoot, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("imgui.ini", Path.GetFileName(canonicalDefaultPath));
+        Assert.Equal("PixelEngine", Directory.GetParent(canonicalDefaultPath)?.Name);
+        Assert.Equal(Path.GetFullPath(explicitLayoutPath), explicitPath.Context.Options.GuiLayoutPath);
+    }
+
+    /// <summary>
     /// 验证 EngineOptions 保留未显式 ComputeSharp 偏好的公开构造路径，避免破坏外部宿主配置代码。
     /// </summary>
     [Fact]
@@ -597,6 +626,7 @@ public sealed class EngineBuilderTests
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithWorkerCount(-1));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithWindow(0, 720));
         _ = Assert.Throws<ArgumentException>(() => new EngineBuilder().WithContentRoot(""));
+        _ = Assert.Throws<ArgumentException>(() => new EngineBuilder().WithGuiLayoutPath(""));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithNoGcRegionBudget(-1));
         _ = Assert.Throws<ArgumentOutOfRangeException>(() => new EngineBuilder().WithEventCapacityPerChannel(63).Build());
     }

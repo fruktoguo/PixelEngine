@@ -6,53 +6,130 @@ using SerializedChunkSnapshot = PixelEngine.Serialization.ChunkSnapshot;
 namespace PixelEngine.World;
 
 /// <summary>
-/// 显式整世界存档 / 读档服务。调用者必须在相位 2 或暂停点使用，避免读取半更新 live map。
+/// 显式整世界存档 / 读档服务。live world 只在 capture/apply 安全点访问；编码、磁盘 I/O、
+/// 解码与 material remap 可通过游离的 <see cref="WorldSaveSnapshot" /> 在后台完成。
 /// </summary>
 /// <param name="chunkCodec">chunk blob 编解码器；null 时使用默认实现。</param>
 /// <param name="manifestCodec">world manifest 编解码器；null 时使用默认实现。</param>
 public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCodec? manifestCodec = null)
 {
     private const string ManifestFileName = "manifest.bin";
+    private const long MaximumManifestBytes = 16L * 1024 * 1024;
+    private const int MaximumSnapshotChunks = 65_536;
 
     private readonly ChunkCodec _chunkCodec = chunkCodec ?? new ChunkCodec();
     private readonly ManifestCodec _manifestCodec = manifestCodec ?? new ManifestCodec();
 
     /// <summary>
-    /// 保存当前 resident chunks 与全局态到 savePath。
+    /// 保存当前 resident chunks 与全局态到 savePath。兼容同步调用方；新异步宿主应分别调用
+    /// <see cref="CaptureSnapshot" /> 与 <see cref="WriteSnapshot" />。
     /// </summary>
-    public void SaveAll(WorldSaveContext world, IWorldStateSnapshotSource stateSource, string savePath)
+    public WorldSaveWriteResult SaveAll(
+        WorldSaveContext world,
+        IWorldStateSnapshotSource stateSource,
+        string savePath)
+    {
+        WorldSaveSnapshot snapshot = CaptureSnapshot(world, stateSource);
+        WorldSaveWriteResult result = WriteSnapshot(snapshot, savePath, CancellationToken.None);
+        _ = MarkSnapshotPersisted(world.Residency, snapshot);
+        return result;
+    }
+
+    /// <summary>把成功持久化快照覆盖的 live chunk 标记为无需再次流式写回。</summary>
+    /// <param name="residency">当前 live world 的驻留元数据。</param>
+    /// <param name="snapshot">已确认成功发布的完整快照。</param>
+    /// <returns>至少一个 chunk 的 dirty 状态发生变化时返回 <see langword="true" />。</returns>
+    public static bool MarkSnapshotPersisted(
+        ResidencyTable residency,
+        WorldSaveSnapshot snapshot)
+    {
+        return UpdateSnapshotDirtyState(residency, snapshot, restoreBeforeImage: false);
+    }
+
+    /// <summary>恢复快照捕获时每个 chunk 的流式 dirty before-image，供失败回滚与 Undo。</summary>
+    /// <param name="residency">当前 live world 的驻留元数据。</param>
+    /// <param name="snapshot">保存前捕获的完整快照。</param>
+    /// <returns>至少一个 chunk 的 dirty 状态发生变化时返回 <see langword="true" />。</returns>
+    public static bool RestoreSnapshotPersistenceState(
+        ResidencyTable residency,
+        WorldSaveSnapshot snapshot)
+    {
+        return UpdateSnapshotDirtyState(residency, snapshot, restoreBeforeImage: true);
+    }
+
+    /// <summary>
+    /// 在相位 2 或暂停点深拷贝完整 live world；返回值不再引用任何权威可变对象。
+    /// </summary>
+    /// <param name="world">live world 一致快照上下文。</param>
+    /// <param name="stateSource">粒子与刚体状态源。</param>
+    /// <param name="currentParity">当前 CA parity 位。</param>
+    /// <param name="cancellationToken">在 chunk 间响应的取消令牌。</param>
+    /// <returns>可交给后台线程的完整深快照。</returns>
+    public WorldSaveSnapshot CaptureSnapshot(
+        WorldSaveContext world,
+        IWorldStateSnapshotSource stateSource,
+        byte currentParity = 0,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(stateSource);
-        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
         if (!world.IsFrameBoundary)
         {
-            throw new InvalidOperationException("WorldSaveService.SaveAll 只能在相位 2 或专门暂停点读取一致快照。");
+            throw new InvalidOperationException("WorldSaveService 只能在相位 2 或专门暂停点读取一致快照。");
         }
 
-        _ = Directory.CreateDirectory(savePath);
-        RegionFileStore chunkStore = new(savePath);
-        Chunk[] chunks = world.Chunks.ResidentChunks.ToArray();
-        ChunkCoord[] chunkIndex = new ChunkCoord[chunks.Length];
-        Half[] temperature = new Half[TemperatureField.BlockArea];
-        ArrayBufferWriter<byte> chunkBuffer = new();
-
-        // 逐驻留 chunk 编码 blob 并写入 region store；温度子块与 SoA 一并序列化。
-        for (int i = 0; i < chunks.Length; i++)
+        Chunk[] liveChunks = world.Chunks.ResidentChunks.ToArray();
+        if (liveChunks.Length > MaximumSnapshotChunks)
         {
-            Chunk chunk = chunks[i];
-            chunkIndex[i] = chunk.Coord;
-            world.Temperature.ExportBlock(chunk.Coord, temperature);
-            chunkBuffer.Clear();
-            _chunkCodec.Encode(
-                new SerializedChunkSnapshot(chunk.Coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperature),
-                chunkBuffer);
-            chunkStore.Write(chunk.Coord, chunkBuffer.WrittenSpan);
-            MarkFlushed(world.Residency, chunk.Coord);
+            throw new InvalidOperationException(
+                $"World snapshot chunk 数超过 {MaximumSnapshotChunks} 上限。");
         }
 
-        FreeParticleSnapshot[] particles = new FreeParticleSnapshot[stateSource.FreeParticleCount];
-        RigidBodySnapshot[] bodies = new RigidBodySnapshot[stateSource.RigidBodyCount];
+        WorldSnapshotChunk[] chunks = new WorldSnapshotChunk[liveChunks.Length];
+        ChunkCoord[] chunkIndex = new ChunkCoord[liveChunks.Length];
+        for (int i = 0; i < liveChunks.Length; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            Chunk live = liveChunks[i];
+            Half[] temperature = new Half[TemperatureField.BlockArea];
+            world.Temperature.ExportBlock(live.Coord, temperature);
+            ChunkResidencyInfo residency = world.Residency.TryGetInfo(
+                live.Coord,
+                out ChunkResidencyInfo existing)
+                ? existing
+                : new ChunkResidencyInfo(
+                    ChunkResidencyState.Cached,
+                    0,
+                    ChunkMemoryBudget.EstimatedResidentChunkBytes,
+                    DirtySinceLoad: true);
+            DirtyRect[] incoming = new DirtyRect[live.IncomingDirtySlotCount];
+            for (int slot = 0; slot < incoming.Length; slot++)
+            {
+                incoming[slot] = live.GetIncomingDirty(slot);
+            }
+
+            chunks[i] = new WorldSnapshotChunk(
+                live.Coord,
+                [.. live.Material],
+                [.. live.Flags],
+                [.. live.Lifetime],
+                [.. live.Damage],
+                live.CurrentDirty,
+                live.WorkingDirty,
+                incoming,
+                live.Parity,
+                temperature,
+                residency);
+            chunkIndex[i] = live.Coord;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        int particleCount = stateSource.FreeParticleCount;
+        int bodyCount = stateSource.RigidBodyCount;
+        ArgumentOutOfRangeException.ThrowIfNegative(particleCount);
+        ArgumentOutOfRangeException.ThrowIfNegative(bodyCount);
+        FreeParticleSnapshot[] particles = new FreeParticleSnapshot[particleCount];
+        RigidBodySnapshot[] bodies = new RigidBodySnapshot[bodyCount];
         stateSource.CopyFreeParticles(particles);
         stateSource.CopyRigidBodies(bodies);
 
@@ -65,94 +142,364 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
             particles,
             bodies,
             chunkIndex);
+        return new WorldSaveSnapshot(manifest, chunks, currentParity, materialFallbackHitCount: 0);
+    }
 
+    /// <summary>
+    /// 把游离 world 快照编码并写入目录；不得传入 live world 对象，可在线程池执行。
+    /// </summary>
+    /// <param name="snapshot">尚未被 apply 消费的快照。</param>
+    /// <param name="savePath">目标世界目录。</param>
+    /// <param name="cancellationToken">在 chunk 与发布 manifest 前响应的取消令牌。</param>
+    public WorldSaveWriteResult WriteSnapshot(
+        WorldSaveSnapshot snapshot,
+        string savePath,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
+        string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(savePath));
+        string? parent = Path.GetDirectoryName(root);
+        string targetName = Path.GetFileName(root);
+        if (string.IsNullOrEmpty(parent) || string.IsNullOrEmpty(targetName))
+        {
+            throw new ArgumentException("World save 目标必须是可替换的子目录。", nameof(savePath));
+        }
+
+        if (File.Exists(root))
+        {
+            throw new IOException($"World save 目标是文件而不是目录：{root}");
+        }
+
+        EnsurePathHasNoReparsePoint(parent);
+        _ = Directory.CreateDirectory(parent);
+        EnsurePathHasNoReparsePoint(parent);
+        EnsurePathHasNoReparsePoint(root);
+        string journalRoot = Path.Combine(
+            parent,
+            $".{targetName}.{Guid.NewGuid():N}.world-save-journal");
+        string stagingPath = Path.Combine(journalRoot, "after");
+        string beforePath = Path.Combine(journalRoot, "before");
+        _ = Directory.CreateDirectory(journalRoot);
+        bool preserveJournal = false;
+        try
+        {
+            WriteSnapshotContents(snapshot, stagingPath, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (File.Exists(root))
+            {
+                throw new IOException($"World save 目标在发布前变成文件：{root}");
+            }
+
+            if (Directory.Exists(root))
+            {
+                EnsurePathHasNoReparsePoint(root);
+                Directory.Move(root, beforePath);
+                try
+                {
+                    Directory.Move(stagingPath, root);
+                }
+                catch (Exception operationException)
+                {
+                    try
+                    {
+                        Directory.Move(beforePath, root);
+                    }
+                    catch (Exception rollbackException)
+                    {
+                        preserveJournal = true;
+                        throw new AggregateException(
+                            "World save 目录发布失败，且 before-image 回滚失败。",
+                            operationException,
+                            rollbackException);
+                    }
+
+                    throw;
+                }
+            }
+            else
+            {
+                Directory.Move(stagingPath, root);
+            }
+
+            Exception? cleanupFailure = TryDeleteDirectory(journalRoot);
+            return cleanupFailure is null
+                ? new WorldSaveWriteResult(root, retainedJournalPath: null, cleanupError: null)
+                : new WorldSaveWriteResult(root, journalRoot, cleanupFailure.Message);
+        }
+        catch (Exception operationException) when (!preserveJournal)
+        {
+            Exception? cleanupFailure = TryDeleteDirectory(journalRoot);
+            if (cleanupFailure is not null)
+            {
+                throw new AggregateException(
+                    "World save 失败，且 preparation journal 清理失败。",
+                    operationException,
+                    cleanupFailure);
+            }
+
+            throw;
+        }
+    }
+
+    private void WriteSnapshotContents(
+        WorldSaveSnapshot snapshot,
+        string root,
+        CancellationToken cancellationToken)
+    {
+        EnsurePathHasNoReparsePoint(root);
+        _ = Directory.CreateDirectory(root);
+        EnsurePathHasNoReparsePoint(root);
+
+        RegionFileStore chunkStore = new(root);
+        ArrayBufferWriter<byte> chunkBuffer = new();
+        foreach (WorldSnapshotChunk item in snapshot.Chunks)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            chunkBuffer.Clear();
+            _chunkCodec.Encode(
+                new SerializedChunkSnapshot(
+                    item.Coord,
+                    item.Material,
+                    item.Flags,
+                    item.Lifetime,
+                    item.Damage,
+                    item.Temperature),
+                chunkBuffer);
+            chunkStore.Write(item.Coord, chunkBuffer.WrittenSpan);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
         ArrayBufferWriter<byte> manifestBuffer = new();
-        _manifestCodec.Encode(manifest, manifestBuffer);
-        WriteAtomic(Path.Combine(savePath, ManifestFileName), manifestBuffer.WrittenSpan);
+        _manifestCodec.Encode(snapshot.Manifest, manifestBuffer);
+        WriteAtomic(Path.Combine(root, ManifestFileName), manifestBuffer.WrittenSpan);
+    }
+
+    /// <summary>
+    /// 在后台读取、完整解码并按冻结的目标 material name 表重映射一个 world 存档。
+    /// cell parity 由存档 tick 推导，确保应用后的下一次 CA step 可检视所有载入 cell。
+    /// </summary>
+    /// <param name="savePath">包含 manifest.bin 与 regions 的世界目录。</param>
+    /// <param name="currentMaterials">safe phase 深拷贝的目标 runtime material name 表。</param>
+    /// <param name="fallbackMaterialId">缺失 material name 使用的目标 id。</param>
+    /// <param name="cancellationToken">在文件与 chunk 间响应的取消令牌。</param>
+    /// <returns>已完全解码、可在安全点一次性应用的游离快照。</returns>
+    public WorldSaveSnapshot ReadSnapshot(
+        string savePath,
+        MaterialNameTable currentMaterials,
+        ushort fallbackMaterialId,
+        CancellationToken cancellationToken = default)
+    {
+        return ReadSnapshotCore(
+            savePath,
+            currentMaterials,
+            fallbackMaterialId,
+            currentParityBit: null,
+            cancellationToken);
     }
 
     /// <summary>
     /// 从 savePath 读取整世界存档并重建 resident chunks 与全局态。
+    /// 所有磁盘内容会先完整解码，缺失或损坏数据不会先行清空 live world。
     /// </summary>
     public WorldLoadResult LoadAll(string savePath, WorldLoadContext world, IWorldStateSnapshotSink stateSink)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(stateSink);
-
-        byte[] manifestBytes = File.ReadAllBytes(Path.Combine(savePath, ManifestFileName));
-        WorldManifest manifest = _manifestCodec.Decode(manifestBytes);
-        MaterialRemap remap = MaterialRemap.Build(manifest.MaterialNames, world.Materials, world.FallbackMaterialId);
-        RegionFileStore chunkStore = new(savePath);
-
-        // 先清空 live map，再按 manifest 索引顺序解码 chunk 并做材质 id 重映射。
-        ClearWorld(world);
-        LoadChunks(world, chunkStore, manifest.ChunkIndex.Span, remap);
-
-        FreeParticleSnapshot[] particles = RemapParticles(manifest.FreeParticles.Span, remap);
-        RigidBodySnapshot[] bodies = RemapBodies(manifest.RigidBodies.Span, remap);
-        stateSink.RestoreFreeParticles(particles);
-        stateSink.RestoreRigidBodies(bodies);
-
-        return new WorldLoadResult(
-            manifest.GameTimeTicks,
-            manifest.WorldSeed,
-            manifest.ChunkIndex.Length,
-            remap.FallbackHitCount);
+        WorldSaveSnapshot snapshot = ReadSnapshotCore(
+            savePath,
+            new MaterialNameTable(world.Materials.BuildIdNameTable()),
+            world.FallbackMaterialId,
+            world.CurrentParityBit,
+            CancellationToken.None);
+        return ApplySnapshot(snapshot, world, stateSink);
     }
 
-    private void LoadChunks(
+    /// <summary>
+    /// 在 world 结构性安全点一次性应用已完全解码的快照；本方法不执行磁盘 I/O 或解码。
+    /// </summary>
+    /// <param name="snapshot">目标 world 快照；成功或失败开始应用后均不可重复消费。</param>
+    /// <param name="world">live world 写入上下文。</param>
+    /// <param name="stateSink">粒子与刚体恢复入口。</param>
+    /// <returns>本次读档摘要。</returns>
+    public WorldLoadResult ApplySnapshot(
+        WorldSaveSnapshot snapshot,
         WorldLoadContext world,
-        IChunkStore chunkStore,
-        ReadOnlySpan<ChunkCoord> chunkIndex,
-        MaterialRemap remap)
+        IWorldStateSnapshotSink stateSink)
     {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(world);
+        ArgumentNullException.ThrowIfNull(stateSink);
+        ValidateMaterialNames(snapshot.Manifest.MaterialNames, world.Materials);
+        ReadOnlySpan<WorldSnapshotChunk> prepared = snapshot.Chunks;
+        Chunk[] chunks = new Chunk[prepared.Length];
+        for (int i = 0; i < prepared.Length; i++)
+        {
+            chunks[i] = RestoreChunk(prepared[i]);
+        }
+
+        world.Chunks.Clear();
+        world.Residency.Clear();
+        world.Temperature.Clear();
+        world.Chunks.AddRange(chunks);
+        for (int i = 0; i < prepared.Length; i++)
+        {
+            WorldSnapshotChunk item = prepared[i];
+            world.Temperature.ImportBlock(item.Coord, item.Temperature);
+            world.Residency.Set(item.Coord, item.Residency);
+        }
+
+        stateSink.RestoreFreeParticles(snapshot.Manifest.FreeParticles.Span);
+        stateSink.RestoreRigidBodies(snapshot.Manifest.RigidBodies.Span);
+        return new WorldLoadResult(
+            snapshot.GameTimeTicks,
+            snapshot.WorldSeed,
+            snapshot.ChunkCount,
+            snapshot.MaterialFallbackHitCount);
+    }
+
+    private WorldSaveSnapshot ReadSnapshotCore(
+        string savePath,
+        MaterialNameTable currentMaterials,
+        ushort fallbackMaterialId,
+        byte? currentParityBit,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
+        ArgumentNullException.ThrowIfNull(currentMaterials);
+        string root = Path.GetFullPath(savePath);
+        EnsurePathHasNoReparsePoint(root);
+        string manifestPath = Path.Combine(root, ManifestFileName);
+        FileIdentity manifestIdentity = CaptureRegularFileIdentity(manifestPath, MaximumManifestBytes);
+        byte[] manifestBytes = File.ReadAllBytes(manifestPath);
+        cancellationToken.ThrowIfCancellationRequested();
+        ValidateIdentity(manifestPath, manifestIdentity);
+        WorldManifest sourceManifest = _manifestCodec.Decode(manifestBytes);
+        if (sourceManifest.ChunkIndex.Length > MaximumSnapshotChunks)
+        {
+            throw new InvalidDataException(
+                $"World manifest chunk 数超过 {MaximumSnapshotChunks} 上限。");
+        }
+
+        byte parity = (byte)((currentParityBit ?? CurrentParityFromTick(sourceManifest.GameTimeTicks)) &
+            CellFlags.Parity);
+        MaterialRemap remap = MaterialRemap.Build(
+            sourceManifest.MaterialNames,
+            currentMaterials,
+            fallbackMaterialId);
+        RegionFileStore chunkStore = new(root);
+        ReadOnlySpan<ChunkCoord> chunkIndex = sourceManifest.ChunkIndex.Span;
+        WorldSnapshotChunk[] chunks = new WorldSnapshotChunk[chunkIndex.Length];
+        HashSet<ChunkCoord> unique = [];
+        Dictionary<string, FileIdentity> regionIdentities = new(StringComparer.OrdinalIgnoreCase);
         ArrayBufferWriter<byte> chunkBuffer = new();
-        Half[] temperature = new Half[TemperatureField.BlockArea];
-        Chunk[] loadedChunks = new Chunk[chunkIndex.Length];
         for (int i = 0; i < chunkIndex.Length; i++)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             ChunkCoord coord = chunkIndex[i];
+            if (!unique.Add(coord))
+            {
+                throw new InvalidDataException($"World manifest 包含重复 chunk 坐标：{coord}。");
+            }
+
+            string regionPath = Path.GetFullPath(chunkStore.ResolveRegionPath(coord));
+            if (!regionIdentities.ContainsKey(regionPath))
+            {
+                if (!File.Exists(regionPath))
+                {
+                    throw new InvalidDataException($"存档缺失 chunk blob：{coord}。");
+                }
+
+                regionIdentities.Add(regionPath, CaptureRegularFileIdentity(regionPath, long.MaxValue));
+            }
+
             chunkBuffer.Clear();
             if (!chunkStore.TryRead(coord, chunkBuffer))
             {
                 throw new InvalidDataException($"存档缺失 chunk blob：{coord}。");
             }
 
-            Chunk chunk = new(coord);
+            ushort[] material = GC.AllocateArray<ushort>(PixelEngine.Core.EngineConstants.ChunkArea, pinned: true);
+            byte[] flags = GC.AllocateArray<byte>(PixelEngine.Core.EngineConstants.ChunkArea, pinned: true);
+            byte[] lifetime = GC.AllocateArray<byte>(PixelEngine.Core.EngineConstants.ChunkArea, pinned: true);
+            byte[] damage = GC.AllocateArray<byte>(PixelEngine.Core.EngineConstants.ChunkArea, pinned: true);
+            Half[] temperature = new Half[TemperatureField.BlockArea];
             _chunkCodec.Decode(
                 chunkBuffer.WrittenSpan,
-                new SerializedChunkSnapshot(coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperature),
-                world.CurrentParityBit);
-            // 读档后全 chunk 标 current dirty，保证首帧 CA 重检材质变化区。
-            remap.RemapInPlace(chunk.MaterialBuffer, chunk.DamageBuffer);
-            world.Temperature.ImportBlock(coord, temperature);
-            chunk.SetCurrentDirty(DirtyRect.Full);
-            loadedChunks[i] = chunk;
-        }
-
-        world.Chunks.AddRange(loadedChunks);
-        for (int i = 0; i < loadedChunks.Length; i++)
-        {
-            Chunk chunk = loadedChunks[i];
-            world.Residency.Set(
-                chunk.Coord,
+                new SerializedChunkSnapshot(
+                    coord,
+                    material,
+                    flags,
+                    lifetime,
+                    damage,
+                    temperature),
+                parity);
+            remap.RemapInPlace(material, damage);
+            chunks[i] = new WorldSnapshotChunk(
+                coord,
+                material,
+                flags,
+                lifetime,
+                damage,
+                DirtyRect.Full,
+                DirtyRect.Empty,
+                new DirtyRect[8],
+                parity,
+                temperature,
                 new ChunkResidencyInfo(
                     ChunkResidencyState.Cached,
-                    LastTouchedFrame: 0,
+                    0,
                     ChunkMemoryBudget.EstimatedResidentChunkBytes,
                     DirtySinceLoad: false));
         }
+
+        foreach (KeyValuePair<string, FileIdentity> region in regionIdentities)
+        {
+            ValidateIdentity(region.Key, region.Value);
+        }
+
+        ValidateIdentity(manifestPath, manifestIdentity);
+        cancellationToken.ThrowIfCancellationRequested();
+        FreeParticleSnapshot[] particles = RemapParticles(sourceManifest.FreeParticles.Span, remap);
+        RigidBodySnapshot[] bodies = RemapBodies(sourceManifest.RigidBodies.Span, remap);
+        WorldManifest targetManifest = new(
+            SaveFormatVersions.WorldManifest,
+            sourceManifest.WorldSeed,
+            sourceManifest.GameTimeTicks,
+            sourceManifest.PlayerStateBlob.Span,
+            currentMaterials,
+            particles,
+            bodies,
+            sourceManifest.ChunkIndex.Span);
+        return new WorldSaveSnapshot(
+            targetManifest,
+            chunks,
+            parity,
+            remap.FallbackHitCount);
     }
 
-    private static void ClearWorld(WorldLoadContext world)
+    private static Chunk RestoreChunk(WorldSnapshotChunk source)
     {
-        Chunk[] existing = world.Chunks.ResidentChunks.ToArray();
-        world.Chunks.Clear();
-        for (int i = 0; i < existing.Length; i++)
+        Chunk clone = new(source.Coord);
+        source.Material.CopyTo(clone.MaterialBuffer, 0);
+        source.Flags.CopyTo(clone.FlagsBuffer, 0);
+        source.Lifetime.CopyTo(clone.LifetimeBuffer, 0);
+        source.Damage.CopyTo(clone.DamageBuffer, 0);
+        clone.SetCurrentDirty(source.CurrentDirty);
+        clone.SetWorkingDirty(source.WorkingDirty);
+        if (source.IncomingDirty.Length != clone.IncomingDirtySlotCount)
         {
-            _ = world.Residency.Remove(existing[i].Coord);
+            throw new InvalidDataException("World snapshot incoming dirty slot 数量无效。");
         }
+
+        for (int i = 0; i < source.IncomingDirty.Length; i++)
+        {
+            clone.MarkIncomingDirty(i, source.IncomingDirty[i]);
+        }
+
+        clone.Parity = source.Parity;
+        return clone;
     }
 
     private static FreeParticleSnapshot[] RemapParticles(
@@ -168,7 +515,9 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
         return remapped;
     }
 
-    private static RigidBodySnapshot[] RemapBodies(ReadOnlySpan<RigidBodySnapshot> bodies, MaterialRemap remap)
+    private static RigidBodySnapshot[] RemapBodies(
+        ReadOnlySpan<RigidBodySnapshot> bodies,
+        MaterialRemap remap)
     {
         RigidBodySnapshot[] remapped = new RigidBodySnapshot[bodies.Length];
         for (int i = 0; i < bodies.Length; i++)
@@ -196,14 +545,95 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
         return remapped;
     }
 
-    private static void MarkFlushed(ResidencyTable residency, ChunkCoord coord)
+    private static void ValidateMaterialNames(MaterialNameTable expected, MaterialTable current)
     {
-        if (!residency.TryGetInfo(coord, out ChunkResidencyInfo info))
+        MaterialNameTable actual = new(current.BuildIdNameTable());
+        ReadOnlySpan<(ushort Id, string Name)> expectedEntries = expected.Entries;
+        ReadOnlySpan<(ushort Id, string Name)> actualEntries = actual.Entries;
+        if (expectedEntries.Length != actualEntries.Length)
         {
-            return;
+            throw new InvalidOperationException("后台读档期间 runtime material 表发生变化。");
         }
 
-        residency.Set(coord, info with { DirtySinceLoad = false });
+        for (int i = 0; i < expectedEntries.Length; i++)
+        {
+            if (expectedEntries[i].Id != actualEntries[i].Id ||
+                !string.Equals(expectedEntries[i].Name, actualEntries[i].Name, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException("后台读档期间 runtime material 表发生变化。");
+            }
+        }
+    }
+
+    private static bool UpdateSnapshotDirtyState(
+        ResidencyTable residency,
+        WorldSaveSnapshot snapshot,
+        bool restoreBeforeImage)
+    {
+        ArgumentNullException.ThrowIfNull(residency);
+        ArgumentNullException.ThrowIfNull(snapshot);
+        bool changed = false;
+        foreach (WorldSnapshotChunk item in snapshot.Chunks)
+        {
+            if (!residency.TryGetInfo(item.Coord, out ChunkResidencyInfo info))
+            {
+                continue;
+            }
+
+            bool target = restoreBeforeImage && item.Residency.DirtySinceLoad;
+            if (info.DirtySinceLoad == target)
+            {
+                continue;
+            }
+
+            residency.Set(item.Coord, info with { DirtySinceLoad = target });
+            changed = true;
+        }
+
+        return changed;
+    }
+
+    private static byte CurrentParityFromTick(long gameTimeTicks)
+    {
+        return (gameTimeTicks & 1L) == 0 ? (byte)0 : CellFlags.Parity;
+    }
+
+    private static FileIdentity CaptureRegularFileIdentity(string path, long maximumBytes)
+    {
+        EnsurePathHasNoReparsePoint(path);
+        FileInfo info = new(path);
+        return !info.Exists
+            ? throw new FileNotFoundException("World save 文件不存在。", path)
+            : info.Length is >= 0 && info.Length <= maximumBytes
+            ? (info.Attributes & FileAttributes.ReparsePoint) == 0
+                ? new FileIdentity(info.Length, info.LastWriteTimeUtc)
+                : throw new InvalidDataException($"World save 文件不能是 reparse point：{path}")
+            : throw new InvalidDataException(
+                $"World save 文件大小无效：{path} ({info.Length} bytes)。");
+    }
+
+    private static void ValidateIdentity(string path, FileIdentity expected)
+    {
+        FileIdentity actual = CaptureRegularFileIdentity(path, long.MaxValue);
+        if (actual != expected)
+        {
+            throw new IOException($"读取 world save 时文件发生变化：{path}");
+        }
+    }
+
+    private static void EnsurePathHasNoReparsePoint(string path)
+    {
+        string? current = Path.GetFullPath(path);
+        while (current is not null)
+        {
+            if ((File.Exists(current) || Directory.Exists(current)) &&
+                (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+            {
+                throw new InvalidDataException($"World save 路径包含 reparse point：{current}");
+            }
+
+            current = Path.GetDirectoryName(current);
+        }
     }
 
     private static void WriteAtomic(string path, ReadOnlySpan<byte> bytes)
@@ -214,7 +644,6 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
             _ = Directory.CreateDirectory(directory);
         }
 
-        // 先写临时文件再原子 rename，避免崩溃留下半截 manifest。
         string tempPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
         try
         {
@@ -249,4 +678,23 @@ public sealed class WorldSaveService(ChunkCodec? chunkCodec = null, ManifestCode
         {
         }
     }
+
+    private static Exception? TryDeleteDirectory(string path)
+    {
+        try
+        {
+            if (Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+
+            return null;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return exception;
+        }
+    }
+
+    private readonly record struct FileIdentity(long Length, DateTime LastWriteTimeUtc);
 }

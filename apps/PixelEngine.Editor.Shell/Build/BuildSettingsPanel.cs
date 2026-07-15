@@ -25,6 +25,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private readonly ConcurrentQueue<BuildProgressEvent> _pendingEvents = new();
     private readonly BuildLog _log = new();
     private readonly BuildProfileDto _settings;
+    private readonly BuildProfileDto _persistedSettings;
     private BuildRunView _view = new();
     private CancellationTokenSource? _buildCancellation;
     private Task<BuildPreflight>? _preflightTask;
@@ -48,6 +49,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _console = console;
         _prepareScene = prepareScene ?? (static () => new BuildScenePreparationResult(true, string.Empty));
         _settings = _store.LoadRecoverable(out _persistentSettingsDiagnostic);
+        _persistedSettings = CloneProfile(_settings);
         RequiresRepair = !string.IsNullOrWhiteSpace(_persistentSettingsDiagnostic);
         if (RequiresRepair)
         {
@@ -62,9 +64,96 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
     public bool Visible { get; set; } = true;
 
+    internal event Action? SettingsApplied;
+
     internal bool RequiresRepair { get; private set; }
 
     internal string SettingsDiagnostic => _persistentSettingsDiagnostic;
+
+    internal BuildProfileDto CaptureAutomationSettings()
+    {
+        DrainEvents();
+        RefreshTasks();
+        return CloneProfile(_settings);
+    }
+
+    internal bool TryApplyAutomationSettings(BuildProfileDto settings, out string diagnostic)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        DrainEvents();
+        RefreshTasks();
+        if (_view.IsRunning)
+        {
+            diagnostic = L.Get("build.editWhileRunning", "Build settings cannot be modified while a build is running.");
+            return false;
+        }
+
+        if (!settings.TryNormalize(out diagnostic))
+        {
+            return false;
+        }
+
+        BuildProfileDto before = CloneProfile(_settings);
+        CopyProfile(settings.Normalize(), _settings);
+        if (Save())
+        {
+            diagnostic = string.Empty;
+            return true;
+        }
+
+        diagnostic = _validationMessage;
+        CopyProfile(before, _settings);
+        Validate();
+        return false;
+    }
+
+    internal BuildSettingsPanelAutomationSnapshot CaptureAutomationState()
+    {
+        DrainEvents();
+        RefreshTasks();
+        return new BuildSettingsPanelAutomationSnapshot(
+            CloneProfile(_settings),
+            CloneProfile(_persistedSettings),
+            _validationMessage,
+            _persistentSettingsDiagnostic,
+            RequiresRepair,
+            _view.IsRunning);
+    }
+
+    internal BuildSettingsPanelAutomationSnapshot CreateAutomationAppliedState(
+        BuildProfileDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        return !_view.IsRunning
+            ? new BuildSettingsPanelAutomationSnapshot(
+                CloneProfile(settings.Normalize()),
+                CloneProfile(settings.Normalize()),
+                string.Empty,
+                string.Empty,
+                RequiresRepair: false,
+                BuildRunning: false)
+            : throw new InvalidOperationException(L.Get(
+                "build.editWhileRunning",
+                "Build settings cannot be modified while a build is running."));
+    }
+
+    internal void RestoreAutomationState(BuildSettingsPanelAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        DrainEvents();
+        RefreshTasks();
+        if (_view.IsRunning != snapshot.BuildRunning)
+        {
+            throw new InvalidOperationException(
+                "Build 运行状态在 settings preparation 期间发生变化，拒绝覆盖 profile。");
+        }
+
+        CopyProfile(snapshot.Settings, _settings);
+        CopyProfile(snapshot.PersistedSettings, _persistedSettings);
+        _validationMessage = snapshot.ValidationMessage;
+        _persistentSettingsDiagnostic = snapshot.PersistentDiagnostic;
+        RequiresRepair = snapshot.RequiresRepair;
+    }
 
     internal bool TryRepairSettings(out string diagnostic)
     {
@@ -1011,10 +1100,19 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
         try
         {
+            bool changed = RequiresRepair || !ProfilesEqual(_persistedSettings, _settings);
+            if (!changed)
+            {
+                _validationMessage = string.Empty;
+                return true;
+            }
+
             _store.Save(_settings);
+            CopyProfile(_settings, _persistedSettings);
             _persistentSettingsDiagnostic = string.Empty;
             RequiresRepair = false;
             _validationMessage = string.Empty;
+            SettingsApplied?.Invoke();
             return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
@@ -1040,6 +1138,49 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     {
         bool valid = _settings.TryNormalize(out string diagnostic);
         _validationMessage = valid ? _persistentSettingsDiagnostic : diagnostic;
+    }
+
+    private static BuildProfileDto CloneProfile(BuildProfileDto source)
+    {
+        BuildProfileDto clone = new();
+        CopyProfile(source, clone);
+        return clone;
+    }
+
+    private static void CopyProfile(BuildProfileDto source, BuildProfileDto target)
+    {
+        target.Rid = source.Rid;
+        target.Channel = source.Channel;
+        target.Configuration = source.Configuration;
+        target.OutputDirectory = source.OutputDirectory;
+        target.ProductName = source.ProductName;
+        target.Version = source.Version;
+        target.InformationalVersion = source.InformationalVersion;
+        target.IconPath = source.IconPath;
+        target.IncludeSymbols = source.IncludeSymbols;
+        target.PackageWholeContent = source.PackageWholeContent;
+        target.RunAfterBuild = source.RunAfterBuild;
+        target.Scenes =
+        [
+            .. source.Scenes.Select(static scene => scene with { }),
+        ];
+    }
+
+    private static bool ProfilesEqual(BuildProfileDto left, BuildProfileDto right)
+    {
+        return left.FormatVersion == right.FormatVersion &&
+            string.Equals(left.Rid, right.Rid, StringComparison.Ordinal) &&
+            left.Channel == right.Channel &&
+            string.Equals(left.Configuration, right.Configuration, StringComparison.Ordinal) &&
+            string.Equals(left.OutputDirectory, right.OutputDirectory, StringComparison.Ordinal) &&
+            string.Equals(left.ProductName, right.ProductName, StringComparison.Ordinal) &&
+            string.Equals(left.Version, right.Version, StringComparison.Ordinal) &&
+            string.Equals(left.InformationalVersion, right.InformationalVersion, StringComparison.Ordinal) &&
+            string.Equals(left.IconPath, right.IconPath, StringComparison.Ordinal) &&
+            left.IncludeSymbols == right.IncludeSymbols &&
+            left.PackageWholeContent == right.PackageWholeContent &&
+            left.RunAfterBuild == right.RunAfterBuild &&
+            left.Scenes.SequenceEqual(right.Scenes);
     }
 
     private string BuildLogText()
@@ -1153,6 +1294,14 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         return changed;
     }
 }
+
+internal sealed record BuildSettingsPanelAutomationSnapshot(
+    BuildProfileDto Settings,
+    BuildProfileDto PersistedSettings,
+    string ValidationMessage,
+    string PersistentDiagnostic,
+    bool RequiresRepair,
+    bool BuildRunning);
 
 /// <summary>Build 提交前当前 authoring scene 的校验/持久化结果。</summary>
 internal readonly record struct BuildScenePreparationResult(bool Succeeded, string Diagnostic);

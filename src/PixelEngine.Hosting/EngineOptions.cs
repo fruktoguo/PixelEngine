@@ -139,7 +139,8 @@ public sealed class EngineOptions
         int eventCapacityPerChannel,
         long noGcRegionBudgetBytes,
         EngineOverloadOptions overload,
-        PlayerWindowMode windowMode)
+        PlayerWindowMode windowMode,
+        string? guiLayoutPath = null)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(windowHeight);
@@ -160,6 +161,10 @@ public sealed class EngineOptions
 
         ArgumentOutOfRangeException.ThrowIfNegative(noGcRegionBudgetBytes);
         ArgumentNullException.ThrowIfNull(overload);
+        if (guiLayoutPath is not null && string.IsNullOrWhiteSpace(guiLayoutPath))
+        {
+            throw new ArgumentException("GUI layout path 不能是空白字符串。", nameof(guiLayoutPath));
+        }
         if (!Enum.IsDefined(windowMode))
         {
             throw new ArgumentOutOfRangeException(nameof(windowMode), windowMode, "未知 Player window mode。");
@@ -183,6 +188,9 @@ public sealed class EngineOptions
         VSync = vSync;
         WindowMode = windowMode;
         ContentRoot = contentRoot;
+        GuiLayoutPath = string.IsNullOrWhiteSpace(guiLayoutPath)
+            ? ResolveDefaultGuiLayoutPath(WindowTitle)
+            : Path.GetFullPath(guiLayoutPath.Trim());
         StartScene = startScene;
         SimHz = simHz;
         EventCapacityPerChannel = eventCapacityPerChannel;
@@ -311,6 +319,11 @@ public sealed class EngineOptions
     public string ContentRoot { get; }
 
     /// <summary>
+    /// Runtime ImGui 用户布局文件；始终位于可写用户状态目录或由宿主显式提供，绝不默认写入 ContentRoot。
+    /// </summary>
+    public string GuiLayoutPath { get; }
+
+    /// <summary>
     /// 起始场景标识；为空时由 Demo 或宿主后续指定。
     /// </summary>
     public string? StartScene { get; }
@@ -363,5 +376,34 @@ public sealed class EngineOptions
             eventCapacityPerChannel: DefaultEventCapacityPerChannel,
             noGcRegionBudgetBytes: 0,
             overload: EngineOverloadOptions.CreateDefault());
+    }
+
+    private static string ResolveDefaultGuiLayoutPath(string windowTitle)
+    {
+        char[] invalid = Path.GetInvalidFileNameChars();
+        string name = new(
+        [
+            .. windowTitle
+                .Take(64)
+                .Select(character => invalid.Contains(character) || character is '/' or '\\' ? '_' : character),
+        ]);
+        name = name.Trim().TrimEnd('.');
+        if (string.IsNullOrWhiteSpace(name) || name is "." or "..")
+        {
+            name = "PixelEngine";
+        }
+
+        string userDataRoot = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(userDataRoot))
+        {
+            userDataRoot = Path.Combine(Path.GetTempPath(), "PixelEngine-user-data");
+        }
+
+        return Path.GetFullPath(Path.Combine(
+            userDataRoot,
+            "PixelEngine",
+            "RuntimeGui",
+            name,
+            "imgui.ini"));
     }
 }

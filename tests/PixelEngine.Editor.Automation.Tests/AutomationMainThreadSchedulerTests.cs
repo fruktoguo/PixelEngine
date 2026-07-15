@@ -11,6 +11,7 @@ namespace PixelEngine.Editor.Automation.Tests;
 public sealed class AutomationMainThreadSchedulerTests
 {
     private const string SetValueMethod = "test.state.set";
+    private const string PreparedSetValueMethod = "test.state.prepared-set";
     private const string ResourceId = "test:state";
 
     /// <summary>验证 work 只在声明 phase 执行且一次写入产生一个 revision/Undo item。</summary>
@@ -39,13 +40,77 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(42, state.Value);
         Assert.Equal(1, result.Revision?.GlobalRevision);
         Assert.Equal(1, Assert.Single(result.Revision!.Resources).Revision);
-        _ = Assert.Single(undo.Actions);
+        IAutomationResourceScopedUndoAction scoped = Assert.IsAssignableFrom<IAutomationResourceScopedUndoAction>(
+            Assert.Single(undo.Actions));
+        Assert.Equal([ResourceId], scoped.ResourceIds);
         undo.Actions[0].Undo();
         Assert.Equal(0, state.Value);
         Assert.Equal(2, scheduler.Revisions.GlobalRevision);
         undo.Actions[0].Redo();
         Assert.Equal(42, state.Value);
         Assert.Equal(3, scheduler.Revisions.GlobalRevision);
+    }
+
+    /// <summary>Engine phase write 可禁止跨操作 transaction，但仍必须进入唯一 Undo/Redo 历史。</summary>
+    [Fact]
+    public void TransactionForbiddenWriteStillRecordsUndoAtDeclaredEnginePhase()
+    {
+        const string method = "test.engine.write";
+        TestState state = new();
+        TestUndoSink undo = new();
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorControl],
+                OperationKind = AutomationOperationKind.Write,
+                ExecutionPhase = AutomationExecutionPhase.EngineWorldStreaming,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                RequiresExpectedRevision = true,
+                RequiresIdempotencyKey = true,
+            },
+            Operation = (_, _) =>
+            {
+                int before = state.Value;
+                state.Value = 17;
+                return new AutomationOperationResult
+                {
+                    ResourceIds = [ResourceId],
+                    UndoAction = new TestValueUndoAction(state, before, 17),
+                };
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            undo,
+            new TestTransactionParticipant());
+
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(Expected(0, 0), "engine-write"),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        Assert.Equal(0, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EngineWorldStreaming));
+        AutomationHandlerResult result = pending.GetAwaiter().GetResult();
+
+        Assert.Equal(17, state.Value);
+        Assert.Equal(1, result.Revision?.GlobalRevision);
+        IAutomationUndoAction action = Assert.Single(undo.Actions);
+        action.Undo();
+        Assert.Equal(0, state.Value);
+        action.Redo();
+        Assert.Equal(17, state.Value);
+
+        AutomationRequestException exception = Assert.Throws<AutomationRequestException>(
+            () => scheduler.HandleAsync(
+                CreateContext(Expected(3, 3), "engine-write-transaction", "transaction-1"),
+                method,
+                payload: null,
+                CancellationToken.None));
+        Assert.Equal(AutomationErrorCodes.TransactionInvalid, exception.Error.Code);
     }
 
     /// <summary>幂等 Write 必须返回当前 revision，且不得登记 Undo 或推进全局/资源 revision。</summary>
@@ -74,6 +139,491 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Empty(undo.Actions);
     }
 
+    /// <summary>只读 safe phase 可以冻结 revision 后把编码/I/O payload 延迟到 Server 后台。</summary>
+    [Fact]
+    public void ReadCanReturnDeferredPayloadWithoutExecutingItOnOwnerSafePoint()
+    {
+        bool factoryInvoked = false;
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = "test.snapshot.export",
+                Domain = "test",
+                RequestSchema = "#/$defs/emptyRequest",
+                ResponseSchema = "#/$defs/artifactReference",
+                RequiredScopes = [AutomationScopes.EditorRead],
+                SupportedModes = ["edit"],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                ArtifactBehavior = AutomationArtifactBehavior.Required,
+            },
+            Operation = (_, _) => new AutomationOperationResult
+            {
+                ResourceIds = [ResourceId],
+                DeferredPayloadFactory = (revision, _) =>
+                {
+                    factoryInvoked = true;
+                    return ValueTask.FromResult<JsonElement?>(
+                        JsonSerializer.SerializeToElement(new { revision = revision.GlobalRevision }));
+                },
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(),
+            registration.Descriptor.Method,
+            payload: null,
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult result = pending.GetAwaiter().GetResult();
+        Assert.False(factoryInvoked);
+        Assert.Null(result.Payload);
+        Assert.NotNull(result.DeferredPayloadFactory);
+        Assert.Equal(0, result.Revision?.GlobalRevision);
+
+        JsonElement? payload = result.DeferredPayloadFactory!(
+            result.Revision!,
+            CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        Assert.True(factoryInvoked);
+        Assert.Equal(0, payload?.GetProperty("revision").GetInt64());
+    }
+
+    /// <summary>不修改编辑器状态的 Command 可以冻结 session 后把制品 I/O 延迟到 Server 后台。</summary>
+    [Fact]
+    public void CommandCanReturnDeferredPayloadWithoutAdvancingRevision()
+    {
+        bool factoryInvoked = false;
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = "test.artifact.delete",
+                Domain = "test",
+                RequestSchema = "#/$defs/artifactRequest",
+                ResponseSchema = "#/$defs/artifactDeleteResult",
+                RequiredScopes = [AutomationScopes.EditorControl],
+                SupportedModes = ["edit", "play", "paused"],
+                OperationKind = AutomationOperationKind.Command,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                ArtifactBehavior = AutomationArtifactBehavior.Required,
+            },
+            Operation = (_, _) => new AutomationOperationResult
+            {
+                ResourceIds = [ResourceId],
+                DeferredPayloadFactory = (revision, _) =>
+                {
+                    factoryInvoked = true;
+                    return ValueTask.FromResult<JsonElement?>(
+                        JsonSerializer.SerializeToElement(new { revision = revision.GlobalRevision }));
+                },
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(),
+            registration.Descriptor.Method,
+            payload: null,
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult result = pending.GetAwaiter().GetResult();
+        Assert.False(factoryInvoked);
+        Assert.NotNull(result.DeferredPayloadFactory);
+        Assert.Equal(0, result.Revision?.GlobalRevision);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+
+        JsonElement? payload = result.DeferredPayloadFactory!(
+            result.Revision!,
+            CancellationToken.None).AsTask().GetAwaiter().GetResult();
+        Assert.True(factoryInvoked);
+        Assert.Equal(0, payload?.GetProperty("revision").GetInt64());
+    }
+
+    /// <summary>可回滚 Write 不得把任何工作延迟到 revision/Undo 提交点之后。</summary>
+    [Fact]
+    public void WriteCannotReturnDeferredPayload()
+    {
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = "test.state.deferred-set",
+                Domain = "test",
+                RequestSchema = "#/$defs/emptyRequest",
+                ResponseSchema = "#/$defs/emptyRequest",
+                RequiredScopes = [AutomationScopes.EditorControl],
+                SupportedModes = ["edit"],
+                OperationKind = AutomationOperationKind.Write,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Optional,
+                RequiresExpectedRevision = true,
+                RequiresIdempotencyKey = true,
+            },
+            Operation = (_, _) => new AutomationOperationResult
+            {
+                ResourceIds = [ResourceId],
+                DeferredPayloadFactory = static (_, _) => ValueTask.FromResult<JsonElement?>(null),
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(Expected(0, 0), "deferred-write"),
+            registration.Descriptor.Method,
+            payload: null,
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(
+            () => pending.GetAwaiter().GetResult());
+        Assert.Contains("不得越过 revision/Undo", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+    }
+
+    /// <summary>后台 preparation 占用有界容量，完成后只在原 owner safe phase 提交。</summary>
+    [Fact]
+    public void BackgroundPreparationReentersOwnerPhaseAndRetainsCapacity()
+    {
+        const string method = "test.read.prepared";
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        int commitCount = 0;
+        using ManualResetEventSlim workerStarted = new();
+        TaskCompletionSource<string> releaseWorker = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorRead],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                UsesBackgroundPreparation = true,
+            },
+            Preparation = (_, _) => new AutomationBackgroundPreparation
+            {
+                PrepareAsync = async cancellationToken =>
+                {
+                    workerStarted.Set();
+                    return await releaseWorker.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                },
+            },
+            Operation = (context, _) =>
+            {
+                Assert.Equal(ownerThreadId, Environment.CurrentManagedThreadId);
+                string prepared = context.RequirePreparedState<string>();
+                commitCount++;
+                return new AutomationOperationResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(new { prepared }),
+                    ResourceIds = [ResourceId],
+                };
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant(),
+            new AutomationMainThreadSchedulerOptions { Capacity = 1 });
+
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
+        Assert.False(pending.IsCompleted);
+        AutomationRequestException capacity = Assert.Throws<AutomationRequestException>(() =>
+        {
+            _ = scheduler.HandleAsync(
+                CreateContext(),
+                method,
+                payload: null,
+                CancellationToken.None);
+        });
+        Assert.Equal(AutomationErrorCodes.Busy, capacity.Error.Code);
+
+        releaseWorker.SetResult("ready");
+        Assert.True(SpinWait.SpinUntil(
+            () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+            TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult result = pending.GetAwaiter().GetResult();
+
+        Assert.Equal(1, commitCount);
+        Assert.Equal("ready", result.Payload?.GetProperty("prepared").GetString());
+    }
+
+    /// <summary>后台 preparation 使用有界常驻 worker，连续请求不会在 owner thread 执行同步前缀。</summary>
+    [Fact]
+    public void BackgroundPreparationReusesPersistentWorkerOutsideOwnerThread()
+    {
+        const string method = "test.read.persistent-preparation-worker";
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        List<int> preparationThreadIds = [];
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorRead],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                UsesBackgroundPreparation = true,
+            },
+            Preparation = (_, _) => new AutomationBackgroundPreparation
+            {
+                PrepareAsync = _ => ValueTask.FromResult<object?>(Environment.CurrentManagedThreadId),
+            },
+            Operation = (context, _) =>
+            {
+                preparationThreadIds.Add(context.RequirePreparedState<int>());
+                return new AutomationOperationResult { ResourceIds = [ResourceId] };
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant(),
+            new AutomationMainThreadSchedulerOptions
+            {
+                BackgroundPreparationWorkerCount = 1,
+            });
+
+        for (int i = 0; i < 2; i++)
+        {
+            Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+                CreateContext(),
+                method,
+                payload: null,
+                CancellationToken.None).AsTask();
+            Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+            Assert.True(SpinWait.SpinUntil(
+                () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+                TimeSpan.FromSeconds(5)));
+            Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+            _ = pending.GetAwaiter().GetResult();
+        }
+
+        Assert.Equal(2, preparationThreadIds.Count);
+        Assert.NotEqual(ownerThreadId, preparationThreadIds[0]);
+        Assert.Equal(preparationThreadIds[0], preparationThreadIds[1]);
+    }
+
+    /// <summary>取消 preparation 会物理释放容量、只排一次 owner-thread cleanup，且不执行 commit。</summary>
+    [Fact]
+    public void CancellingBackgroundPreparationReleasesCapacityWithoutCommit()
+    {
+        const string method = "test.read.prepared-cancel";
+        int preparationCount = 0;
+        int commitCount = 0;
+        int abortCount = 0;
+        using ManualResetEventSlim firstWorkerStarted = new();
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorRead],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                UsesBackgroundPreparation = true,
+            },
+            Preparation = (_, _) =>
+            {
+                int ordinal = Interlocked.Increment(ref preparationCount);
+                return new AutomationBackgroundPreparation
+                {
+                    PrepareAsync = async cancellationToken =>
+                    {
+                        if (ordinal == 1)
+                        {
+                            firstWorkerStarted.Set();
+                            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                        }
+
+                        return "ready";
+                    },
+                    AbortAtEditorIngress = () => abortCount++,
+                };
+            },
+            Operation = (context, payload) =>
+            {
+                _ = payload;
+                Assert.Equal("ready", context.RequirePreparedState<string>());
+                commitCount++;
+                return new AutomationOperationResult { ResourceIds = [ResourceId] };
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant(),
+            new AutomationMainThreadSchedulerOptions { Capacity = 1 });
+        using CancellationTokenSource cancellation = new();
+
+        Task<AutomationHandlerResult> cancelled = scheduler.HandleAsync(
+            CreateContext(),
+            method,
+            payload: null,
+            cancellation.Token).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(firstWorkerStarted.Wait(TimeSpan.FromSeconds(5)));
+        cancellation.Cancel();
+        _ = Assert.ThrowsAny<OperationCanceledException>(() => cancelled.GetAwaiter().GetResult());
+        Assert.True(SpinWait.SpinUntil(
+            () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+            TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.Equal(1, abortCount);
+        Assert.Equal(0, commitCount);
+
+        Task<AutomationHandlerResult> retry = scheduler.HandleAsync(
+            CreateContext(),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(SpinWait.SpinUntil(
+            () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+            TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        _ = retry.GetAwaiter().GetResult();
+        Assert.Equal(2, preparationCount);
+        Assert.Equal(1, commitCount);
+        Assert.Equal(1, abortCount);
+    }
+
+    /// <summary>关闭 scheduler 会取消运行中的 worker，并在 owner thread 执行一次 preparation cleanup。</summary>
+    [Fact]
+    public void DisposingSchedulerCancelsBackgroundPreparationAndRunsOwnerCleanup()
+    {
+        const string method = "test.read.prepared-dispose";
+        int ownerThreadId = Environment.CurrentManagedThreadId;
+        int abortThreadId = 0;
+        int abortCount = 0;
+        using ManualResetEventSlim workerStarted = new();
+        using ManualResetEventSlim workerCancelled = new();
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorRead],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                UsesBackgroundPreparation = true,
+            },
+            Preparation = (_, _) => new AutomationBackgroundPreparation
+            {
+                PrepareAsync = async cancellationToken =>
+                {
+                    workerStarted.Set();
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        workerCancelled.Set();
+                    }
+
+                    return null;
+                },
+                AbortAtEditorIngress = () =>
+                {
+                    abortThreadId = Environment.CurrentManagedThreadId;
+                    abortCount++;
+                },
+            },
+            Operation = static (_, _) => throw new InvalidOperationException("关闭后不得提交 preparation。"),
+        };
+        AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
+
+        scheduler.Dispose();
+
+        Exception exception = Assert.ThrowsAny<Exception>(
+            () => pending.GetAwaiter().GetResult());
+        Assert.Contains("scheduler", exception.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, abortCount);
+        Assert.Equal(ownerThreadId, abortThreadId);
+        Assert.True(workerCancelled.Wait(TimeSpan.FromSeconds(5)));
+    }
+
+    /// <summary>同一 preparation scope/key 只冻结一次 workspace，并按逆注册顺序释放全部资源。</summary>
+    [Fact]
+    public void PreparationScopeReusesWorkspaceAndDisposesResourcesInReverseOrder()
+    {
+        List<string> disposed = [];
+        AutomationPreparationScope scope = new();
+        TestPreparationWorkspace first = scope.GetOrAdd(
+            "first",
+            () => new TestPreparationWorkspace("first", disposed));
+        TestPreparationWorkspace reused = scope.GetOrAdd<TestPreparationWorkspace>(
+            "first",
+            () => throw new InvalidOperationException("复用 key 不得再次执行 factory。"));
+        TestPreparationWorkspace second = scope.GetOrAdd(
+            "second",
+            () => new TestPreparationWorkspace("second", disposed));
+
+        Assert.Same(first, reused);
+        Assert.NotSame(first, second);
+        Exception? ownerFailure = null;
+        Thread worker = new(() =>
+        {
+            try
+            {
+                _ = scope.GetOrAdd("worker", () => first);
+            }
+            catch (Exception exception)
+            {
+                ownerFailure = exception;
+            }
+        });
+        worker.Start();
+        worker.Join();
+        InvalidOperationException ownerException = Assert.IsType<InvalidOperationException>(ownerFailure);
+        Assert.Contains("owner safe phase", ownerException.Message, StringComparison.Ordinal);
+
+        scope.DisposeResources();
+        scope.DisposeResources();
+        Assert.Equal(["second", "first"], disposed);
+        _ = Assert.Throws<ObjectDisposedException>(() => scope.GetOrAdd("late", () => first));
+    }
+
     /// <summary>非事务 write 在 handler contract 校验失败时也必须撤回已经执行的 semantic action。</summary>
     [Fact]
     public void WriteContractFailureRollsBackAppliedActionBeforeCommit()
@@ -93,6 +643,58 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
         _ = Assert.Throws<InvalidOperationException>(() => pending.GetAwaiter().GetResult());
 
+        Assert.Equal(0, state.Value);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+        Assert.Empty(undo.Actions);
+    }
+
+    /// <summary>提交失败的 write 必须释放尚未移交给 Undo 历史的 semantic action。</summary>
+    [Fact]
+    public void WriteContractFailureDisposesUncommittedUndoAction()
+    {
+        const string method = "test.state.disposable-contract-failure";
+        TestState state = new();
+        TestUndoSink undo = new();
+        DisposableTestUndoAction? action = null;
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorControl],
+                OperationKind = AutomationOperationKind.Write,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Optional,
+                RequiresIdempotencyKey = true,
+            },
+            Operation = (_, _) =>
+            {
+                state.Value = 23;
+                action = new DisposableTestUndoAction(state, before: 0, after: 23);
+                return new AutomationOperationResult
+                {
+                    UndoAction = action,
+                    ResourceIds = [string.Empty],
+                };
+            },
+        };
+        using AutomationMainThreadScheduler scheduler = new(
+            [registration],
+            new AutomationRevisionStore(),
+            undo,
+            new TestTransactionParticipant());
+        Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
+            CreateContext(idempotencyKey: "disposable-contract-failure"),
+            method,
+            payload: null,
+            CancellationToken.None).AsTask();
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        _ = Assert.Throws<ArgumentException>(() => pending.GetAwaiter().GetResult());
+
+        DisposableTestUndoAction completedAction = Assert.IsType<DisposableTestUndoAction>(action);
+        Assert.Equal(1, completedAction.UndoCount);
+        Assert.Equal(1, completedAction.DisposeCount);
         Assert.Equal(0, state.Value);
         Assert.Equal(0, scheduler.Revisions.GlobalRevision);
         Assert.Empty(undo.Actions);
@@ -231,7 +833,8 @@ public sealed class AutomationMainThreadSchedulerTests
             {
                 RequiredScopes = [AutomationScopes.EditorControl],
                 OperationKind = AutomationOperationKind.Write,
-                TransactionMode = AutomationTransactionMode.Forbidden,
+                ExecutionPhase = AutomationExecutionPhase.EngineWorldStreaming,
+                TransactionMode = AutomationTransactionMode.Optional,
             },
         ];
 
@@ -247,6 +850,28 @@ public sealed class AutomationMainThreadSchedulerTests
                 new TestUndoSink(),
                 new TestTransactionParticipant()));
         }
+    }
+
+    /// <summary>验证 background preparation 的并发度与关闭等待始终保持显式有界。</summary>
+    [Fact]
+    public void InvalidBackgroundPreparationWorkerOptionsAreRejectedBeforeStartingThreads()
+    {
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => CreateScheduler(
+            new TestState(),
+            new TestUndoSink(),
+            new TestTransactionParticipant(),
+            new AutomationMainThreadSchedulerOptions
+            {
+                BackgroundPreparationWorkerCount = 0,
+            }));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() => CreateScheduler(
+            new TestState(),
+            new TestUndoSink(),
+            new TestTransactionParticipant(),
+            new AutomationMainThreadSchedulerOptions
+            {
+                BackgroundPreparationShutdownTimeout = TimeSpan.FromMinutes(2),
+            }));
     }
 
     /// <summary>验证已进入 safe phase 且实际完成的 operation 不会被等待层伪报为已取消。</summary>
@@ -610,6 +1235,13 @@ public sealed class AutomationMainThreadSchedulerTests
         }
 
         Assert.True(wake.WaitOne(TimeSpan.FromSeconds(5)));
+        TimeSpan remaining = transaction.ExpiresAtUtc - TimeProvider.System.GetUtcNow();
+        if (remaining > TimeSpan.Zero)
+        {
+            // Windows timer 可能略早唤醒；跨过绝对 lease 截止点后再验证 safe-point expiry。
+            Thread.Sleep(remaining + TimeSpan.FromMilliseconds(10));
+        }
+
         _ = scheduler.Drain(AutomationExecutionPhase.EditorIngress);
 
         Assert.Equal(0, state.Value);
@@ -756,6 +1388,191 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Empty(undo.Actions);
         Assert.Equal(1, participant.RestoreCount);
         Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+    }
+
+    /// <summary>
+    /// transaction preparation 在 worker 期间不暴露状态、不释放租约；回到 EditorIngress 后只提交一次。
+    /// </summary>
+    [Fact]
+    public void TransactionBackgroundPreparationCommitsAtomicallyAtOwnerSafePoint()
+    {
+        TestState state = new();
+        TestUndoSink undo = new();
+        TestTransactionParticipant participant = new();
+        using ManualResetEventSlim workerStarted = new();
+        using ManualResetEventSlim workerFinished = new();
+        TaskCompletionSource<int> releaseWorker = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int abortCount = 0;
+        using AutomationMainThreadScheduler scheduler = CreatePreparedScheduler(
+            state,
+            undo,
+            participant,
+            workerStarted,
+            workerFinished,
+            releaseWorker,
+            () => abortCount++);
+        AutomationTransactionInfo transaction = BeginTransaction(scheduler, "prepared-transaction");
+        _ = ExecuteTransactionalWrite(
+            scheduler,
+            transaction.TransactionId,
+            "prepared-transaction-write",
+            7,
+            method: PreparedSetValueMethod);
+        Task<AutomationHandlerResult> commit = CommitTransaction(
+            scheduler,
+            transaction.TransactionId,
+            "prepared-transaction-commit");
+
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
+        Assert.False(commit.IsCompleted);
+        Assert.Equal(0, state.Value);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+        Assert.Empty(undo.Actions);
+
+        Task<AutomationHandlerResult> lateStage = scheduler.HandleAsync(
+            CreateContext(Expected(0, 0), "prepared-late-stage", transaction.TransactionId),
+            PreparedSetValueMethod,
+            JsonSerializer.SerializeToElement(new { value = 9 }),
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationRequestException conflict = Assert.Throws<AutomationRequestException>(
+            () => lateStage.GetAwaiter().GetResult());
+        Assert.Equal(AutomationErrorCodes.TransactionConflict, conflict.Error.Code);
+
+        releaseWorker.SetResult(14);
+        Assert.True(workerFinished.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(SpinWait.SpinUntil(
+            () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+            TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult result = commit.GetAwaiter().GetResult();
+        AutomationTransactionCommitResult committed = result.Payload?.Deserialize(
+            AutomationJsonContext.Default.AutomationTransactionCommitResult)
+            ?? throw new InvalidOperationException("prepared transaction 未返回 commit result。");
+
+        Assert.Equal(14, state.Value);
+        Assert.Equal(1, result.Revision?.GlobalRevision);
+        Assert.Equal(1, scheduler.Revisions.GlobalRevision);
+        _ = Assert.Single(undo.Actions);
+        Assert.True(Assert.Single(committed.Operations).StateChanged);
+        Assert.Equal(0, abortCount);
+        Assert.Equal(0, participant.RestoreCount);
+        Assert.Equal(
+            AutomationTransactionStatus.Committed,
+            GetTransactionStatus(scheduler, transaction.TransactionId).Status);
+    }
+
+    /// <summary>取消运行中的 transaction preparation 会恢复 before-image、回滚 staging 且不执行 operation。</summary>
+    [Fact]
+    public void CancellingTransactionBackgroundPreparationRollsBackWithoutMutation()
+    {
+        TestState state = new();
+        TestUndoSink undo = new();
+        TestTransactionParticipant participant = new();
+        using ManualResetEventSlim workerStarted = new();
+        using ManualResetEventSlim workerFinished = new();
+        TaskCompletionSource<int> releaseWorker = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int abortCount = 0;
+        using AutomationMainThreadScheduler scheduler = CreatePreparedScheduler(
+            state,
+            undo,
+            participant,
+            workerStarted,
+            workerFinished,
+            releaseWorker,
+            () => abortCount++);
+        AutomationTransactionInfo transaction = BeginTransaction(scheduler, "cancel-prepared-transaction");
+        _ = ExecuteTransactionalWrite(
+            scheduler,
+            transaction.TransactionId,
+            "cancel-prepared-transaction-write",
+            8,
+            method: PreparedSetValueMethod);
+        using CancellationTokenSource cancellation = new();
+        Task<AutomationHandlerResult> commit = CommitTransaction(
+            scheduler,
+            transaction.TransactionId,
+            "cancel-prepared-transaction-commit",
+            cancellation.Token);
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
+
+        cancellation.Cancel();
+
+        _ = Assert.ThrowsAny<OperationCanceledException>(() => commit.GetAwaiter().GetResult());
+        Assert.True(workerFinished.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(SpinWait.SpinUntil(
+            () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+            TimeSpan.FromSeconds(5)));
+        _ = scheduler.Drain(AutomationExecutionPhase.EditorIngress);
+        Assert.Equal(0, state.Value);
+        Assert.Equal(0, scheduler.Revisions.GlobalRevision);
+        Assert.Empty(undo.Actions);
+        Assert.Equal(1, abortCount);
+        Assert.Equal(1, participant.RestoreCount);
+        Assert.Equal(
+            AutomationTransactionStatus.RolledBack,
+            GetTransactionStatus(scheduler, transaction.TransactionId).Status);
+    }
+
+    /// <summary>worker 返回后必须重验全部 staged revision；过期结果不得进入 semantic commit。</summary>
+    [Fact]
+    public void TransactionBackgroundPreparationRevalidatesRevisionBeforeCommit()
+    {
+        TestState state = new();
+        TestUndoSink undo = new();
+        TestTransactionParticipant participant = new();
+        using ManualResetEventSlim workerStarted = new();
+        using ManualResetEventSlim workerFinished = new();
+        TaskCompletionSource<int> releaseWorker = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        int abortCount = 0;
+        using AutomationMainThreadScheduler scheduler = CreatePreparedScheduler(
+            state,
+            undo,
+            participant,
+            workerStarted,
+            workerFinished,
+            releaseWorker,
+            () => abortCount++);
+        AutomationTransactionInfo transaction = BeginTransaction(scheduler, "stale-prepared-transaction");
+        _ = ExecuteTransactionalWrite(
+            scheduler,
+            transaction.TransactionId,
+            "stale-prepared-transaction-write",
+            10,
+            method: PreparedSetValueMethod);
+        Task<AutomationHandlerResult> commit = CommitTransaction(
+            scheduler,
+            transaction.TransactionId,
+            "stale-prepared-transaction-commit");
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        Assert.True(workerStarted.Wait(TimeSpan.FromSeconds(5)));
+
+        _ = scheduler.Revisions.Advance([ResourceId]);
+        releaseWorker.SetResult(20);
+        Assert.True(workerFinished.Wait(TimeSpan.FromSeconds(5)));
+        Assert.True(SpinWait.SpinUntil(
+            () => scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+            TimeSpan.FromSeconds(5)));
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+
+        AutomationRequestException exception = Assert.Throws<AutomationRequestException>(
+            () => commit.GetAwaiter().GetResult());
+        AutomationTransactionFailureDetails details = exception.Error.Details?.Deserialize(
+            AutomationJsonContext.Default.AutomationTransactionFailureDetails)
+            ?? throw new InvalidOperationException("prepared transaction failure 缺少 details。");
+        Assert.Equal(AutomationErrorCodes.TransactionFailed, exception.Error.Code);
+        Assert.Equal(AutomationErrorCodes.RevisionConflict, details.Cause.Code);
+        Assert.True(details.RollbackSucceeded);
+        Assert.Equal(0, state.Value);
+        Assert.Equal(1, scheduler.Revisions.GlobalRevision);
+        Assert.Empty(undo.Actions);
+        Assert.Equal(1, abortCount);
+        Assert.Equal(1, participant.RestoreCount);
+        Assert.Equal(
+            AutomationTransactionStatus.RolledBack,
+            GetTransactionStatus(scheduler, transaction.TransactionId).Status);
     }
 
     /// <summary>验证 transaction staging 数量受全局配置约束，超限不执行也不挤占主线程队列。</summary>
@@ -927,6 +1744,98 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(2, result.Revision?.GlobalRevision);
     }
 
+    /// <summary>
+    /// 普通写与 transaction commit 同时发布通用及领域事件；staging 和 no-change 不泄漏伪事件。
+    /// </summary>
+    [Fact]
+    public void WritesPublishDomainEventsOnlyAfterCommittedStateChange()
+    {
+        TestState state = new();
+        using AutomationMainThreadScheduler scheduler = CreateScheduler(
+            state,
+            new TestUndoSink(),
+            new TestTransactionParticipant());
+        TestEventSink sink = new(capacity: 32);
+        scheduler.OnSessionOpened(new AutomationSessionContext
+        {
+            SessionId = "session-1",
+            PrincipalId = new string('a', 64),
+            ClientInstanceId = "client-instance",
+            ClientName = "scheduler-tests",
+            GrantedScopes = [AutomationScopes.EditorRead, AutomationScopes.EditorControl],
+        }, sink);
+        _ = scheduler.Events.Subscribe("session-1", new AutomationEventSubscribeRequest
+        {
+            SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+            SubscriptionKey = "scheduler-domain-events",
+            EventTypes = [],
+            BacklogLimit = 32,
+        });
+
+        AutomationRequestContext writeContext = CreateContext(Expected(0, 0), "event-write");
+        Task<AutomationHandlerResult> write = scheduler.HandleAsync(
+            writeContext,
+            SetValueMethod,
+            JsonSerializer.SerializeToElement(new { value = 1 }),
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult writeResult = write.GetAwaiter().GetResult();
+
+        Assert.Equal(
+            [
+                AutomationProtocolConstants.StateChangedEventType,
+                AutomationProtocolConstants.AssetsChangedEventType,
+            ],
+            sink.Events.Select(static eventRecord => eventRecord.EventType));
+        Assert.All(sink.Events, eventRecord =>
+        {
+            Assert.Equal(writeContext.RequestId, eventRecord.CausationRequestId);
+            Assert.Equal(writeResult.Revision?.GlobalRevision, eventRecord.StateRevision.GlobalRevision);
+        });
+
+        sink.Events.Clear();
+        Task<AutomationHandlerResult> noChange = scheduler.HandleAsync(
+            CreateContext(Expected(1, 1), "event-no-change"),
+            SetValueMethod,
+            JsonSerializer.SerializeToElement(new { value = 1 }),
+            CancellationToken.None).AsTask();
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        _ = noChange.GetAwaiter().GetResult();
+        Assert.Empty(sink.Events);
+
+        AutomationTransactionInfo transaction = BeginTransaction(scheduler, "event-transaction-begin");
+        _ = ExecuteTransactionalWrite(
+            scheduler,
+            transaction.TransactionId,
+            "event-staged-write",
+            2,
+            expectedRevision: 1);
+        Assert.Empty(sink.Events);
+        Task<AutomationHandlerResult> commit = CommitTransaction(
+            scheduler,
+            transaction.TransactionId,
+            "event-transaction-commit");
+        Assert.Equal(1, scheduler.Drain(AutomationExecutionPhase.EditorIngress));
+        AutomationHandlerResult commitHandlerResult = commit.GetAwaiter().GetResult();
+        AutomationTransactionCommitResult commitResult = commitHandlerResult.Payload?.Deserialize(
+            AutomationJsonContext.Default.AutomationTransactionCommitResult)
+            ?? throw new InvalidOperationException("transaction.commit 未返回结果。");
+
+        Assert.True(Assert.Single(commitResult.Operations).StateChanged);
+        Assert.Equal(
+            [
+                AutomationProtocolConstants.AssetsChangedEventType,
+                AutomationProtocolConstants.StateChangedEventType,
+                AutomationProtocolConstants.TransactionChangedEventType,
+            ],
+            sink.Events.Select(static eventRecord => eventRecord.EventType));
+        Assert.Equal(commitResult.Operations[0].RequestId, sink.Events[0].CausationRequestId);
+        Assert.All(sink.Events, eventRecord =>
+            Assert.Equal(
+                commitHandlerResult.Revision?.GlobalRevision,
+                eventRecord.StateRevision.GlobalRevision));
+    }
+
     private static AutomationMainThreadScheduler CreateScheduler(
         TestState state,
         TestUndoSink undo,
@@ -945,6 +1854,11 @@ public sealed class AutomationMainThreadSchedulerTests
                 TransactionMode = AutomationTransactionMode.Optional,
                 RequiresExpectedRevision = true,
                 RequiresIdempotencyKey = true,
+                EventTypes =
+                [
+                    AutomationProtocolConstants.StateChangedEventType,
+                    AutomationProtocolConstants.AssetsChangedEventType,
+                ],
             },
             Operation = (context, payload) =>
             {
@@ -986,6 +1900,71 @@ public sealed class AutomationMainThreadSchedulerTests
             options);
     }
 
+    private static AutomationMainThreadScheduler CreatePreparedScheduler(
+        TestState state,
+        TestUndoSink undo,
+        TestTransactionParticipant participant,
+        ManualResetEventSlim workerStarted,
+        ManualResetEventSlim workerFinished,
+        TaskCompletionSource<int> releaseWorker,
+        Action abort)
+    {
+        AutomationMethodRegistration registration = new()
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = PreparedSetValueMethod,
+                RequiredScopes = [AutomationScopes.EditorControl],
+                OperationKind = AutomationOperationKind.Write,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Optional,
+                RequiresExpectedRevision = true,
+                RequiresIdempotencyKey = true,
+                UsesBackgroundPreparation = true,
+                EventTypes = [AutomationProtocolConstants.StateChangedEventType],
+            },
+            Preparation = (context, payload) =>
+            {
+                _ = context;
+                _ = payload?.GetProperty("value").GetInt32()
+                    ?? throw new InvalidOperationException("测试 payload 缺少 value。");
+                return new AutomationBackgroundPreparation
+                {
+                    PrepareAsync = async cancellationToken =>
+                    {
+                        workerStarted.Set();
+                        try
+                        {
+                            return await releaseWorker.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            workerFinished.Set();
+                        }
+                    },
+                    AbortAtEditorIngress = abort,
+                };
+            },
+            Operation = (context, _) =>
+            {
+                int next = context.RequirePreparedState<int>();
+                int previous = state.Value;
+                state.Value = next;
+                return new AutomationOperationResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(new { value = next }),
+                    UndoAction = new TestValueUndoAction(state, previous, next),
+                    ResourceIds = [ResourceId],
+                };
+            },
+        };
+        return new AutomationMainThreadScheduler(
+            [registration],
+            new AutomationRevisionStore(),
+            undo,
+            participant);
+    }
+
     private static AutomationTransactionInfo BeginTransaction(
         AutomationMainThreadScheduler scheduler,
         string idempotencyKey,
@@ -1015,16 +1994,18 @@ public sealed class AutomationMainThreadSchedulerTests
         AutomationMainThreadScheduler scheduler,
         string transactionId,
         string idempotencyKey,
-        int value)
+        int value,
+        long expectedRevision = 0,
+        string method = SetValueMethod)
     {
         Task<AutomationHandlerResult> pending = scheduler.HandleAsync(
-            CreateContext(Expected(0, 0), idempotencyKey, transactionId),
-            SetValueMethod,
+            CreateContext(Expected(expectedRevision, expectedRevision), idempotencyKey, transactionId),
+            method,
             JsonSerializer.SerializeToElement(new { value }),
             CancellationToken.None).AsTask();
         _ = scheduler.Drain(AutomationExecutionPhase.EditorIngress);
         AutomationHandlerResult result = pending.GetAwaiter().GetResult();
-        Assert.Equal(0, result.Revision?.GlobalRevision);
+        Assert.Equal(expectedRevision, result.Revision?.GlobalRevision);
         return result.Payload?.Deserialize(
             AutomationJsonContext.Default.AutomationTransactionStagedOperationInfo)
             ?? throw new InvalidOperationException("transaction write 未返回 staging 回执。");
@@ -1053,7 +2034,8 @@ public sealed class AutomationMainThreadSchedulerTests
     private static Task<AutomationHandlerResult> CommitTransaction(
         AutomationMainThreadScheduler scheduler,
         string transactionId,
-        string idempotencyKey)
+        string idempotencyKey,
+        CancellationToken cancellationToken = default)
     {
         return scheduler.HandleAsync(
             CreateContext(idempotencyKey: idempotencyKey),
@@ -1063,7 +2045,7 @@ public sealed class AutomationMainThreadSchedulerTests
                 SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
                 TransactionId = transactionId,
             }, AutomationJsonContext.Default.AutomationTransactionRequest),
-            CancellationToken.None).AsTask();
+            cancellationToken).AsTask();
     }
 
     private static AutomationRequestContext CreateContext(
@@ -1109,6 +2091,14 @@ public sealed class AutomationMainThreadSchedulerTests
         public int Value { get; set; }
     }
 
+    private sealed class TestPreparationWorkspace(string name, List<string> disposed) : IDisposable
+    {
+        public void Dispose()
+        {
+            disposed.Add(name);
+        }
+    }
+
     private sealed class TestValueUndoAction(TestState state, int before, int after) : IAutomationUndoAction
     {
         public string Name => "Set Test Value";
@@ -1121,6 +2111,33 @@ public sealed class AutomationMainThreadSchedulerTests
         public void Redo()
         {
             state.Value = after;
+        }
+    }
+
+    private sealed class DisposableTestUndoAction(TestState state, int before, int after) :
+        IAutomationUndoAction,
+        IDisposable
+    {
+        public string Name => "Set Disposable Test Value";
+
+        public int UndoCount { get; private set; }
+
+        public int DisposeCount { get; private set; }
+
+        public void Undo()
+        {
+            UndoCount++;
+            state.Value = before;
+        }
+
+        public void Redo()
+        {
+            state.Value = after;
+        }
+
+        public void Dispose()
+        {
+            DisposeCount++;
         }
     }
 
@@ -1147,6 +2164,26 @@ public sealed class AutomationMainThreadSchedulerTests
         {
             ArgumentNullException.ThrowIfNull(state);
             RestoreCount++;
+        }
+    }
+
+    private sealed class TestEventSink(int capacity) : IAutomationEventSink
+    {
+        public List<AutomationEventRecord> Events { get; } = [];
+
+        public bool TryPublish(AutomationEventRecord eventRecord)
+        {
+            if (Events.Count >= capacity)
+            {
+                return false;
+            }
+
+            Events.Add(eventRecord);
+            return true;
+        }
+
+        public void Abort()
+        {
         }
     }
 }

@@ -816,7 +816,7 @@ public sealed class Engine : IDisposable
             new GuiAppOptions
             {
                 Enabled = true,
-                LayoutPath = Path.Combine(Context.Options.ContentRoot, "imgui.ini"),
+                LayoutPath = Context.Options.GuiLayoutPath,
             });
 
         Context.RegisterService(created);
@@ -1329,7 +1329,7 @@ public sealed class Engine : IDisposable
             "PixelEngine",
             "world-snapshots",
             Guid.NewGuid().ToString("N"));
-        SaveWorldToDirectory(snapshotPath);
+        _ = SaveWorldToDirectory(snapshotPath);
         SimulationKernel kernel = Context.GetService<SimulationKernel>();
         return new EngineWorldSnapshot(snapshotPath, Context.Clock.SimTickIndex, kernel.WorldSeed);
     }
@@ -1338,20 +1338,85 @@ public sealed class Engine : IDisposable
     /// 将当前 resident world 持久保存到指定目录；目录内容使用 plan/07 world save 格式。
     /// </summary>
     /// <param name="savePath">目标存档目录。</param>
-    public void SaveWorldToDirectory(string savePath)
+    /// <returns>已原子发布的目录与可选延迟清理 journal。</returns>
+    public WorldSaveWriteResult SaveWorldToDirectory(string savePath)
     {
         ThrowIfShutdown();
         ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
+        WorldSaveService service = new();
+        WorldSaveSnapshot snapshot = CaptureWorldSaveSnapshot(service);
+        WorldSaveWriteResult result = service.WriteSnapshot(snapshot, Path.GetFullPath(savePath));
+        _ = MarkWorldSnapshotPersisted(snapshot);
+        return result;
+    }
+
+    /// <summary>
+    /// 在当前 world 安全点冻结完整 resident world 深快照；快照可交给后台线程编码，
+    /// 也可用于失败回滚与 Undo/Redo。
+    /// </summary>
+    /// <param name="cancellationToken">在 resident chunk 间响应的取消令牌。</param>
+    /// <returns>不再引用 Engine 权威可变对象的完整快照。</returns>
+    public WorldSaveSnapshot CaptureWorldSaveSnapshot(CancellationToken cancellationToken = default)
+    {
+        ThrowIfShutdown();
+        return CaptureWorldSaveSnapshot(new WorldSaveService(), cancellationToken);
+    }
+
+    /// <summary>
+    /// 在当前 world 安全点应用完整快照，并同步随机种子、tick 与 parity。
+    /// 本方法不执行磁盘 I/O；调用者可用另一份快照实现回滚或 Undo/Redo。
+    /// </summary>
+    /// <param name="snapshot">已完全冻结或后台解码的世界快照。</param>
+    /// <returns>应用后的世界摘要。</returns>
+    public WorldLoadResult ApplyWorldSaveSnapshot(WorldSaveSnapshot snapshot)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(snapshot);
+        WorldSaveService service = new();
+        WorldLoadResult result = service.ApplySnapshot(
+            snapshot,
+            CreateWorldLoadContext(fallbackMaterialId: 0),
+            ResolveRuntimeWorldStateBridge());
+        RestoreWorldTimeline(result, snapshot.CurrentParity);
+        return result;
+    }
+
+    /// <summary>在存档目录成功发布后清除该快照覆盖 chunk 的流式 dirty 标记。</summary>
+    /// <param name="snapshot">已成功持久化的完整 world 快照。</param>
+    /// <returns>至少一个 chunk 的 dirty 状态发生变化时返回 <see langword="true" />。</returns>
+    public bool MarkWorldSnapshotPersisted(WorldSaveSnapshot snapshot)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
+        return WorldSaveService.MarkSnapshotPersisted(ResolveSnapshotResidency(chunks), snapshot);
+    }
+
+    /// <summary>恢复 world 快照捕获时的流式 dirty before-image，供保存失败回滚与 Undo。</summary>
+    /// <param name="snapshot">保存前捕获的完整 world 快照。</param>
+    /// <returns>至少一个 chunk 的 dirty 状态发生变化时返回 <see langword="true" />。</returns>
+    public bool RestoreWorldSnapshotPersistenceState(WorldSaveSnapshot snapshot)
+    {
+        ThrowIfShutdown();
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
+        return WorldSaveService.RestoreSnapshotPersistenceState(
+            ResolveSnapshotResidency(chunks),
+            snapshot);
+    }
+
+    private WorldSaveSnapshot CaptureWorldSaveSnapshot(
+        WorldSaveService service,
+        CancellationToken cancellationToken = default)
+    {
         ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
         TemperatureField temperature = Context.GetService<TemperatureField>();
         MaterialTable materials = Context.GetService<MaterialTable>();
         SimulationKernel kernel = Context.GetService<SimulationKernel>();
-        ParticleSystem particles = Context.GetService<ParticleSystem>();
-        RuntimeWorldStateBridge stateBridge = EnsureRuntimeWorldStateBridge(particles);
+        RuntimeWorldStateBridge stateBridge = ResolveRuntimeWorldStateBridge();
         ResidencyTable residency = ResolveSnapshotResidency(chunks);
         long gameTimeTicks = Context.Clock.SimTickIndex;
-
-        new WorldSaveService().SaveAll(
+        return service.CaptureSnapshot(
             new WorldSaveContext(
                 chunks,
                 residency,
@@ -1362,7 +1427,8 @@ public sealed class Engine : IDisposable
                 ReadOnlyMemory<byte>.Empty,
                 isFrameBoundary: true),
             stateBridge,
-            Path.GetFullPath(savePath));
+            kernel.CurrentParity,
+            cancellationToken);
     }
 
     /// <summary>
@@ -1390,26 +1456,69 @@ public sealed class Engine : IDisposable
         ArgumentException.ThrowIfNullOrWhiteSpace(savePath);
         MaterialTable materials = Context.GetService<MaterialTable>();
         _ = materials.GetName(fallbackMaterialId);
-        ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
-        TemperatureField temperature = Context.GetService<TemperatureField>();
-        ParticleSystem particles = Context.GetService<ParticleSystem>();
-        RuntimeWorldStateBridge stateBridge = EnsureRuntimeWorldStateBridge(particles);
-        WorldLoadResult result = new WorldSaveService().LoadAll(
+        WorldSaveService service = new();
+        WorldSaveSnapshot loaded = service.ReadSnapshot(
             Path.GetFullPath(savePath),
-            new WorldLoadContext(
-                chunks,
-                ResolveSnapshotResidency(chunks),
-                temperature,
-                materials,
-                fallbackMaterialId,
-                currentParityBit: 0),
-            stateBridge);
+            new MaterialNameTable(materials.BuildIdNameTable()),
+            fallbackMaterialId);
+        WorldSaveSnapshot before = CaptureWorldSaveSnapshot(service);
+        try
+        {
+            WorldLoadResult result = service.ApplySnapshot(
+                loaded,
+                CreateWorldLoadContext(fallbackMaterialId),
+                ResolveRuntimeWorldStateBridge());
+            RestoreWorldTimeline(result, loaded.CurrentParity);
+            return result;
+        }
+        catch (Exception operationException)
+        {
+            try
+            {
+                WorldLoadResult restored = service.ApplySnapshot(
+                    before,
+                    CreateWorldLoadContext(fallbackMaterialId: 0),
+                    ResolveRuntimeWorldStateBridge());
+                RestoreWorldTimeline(restored, before.CurrentParity);
+            }
+            catch (Exception rollbackException)
+            {
+                throw new AggregateException(
+                    "World load 应用失败且 before-image 回滚失败。",
+                    operationException,
+                    rollbackException);
+            }
 
-        Context.GetService<SimulationKernel>().RestoreFrameState(
+            throw;
+        }
+    }
+
+    private WorldLoadContext CreateWorldLoadContext(ushort fallbackMaterialId)
+    {
+        MaterialTable materials = Context.GetService<MaterialTable>();
+        _ = materials.GetName(fallbackMaterialId);
+        ResidentChunkMap chunks = Context.GetService<ResidentChunkMap>();
+        return new WorldLoadContext(
+            chunks,
+            ResolveSnapshotResidency(chunks),
+            Context.GetService<TemperatureField>(),
+            materials,
+            fallbackMaterialId,
+            Context.GetService<SimulationKernel>().CurrentParity);
+    }
+
+    private RuntimeWorldStateBridge ResolveRuntimeWorldStateBridge()
+    {
+        return EnsureRuntimeWorldStateBridge(Context.GetService<ParticleSystem>());
+    }
+
+    private void RestoreWorldTimeline(WorldLoadResult result, byte currentParity)
+    {
+        Context.GetService<SimulationKernel>().RestoreWorldState(
+            result.WorldSeed,
             checked((uint)result.GameTimeTicks),
-            CurrentParityFromGameTime(result.GameTimeTicks));
+            currentParity);
         Context.Clock.RestoreCounters(result.GameTimeTicks, result.GameTimeTicks);
-        return result;
     }
 
     /// <summary>

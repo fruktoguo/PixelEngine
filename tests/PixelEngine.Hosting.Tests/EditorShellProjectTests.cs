@@ -342,6 +342,33 @@ public sealed class EditorShellProjectTests
     }
 
     /// <summary>
+    /// 验证最近工程原子替换失败时，收藏/移除不会只改变内存 before-image。
+    /// </summary>
+    [Fact]
+    public void RecentProjectsPersistentMutationsKeepMemoryAndDiskOnReplacementFailure()
+    {
+        using TempDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(Path.Combine(temp.Path, "Project"), "Project");
+        string path = Path.Combine(temp.Path, "recent-projects.json");
+        RecentProjectsStore store = RecentProjectsStore.Load(path);
+        store.AddOrUpdateAndSave(project);
+        RecentProjectEntry before = Assert.Single(store.Entries);
+        using FileStream locked = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+        Exception favoriteFailure = Assert.ThrowsAny<Exception>(
+            () => store.SetFavoriteAndSave(project.ProjectRoot, favorite: true));
+        Assert.True(favoriteFailure is IOException or UnauthorizedAccessException);
+        Assert.Equal(before, Assert.Single(store.Entries));
+        Exception removeFailure = Assert.ThrowsAny<Exception>(
+            () => store.RemoveAndSave(project.ProjectRoot));
+        Assert.True(removeFailure is IOException or UnauthorizedAccessException);
+        Assert.Equal(before, Assert.Single(store.Entries));
+
+        RecentProjectEntry persisted = Assert.Single(RecentProjectsStore.Load(path).Entries);
+        Assert.Equal(before, persisted);
+    }
+
+    /// <summary>
     /// 验证最近工程加载会跳过无效项、按最近打开排序、去重并裁剪上限。
     /// </summary>
     [Fact]

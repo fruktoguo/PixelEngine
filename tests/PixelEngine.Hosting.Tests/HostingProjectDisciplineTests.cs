@@ -1138,7 +1138,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ResetLayoutState(buildDefaultLayout: true)", layout, StringComparison.Ordinal);
         Assert.Contains("_gameObjectInspectorPanel?.RequestFocus()", host, StringComparison.Ordinal);
         Assert.Contains("new EditorConsolePanel(_app)", host, StringComparison.Ordinal);
-        Assert.Contains("new UiManifestPanel(new EditorAssetManifestStore(_project))", host, StringComparison.Ordinal);
+        Assert.Contains("UiManifestPanel uiManifestPanel = new(new EditorAssetManifestStore(_project))", host, StringComparison.Ordinal);
         Assert.Contains("prepareScene: _app.PrepareSceneForBuild", host, StringComparison.Ordinal);
         string assetBrowserDataSource = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserDataSource.cs"));
         string assetBrowserPanel = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "AssetBrowserPanel.cs"));
@@ -1193,7 +1193,11 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("TryBuildKnownJsonPreview", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("ApplyQueuedChanges", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("SynchronizeAssetRecords", shellAssetBrowserDataSource, StringComparison.Ordinal);
-        Assert.Contains("store.DeleteFolder(path.RelativePath, activeScene, request.Confirmed)", shellAssetBrowserDataSource, StringComparison.Ordinal);
+        Assert.Contains(
+            "EditorAssetFolderDeleteResult result = store.DeleteFolder(",
+            shellAssetBrowserDataSource,
+            StringComparison.Ordinal);
+        Assert.Contains("retainArchivePath);", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("GetStore(path.Root).MoveFolder", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("store.CreateAsset(path.RelativePath, type)", shellAssetBrowserDataSource, StringComparison.Ordinal);
         Assert.Contains("store.ImportAsset(request.SourceFullPath, path.RelativePath, type)", shellAssetBrowserDataSource, StringComparison.Ordinal);
@@ -1747,13 +1751,14 @@ public sealed class HostingProjectDisciplineTests
         string engine = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Hosting", "Engine.cs"));
 
         // Assert：验证预期结果
-        Assert.Contains("new SaveLoadPanel(new EditorWorldSaveLoadService", source, StringComparison.Ordinal);
+        Assert.Contains("_saveLoadService = new EditorWorldSaveLoadService", source, StringComparison.Ordinal);
+        Assert.Contains("new SaveLoadPanel(_saveLoadService)", source, StringComparison.Ordinal);
         Assert.Contains("class EditorWorldSaveLoadService", source, StringComparison.Ordinal);
         Assert.Contains("ISaveLoadService", source, StringComparison.Ordinal);
         Assert.Contains("SaveWorldToDirectory", source, StringComparison.Ordinal);
         Assert.Contains("LoadWorldFromDirectory", source, StringComparison.Ordinal);
         Assert.Contains("Path.Combine(_project.ProjectRoot, \"saves\")", source, StringComparison.Ordinal);
-        Assert.Contains("public void SaveWorldToDirectory", engine, StringComparison.Ordinal);
+        Assert.Contains("public WorldSaveWriteResult SaveWorldToDirectory", engine, StringComparison.Ordinal);
         Assert.Contains("public WorldLoadResult LoadWorldFromDirectory", engine, StringComparison.Ordinal);
         Assert.Contains("Context.Clock.RestoreCounters", engine, StringComparison.Ordinal);
         Assert.Contains("RestoreFrameState", engine, StringComparison.Ordinal);

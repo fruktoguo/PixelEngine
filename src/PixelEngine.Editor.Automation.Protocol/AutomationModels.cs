@@ -151,6 +151,32 @@ public sealed record AutomationError
     public string? CorrelationId { get; init; }
 }
 
+/// <summary>内部 semantic handler 失败的有界结构化诊断。</summary>
+public sealed record AutomationInternalErrorDetails
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>顶层异常类型。</summary>
+    public required string ExceptionType { get; init; }
+
+    /// <summary>顶层异常消息；不包含 stack trace 或请求 payload。</summary>
+    public required string Message { get; init; }
+
+    /// <summary>有界、扁平化的 inner exception causes。</summary>
+    public AutomationInternalErrorCause[] Causes { get; init; } = [];
+}
+
+/// <summary>内部错误链中的一项。</summary>
+public sealed record AutomationInternalErrorCause
+{
+    /// <summary>异常类型。</summary>
+    public required string ExceptionType { get; init; }
+
+    /// <summary>异常消息；不包含 stack trace。</summary>
+    public required string Message { get; init; }
+}
+
 /// <summary>
 /// 初始 hello 请求。
 /// </summary>

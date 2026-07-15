@@ -44,7 +44,7 @@ public sealed class TuningPanelTests
             BloomEnabled: false,
             BloomThreshold: 0.5f,
             BloomIntensity: 1.2f,
-            FogOfWarEnabled: true,
+            FogOfWarEnabled: false,
             DitherEnabled: false,
             Gamma: 2.0f,
             RadianceCascadesEnabled: true));
@@ -53,6 +53,7 @@ public sealed class TuningPanelTests
         Assert.Equal(2.0f, settings.Gamma);
         Assert.Equal(0f, settings.Bloom.Intensity);
         Assert.Equal(0.5f, settings.Bloom.Threshold);
+        Assert.False(settings.EnableFogOfWar);
         Assert.True(settings.RadianceCascades.Enabled);
     }
 

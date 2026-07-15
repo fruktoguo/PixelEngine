@@ -13,6 +13,7 @@ public sealed class RegionFileStore : IChunkStore
     private const int RegionChunkCount = RegionSizeChunks * RegionSizeChunks;
     private const int IndexEntrySize = sizeof(long) + sizeof(int);
     private const int IndexBytes = RegionChunkCount * IndexEntrySize;
+    private const int MaximumChunkBlobBytes = 1024 * 1024;
 
     private readonly string _regionsDirectory;
 
@@ -100,6 +101,16 @@ public sealed class RegionFileStore : IChunkStore
         MutateRegion(coord, [], delete: true);
     }
 
+    /// <summary>
+    /// 解析指定 chunk 所属 region 文件的 canonical path；不创建或打开文件。
+    /// </summary>
+    /// <param name="coord">chunk 坐标。</param>
+    /// <returns>region 文件绝对或相对于构造 root 的路径。</returns>
+    public string ResolveRegionPath(ChunkCoord coord)
+    {
+        return RegionPath(coord);
+    }
+
     private void MutateRegion(ChunkCoord coord, ReadOnlySpan<byte> blob, bool delete)
     {
         _ = Directory.CreateDirectory(_regionsDirectory);
@@ -185,7 +196,8 @@ public sealed class RegionFileStore : IChunkStore
 
     private static void ValidatePayloadBounds(RegionIndexEntry entry, long fileLength, string path)
     {
-        if (entry.Offset < IndexBytes || entry.Offset > fileLength || entry.Length < 0)
+        if (entry.Offset < IndexBytes || entry.Offset > fileLength ||
+            entry.Length < 0 || entry.Length > MaximumChunkBlobBytes)
         {
             throw new InvalidDataException($"Region 文件索引项越界：{path}");
         }

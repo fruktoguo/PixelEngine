@@ -77,6 +77,27 @@ public static class AutomationProtocolConstants
     /// <summary>解决等待中的 Scene/Project 转场。</summary>
     public const string WorkspaceTransitionResolveMethod = "workspace.transition.resolve";
 
+    /// <summary>在指定位置原子创建并打开 PixelEngine 工程。</summary>
+    public const string WorkspaceProjectCreateMethod = "workspace.project.create";
+
+    /// <summary>从 canonical path 打开已有 PixelEngine 工程。</summary>
+    public const string WorkspaceProjectOpenMethod = "workspace.project.open";
+
+    /// <summary>关闭当前 PixelEngine 工程并返回 Project Picker。</summary>
+    public const string WorkspaceProjectCloseMethod = "workspace.project.close";
+
+    /// <summary>经 dirty guard 请求退出 Editor。</summary>
+    public const string WorkspaceExitMethod = "workspace.exit";
+
+    /// <summary>分页读取 Project Picker 最近工程。</summary>
+    public const string WorkspaceRecentListMethod = "workspace.recent.list";
+
+    /// <summary>按稳定工程 ID 原子设置最近工程收藏状态。</summary>
+    public const string WorkspaceRecentFavoriteSetMethod = "workspace.recent.favorite.set";
+
+    /// <summary>按稳定工程 ID 原子移除最近工程。</summary>
+    public const string WorkspaceRecentRemoveMethod = "workspace.recent.remove";
+
     /// <summary>读取 Editor 顶层窗口。</summary>
     public const string WindowGetMethod = "window.get";
 
@@ -221,6 +242,264 @@ public static class AutomationProtocolConstants
     /// <summary>沿控制点折线执行连续世界画刷 stroke。</summary>
     public const string BrushStrokeMethod = "tool.brush.stroke";
 
+    /// <summary>读取当前工程与 Asset Database 摘要。</summary>
+    public const string ProjectGetMethod = "project.get";
+
+    /// <summary>分页读取全部稳定资产。</summary>
+    public const string ProjectAssetListMethod = "project.assets.list";
+
+    /// <summary>后台完整刷新 Project Window 资产数据库并原子发布。</summary>
+    public const string ProjectAssetRefreshMethod = "project.assets.refresh";
+
+    /// <summary>分页读取 Project Window 文件夹。</summary>
+    public const string ProjectFolderListMethod = "project.folders.list";
+
+    /// <summary>按 stable asset id 读取资产。</summary>
+    public const string ProjectAssetGetMethod = "project.asset.get";
+
+    /// <summary>读取 Project Window 稳定选择。</summary>
+    public const string ProjectSelectionGetMethod = "project.selection.get";
+
+    /// <summary>设置或清除 Project Window 稳定选择。</summary>
+    public const string ProjectSelectionSetMethod = "project.selection.set";
+
+    /// <summary>读取 Project Window 搜索、过滤、排序与展示状态。</summary>
+    public const string ProjectWindowGetMethod = "project.window.get";
+
+    /// <summary>原子更新 Project Window 搜索、过滤、排序或展示状态。</summary>
+    public const string ProjectWindowSetMethod = "project.window.set";
+
+    /// <summary>读取资产详细预览并把大内容发布为制品。</summary>
+    public const string ProjectAssetPreviewMethod = "project.asset.preview";
+
+    /// <summary>使用已配置的外部编辑器打开脚本资产。</summary>
+    public const string ProjectAssetScriptOpenMethod = "project.asset.script.open";
+
+    /// <summary>使用已配置的 IDE 打开当前工程的完整 C# workspace/solution。</summary>
+    public const string ProjectCodeOpenMethod = "project.code.open";
+
+    /// <summary>通过 Editor 音频预览服务试听音频资产。</summary>
+    public const string ProjectAssetAudioPreviewMethod = "project.asset.audio.preview";
+
+    /// <summary>分页读取一个稳定资产的引用位置。</summary>
+    public const string ProjectAssetReferencesMethod = "project.asset.references.list";
+
+    /// <summary>创建 Project 资产或文件夹。</summary>
+    public const string ProjectAssetCreateMethod = "project.asset.create";
+
+    /// <summary>从获准 import root 导入外部文件。</summary>
+    public const string ProjectAssetImportMethod = "project.asset.import";
+
+    /// <summary>从获准 import root 原子替换已有资产内容并保留 stable ID。</summary>
+    public const string ProjectAssetReplaceMethod = "project.asset.replace";
+
+    /// <summary>移动或重命名 Project 资产。</summary>
+    public const string ProjectAssetMoveMethod = "project.asset.move";
+
+    /// <summary>安全删除 Project 资产。</summary>
+    public const string ProjectAssetDeleteMethod = "project.asset.delete";
+
+    /// <summary>移动或重命名 Project 文件夹。</summary>
+    public const string ProjectFolderMoveMethod = "project.folder.move";
+
+    /// <summary>安全递归删除 Project 文件夹。</summary>
+    public const string ProjectFolderDeleteMethod = "project.folder.delete";
+
+    /// <summary>读取 UI Manifest screens 与 preload 状态。</summary>
+    public const string ProjectUiManifestGetMethod = "project.ui-manifest.get";
+
+    /// <summary>把已发现 UI screen 同步到 UI Manifest。</summary>
+    public const string ProjectUiManifestSyncMethod = "project.ui-manifest.sync";
+
+    /// <summary>设置 UI Manifest screen preload。</summary>
+    public const string ProjectUiManifestPreloadSetMethod = "project.ui-manifest.preload.set";
+
+    /// <summary>分页读取 Console 原始日志。</summary>
+    public const string ConsoleListMethod = "console.entries.list";
+
+    /// <summary>读取 Console 严重度计数。</summary>
+    public const string ConsoleCountsGetMethod = "console.counts.get";
+
+    /// <summary>读取 Console 工具栏与 Play 联动选项。</summary>
+    public const string ConsoleOptionsGetMethod = "console.options.get";
+
+    /// <summary>原子替换 Console 工具栏与 Play 联动选项。</summary>
+    public const string ConsoleOptionsSetMethod = "console.options.set";
+
+    /// <summary>清空 Console 环形缓冲。</summary>
+    public const string ConsoleClearMethod = "console.clear";
+
+    /// <summary>把 Console 全量快照导出为 JSON 制品。</summary>
+    public const string ConsoleExportMethod = "console.export";
+
+    /// <summary>读取 Console 当前选中行与详情。</summary>
+    public const string ConsoleSelectionGetMethod = "console.selection.get";
+
+    /// <summary>选择或清除一个稳定 Console entry。</summary>
+    public const string ConsoleSelectionSetMethod = "console.selection.set";
+
+    /// <summary>生成与 Console Copy 上下文动作相同的文本。</summary>
+    public const string ConsoleEntryCopyMethod = "console.entry.copy";
+
+    /// <summary>使用配置的脚本编辑器打开 Console entry 源码位置。</summary>
+    public const string ConsoleEntryOpenSourceMethod = "console.entry.open-source";
+
+    /// <summary>读取当前 Play session。</summary>
+    public const string PlayGetMethod = "play.get";
+
+    /// <summary>进入新的 Play session。</summary>
+    public const string PlayEnterMethod = "play.enter";
+
+    /// <summary>暂停当前 Play session。</summary>
+    public const string PlayPauseMethod = "play.pause";
+
+    /// <summary>恢复当前 Play session。</summary>
+    public const string PlayResumeMethod = "play.resume";
+
+    /// <summary>执行恰好一个暂停帧 step。</summary>
+    public const string PlayStepMethod = "play.step";
+
+    /// <summary>停止 Play 并恢复 authoring before-image。</summary>
+    public const string PlayStopMethod = "play.stop";
+
+    /// <summary>读取当前 runtime world 摘要。</summary>
+    public const string RuntimeWorldGetMethod = "runtime.world.get";
+
+    /// <summary>分页读取当前 play-session scoped runtime entities。</summary>
+    public const string RuntimeEntityListMethod = "runtime.entities.list";
+
+    /// <summary>读取一个 play-session scoped runtime entity。</summary>
+    public const string RuntimeEntityGetMethod = "runtime.entity.get";
+
+    /// <summary>分页读取 play-session scoped runtime rigid bodies。</summary>
+    public const string RuntimeBodyListMethod = "runtime.bodies.list";
+
+    /// <summary>读取一个 play-session scoped runtime rigid body。</summary>
+    public const string RuntimeBodyGetMethod = "runtime.body.get";
+
+    /// <summary>临时修改 Play/Paused runtime entity Transform。</summary>
+    public const string RuntimeEntityTransformSetMethod = "runtime.entity.transform.set";
+
+    /// <summary>临时修改 Play/Paused runtime Behaviour Inspector 字段。</summary>
+    public const string RuntimeComponentFieldSetMethod = "runtime.component.field.set";
+
+    /// <summary>读取当前 Engine simulation 控制状态。</summary>
+    public const string RuntimeSimulationGetMethod = "runtime.simulation.get";
+
+    /// <summary>设置当前 Engine 请求的 simulation 频率。</summary>
+    public const string RuntimeSimulationSetMethod = "runtime.simulation.set";
+
+    /// <summary>读取指定世界坐标的 runtime cell 诊断快照。</summary>
+    public const string RuntimeCellInspectMethod = "runtime.cell.inspect";
+
+    /// <summary>读取 World Inspector 面板跟随/锁定状态与最近显示结果。</summary>
+    public const string RuntimeWorldInspectorGetMethod = "runtime.world-inspector.get";
+
+    /// <summary>设置 World Inspector 跟随模式与锁定坐标。</summary>
+    public const string RuntimeWorldInspectorSetMethod = "runtime.world-inspector.set";
+
+    /// <summary>分页读取当前 Engine 的稳定 material catalog。</summary>
+    public const string RuntimeMaterialListMethod = "runtime.materials.list";
+
+    /// <summary>按稳定名称读取一个完整 runtime material 定义。</summary>
+    public const string RuntimeMaterialGetMethod = "runtime.material.get";
+
+    /// <summary>读取 Materials/Reactions 面板完整草稿与 runtime bindings。</summary>
+    public const string MaterialEditorGetMethod = "materials.editor.get";
+
+    /// <summary>原子替换 Materials/Reactions 面板完整草稿。</summary>
+    public const string MaterialEditorSetMethod = "materials.editor.set";
+
+    /// <summary>从 materials.json 与 reactions.json 重新加载面板草稿。</summary>
+    public const string MaterialEditorReloadMethod = "materials.editor.reload";
+
+    /// <summary>预览 tag 展开与 packed reaction 数量。</summary>
+    public const string MaterialEditorPreviewMethod = "materials.editor.preview";
+
+    /// <summary>原子持久化双文件并稳定热重载运行时材质、反应与 live grid。</summary>
+    public const string MaterialEditorApplyMethod = "materials.editor.apply";
+
+    /// <summary>读取 Physics 运行时调参与统计。</summary>
+    public const string RuntimePhysicsGetMethod = "runtime.physics.get";
+
+    /// <summary>设置 Physics 运行时调参。</summary>
+    public const string RuntimePhysicsSetMethod = "runtime.physics.set";
+
+    /// <summary>读取自由粒子运行时调参与统计。</summary>
+    public const string RuntimeParticlesGetMethod = "runtime.particles.get";
+
+    /// <summary>设置自由粒子运行时调参。</summary>
+    public const string RuntimeParticlesSetMethod = "runtime.particles.set";
+
+    /// <summary>读取 Lighting 运行时调参。</summary>
+    public const string RuntimeLightingGetMethod = "runtime.lighting.get";
+
+    /// <summary>设置 Lighting 运行时调参。</summary>
+    public const string RuntimeLightingSetMethod = "runtime.lighting.set";
+
+    /// <summary>分页列出 Editor 世界存档 slots。</summary>
+    public const string RuntimeSaveSlotListMethod = "runtime.saves.list";
+
+    /// <summary>在 Engine world 安全点冻结并原子发布一个粗粒度存档。</summary>
+    public const string RuntimeSaveSlotSaveMethod = "runtime.saves.save";
+
+    /// <summary>后台完整解码后在 Engine world 安全点原子加载一个粗粒度存档。</summary>
+    public const string RuntimeSaveSlotLoadMethod = "runtime.saves.load";
+
+    /// <summary>读取 Game View presentation、preset 与显示状态。</summary>
+    public const string GamePresentationGetMethod = "game.presentation.get";
+
+    /// <summary>原子替换 Game View presentation、preset 与显示状态。</summary>
+    public const string GamePresentationSetMethod = "game.presentation.set";
+
+    /// <summary>捕获 Scene View 可见 authoring viewport 为图片制品。</summary>
+    public const string SceneCaptureMethod = "scene.capture";
+
+    /// <summary>捕获最新完整 Game presentation 为图片制品。</summary>
+    public const string GameCaptureMethod = "game.capture";
+
+    /// <summary>读取 Editor Preferences。</summary>
+    public const string PreferencesGetMethod = "settings.preferences.get";
+
+    /// <summary>原子写入 Editor Preferences。</summary>
+    public const string PreferencesSetMethod = "settings.preferences.set";
+
+    /// <summary>分页读取菜单、调度器与 Preferences 共用的快捷键目录。</summary>
+    public const string ShortcutListMethod = "settings.shortcuts.list";
+
+    /// <summary>读取 Project Settings。</summary>
+    public const string ProjectSettingsGetMethod = "settings.project.get";
+
+    /// <summary>原子写入 Project Settings。</summary>
+    public const string ProjectSettingsSetMethod = "settings.project.set";
+
+    /// <summary>读取 Player Settings。</summary>
+    public const string PlayerSettingsGetMethod = "settings.player.get";
+
+    /// <summary>原子写入 Player Settings。</summary>
+    public const string PlayerSettingsSetMethod = "settings.player.set";
+
+    /// <summary>读取 Build Settings profile。</summary>
+    public const string BuildSettingsGetMethod = "settings.build.get";
+
+    /// <summary>原子写入 Build Settings profile。</summary>
+    public const string BuildSettingsSetMethod = "settings.build.set";
+
+    /// <summary>读取上一帧 Profiler 与运行诊断。</summary>
+    public const string ProfilerGetMethod = "profiler.get";
+
+    /// <summary>把 Profiler 快照导出为 JSON 制品。</summary>
+    public const string ProfilerExportMethod = "profiler.export";
+
+    /// <summary>通过真实 present 控制器切换 Profiler VSync。</summary>
+    public const string ProfilerVSyncSetMethod = "profiler.vsync.set";
+
+    /// <summary>读取 debug overlay flags。</summary>
+    public const string DebugOverlayGetMethod = "debug.overlay.get";
+
+    /// <summary>设置一个 debug overlay flag。</summary>
+    public const string DebugOverlaySetMethod = "debug.overlay.set";
+
     /// <summary>开始可逆 transaction。</summary>
     public const string TransactionBeginMethod = "transaction.begin";
 
@@ -242,6 +521,15 @@ public static class AutomationProtocolConstants
     /// <summary>删除 event subscription。</summary>
     public const string EventUnsubscribeMethod = "event.unsubscribe";
 
+    /// <summary>分页读取当前 session 拥有的 artifact。</summary>
+    public const string ArtifactListMethod = "artifact.list";
+
+    /// <summary>从磁盘重新校验 artifact 长度与 SHA256。</summary>
+    public const string ArtifactVerifyMethod = "artifact.verify";
+
+    /// <summary>删除当前 session 拥有的 artifact。</summary>
+    public const string ArtifactDeleteMethod = "artifact.delete";
+
     /// <summary>Server→Client 的 event envelope method。</summary>
     public const string EventNotificationMethod = "event.notification";
 
@@ -250,6 +538,60 @@ public static class AutomationProtocolConstants
 
     /// <summary>transaction commit/rollback/expiry 事件类型。</summary>
     public const string TransactionChangedEventType = "editor.transaction.changed";
+
+    /// <summary>workspace、工程或转场状态发生变化。</summary>
+    public const string WorkspaceChangedEventType = "editor.workspace.changed";
+
+    /// <summary>平台窗口状态发生变化。</summary>
+    public const string WindowChangedEventType = "editor.window.changed";
+
+    /// <summary>panel、dock 或布局状态发生变化。</summary>
+    public const string LayoutChangedEventType = "editor.layout.changed";
+
+    /// <summary>Scene authoring 状态发生变化。</summary>
+    public const string SceneChangedEventType = "editor.scene.changed";
+
+    /// <summary>Hierarchy 内容发生变化。</summary>
+    public const string HierarchyChangedEventType = "editor.hierarchy.changed";
+
+    /// <summary>编辑器 selection 发生变化。</summary>
+    public const string SelectionChangedEventType = "editor.selection.changed";
+
+    /// <summary>Inspector 可观察内容发生变化。</summary>
+    public const string InspectorChangedEventType = "editor.inspector.changed";
+
+    /// <summary>Scene tool、gizmo、grid、snap 或 brush 状态发生变化。</summary>
+    public const string ToolChangedEventType = "editor.tool.changed";
+
+    /// <summary>Project asset/folder 数据库发生变化。</summary>
+    public const string AssetsChangedEventType = "editor.assets.changed";
+
+    /// <summary>Console 内容或计数发生变化。</summary>
+    public const string ConsoleChangedEventType = "editor.console.changed";
+
+    /// <summary>Play/Pause/Step/Stop 状态发生变化。</summary>
+    public const string PlayChangedEventType = "editor.play.changed";
+
+    /// <summary>运行时 world/entity/component snapshot 失效。</summary>
+    public const string RuntimeChangedEventType = "editor.runtime.changed";
+
+    /// <summary>Game View presentation 状态发生变化。</summary>
+    public const string GameChangedEventType = "editor.game.changed";
+
+    /// <summary>Preferences、Project、Player 或 Build settings 发生变化。</summary>
+    public const string SettingsChangedEventType = "editor.settings.changed";
+
+    /// <summary>Profiler snapshot 或采集状态发生变化。</summary>
+    public const string ProfilerChangedEventType = "editor.profiler.changed";
+
+    /// <summary>debug overlay 状态发生变化。</summary>
+    public const string DebugChangedEventType = "editor.debug.changed";
+
+    /// <summary>build job 或 build output 状态发生变化。</summary>
+    public const string BuildChangedEventType = "editor.build.changed";
+
+    /// <summary>session artifact 集合发生变化。</summary>
+    public const string ArtifactChangedEventType = "editor.artifact.changed";
 
     /// <summary>当前协议版本。</summary>
     public static AutomationProtocolVersion CurrentVersion { get; } = new(CurrentMajor, CurrentMinor);

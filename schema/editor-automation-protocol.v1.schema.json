@@ -247,6 +247,49 @@
         "metadata": {}
       }
     },
+    "artifactListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/artifactReference" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "artifactRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "artifactId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" }
+      }
+    },
+    "artifactVerifyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "artifactId", "verified"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "verified": { "type": "boolean" }
+      }
+    },
+    "artifactDeleteResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "artifactId", "deleted"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "artifactId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+        "deleted": { "type": "boolean" }
+      }
+    },
     "transactionBeginRequest": {
       "type": "object",
       "additionalProperties": false,
@@ -322,7 +365,7 @@
     "transactionOperationResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "operationId", "requestId", "method", "resourceIds"],
+      "required": ["schemaVersion", "operationId", "requestId", "method", "resourceIds", "stateChanged"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "operationId": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
@@ -334,7 +377,8 @@
           "maxItems": 4096,
           "uniqueItems": true,
           "items": { "type": "string", "minLength": 1, "maxLength": 256 }
-        }
+        },
+        "stateChanged": { "type": "boolean" }
       }
     },
     "transactionCommitResult": {
@@ -481,6 +525,30 @@
       "type": "object",
       "additionalProperties": false
     },
+    "internalErrorCause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exceptionType", "message"],
+      "properties": {
+        "exceptionType": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "message": { "type": "string", "maxLength": 4096 }
+      }
+    },
+    "internalErrorDetails": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "exceptionType", "message", "causes"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "exceptionType": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "message": { "type": "string", "maxLength": 4096 },
+        "causes": {
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/$defs/internalErrorCause" }
+        }
+      }
+    },
     "filterClause": {
       "type": "object",
       "additionalProperties": false,
@@ -567,6 +635,7 @@
         "transactionMode",
         "requiresExpectedRevision",
         "requiresIdempotencyKey",
+        "usesBackgroundPreparation",
         "eventTypes",
         "artifactBehavior",
         "uiCommandIds"
@@ -596,6 +665,7 @@
         "transactionMode": { "enum": ["Forbidden", "Optional", "Required"] },
         "requiresExpectedRevision": { "type": "boolean" },
         "requiresIdempotencyKey": { "type": "boolean" },
+        "usesBackgroundPreparation": { "type": "boolean" },
         "eventTypes": {
           "type": "array",
           "maxItems": 256,
@@ -650,6 +720,95 @@
         "transitionKind": { "type": "string", "minLength": 1, "maxLength": 64 },
         "transitionTarget": { "type": "string", "minLength": 1, "maxLength": 32767 }
       }
+    },
+    "projectCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "locationPath", "name"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "locationPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "projectOpenRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "path"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "recentProjectInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "projectId", "name", "rootPath", "lastOpenedUtc", "favorite", "projectFileExists"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "rootPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "lastOpenedUtc": { "type": "string", "format": "date-time" },
+        "favorite": { "type": "boolean" },
+        "projectFileExists": { "type": "boolean" }
+      }
+    },
+    "recentProjectListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/recentProjectInfo" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "recentProjectFavoriteSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "projectId", "favorite"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "favorite": { "type": "boolean" }
+      }
+    },
+    "recentProjectRemoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "projectId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    },
+    "recentProjectMutationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "projectId", "removed"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectId": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "removed": { "type": "boolean" },
+        "favorite": { "type": "boolean" }
+      },
+      "oneOf": [
+        {
+          "required": ["favorite"],
+          "properties": { "removed": { "const": false } }
+        },
+        {
+          "properties": {
+            "removed": { "const": true },
+            "favorite": false
+          }
+        }
+      ]
     },
     "commandResult": {
       "type": "object",
@@ -1349,7 +1508,7 @@
       "required": [
         "tool",
         "shape",
-        "materialId",
+        "materialName",
         "radius",
         "probability",
         "temperatureMode",
@@ -1358,6 +1517,7 @@
       "properties": {
         "tool": { "type": "string", "minLength": 1, "maxLength": 64 },
         "shape": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "materialName": { "type": "string", "minLength": 1, "maxLength": 256 },
         "materialId": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "radius": { "type": "integer", "minimum": 0, "maximum": 128 },
         "probability": { "type": "number", "minimum": 0, "maximum": 1 },
@@ -1507,6 +1667,1561 @@
         "skippedNonResidentCells": { "type": "integer", "minimum": 0 },
         "skippedOutOfBoundsCells": { "type": "integer", "minimum": 0 },
         "diagnostic": { "type": "string", "maxLength": 4096 }
+      }
+    },
+    "projectSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "projectId", "name", "rootPath", "contentRootPath", "scriptSourcePath", "configuredContentRootPath", "configuredScriptSourcePath", "requiresReload", "currentScenePath", "assetCount", "folderCount", "assetDatabaseDiagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "projectId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "rootPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "contentRootPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "scriptSourcePath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "configuredContentRootPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "configuredScriptSourcePath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "requiresReload": { "type": "boolean" },
+        "currentScenePath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "assetCount": { "type": "integer", "minimum": 0 },
+        "folderCount": { "type": "integer", "minimum": 0 },
+        "assetDatabaseDiagnostic": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "projectSelectionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "assetPath", "folderId", "folderPath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "assetPath": { "type": ["string", "null"], "minLength": 1, "maxLength": 32767 },
+        "folderId": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "folderPath": { "type": ["string", "null"], "maxLength": 32767 }
+      }
+    },
+    "projectSelectionSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "folderPath", "clear"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": ["string", "null"], "minLength": 1, "maxLength": 512 },
+        "folderPath": { "type": ["string", "null"], "maxLength": 32767 },
+        "clear": { "type": "boolean" }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "assetId": { "type": "string", "minLength": 1 },
+            "folderPath": { "type": "null" },
+            "clear": { "const": false }
+          }
+        },
+        {
+          "properties": {
+            "assetId": { "type": "null" },
+            "folderPath": { "type": "string" },
+            "clear": { "const": false }
+          }
+        },
+        {
+          "properties": {
+            "assetId": { "type": "null" },
+            "folderPath": { "type": "null" },
+            "clear": { "const": true }
+          }
+        }
+      ]
+    },
+    "projectWindowSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "search", "sortMode", "viewMode", "thumbnailSize", "minimumThumbnailSize", "maximumThumbnailSize", "activeFolderPath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "search": { "type": "string", "maxLength": 128 },
+        "kindFilter": { "enum": [null, "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UiScreen", "Json", "Other"] },
+        "sortMode": { "enum": ["PathAscending", "KindThenPath", "LastModifiedDescending", "SizeDescending"] },
+        "viewMode": { "enum": ["Grid", "List"] },
+        "thumbnailSize": { "type": "number", "minimum": 48, "maximum": 128 },
+        "minimumThumbnailSize": { "const": 48 },
+        "maximumThumbnailSize": { "const": 128 },
+        "activeFolderPath": { "type": "string", "maxLength": 32767 }
+      }
+    },
+    "projectWindowSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "clearKindFilter"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "search": { "type": ["string", "null"], "maxLength": 128 },
+        "kindFilter": { "enum": [null, "Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UiScreen", "Json", "Other"] },
+        "clearKindFilter": { "type": "boolean" },
+        "sortMode": { "enum": [null, "PathAscending", "KindThenPath", "LastModifiedDescending", "SizeDescending"] },
+        "viewMode": { "enum": [null, "Grid", "List"] },
+        "thumbnailSize": { "type": ["number", "null"], "minimum": 48, "maximum": 128 }
+      },
+      "allOf": [
+        {
+          "not": {
+            "properties": {
+              "kindFilter": { "type": "string" },
+              "clearKindFilter": { "const": true }
+            }
+          }
+        }
+      ],
+      "anyOf": [
+        { "properties": { "search": { "type": "string" } } },
+        { "properties": { "kindFilter": { "type": "string" } } },
+        { "properties": { "clearKindFilter": { "const": true } } },
+        { "properties": { "sortMode": { "type": "string" } } },
+        { "properties": { "viewMode": { "type": "string" } } },
+        { "properties": { "thumbnailSize": { "type": "number" } } }
+      ]
+    },
+    "assetInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "path", "kind", "sizeBytes", "lastModifiedUtc", "displayName", "previewSummary", "typeLabel", "purpose", "badges"],
+      "properties": {
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "kind": { "enum": ["Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UiScreen", "Json", "Other"] },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "lastModifiedUtc": { "type": "string", "format": "date-time" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "previewSummary": { "type": "string", "maxLength": 65536 },
+        "typeLabel": { "type": "string", "maxLength": 1024 },
+        "purpose": { "type": "string", "maxLength": 65536 },
+        "badges": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      }
+    },
+    "assetListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/assetInfo" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "folderInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["folderId", "path", "displayName", "assetCount"],
+      "properties": {
+        "folderId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "path": { "type": "string", "maxLength": 32767 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "assetCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "folderListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/folderInfo" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "assetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 }
+      }
+    },
+    "scriptAssetOpenRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "line", "column"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "line": { "type": "integer", "minimum": 1, "maximum": 10000000 },
+        "column": { "type": "integer", "minimum": 1, "maximum": 1000000 }
+      }
+    },
+    "assetActionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "succeeded", "diagnostic", "asset"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "succeeded": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 65536 },
+        "asset": { "$ref": "#/$defs/assetInfo" }
+      }
+    },
+    "codeProjectOpenResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "succeeded", "projectGenerated", "solutionGenerated", "filesChanged", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "succeeded": { "type": "boolean" },
+        "editorKind": { "enum": ["VsCode", "VisualStudio", "Rider", "SystemDefault", "Custom"] },
+        "projectPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "solutionPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "openedTarget": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "projectGenerated": { "type": "boolean" },
+        "solutionGenerated": { "type": "boolean" },
+        "filesChanged": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "assetCreateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "path", "kind"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "kind": { "enum": ["Folder", "Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UiScreen", "Json", "Other"] }
+      }
+    },
+    "assetImportRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "sourcePath", "targetPath", "kind"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "sourcePath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "targetPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "kind": { "enum": ["Material", "Texture", "Audio", "Scene", "Prefab", "Script", "UiScreen", "Json", "Other"] }
+      }
+    },
+    "assetReplaceRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "sourcePath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "sourcePath": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "assetMoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "newPath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "newPath": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "assetDeleteRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "confirmed"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "confirmed": { "type": "boolean" }
+      }
+    },
+    "folderMoveRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "path", "newPath"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "newPath": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "folderDeleteRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "path", "confirmed"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "confirmed": { "type": "boolean" }
+      }
+    },
+    "uiManifestScreen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["screenId", "path", "preload", "fileExists", "logicalPath"],
+      "properties": {
+        "screenId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 2048 },
+        "preload": { "type": "boolean" },
+        "fileExists": { "type": "boolean" },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "logicalPath": { "type": "string", "minLength": 1, "maxLength": 4096 }
+      }
+    },
+    "uiManifestSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "screens", "missingFileCount", "unregisteredAssetCount", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "screens": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/uiManifestScreen" } },
+        "missingFileCount": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "unregisteredAssetCount": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "diagnostic": { "type": "string", "maxLength": 32767 }
+      }
+    },
+    "uiManifestPreloadSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "screenId", "preload"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "screenId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+        "preload": { "type": "boolean" }
+      }
+    },
+    "assetMutationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "succeeded", "requiresConfirmation", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "succeeded": { "type": "boolean" },
+        "requiresConfirmation": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 65536 },
+        "asset": { "$ref": "#/$defs/assetInfo" }
+      }
+    },
+    "assetRefreshResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetCount", "folderCount", "stateChanged", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetCount": { "type": "integer", "minimum": 0, "maximum": 262144 },
+        "folderCount": { "type": "integer", "minimum": 0, "maximum": 262144 },
+        "stateChanged": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "assetPreviewProperty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "value"],
+      "properties": {
+        "label": { "type": "string", "maxLength": 1024 },
+        "value": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "assetPreviewResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "asset", "title", "contentKind", "summary", "properties"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "asset": { "$ref": "#/$defs/assetInfo" },
+        "title": { "type": "string", "maxLength": 32767 },
+        "contentKind": { "enum": ["Metadata", "Image", "Audio", "Text"] },
+        "summary": { "type": "string", "maxLength": 65536 },
+        "properties": { "type": "array", "maxItems": 256, "items": { "$ref": "#/$defs/assetPreviewProperty" } },
+        "diagnostic": { "type": "string", "maxLength": 65536 },
+        "artifact": { "$ref": "#/$defs/artifactReference" }
+      }
+    },
+    "assetReferenceListRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "assetId", "sort", "pageSize"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "filter": { "$ref": "#/$defs/queryFilter" },
+        "sort": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/sortClause" }
+        },
+        "cursor": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "pageSize": { "type": "integer", "minimum": 1, "maximum": 500 }
+      }
+    },
+    "assetReferenceInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["referenceId", "location", "activeScene"],
+      "properties": {
+        "referenceId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "location": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "activeScene": { "type": "boolean" }
+      }
+    },
+    "assetReferenceListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "assetId",
+        "referenceCount",
+        "referenceDocuments",
+        "activeSceneHasReferences",
+        "items",
+        "page"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "assetId": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "referenceCount": { "type": "integer", "minimum": 0 },
+        "referenceDocuments": { "type": "integer", "minimum": 0 },
+        "activeSceneHasReferences": { "type": "boolean" },
+        "items": {
+          "type": "array",
+          "maxItems": 500,
+          "items": { "$ref": "#/$defs/assetReferenceInfo" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "consoleEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entryId", "sequence", "timestamp", "category", "severity", "source", "text", "details", "line", "column", "frameIndex"],
+      "properties": {
+        "entryId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "category": { "enum": ["General", "Build", "Script", "Ui", "Asset", "Project", "Runtime"] },
+        "severity": { "enum": ["Trace", "Info", "Warning", "Error"] },
+        "source": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "text": { "type": "string", "maxLength": 1048576 },
+        "details": { "type": "string", "maxLength": 1048576 },
+        "filePath": { "type": "string", "maxLength": 32767 },
+        "line": { "type": "integer", "minimum": 0 },
+        "column": { "type": "integer", "minimum": 0 },
+        "frameIndex": { "type": "integer", "minimum": -1 }
+      }
+    },
+    "consoleListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/consoleEntry" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "consoleCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "logs", "warnings", "errors", "lastSequence"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "logs": { "type": "integer", "minimum": 0 },
+        "warnings": { "type": "integer", "minimum": 0 },
+        "errors": { "type": "integer", "minimum": 0 },
+        "lastSequence": { "type": "integer", "minimum": -1 }
+      }
+    },
+    "consoleOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "search", "collapse", "clearOnPlay", "errorPause", "showLogs", "showWarnings", "showErrors", "autoScroll"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "search": { "type": "string", "maxLength": 256 },
+        "collapse": { "type": "boolean" },
+        "clearOnPlay": { "type": "boolean" },
+        "errorPause": { "type": "boolean" },
+        "showLogs": { "type": "boolean" },
+        "showWarnings": { "type": "boolean" },
+        "showErrors": { "type": "boolean" },
+        "autoScroll": { "type": "boolean" }
+      }
+    },
+    "consoleEntryRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "entryId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entryId": { "type": "string", "pattern": "^console:[0-9]+$", "maxLength": 256 }
+      }
+    },
+    "consoleSelectionSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entryId": { "type": ["string", "null"], "pattern": "^console:[0-9]+$", "maxLength": 256 },
+        "entry": {
+          "oneOf": [
+            { "$ref": "#/$defs/consoleEntry" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "consoleSelectionSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "clear"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entryId": { "type": ["string", "null"], "pattern": "^console:[0-9]+$", "maxLength": 256 },
+        "clear": { "type": "boolean" }
+      },
+      "oneOf": [
+        { "required": ["entryId"], "properties": { "entryId": { "type": "string" }, "clear": { "const": false } } },
+        { "properties": { "entryId": { "type": ["null"] }, "clear": { "const": true } } }
+      ]
+    },
+    "consoleCopyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "entry", "text"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entry": { "$ref": "#/$defs/consoleEntry" },
+        "text": { "type": "string", "maxLength": 2129920 }
+      }
+    },
+    "consoleOpenSourceResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "entry", "succeeded", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entry": { "$ref": "#/$defs/consoleEntry" },
+        "succeeded": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "playSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "mode", "temporarySnapshotActive", "frameIndex", "status"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playSessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "mode": { "enum": ["Edit", "Play", "Paused"] },
+        "source": { "enum": ["CurrentState", "TemporarySnapshot"] },
+        "temporarySnapshotActive": { "type": "boolean" },
+        "frameIndex": { "type": "integer", "minimum": 0 },
+        "status": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "playEnterRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "source"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "source": { "enum": ["CurrentState", "TemporarySnapshot"] }
+      }
+    },
+    "playCommandResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "succeeded", "diagnostic", "snapshot"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "succeeded": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 65536 },
+        "snapshot": { "$ref": "#/$defs/playSnapshot" }
+      }
+    },
+    "runtimeTransform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "rotationRadians", "scaleX", "scaleY"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "rotationRadians": { "type": "number" },
+        "scaleX": { "type": "number" },
+        "scaleY": { "type": "number" }
+      }
+    },
+    "runtimeComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["componentId", "typeName", "enabled", "faulted", "fields"],
+      "properties": {
+        "componentId": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "typeName": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "enabled": { "type": "boolean" },
+        "faulted": { "type": "boolean" },
+        "fields": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/inspectorField" } }
+      }
+    },
+    "runtimeEntity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entityId", "numericId", "handle", "components"],
+      "properties": {
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "numericId": { "type": "integer", "minimum": 1 },
+        "handle": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "transform": { "$ref": "#/$defs/runtimeTransform" },
+        "components": { "type": "array", "maxItems": 4096, "items": { "$ref": "#/$defs/runtimeComponent" } }
+      }
+    },
+    "runtimeEntityListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "playSessionId", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playSessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/runtimeEntity" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "runtimeEntityRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "entityId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "runtimeBody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bodyId", "bodyKey", "positionX", "positionY", "rotationSin", "rotationCos", "linearVelocityX", "linearVelocityY", "angularVelocityRadiansPerSecond", "maskWidth", "maskHeight", "solidPixelCount"],
+      "properties": {
+        "bodyId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bodyKey": { "type": "integer", "minimum": 0 },
+        "positionX": { "type": "number" },
+        "positionY": { "type": "number" },
+        "rotationSin": { "type": "number", "minimum": -1, "maximum": 1 },
+        "rotationCos": { "type": "number", "minimum": -1, "maximum": 1 },
+        "linearVelocityX": { "type": "number" },
+        "linearVelocityY": { "type": "number" },
+        "angularVelocityRadiansPerSecond": { "type": "number" },
+        "maskWidth": { "type": "integer", "minimum": 1 },
+        "maskHeight": { "type": "integer", "minimum": 1 },
+        "solidPixelCount": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "runtimeBodyListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "playSessionId", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playSessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/runtimeBody" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "runtimeBodyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "bodyId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "bodyId": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "runtimeTransformSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "entityId", "x", "y", "rotationRadians", "scaleX", "scaleY"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "rotationRadians": { "type": "number" },
+        "scaleX": { "type": "number" },
+        "scaleY": { "type": "number" }
+      }
+    },
+    "runtimeComponentFieldSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "entityId", "componentId", "fieldName", "value"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "componentId": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "fieldName": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "value": { "type": "string", "maxLength": 32768 }
+      }
+    },
+    "runtimeSimulationSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "isPlaying", "simulationHz", "frameIndex", "simulationTickIndex", "ranSimulationThisFrame"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playSessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "isPlaying": { "type": "boolean" },
+        "simulationHz": { "type": "number", "exclusiveMinimum": 0 },
+        "frameIndex": { "type": "integer", "minimum": 0 },
+        "simulationTickIndex": { "type": "integer", "minimum": 0 },
+        "ranSimulationThisFrame": { "type": "boolean" }
+      }
+    },
+    "runtimeSimulationSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "simulationHz"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "simulationHz": { "enum": [30, 60] }
+      }
+    },
+    "materialRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "name"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 }
+      }
+    },
+    "materialDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "resourceId", "name", "runtimeId", "displayName", "cellType",
+        "density", "dispersion", "liquidStatic", "liquidSand", "flammability",
+        "autoIgnitionTemp", "fireHp", "temperatureOfFire", "generatesSmoke",
+        "heatConduct", "heatCapacity", "defaultLifetime", "durability", "hardness",
+        "maxIntegrity", "debrisCount", "mineYield", "textureId", "baseColorBgra",
+        "colorNoise", "renderStyle", "legendCategory", "edgeColorBgra", "opacity",
+        "highlightColorBgra", "legendVisible", "propertyFlags", "emissive",
+        "destructible", "blocksCharacter", "reactionCount", "impactCue", "fireCue",
+        "splashCue", "explosionCue", "shatterCue", "ambientCue"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "runtimeId": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "cellType": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "density": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "dispersion": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "liquidStatic": { "type": "boolean" },
+        "liquidSand": { "type": "boolean" },
+        "flammability": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "autoIgnitionTemp": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "fireHp": { "type": "integer" },
+        "temperatureOfFire": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "generatesSmoke": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "meltPoint": { "type": ["number", "null"] },
+        "meltTargetName": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "freezePoint": { "type": ["number", "null"] },
+        "freezeTargetName": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "boilPoint": { "type": ["number", "null"] },
+        "boilTargetName": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "heatConduct": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "heatCapacity": { "type": "number", "exclusiveMinimum": 0 },
+        "defaultLifetime": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "durability": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "hardness": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "maxIntegrity": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "destroyedTargetName": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+        "debrisCount": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "mineYield": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "textureId": { "type": "integer", "minimum": -1 },
+        "baseColorBgra": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "colorNoise": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "renderStyle": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "legendCategory": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "edgeColorBgra": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "opacity": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "highlightColorBgra": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "legendVisible": { "type": "boolean" },
+        "propertyFlags": { "type": "string", "minLength": 1, "maxLength": 1024 },
+        "emissive": { "type": "boolean" },
+        "destructible": { "type": "boolean" },
+        "blocksCharacter": { "type": "boolean" },
+        "reactionCount": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "impactCue": { "type": "integer" },
+        "fireCue": { "type": "integer" },
+        "splashCue": { "type": "integer" },
+        "explosionCue": { "type": "integer" },
+        "shatterCue": { "type": "integer" },
+        "ambientCue": { "type": "integer" }
+      }
+    },
+    "materialListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/materialDefinition" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "materialEditorRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name", "type", "density", "flowRate", "liquidStatic", "liquidSand",
+        "flammability", "autoIgnitionTemp", "fireHp", "temperatureOfFire",
+        "generatesSmoke", "meltTarget", "freezeTarget", "boilTarget",
+        "heatConduct", "heatCapacity", "defaultLifetime", "durability",
+        "maxIntegrity", "rubbleTarget", "debrisCount", "mineYield", "textureId",
+        "baseColorBgra", "colorNoise", "renderStyle", "legendCategory",
+        "outlineColorBgra", "alpha", "flowTintBgra", "displayName", "legendVisible",
+        "tags", "impactCue", "fireCue", "splashCue", "explosionCue", "shatterCue",
+        "ambientCue"
+      ],
+      "properties": {
+        "name": { "type": "string", "maxLength": 95 },
+        "type": { "type": "string", "maxLength": 31 },
+        "density": { "type": "integer" },
+        "flowRate": { "type": "integer" },
+        "liquidStatic": { "type": "boolean" },
+        "liquidSand": { "type": "boolean" },
+        "flammability": { "type": "integer" },
+        "autoIgnitionTemp": { "type": "integer" },
+        "fireHp": { "type": "integer" },
+        "temperatureOfFire": { "type": "integer" },
+        "generatesSmoke": { "type": "integer" },
+        "meltPoint": { "type": "number" },
+        "meltTarget": { "type": "string", "maxLength": 95 },
+        "freezePoint": { "type": "number" },
+        "freezeTarget": { "type": "string", "maxLength": 95 },
+        "boilPoint": { "type": "number" },
+        "boilTarget": { "type": "string", "maxLength": 95 },
+        "heatConduct": { "type": "integer" },
+        "heatCapacity": { "type": "number" },
+        "defaultLifetime": { "type": "integer" },
+        "durability": { "type": "integer" },
+        "maxIntegrity": { "type": "integer" },
+        "rubbleTarget": { "type": "string", "maxLength": 95 },
+        "debrisCount": { "type": "integer" },
+        "mineYield": { "type": "integer" },
+        "textureId": { "type": "integer" },
+        "baseColorBgra": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "colorNoise": { "type": "integer" },
+        "renderStyle": { "type": "string", "maxLength": 63 },
+        "legendCategory": { "type": "string", "maxLength": 63 },
+        "outlineColorBgra": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "alpha": { "type": "integer" },
+        "flowTintBgra": { "type": "integer", "minimum": 0, "maximum": 4294967295 },
+        "displayName": { "type": "string", "maxLength": 95 },
+        "legendVisible": { "type": "boolean" },
+        "tags": { "type": "string", "maxLength": 191 },
+        "impactCue": { "type": "integer" },
+        "fireCue": { "type": "integer" },
+        "splashCue": { "type": "integer" },
+        "explosionCue": { "type": "integer" },
+        "shatterCue": { "type": "integer" },
+        "ambientCue": { "type": "integer" }
+      }
+    },
+    "materialTagRepresentative": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "material"],
+      "properties": {
+        "tag": { "type": "string", "maxLength": 63 },
+        "material": { "type": "string", "maxLength": 95 }
+      }
+    },
+    "materialReactionRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inputA", "inputB", "outputA", "outputB", "probability", "flags"],
+      "properties": {
+        "inputA": { "type": "string", "maxLength": 95 },
+        "inputB": { "type": "string", "maxLength": 95 },
+        "outputA": { "type": "string", "maxLength": 95 },
+        "outputB": { "type": "string", "maxLength": 95 },
+        "probability": { "type": "integer" },
+        "flags": { "type": "string", "maxLength": 127 }
+      }
+    },
+    "materialEditorDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["materials", "tagRepresentatives", "reactions"],
+      "properties": {
+        "materials": {
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "$ref": "#/$defs/materialEditorRow" }
+        },
+        "tagRepresentatives": {
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "$ref": "#/$defs/materialTagRepresentative" }
+        },
+        "reactions": {
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "$ref": "#/$defs/materialReactionRow" }
+        }
+      }
+    },
+    "materialRuntimeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "runtimeId"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 95 },
+        "runtimeId": { "type": "integer", "minimum": 0, "maximum": 65535 }
+      }
+    },
+    "materialEditorSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "document", "runtimeBindings", "status"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "document": { "$ref": "#/$defs/materialEditorDocument" },
+        "runtimeBindings": {
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "$ref": "#/$defs/materialRuntimeBinding" }
+        },
+        "status": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "materialEditorSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "document"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "document": { "$ref": "#/$defs/materialEditorDocument" }
+      }
+    },
+    "materialEditorPreviewResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "materialCount", "sourceReactionCount", "packedReactionCount", "message"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "materialCount": { "type": "integer", "minimum": 0 },
+        "sourceReactionCount": { "type": "integer", "minimum": 0 },
+        "packedReactionCount": { "type": "integer", "minimum": 0 },
+        "message": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "materialEditorAssetReload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["materialName", "runtimeId", "textureChanged", "audioChanged"],
+      "properties": {
+        "materialName": { "type": "string", "minLength": 1, "maxLength": 95 },
+        "runtimeId": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "textureChanged": { "type": "boolean" },
+        "audioChanged": { "type": "boolean" }
+      }
+    },
+    "materialEditorApplyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion", "tombstonedMaterialNames", "addedCount", "preservedCount",
+        "liveGridFallbackReplacementCount", "packedReactionCount", "assetReloads",
+        "cleanupPending", "status"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "tombstonedMaterialNames": {
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "type": "string", "minLength": 1, "maxLength": 95 }
+        },
+        "addedCount": { "type": "integer", "minimum": 0 },
+        "preservedCount": { "type": "integer", "minimum": 0 },
+        "liveGridFallbackReplacementCount": { "type": "integer", "minimum": 0 },
+        "packedReactionCount": { "type": "integer", "minimum": 0 },
+        "assetReloads": {
+          "type": "array",
+          "maxItems": 65535,
+          "items": { "$ref": "#/$defs/materialEditorAssetReload" }
+        },
+        "cleanupPending": { "type": "boolean" },
+        "retainedJournalPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "cleanupError": { "type": "string", "minLength": 1, "maxLength": 65536 },
+        "status": { "type": "string", "maxLength": 65536 }
+      }
+    },
+    "runtimeCellInspectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "worldX", "worldY"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "worldX": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "worldY": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+      }
+    },
+    "dirtyRectSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["isEmpty", "minX", "minY", "maxX", "maxY"],
+      "properties": {
+        "isEmpty": { "type": "boolean" },
+        "minX": { "type": "integer", "minimum": 0, "maximum": 63 },
+        "minY": { "type": "integer", "minimum": 0, "maximum": 63 },
+        "maxX": { "type": "integer", "minimum": -1, "maximum": 63 },
+        "maxY": { "type": "integer", "minimum": -1, "maximum": 63 }
+      }
+    },
+    "runtimeCellInspection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "worldX", "worldY", "chunkX", "chunkY", "localX", "localY", "materialId", "materialName", "temperatureAvailable", "temperatureCelsius", "rawFlags", "parity", "settled", "burning", "freeFalling", "rigidOwned", "currentDirty", "workingDirty", "chunkState", "chunkParity"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "worldX": { "type": "integer" },
+        "worldY": { "type": "integer" },
+        "chunkX": { "type": "integer" },
+        "chunkY": { "type": "integer" },
+        "localX": { "type": "integer", "minimum": 0, "maximum": 63 },
+        "localY": { "type": "integer", "minimum": 0, "maximum": 63 },
+        "materialId": { "type": "integer", "minimum": 0, "maximum": 65535 },
+        "materialName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "temperatureAvailable": { "type": "boolean" },
+        "temperatureCelsius": { "type": "number" },
+        "rawFlags": { "type": "integer", "minimum": 0, "maximum": 255 },
+        "parity": { "type": "boolean" },
+        "settled": { "type": "boolean" },
+        "burning": { "type": "boolean" },
+        "freeFalling": { "type": "boolean" },
+        "rigidOwned": { "type": "boolean" },
+        "bodyKey": { "type": "integer", "minimum": 0 },
+        "currentDirty": { "$ref": "#/$defs/dirtyRectSnapshot" },
+        "workingDirty": { "$ref": "#/$defs/dirtyRectSnapshot" },
+        "chunkState": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "chunkParity": { "type": "integer", "minimum": 0, "maximum": 255 }
+      }
+    },
+    "worldInspectorSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "followSelection", "lockedWorldX", "lockedWorldY"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "followSelection": { "type": "boolean" },
+        "lockedWorldX": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "lockedWorldY": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "inspection": {
+          "oneOf": [
+            { "$ref": "#/$defs/runtimeCellInspection" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "worldInspectorSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "followSelection", "lockedWorldX", "lockedWorldY"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "followSelection": { "type": "boolean" },
+        "lockedWorldX": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 },
+        "lockedWorldY": { "type": "integer", "minimum": -2147483648, "maximum": 2147483647 }
+      }
+    },
+    "runtimePhysicsSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "pixelsPerMeter", "subStepCount", "workerCount", "fragmentPixelThreshold", "rebuildThrottleTicks", "gravityX", "gravityY", "activeBodyCount", "pendingDamageCount", "lastErasedCellCount", "lastStampedCellCount", "damagedBodyCount", "destroyedBodyCount", "createdBodyCount", "fragmentPixelCount", "skippedSleepingBodyCount", "taskBridgeWorkerCount", "taskBridgeFaultedCallbackCount"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "pixelsPerMeter": { "type": "number", "exclusiveMinimum": 0 },
+        "subStepCount": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "workerCount": { "type": "integer", "minimum": 0 },
+        "fragmentPixelThreshold": { "type": "integer", "minimum": 0 },
+        "rebuildThrottleTicks": { "type": "integer", "minimum": 0 },
+        "gravityX": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "gravityY": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "activeBodyCount": { "type": "integer", "minimum": 0 },
+        "pendingDamageCount": { "type": "integer", "minimum": 0 },
+        "lastErasedCellCount": { "type": "integer", "minimum": 0 },
+        "lastStampedCellCount": { "type": "integer", "minimum": 0 },
+        "damagedBodyCount": { "type": "integer", "minimum": 0 },
+        "destroyedBodyCount": { "type": "integer", "minimum": 0 },
+        "createdBodyCount": { "type": "integer", "minimum": 0 },
+        "fragmentPixelCount": { "type": "integer", "minimum": 0 },
+        "skippedSleepingBodyCount": { "type": "integer", "minimum": 0 },
+        "taskBridgeWorkerCount": { "type": "integer", "minimum": 0 },
+        "taskBridgeFaultedCallbackCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "runtimePhysicsSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "subStepCount", "fragmentPixelThreshold", "gravityX", "gravityY"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "subStepCount": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "fragmentPixelThreshold": { "type": "integer", "minimum": 0, "maximum": 1048576 },
+        "gravityX": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "gravityY": { "type": "number", "minimum": -1000000, "maximum": 1000000 }
+      }
+    },
+    "runtimeParticlesSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "maxCount", "gravityPerTick", "maxLifetimeTicks", "depositSpeedEpsilon", "ejectionImpulseScale", "maxEjectionPerTick", "activeCount", "capacity", "spawnedThisTick", "depositedThisTick", "killedByLifetimeThisTick", "droppedThisTick", "audioEventsDroppedThisTick", "cellDestructionEventsThisTick"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "maxCount": { "type": "integer", "minimum": 1 },
+        "gravityPerTick": { "type": "number" },
+        "maxLifetimeTicks": { "type": "integer", "minimum": 1, "maximum": 255 },
+        "depositSpeedEpsilon": { "type": "number", "minimum": 0 },
+        "ejectionImpulseScale": { "type": "number", "minimum": 0 },
+        "maxEjectionPerTick": { "type": "integer", "minimum": 0 },
+        "activeCount": { "type": "integer", "minimum": 0 },
+        "capacity": { "type": "integer", "minimum": 1 },
+        "spawnedThisTick": { "type": "integer", "minimum": 0 },
+        "depositedThisTick": { "type": "integer", "minimum": 0 },
+        "killedByLifetimeThisTick": { "type": "integer", "minimum": 0 },
+        "droppedThisTick": { "type": "integer", "minimum": 0 },
+        "audioEventsDroppedThisTick": { "type": "integer", "minimum": 0 },
+        "cellDestructionEventsThisTick": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "runtimeParticlesSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "maxCount", "gravityPerTick", "maxLifetimeTicks", "depositSpeedEpsilon", "ejectionImpulseScale", "maxEjectionPerTick"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "maxCount": { "type": "integer", "minimum": 1, "maximum": 1048576 },
+        "gravityPerTick": { "type": "number", "minimum": -1000000, "maximum": 1000000 },
+        "maxLifetimeTicks": { "type": "integer", "minimum": 1, "maximum": 255 },
+        "depositSpeedEpsilon": { "type": "number", "minimum": 0, "maximum": 1000000 },
+        "ejectionImpulseScale": { "type": "number", "minimum": 0, "maximum": 1000000 },
+        "maxEjectionPerTick": { "type": "integer", "minimum": 0, "maximum": 1048576 }
+      }
+    },
+    "runtimeLightingSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "quality", "bloomEnabled", "bloomThreshold", "bloomIntensity", "fogOfWarEnabled", "ditherEnabled", "gamma", "radianceCascadesEnabled"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "quality": { "enum": ["Full", "BloomDisabled", "FogOfWarEmissiveOnly"] },
+        "bloomEnabled": { "type": "boolean" },
+        "bloomThreshold": { "type": "number", "minimum": 0, "maximum": 8 },
+        "bloomIntensity": { "type": "number", "minimum": 0, "maximum": 100 },
+        "fogOfWarEnabled": { "type": "boolean" },
+        "ditherEnabled": { "type": "boolean" },
+        "gamma": { "type": "number", "minimum": 0.01, "maximum": 10 },
+        "radianceCascadesEnabled": { "type": "boolean" }
+      }
+    },
+    "runtimeLightingSetRequest": {
+      "$ref": "#/$defs/runtimeLightingSnapshot"
+    },
+    "saveSlotInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slotId", "path", "lastWriteUtc", "formatVersion", "worldSeed", "gameTimeTicks", "chunkCount"],
+      "properties": {
+        "slotId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+        "path": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "lastWriteUtc": { "type": "string", "format": "date-time" },
+        "formatVersion": { "type": "integer", "minimum": 1 },
+        "worldSeed": { "type": "integer", "minimum": 0 },
+        "gameTimeTicks": { "type": "integer", "minimum": 0 },
+        "chunkCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "saveSlotListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/saveSlotInfo" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "saveSlotRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "slotId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "slotId": { "type": "string", "minLength": 1, "maxLength": 96 }
+      }
+    },
+    "saveSlotOperationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "slot", "worldSeed", "gameTimeTicks", "chunkCount", "materialFallbackHitCount"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "slot": { "$ref": "#/$defs/saveSlotInfo" },
+        "worldSeed": { "type": "integer", "minimum": 0 },
+        "gameTimeTicks": { "type": "integer", "minimum": 0 },
+        "chunkCount": { "type": "integer", "minimum": 0 },
+        "materialFallbackHitCount": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "runtimeWorldSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "playSessionId", "frameIndex", "entityCount", "framesPerSecond", "frameMilliseconds", "p99FrameMilliseconds", "onePercentLowFps", "simulationHz", "activeChunks", "activeParticles", "activeBodies", "activeLights"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playSessionId": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "frameIndex": { "type": "integer", "minimum": 0 },
+        "entityCount": { "type": "integer", "minimum": 0 },
+        "framesPerSecond": { "type": "number", "minimum": 0 },
+        "frameMilliseconds": { "type": "number", "minimum": 0 },
+        "p99FrameMilliseconds": { "type": "number", "minimum": 0 },
+        "onePercentLowFps": { "type": "number", "minimum": 0 },
+        "simulationHz": { "type": "integer", "minimum": 0 },
+        "activeChunks": { "type": "integer", "minimum": 0 },
+        "activeParticles": { "type": "integer", "minimum": 0 },
+        "activeBodies": { "type": "integer", "minimum": 0 },
+        "activeLights": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "gameViewPreset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presetId", "name", "kind", "builtIn", "valueA", "valueB"],
+      "properties": {
+        "presetId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "kind": { "enum": ["PlayerDefault", "FreeAspect", "AspectRatio", "FixedResolution"] },
+        "builtIn": { "type": "boolean" },
+        "valueA": { "type": "integer", "minimum": 0, "maximum": 32768 },
+        "valueB": { "type": "integer", "minimum": 0, "maximum": 32768 }
+      }
+    },
+    "pixelRect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "integer", "minimum": 0, "maximum": 32768 },
+        "y": { "type": "integer", "minimum": 0, "maximum": 32768 },
+        "width": { "type": "integer", "minimum": 1, "maximum": 32768 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 32768 }
+      }
+    },
+    "gamePresentationSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "selectedPresetId", "scalePercent", "panX", "panY", "maximizeOnPlay", "maximized", "presets", "hasCommittedPresentation", "presentationWidth", "presentationHeight", "presentationRevision", "requestRevision", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "selectedPresetId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+        "scalePercent": { "type": "number", "minimum": 0, "maximum": 2000 },
+        "panX": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "panY": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "maximizeOnPlay": { "type": "boolean" },
+        "maximized": { "type": "boolean" },
+        "presets": { "type": "array", "minItems": 12, "maxItems": 44, "items": { "$ref": "#/$defs/gameViewPreset" } },
+        "hasCommittedPresentation": { "type": "boolean" },
+        "presentationWidth": { "type": "integer", "minimum": 0, "maximum": 32768 },
+        "presentationHeight": { "type": "integer", "minimum": 0, "maximum": 32768 },
+        "presentationRevision": { "type": "integer", "minimum": 0 },
+        "requestRevision": { "type": "integer", "minimum": 0 },
+        "source": { "enum": ["PlayerDefault", "EditorFreeAspect", "EditorAspectRatio", "EditorFixedResolution"] },
+        "worldContentRect": { "$ref": "#/$defs/pixelRect" },
+        "diagnostic": { "type": "string", "maxLength": 32767 }
+      }
+    },
+    "gamePresentationSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "selectedPresetId", "scalePercent", "panX", "panY", "maximizeOnPlay", "maximized", "customPresets"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "selectedPresetId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
+        "scalePercent": { "type": "number", "minimum": 0, "maximum": 2000 },
+        "panX": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "panY": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
+        "maximizeOnPlay": { "type": "boolean" },
+        "maximized": { "type": "boolean" },
+        "customPresets": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "allOf": [
+              { "$ref": "#/$defs/gameViewPreset" },
+              {
+                "type": "object",
+                "properties": {
+                  "kind": { "const": "FixedResolution" },
+                  "builtIn": { "const": false },
+                  "valueA": { "type": "integer", "minimum": 1, "maximum": 32768 },
+                  "valueB": { "type": "integer", "minimum": 1, "maximum": 32768 }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "profilerSample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "milliseconds"],
+      "properties": {
+        "phase": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "milliseconds": { "type": "number", "minimum": 0 },
+        "average60Milliseconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "profilerHistorySample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frameIndex", "frameMilliseconds", "caMilliseconds", "physicsMilliseconds", "renderMilliseconds", "audioMilliseconds", "cpuMilliseconds", "gpuMilliseconds", "waitMilliseconds", "effectiveMilliseconds", "variableWorkMilliseconds", "fixedOverheadMilliseconds", "activeChunks", "activeCells", "freeParticles", "rigidBodies", "destructionEvents", "customMetricValue", "simulationHz"],
+      "properties": {
+        "frameIndex": { "type": "integer", "minimum": 0 },
+        "frameMilliseconds": { "type": "number", "minimum": 0 },
+        "caMilliseconds": { "type": "number", "minimum": 0 },
+        "physicsMilliseconds": { "type": "number", "minimum": 0 },
+        "renderMilliseconds": { "type": "number", "minimum": 0 },
+        "audioMilliseconds": { "type": "number", "minimum": 0 },
+        "cpuMilliseconds": { "type": "number", "minimum": 0 },
+        "gpuMilliseconds": { "type": "number", "minimum": 0 },
+        "waitMilliseconds": { "type": "number", "minimum": 0 },
+        "effectiveMilliseconds": { "type": "number", "minimum": 0 },
+        "variableWorkMilliseconds": { "type": "number", "minimum": 0 },
+        "fixedOverheadMilliseconds": { "type": "number", "minimum": 0 },
+        "activeChunks": { "type": "integer", "minimum": 0 },
+        "activeCells": { "type": "integer", "minimum": 0 },
+        "freeParticles": { "type": "integer", "minimum": 0 },
+        "rigidBodies": { "type": "integer", "minimum": 0 },
+        "destructionEvents": { "type": "integer", "minimum": 0 },
+        "customMetricValue": { "type": "integer" },
+        "simulationHz": { "type": "number", "minimum": 0 }
+      }
+    },
+    "profilerStatistics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sampleCount", "averageMilliseconds", "p50Milliseconds", "p95Milliseconds", "p99Milliseconds", "maxMilliseconds", "isSteady", "isSpike"],
+      "properties": {
+        "sampleCount": { "type": "integer", "minimum": 0, "maximum": 512 },
+        "averageMilliseconds": { "type": "number", "minimum": 0 },
+        "p50Milliseconds": { "type": "number", "minimum": 0 },
+        "p95Milliseconds": { "type": "number", "minimum": 0 },
+        "p99Milliseconds": { "type": "number", "minimum": 0 },
+        "maxMilliseconds": { "type": "number", "minimum": 0 },
+        "isSteady": { "type": "boolean" },
+        "isSpike": { "type": "boolean" }
+      }
+    },
+    "profilerSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "frameIndex", "wallMilliseconds", "cpuWorkMilliseconds", "gpuWorkMilliseconds", "gpuTimerAvailable", "waitMilliseconds", "effectiveFrameMilliseconds", "effectiveFramesPerSecond", "boundType", "vSyncEnabled", "canToggleVSync", "timeScale", "degradationLevel", "degradationName", "consecutiveOverBudgetFrames", "mainPhases", "subPhases", "historyCapacity", "capturedSampleCount", "history", "frameStatistics", "cpuStatistics", "gpuStatistics", "waitStatistics", "effectiveStatistics", "variableWorkStatistics", "fixedOverheadStatistics"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "frameIndex": { "type": "integer", "minimum": 0 },
+        "wallMilliseconds": { "type": "number", "minimum": 0 },
+        "cpuWorkMilliseconds": { "type": "number", "minimum": 0 },
+        "gpuWorkMilliseconds": { "type": "number", "minimum": 0 },
+        "gpuTimerAvailable": { "type": "boolean" },
+        "waitMilliseconds": { "type": "number", "minimum": 0 },
+        "effectiveFrameMilliseconds": { "type": "number", "minimum": 0 },
+        "effectiveFramesPerSecond": { "type": "number", "minimum": 0 },
+        "boundType": { "enum": ["vsync-bound", "present-bound", "GPU-bound", "CPU-bound", "balanced"] },
+        "vSyncEnabled": { "type": "boolean" },
+        "canToggleVSync": { "type": "boolean" },
+        "timeScale": { "type": "number", "minimum": 0 },
+        "degradationLevel": { "type": "integer", "minimum": 0 },
+        "degradationName": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "consecutiveOverBudgetFrames": { "type": "integer", "minimum": 0 },
+        "mainPhases": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/profilerSample" } },
+        "subPhases": { "type": "array", "maxItems": 128, "items": { "$ref": "#/$defs/profilerSample" } },
+        "historyCapacity": { "type": "integer", "minimum": 1, "maximum": 4096 },
+        "capturedSampleCount": { "type": "integer", "minimum": 0 },
+        "history": { "type": "array", "maxItems": 512, "items": { "$ref": "#/$defs/profilerHistorySample" } },
+        "frameStatistics": { "$ref": "#/$defs/profilerStatistics" },
+        "cpuStatistics": { "$ref": "#/$defs/profilerStatistics" },
+        "gpuStatistics": { "$ref": "#/$defs/profilerStatistics" },
+        "waitStatistics": { "$ref": "#/$defs/profilerStatistics" },
+        "effectiveStatistics": { "$ref": "#/$defs/profilerStatistics" },
+        "variableWorkStatistics": { "$ref": "#/$defs/profilerStatistics" },
+        "fixedOverheadStatistics": { "$ref": "#/$defs/profilerStatistics" }
+      }
+    },
+    "profilerVSyncSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "enabled"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "debugOverlaySnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "availableFlags", "enabledFlags"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "availableFlags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } },
+        "enabledFlags": { "type": "array", "maxItems": 32, "uniqueItems": true, "items": { "type": "string", "minLength": 1, "maxLength": 128 } }
+      }
+    },
+    "debugOverlaySetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "flag", "enabled"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "flag": { "enum": ["DirtyRects", "ChunkGridParity", "KeepAliveHotspots", "CellParity", "TemperatureHeatmap", "OwnedByBody", "ParticleTrails", "ConnectedComponents", "CaIterationRects"] },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "shortcutInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "uiCommandId", "action", "key", "control", "shift", "alt", "super", "displayText"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "uiCommandId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "action": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "key": { "type": "string", "minLength": 1, "maxLength": 32 },
+        "control": { "type": "boolean" },
+        "shift": { "type": "boolean" },
+        "alt": { "type": "boolean" },
+        "super": { "type": "boolean" },
+        "displayText": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "shortcutListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/$defs/shortcutInfo" }
+        },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "editorPreferences": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "uiScale", "saveLayoutOnExit", "reopenLastProject", "restoreLastScene", "externalScriptEditor", "language"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "uiScale": { "type": "number", "minimum": 0.5, "maximum": 4 },
+        "saveLayoutOnExit": { "type": "boolean" },
+        "reopenLastProject": { "type": "boolean" },
+        "restoreLastScene": { "type": "boolean" },
+        "externalScriptEditor": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "language": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "projectSettingsSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "name", "contentRoot", "scriptSourceDir", "startScene", "requireStableMaterialNames", "contentFileGlobs", "defaultUiBackend"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "contentRoot": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "scriptSourceDir": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "startScene": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "requireStableMaterialNames": { "type": "boolean" },
+        "contentFileGlobs": { "type": "array", "maxItems": 1024, "items": { "type": "string", "minLength": 1, "maxLength": 32767 } },
+        "defaultUiBackend": { "enum": ["ManagedFallback", "RmlUi", "Ultralight"] }
+      }
+    },
+    "projectSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "name", "contentRoot", "scriptSourceDir", "activeContentRoot", "activeScriptSourceDir", "startScene", "requireStableMaterialNames", "contentFileGlobs", "defaultUiBackend", "requiresReload", "reloadReasons"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "name": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "contentRoot": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "scriptSourceDir": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "activeContentRoot": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "activeScriptSourceDir": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "startScene": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "requireStableMaterialNames": { "type": "boolean" },
+        "contentFileGlobs": { "type": "array", "maxItems": 1024, "items": { "type": "string", "minLength": 1, "maxLength": 32767 } },
+        "defaultUiBackend": { "enum": ["ManagedFallback", "RmlUi", "Ultralight"] },
+        "requiresReload": { "type": "boolean" },
+        "reloadReasons": {
+          "type": "array",
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": { "enum": ["contentRoot", "scriptSourceDir"] }
+        }
+      }
+    },
+    "playerSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "windowTitle", "windowWidth", "windowHeight", "windowMode", "vSync", "version", "startupScene", "enableKeyboardMouse", "enableGamepad", "runtimeUiBackend", "releaseChannel"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "windowTitle": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "windowWidth": { "type": "integer", "minimum": 1, "maximum": 32768 },
+        "windowHeight": { "type": "integer", "minimum": 1, "maximum": 32768 },
+        "windowMode": { "enum": ["Windowed", "MaximizedWindow", "BorderlessFullscreen"] },
+        "vSync": { "type": "boolean" },
+        "iconPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "startupScene": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "enableKeyboardMouse": { "type": "boolean" },
+        "enableGamepad": { "type": "boolean" },
+        "runtimeUiBackend": { "enum": ["ManagedFallback", "RmlUi", "Ultralight"] },
+        "releaseChannel": { "enum": ["Development", "Production"] }
+      }
+    },
+    "buildScene": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sceneName", "included", "isStartup", "sourceKind"],
+      "properties": {
+        "sceneName": { "type": "string", "maxLength": 32767 },
+        "included": { "type": "boolean" },
+        "isStartup": { "type": "boolean" },
+        "sourceKind": { "enum": ["Empty", "SaveDirectory", "SceneFile", "Procedural"] },
+        "source": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "buildSettings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "rid", "channel", "configuration", "outputDirectory", "productName", "version", "informationalVersion", "includeSymbols", "packageWholeContent", "runAfterBuild", "scenes"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "rid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "channel": { "enum": ["R2R", "Aot"] },
+        "configuration": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "outputDirectory": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "productName": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "version": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "informationalVersion": { "type": "string", "maxLength": 256 },
+        "iconPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "includeSymbols": { "type": "boolean" },
+        "packageWholeContent": { "type": "boolean" },
+        "runAfterBuild": { "type": "boolean" },
+        "scenes": { "type": "array", "minItems": 1, "maxItems": 4096, "items": { "$ref": "#/$defs/buildScene" } }
       }
     },
     "envelope": {

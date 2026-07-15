@@ -74,6 +74,14 @@ public sealed class ResidencyTable
     }
 
     /// <summary>
+    /// 清空全部驻留元数据；仅可与 live chunk map 的结构性替换在同一安全点调用。
+    /// </summary>
+    public void Clear()
+    {
+        _entries.Clear();
+    }
+
+    /// <summary>
     /// 更新指定 chunk 的最近触碰帧。
     /// </summary>
     public bool Touch(ChunkCoord coord, long frame)

@@ -51,6 +51,8 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
 
     public bool Visible { get; set; } = true;
 
+    internal event Action? SettingsApplied;
+
     public string ValidationMessage { get; private set; } = string.Empty;
 
     internal bool HasPendingChanges { get; private set; }
@@ -122,6 +124,12 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         }
 
         PlayerSettingsDto normalized = settings.Normalize();
+        if (!RequiresRepair && AreEquivalent(AppliedSettings, normalized))
+        {
+            diagnostic = string.Empty;
+            return true;
+        }
+
         try
         {
             _store.Save(normalized);
@@ -144,7 +152,50 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         _draftIsValid = true;
         ValidationMessage = string.Empty;
         diagnostic = string.Empty;
+        SettingsApplied?.Invoke();
         return true;
+    }
+
+    internal PlayerSettingsPanelAutomationSnapshot CaptureAutomationState()
+    {
+        return new PlayerSettingsPanelAutomationSnapshot(
+            CloneSettings(AppliedSettings),
+            CloneSettings(DraftSettings),
+            _persistentDiagnostic,
+            _draftIsValid,
+            ValidationMessage,
+            HasPendingChanges,
+            HasDraftChanges,
+            RequiresRepair);
+    }
+
+    internal PlayerSettingsPanelAutomationSnapshot CreateAutomationAppliedState(
+        PlayerSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        PlayerSettingsDto normalized = settings.Normalize();
+        return new PlayerSettingsPanelAutomationSnapshot(
+            CloneSettings(normalized),
+            CloneSettings(normalized),
+            string.Empty,
+            DraftIsValid: true,
+            ValidationMessage: string.Empty,
+            HasPendingChanges: false,
+            HasDraftChanges: false,
+            RequiresRepair: false);
+    }
+
+    internal void RestoreAutomationState(PlayerSettingsPanelAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        AppliedSettings = CloneSettings(snapshot.AppliedSettings);
+        DraftSettings = CloneSettings(snapshot.DraftSettings);
+        _persistentDiagnostic = snapshot.PersistentDiagnostic;
+        _draftIsValid = snapshot.DraftIsValid;
+        ValidationMessage = snapshot.ValidationMessage;
+        HasPendingChanges = snapshot.HasPendingChanges;
+        HasDraftChanges = snapshot.HasDraftChanges;
+        RequiresRepair = snapshot.RequiresRepair;
     }
 
     internal void StagePlayerSettings(PlayerSettingsDto settings)
@@ -442,6 +493,14 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         HasPendingChanges = RequiresRepair || HasDraftChanges;
     }
 
+    private static PlayerSettingsDto CloneSettings(PlayerSettingsDto settings)
+    {
+        return settings with
+        {
+            InputDefaults = settings.InputDefaults with { },
+        };
+    }
+
     private static bool AreEquivalent(PlayerSettingsDto left, PlayerSettingsDto right)
     {
         return left.FormatVersion == right.FormatVersion &&
@@ -477,6 +536,16 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ImGui.PopTextWrapPos();
     }
 }
+
+internal sealed record PlayerSettingsPanelAutomationSnapshot(
+    PlayerSettingsDto AppliedSettings,
+    PlayerSettingsDto DraftSettings,
+    string PersistentDiagnostic,
+    bool DraftIsValid,
+    string ValidationMessage,
+    bool HasPendingChanges,
+    bool HasDraftChanges,
+    bool RequiresRepair);
 
 /// <summary>
 /// 脚本化验收探针：ScriptedPlayerSettingsProbeSnapshot。

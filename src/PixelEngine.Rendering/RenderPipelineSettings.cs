@@ -23,6 +23,11 @@ public sealed class RenderPipelineSettings
     public bool EnableDither { get; set; } = true;
 
     /// <summary>
+    /// 是否应用 runtime fog-of-war visibility；关闭时世界按完全可见合成，点光源仍可参与 emissive。
+    /// </summary>
+    public bool EnableFogOfWar { get; set; } = true;
+
+    /// <summary>
     /// Dither 强度。
     /// </summary>
     public float DitherStrength { get; set; } = 1f / 255f;

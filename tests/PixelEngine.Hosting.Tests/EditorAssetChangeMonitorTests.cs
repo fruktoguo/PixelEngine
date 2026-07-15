@@ -119,6 +119,9 @@ public sealed class EditorAssetChangeMonitorTests
         Assert.Equal(string.Empty, escapedPath);
         _ = Assert.Throws<InvalidOperationException>(() =>
             EditorAssetChangeMonitor.NormalizeRelativePath("../outside.png"));
+        Assert.True(EditorAssetChangeMonitor.IsInternalMetadataPath(".pixelengine"));
+        Assert.True(EditorAssetChangeMonitor.IsInternalMetadataPath(".PIXELENGINE/archive/file.bin"));
+        Assert.False(EditorAssetChangeMonitor.IsInternalMetadataPath("assets/.pixelengine.png"));
     }
 
     /// <summary>
@@ -170,6 +173,27 @@ public sealed class EditorAssetChangeMonitorTests
         Assert.Contains(observed, change =>
             change.Path.Root == EditorAssetRootKind.ScriptSource &&
             change.Path.RelativePath == "Player.cs");
+    }
+
+    /// <summary>验证内部 manifest/archive 写入不会反向进入用户资产失效队列。</summary>
+    [Fact]
+    public void RealWatcherIgnoresPixelEngineMetadataTrees()
+    {
+        using TempAssetRoots roots = new();
+        using EditorAssetChangeMonitor monitor = new(roots.ContentRoot, roots.ScriptRoot);
+        string contentMetadata = Path.Combine(roots.ContentRoot, ".pixelengine", "automation", "archive.bin");
+        string scriptMetadata = Path.Combine(roots.ScriptRoot, ".pixelengine", "script-assets.json");
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(contentMetadata)!);
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(scriptMetadata)!);
+        File.WriteAllBytes(contentMetadata, [1, 2, 3]);
+        File.WriteAllText(scriptMetadata, "{}\n");
+
+        Thread.Sleep(250);
+        EditorAssetChangeBatch batch = monitor.Drain();
+
+        Assert.DoesNotContain(batch.Changes, static change =>
+            EditorAssetChangeMonitor.IsInternalMetadataPath(change.Path.RelativePath));
+        Assert.Empty(batch.FullRescanRoots);
     }
 
     /// <summary>

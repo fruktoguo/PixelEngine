@@ -193,4 +193,43 @@ public sealed class EditorTransitionCoordinatorTests
         Assert.Equal(1, firstAction);
         Assert.Equal(0, secondAction);
     }
+
+    /// <summary>pending preparation 仅在 Cancel 或生命周期释放时清理，成功执行不会误调用 cancel。</summary>
+    [Fact]
+    public void PendingPreparationCleanupFollowsTransitionOwnership()
+    {
+        int executed = 0;
+        int cleaned = 0;
+        EditorTransitionCoordinator coordinator = new(
+            isDirty: static () => true,
+            save: static () => EditorTransitionSaveResult.Success());
+
+        _ = coordinator.Request(
+            EditorTransitionKind.CreateProject,
+            () => executed++,
+            "created",
+            () => cleaned++);
+        _ = coordinator.Resolve(EditorTransitionDecision.Discard);
+        Assert.Equal(1, executed);
+        Assert.Equal(0, cleaned);
+
+        _ = coordinator.Request(
+            EditorTransitionKind.CreateProject,
+            () => executed++,
+            "cancelled",
+            () => cleaned++);
+        _ = coordinator.Resolve(EditorTransitionDecision.Cancel);
+        Assert.Equal(1, executed);
+        Assert.Equal(1, cleaned);
+
+        _ = coordinator.Request(
+            EditorTransitionKind.CreateProject,
+            () => executed++,
+            "shutdown",
+            () => cleaned++);
+        coordinator.ReleasePendingPreparation();
+        Assert.Equal(1, executed);
+        Assert.Equal(2, cleaned);
+        Assert.False(coordinator.HasPendingTransition);
+    }
 }

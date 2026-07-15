@@ -31,6 +31,7 @@ public sealed class EngineBuilder
     private bool _vSync = true;
     private PlayerWindowMode _windowMode = PlayerWindowMode.Windowed;
     private string _contentRoot = "content";
+    private string? _guiLayoutPath;
     private string? _startScene;
     private double _simHz = EngineConstants.DefaultSimHz;
     private int _eventCapacityPerChannel = EngineOptions.DefaultEventCapacityPerChannel;
@@ -226,6 +227,18 @@ public sealed class EngineBuilder
     }
 
     /// <summary>
+    /// 配置 runtime ImGui 用户布局文件。宿主应提供独立可写的 user-data 路径，不得放入只读 ContentRoot。
+    /// </summary>
+    /// <param name="path">布局文件 canonical 或可解析路径。</param>
+    /// <returns>当前构建器。</returns>
+    public EngineBuilder WithGuiLayoutPath(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        _guiLayoutPath = Path.GetFullPath(path.Trim());
+        return this;
+    }
+
+    /// <summary>
     /// 配置起始场景标识。
     /// </summary>
     public EngineBuilder WithStartScene(string? startScene)
@@ -367,7 +380,8 @@ public sealed class EngineBuilder
             _eventCapacityPerChannel,
             _noGcRegionBudgetBytes,
             _overload,
-            _windowMode);
+            _windowMode,
+            _guiLayoutPath);
         EngineGcCoordinator.ApplyLatencyMode(options.GcMode.ToLatencyMode());
         // 2) 创建 Core 运行时服务：JobSystem、帧时钟、事件总线、计数器与过载控制器。
         JobSystem jobs = new(options.WorkerCount);

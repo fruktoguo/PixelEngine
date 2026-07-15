@@ -76,7 +76,11 @@ public static class SerializedFieldBinder
             (field.IsPublic || field.GetCustomAttribute<SerializeFieldAttribute>() is not null);
     }
 
-    private static object? ConvertValue(string value, Type targetType)
+    /// <summary>按与 Scene/runtime projection 相同的规则解析单个 Inspector 序列化值。</summary>
+    /// <param name="value">序列化字符串。</param>
+    /// <param name="targetType">目标字段或属性类型。</param>
+    /// <returns>可赋给目标类型的规范值。</returns>
+    public static object? ConvertValue(string value, Type targetType)
     {
         Type normalized = Nullable.GetUnderlyingType(targetType) ?? targetType;
         return string.IsNullOrEmpty(value) && Nullable.GetUnderlyingType(targetType) is not null

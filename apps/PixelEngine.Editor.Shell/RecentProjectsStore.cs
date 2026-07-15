@@ -9,16 +9,19 @@ internal sealed class RecentProjectsStore
 {
     public const int MaxEntries = 20;
 
-    private readonly string? _path;
     private readonly List<RecentProjectEntry> _entries;
 
     private RecentProjectsStore(string? path, List<RecentProjectEntry> entries)
     {
-        _path = path;
+        StoragePath = path;
         _entries = entries;
     }
 
     public IReadOnlyList<RecentProjectEntry> Entries => _entries;
+
+    internal string? StoragePath { get; }
+
+    internal event Action? Changed;
 
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -144,42 +147,149 @@ internal sealed class RecentProjectsStore
     public void AddOrUpdate(EditorProject project)
     {
         ArgumentNullException.ThrowIfNull(project);
+        RestoreAutomationSnapshot(CreateAddOrUpdateSnapshot(
+            CaptureAutomationSnapshot(),
+            project,
+            DateTimeOffset.UtcNow));
+    }
+
+    public void AddOrUpdateAndSave(EditorProject project)
+    {
+        ArgumentNullException.ThrowIfNull(project);
+        PersistAndPublish(CreateAddOrUpdateSnapshot(
+            CaptureAutomationSnapshot(),
+            project,
+            DateTimeOffset.UtcNow));
+    }
+
+    private static RecentProjectsAutomationSnapshot CreateAddOrUpdateSnapshot(
+        RecentProjectsAutomationSnapshot source,
+        EditorProject project,
+        DateTimeOffset openedAt)
+    {
         string projectPath = Path.GetFullPath(project.ProjectRoot);
         bool favorite = false;
-        for (int i = _entries.Count - 1; i >= 0; i--)
+        List<RecentProjectEntry> entries = [.. source.Entries];
+        for (int i = entries.Count - 1; i >= 0; i--)
         {
-            if (string.Equals(Path.GetFullPath(_entries[i].ProjectPath), projectPath, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(
+                Path.GetFullPath(entries[i].ProjectPath),
+                projectPath,
+                StringComparison.OrdinalIgnoreCase))
             {
-                favorite |= _entries[i].Favorite;
-                _entries.RemoveAt(i);
+                favorite |= entries[i].Favorite;
+                entries.RemoveAt(i);
             }
         }
 
-        _entries.Insert(
+        entries.Insert(
             0,
             new RecentProjectEntry
             {
                 Name = project.Name,
                 ProjectPath = projectPath,
-                LastOpenedUtc = DateTimeOffset.UtcNow,
+                LastOpenedUtc = openedAt,
                 Favorite = favorite,
             });
-        if (_entries.Count > MaxEntries)
+        if (entries.Count > MaxEntries)
         {
-            _entries.RemoveRange(MaxEntries, _entries.Count - MaxEntries);
+            entries.RemoveRange(MaxEntries, entries.Count - MaxEntries);
         }
+
+        return new RecentProjectsAutomationSnapshot([.. entries]);
     }
 
     public bool SetFavorite(string projectPath, bool favorite)
     {
+        RecentProjectsAutomationSnapshot before = CaptureAutomationSnapshot();
+        if (!TryCreateFavoriteSnapshot(before, projectPath, favorite, out RecentProjectsAutomationSnapshot after))
+        {
+            return false;
+        }
+
+        RestoreAutomationSnapshot(after);
+        return true;
+    }
+
+    public bool SetFavoriteAndSave(string projectPath, bool favorite)
+    {
+        RecentProjectsAutomationSnapshot before = CaptureAutomationSnapshot();
+        if (!TryCreateFavoriteSnapshot(before, projectPath, favorite, out RecentProjectsAutomationSnapshot after))
+        {
+            return false;
+        }
+
+        PersistAndPublish(after);
+        return true;
+    }
+
+    public bool Remove(string projectPath)
+    {
+        RecentProjectsAutomationSnapshot before = CaptureAutomationSnapshot();
+        if (!TryCreateRemoveSnapshot(before, projectPath, out RecentProjectsAutomationSnapshot after))
+        {
+            return false;
+        }
+
+        RestoreAutomationSnapshot(after);
+        return true;
+    }
+
+    public bool RemoveAndSave(string projectPath)
+    {
+        RecentProjectsAutomationSnapshot before = CaptureAutomationSnapshot();
+        if (!TryCreateRemoveSnapshot(before, projectPath, out RecentProjectsAutomationSnapshot after))
+        {
+            return false;
+        }
+
+        PersistAndPublish(after);
+        return true;
+    }
+
+    public void Save()
+    {
+        SaveSnapshot(CaptureAutomationSnapshot());
+    }
+
+    internal RecentProjectsAutomationSnapshot CaptureAutomationSnapshot()
+    {
+        return new RecentProjectsAutomationSnapshot([.. _entries]);
+    }
+
+    internal void RestoreAutomationSnapshot(RecentProjectsAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        _entries.Clear();
+        _entries.AddRange(snapshot.Entries);
+    }
+
+    internal static bool SnapshotsEqual(
+        RecentProjectsAutomationSnapshot left,
+        RecentProjectsAutomationSnapshot right)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+        return left.Entries.AsSpan().SequenceEqual(right.Entries);
+    }
+
+    internal static bool TryCreateFavoriteSnapshot(
+        RecentProjectsAutomationSnapshot source,
+        string projectPath,
+        bool favorite,
+        out RecentProjectsAutomationSnapshot result)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        result = source;
         if (!TryGetFullPath(projectPath, out string? fullPath) || fullPath is null)
         {
             return false;
         }
 
-        for (int i = 0; i < _entries.Count; i++)
+        RecentProjectEntry[] entries = [.. source.Entries];
+        for (int i = 0; i < entries.Length; i++)
         {
-            RecentProjectEntry entry = _entries[i];
+            RecentProjectEntry entry = entries[i];
             if (!string.Equals(entry.ProjectPath, fullPath, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
@@ -190,63 +300,76 @@ internal sealed class RecentProjectsStore
                 return false;
             }
 
-            _entries[i] = new RecentProjectEntry
-            {
-                Name = entry.Name,
-                ProjectPath = entry.ProjectPath,
-                LastOpenedUtc = entry.LastOpenedUtc,
-                Favorite = favorite,
-            };
+            entries[i] = entry with { Favorite = favorite };
+            result = new RecentProjectsAutomationSnapshot(entries);
             return true;
         }
 
         return false;
     }
 
-    public bool Remove(string projectPath)
+    internal static bool TryCreateRemoveSnapshot(
+        RecentProjectsAutomationSnapshot source,
+        string projectPath,
+        out RecentProjectsAutomationSnapshot result)
     {
+        ArgumentNullException.ThrowIfNull(source);
+        result = source;
         if (!TryGetFullPath(projectPath, out string? fullPath) || fullPath is null)
         {
             return false;
         }
 
-        for (int i = _entries.Count - 1; i >= 0; i--)
+        List<RecentProjectEntry> entries = [.. source.Entries];
+        for (int i = entries.Count - 1; i >= 0; i--)
         {
-            if (!string.Equals(_entries[i].ProjectPath, fullPath, StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(entries[i].ProjectPath, fullPath, StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            _entries.RemoveAt(i);
+            entries.RemoveAt(i);
+            result = new RecentProjectsAutomationSnapshot([.. entries]);
             return true;
         }
 
         return false;
     }
 
-    public void Save()
+    internal static byte[] SerializeCanonical(RecentProjectsAutomationSnapshot snapshot)
     {
-        if (_path is null)
+        ArgumentNullException.ThrowIfNull(snapshot);
+        return JsonSerializer.SerializeToUtf8Bytes(
+            new RecentProjectsDocument { Entries = [.. snapshot.Entries] },
+            EditorShellJsonContext.Default.RecentProjectsDocument);
+    }
+
+    private void PersistAndPublish(RecentProjectsAutomationSnapshot snapshot)
+    {
+        SaveSnapshot(snapshot);
+        RestoreAutomationSnapshot(snapshot);
+        Changed?.Invoke();
+    }
+
+    private void SaveSnapshot(RecentProjectsAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (StoragePath is null)
         {
             return;
         }
 
-        string? directory = Path.GetDirectoryName(_path);
+        string? directory = Path.GetDirectoryName(StoragePath);
         if (!string.IsNullOrEmpty(directory))
         {
             _ = Directory.CreateDirectory(directory);
         }
 
-        RecentProjectsDocument document = new()
-        {
-            Entries = [.. _entries],
-        };
-        string json = JsonSerializer.Serialize(
-            document,
-            EditorShellJsonContext.Default.RecentProjectsDocument);
-        EditorAtomicTextFile.WriteAllText(_path, json);
+        EditorAtomicTextFile.WriteAllBytes(StoragePath, SerializeCanonical(snapshot));
     }
 }
+
+internal sealed record RecentProjectsAutomationSnapshot(RecentProjectEntry[] Entries);
 
 /// <summary>
 /// RecentProjectsDocument JSON 文档模型。
@@ -259,7 +382,7 @@ internal sealed class RecentProjectsDocument
 /// <summary>
 /// RecentProjectEntry。
 /// </summary>
-internal sealed class RecentProjectEntry
+internal sealed record RecentProjectEntry
 {
     public string Name { get; init; } = string.Empty;
 

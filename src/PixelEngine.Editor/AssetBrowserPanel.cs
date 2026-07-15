@@ -61,6 +61,11 @@ public sealed class AssetBrowserPanel(
     PrefabAssetInstantiateHandler? tryInstantiatePrefab = null) : IEditorPanel
 {
     /// <summary>
+    /// Project Window 搜索输入允许的最大字符数，与 ImGui 输入缓冲一致。
+    /// </summary>
+    public const int MaximumSearchLength = 128;
+
+    /// <summary>
     /// Project Window 网格缩略图允许的最小边长。
     /// </summary>
     public const float MinimumThumbnailSize = 48f;
@@ -115,7 +120,6 @@ public sealed class AssetBrowserPanel(
     ];
 
     private static readonly string[] ImportKindLabels = ["Texture", "Audio"];
-    private string _search = string.Empty;
     private AssetBrowserDeleteRequest? _pendingDeleteRequest;
     private AssetBrowserFolderDeleteRequest? _pendingFolderDeleteRequest;
     private AssetBrowserMoveRequest? _pendingMoveRequest;
@@ -129,6 +133,11 @@ public sealed class AssetBrowserPanel(
 
     /// <inheritdoc />
     public string Title => EditorDockSpace.AssetBrowserWindowTitle;
+
+    /// <summary>
+    /// 搜索、过滤、排序或展示控件实际变化后触发。若订阅者拒绝变更，面板会恢复完整 before state。
+    /// </summary>
+    public event Action<AssetBrowserViewState>? ViewStateChanged;
 
     /// <inheritdoc />
     public bool Visible
@@ -210,6 +219,11 @@ public sealed class AssetBrowserPanel(
     /// 当前资产类型过滤；null 表示全部类型。
     /// </summary>
     public AssetBrowserItemKind? KindFilter { get; private set; }
+
+    /// <summary>
+    /// 当前 Project Window 搜索文本。
+    /// </summary>
+    public string Search { get; private set; } = string.Empty;
 
     /// <summary>
     /// 当前排序模式。
@@ -366,8 +380,7 @@ public sealed class AssetBrowserPanel(
     /// <param name="search">搜索文本。</param>
     public void SetSearch(string search)
     {
-        _search = search ?? string.Empty;
-        ApplyFilter();
+        _ = ApplyViewState(CaptureViewState() with { Search = search ?? string.Empty });
     }
 
     /// <summary>
@@ -376,8 +389,7 @@ public sealed class AssetBrowserPanel(
     /// <param name="kind">目标资产类型；null 表示全部类型。</param>
     public void SetKindFilter(AssetBrowserItemKind? kind)
     {
-        KindFilter = kind;
-        ApplyFilter();
+        _ = ApplyViewState(CaptureViewState() with { KindFilter = kind });
     }
 
     /// <summary>
@@ -386,13 +398,7 @@ public sealed class AssetBrowserPanel(
     /// <param name="mode">排序模式。</param>
     public void SetSortMode(AssetBrowserSortMode mode)
     {
-        if (!Enum.IsDefined(mode))
-        {
-            throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知 Project Window 排序模式。");
-        }
-
-        SortMode = mode;
-        ApplyFilter();
+        _ = ApplyViewState(CaptureViewState() with { SortMode = mode });
     }
 
     /// <summary>
@@ -401,12 +407,7 @@ public sealed class AssetBrowserPanel(
     /// <param name="mode">目标展示模式。</param>
     public void SetViewMode(AssetBrowserViewMode mode)
     {
-        if (!Enum.IsDefined(mode))
-        {
-            throw new ArgumentOutOfRangeException(nameof(mode), mode, "未知 Project Window 展示模式。");
-        }
-
-        ViewMode = mode;
+        _ = ApplyViewState(CaptureViewState() with { ViewMode = mode });
     }
 
     /// <summary>
@@ -415,12 +416,104 @@ public sealed class AssetBrowserPanel(
     /// <param name="size">请求的图标边长。</param>
     public void SetThumbnailSize(float size)
     {
-        if (!float.IsFinite(size))
+        _ = ApplyViewState(CaptureViewState() with { ThumbnailSize = size });
+    }
+
+    /// <summary>
+    /// 捕获 Project Window 五个共享视图控件的完整状态。
+    /// </summary>
+    /// <returns>可用于原子恢复的不可变快照。</returns>
+    public AssetBrowserViewState CaptureViewState()
+    {
+        return new AssetBrowserViewState(Search, KindFilter, SortMode, ViewMode, ThumbnailSize);
+    }
+
+    /// <summary>
+    /// 一次性验证并应用 Project Window 的完整视图状态。
+    /// </summary>
+    /// <param name="state">目标状态。</param>
+    /// <param name="notifyChanged">实际变化后是否通知共享 automation 事件桥。</param>
+    /// <returns>至少一个可观察字段实际变化时返回 true。</returns>
+    public bool ApplyViewState(in AssetBrowserViewState state, bool notifyChanged = true)
+    {
+        ArgumentNullException.ThrowIfNull(state.Search);
+        if (state.Search.Length > MaximumSearchLength)
         {
-            throw new ArgumentOutOfRangeException(nameof(size), size, "缩略图尺寸必须为有限值。");
+            throw new ArgumentOutOfRangeException(
+                nameof(state),
+                state.Search.Length,
+                $"Project Window 搜索文本最多 {MaximumSearchLength} 个字符。");
         }
 
-        ThumbnailSize = Math.Clamp(size, MinimumThumbnailSize, MaximumThumbnailSize);
+        if (state.KindFilter is { } kindFilter && !Enum.IsDefined(kindFilter))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state), kindFilter, "未知 Project Window 资产类型过滤。");
+        }
+
+        if (!Enum.IsDefined(state.SortMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state), state.SortMode, "未知 Project Window 排序模式。");
+        }
+
+        if (!Enum.IsDefined(state.ViewMode))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state), state.ViewMode, "未知 Project Window 展示模式。");
+        }
+
+        if (!float.IsFinite(state.ThumbnailSize))
+        {
+            throw new ArgumentOutOfRangeException(nameof(state), state.ThumbnailSize, "缩略图尺寸必须为有限值。");
+        }
+
+        AssetBrowserViewState normalized = state with
+        {
+            ThumbnailSize = Math.Clamp(state.ThumbnailSize, MinimumThumbnailSize, MaximumThumbnailSize),
+        };
+        AssetBrowserViewState before = CaptureViewState();
+        if (before == normalized)
+        {
+            return false;
+        }
+
+        bool filterChanged = !string.Equals(before.Search, normalized.Search, StringComparison.Ordinal) ||
+            before.KindFilter != normalized.KindFilter ||
+            before.SortMode != normalized.SortMode;
+        SetViewStateFields(normalized);
+        if (filterChanged)
+        {
+            ApplyFilter();
+        }
+
+        Action<AssetBrowserViewState>? changed = ViewStateChanged;
+        if (!notifyChanged || changed is null)
+        {
+            return true;
+        }
+
+        try
+        {
+            changed(normalized);
+            return true;
+        }
+        catch
+        {
+            SetViewStateFields(before);
+            if (filterChanged)
+            {
+                ApplyFilter();
+            }
+
+            throw;
+        }
+    }
+
+    private void SetViewStateFields(in AssetBrowserViewState state)
+    {
+        Search = state.Search;
+        KindFilter = state.KindFilter;
+        SortMode = state.SortMode;
+        ViewMode = state.ViewMode;
+        ThumbnailSize = state.ThumbnailSize;
     }
 
     /// <summary>
@@ -446,6 +539,15 @@ public sealed class AssetBrowserPanel(
     {
         _trackedSelection = selection ?? throw new ArgumentNullException(nameof(selection));
         return Refresh();
+    }
+
+    /// <summary>从已经原子发布的数据源缓存重载 Project Window，不触发磁盘扫描。</summary>
+    /// <param name="selection">按 stable asset/folder identity 重定位的共享选择。</param>
+    /// <returns>完整资产快照。</returns>
+    public IReadOnlyList<AssetBrowserItem> ReloadCachedSnapshot(EditorSelection selection)
+    {
+        _trackedSelection = selection ?? throw new ArgumentNullException(nameof(selection));
+        return ReloadSnapshot();
     }
 
     /// <summary>
@@ -1149,7 +1251,7 @@ public sealed class AssetBrowserPanel(
                 windowMinimum + ImGui.GetWindowSize());
 
             DrawToolbar(context.Selection);
-            if (!string.IsNullOrWhiteSpace(_search))
+            if (!string.IsNullOrWhiteSpace(Search))
             {
                 // 搜索可能命中动态“启动 / 当前” badge；只在搜索态重算，普通浏览不逐帧分配投影。
                 ApplyFilter();
@@ -1229,7 +1331,7 @@ public sealed class AssetBrowserPanel(
         ImGui.SameLine();
         float searchWidth = MathF.Max(72f, ImGui.GetContentRegionAvail().X - ReservedControlsWidth);
         ImGui.SetNextItemWidth(searchWidth);
-        string search = _search;
+        string search = Search;
         if (ImGui.InputTextWithHint("##project-search", "Search", ref search, 128))
         {
             SetSearch(search);
@@ -2973,7 +3075,7 @@ public sealed class AssetBrowserPanel(
         }
 
         IEnumerable<AssetBrowserItem> query = LastAssets;
-        bool searching = !string.IsNullOrWhiteSpace(_search);
+        bool searching = !string.IsNullOrWhiteSpace(Search);
         if (searching)
         {
             if (!string.IsNullOrWhiteSpace(ActiveFolderPath))
@@ -3005,13 +3107,13 @@ public sealed class AssetBrowserPanel(
         string purpose = item.Descriptor?.Purpose ?? string.Empty;
         string summary = item.PreviewSummary ?? string.Empty;
         string badges = FormatBadges(GetBadges(item));
-        return item.Path.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            item.Kind.ToString().Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            typeLabel.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            purpose.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            summary.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            badges.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-            (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(_search, StringComparison.OrdinalIgnoreCase));
+        return item.Path.Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+            item.Kind.ToString().Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+            typeLabel.Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+            purpose.Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+            summary.Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+            badges.Contains(Search, StringComparison.OrdinalIgnoreCase) ||
+            (!string.IsNullOrWhiteSpace(item.AssetId) && item.AssetId.Contains(Search, StringComparison.OrdinalIgnoreCase));
     }
 
     private void RebuildNavigationProjection()

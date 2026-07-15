@@ -31,6 +31,9 @@ public sealed class ColorRenderTarget : IDisposable
     /// </summary>
     public uint Handle => _texture.Handle;
 
+    /// <summary>当前颜色纹理所属 framebuffer 句柄；仅供同一 GL context 的宿主安全阶段读取。</summary>
+    public uint FramebufferHandle => _framebuffer.Handle;
+
     /// <summary>
     /// 宽度。
     /// </summary>

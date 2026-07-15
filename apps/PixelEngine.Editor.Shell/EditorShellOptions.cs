@@ -67,6 +67,9 @@ internal sealed record EditorShellOptions(
     /// <summary>可选预置 current-user credential 文件。</summary>
     public string? AutomationCredentialPath { get; init; }
 
+    /// <summary>允许 automation asset.import 读取的显式 canonical roots。</summary>
+    public string[] AutomationImportRoots { get; init; } = [];
+
     public static EditorShellOptions Parse(string[] args)
     {
         string? projectPath = null;
@@ -95,6 +98,7 @@ internal sealed record EditorShellOptions(
         string? automationDiscoveryRoot = null;
         string? automationArtifactRoot = null;
         string? automationCredentialPath = null;
+        List<string> automationImportRoots = [];
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -197,6 +201,9 @@ internal sealed record EditorShellOptions(
                 case "--automation-credential":
                     automationCredentialPath = RequireValue(args, ref i, arg);
                     break;
+                case "--automation-import-root":
+                    automationImportRoots.Add(RequireValue(args, ref i, arg));
+                    break;
                 default:
                     throw new ArgumentException($"未知参数：{arg}");
             }
@@ -228,6 +235,13 @@ internal sealed record EditorShellOptions(
             AutomationDiscoveryRoot = NormalizeOptionalPath(automationDiscoveryRoot),
             AutomationArtifactRoot = NormalizeOptionalPath(automationArtifactRoot),
             AutomationCredentialPath = NormalizeOptionalPath(automationCredentialPath),
+            AutomationImportRoots =
+            [
+                .. automationImportRoots
+                    .Select(static path => Path.GetFullPath(path.Trim()))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .Order(StringComparer.OrdinalIgnoreCase),
+            ],
         };
     }
 

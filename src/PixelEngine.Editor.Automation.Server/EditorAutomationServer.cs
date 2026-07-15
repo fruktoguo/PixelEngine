@@ -788,7 +788,12 @@ public sealed class EditorAutomationServer : IAsyncDisposable
             error = CreateError(
                 AutomationErrorCodes.Internal,
                 AutomationErrorCategory.Internal,
-                $"Automation handler 失败：{exception.GetType().Name}。");
+                $"Automation handler 失败：{exception.GetType().Name}。") with
+            {
+                Details = JsonSerializer.SerializeToElement(
+                    CreateInternalErrorDetails(exception),
+                    AutomationJsonContext.Default.AutomationInternalErrorDetails),
+            };
         }
 
         AutomationEnvelope? responseEnvelope = null;
@@ -937,8 +942,18 @@ public sealed class EditorAutomationServer : IAsyncDisposable
                 method,
                 request.Payload,
                 cancellationToken).ConfigureAwait(false);
-            payload = result.Payload;
             revision = result.Revision;
+            if (result.DeferredPayloadFactory is { } deferred)
+            {
+                AutomationRevisionSnapshot sourceRevision = revision ??
+                    throw new InvalidOperationException(
+                        $"Deferred automation method '{method}' 缺少 source revision。");
+                payload = await deferred(sourceRevision, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                payload = result.Payload;
+            }
         }
 
         return new ProcessedAutomationResponse(payload, revision);
@@ -1541,6 +1556,56 @@ public sealed class EditorAutomationServer : IAsyncDisposable
                 CorrelationId = envelope.CorrelationId ?? envelope.MessageId,
             });
         }
+    }
+
+    private static AutomationInternalErrorDetails CreateInternalErrorDetails(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        List<AutomationInternalErrorCause> causes = [];
+        if (exception is AggregateException aggregate)
+        {
+            IReadOnlyList<Exception> flattened = aggregate.Flatten().InnerExceptions;
+            for (int i = 0; i < flattened.Count && causes.Count < 16; i++)
+            {
+                causes.Add(new AutomationInternalErrorCause
+                {
+                    ExceptionType = BoundedExceptionType(flattened[i]),
+                    Message = BoundedExceptionMessage(flattened[i]),
+                });
+            }
+        }
+        else
+        {
+            Exception? current = exception.InnerException;
+            while (current is not null && causes.Count < 16)
+            {
+                causes.Add(new AutomationInternalErrorCause
+                {
+                    ExceptionType = BoundedExceptionType(current),
+                    Message = BoundedExceptionMessage(current),
+                });
+                current = current.InnerException;
+            }
+        }
+
+        return new AutomationInternalErrorDetails
+        {
+            ExceptionType = BoundedExceptionType(exception),
+            Message = BoundedExceptionMessage(exception),
+            Causes = [.. causes],
+        };
+    }
+
+    private static string BoundedExceptionType(Exception exception)
+    {
+        string value = exception.GetType().FullName ?? exception.GetType().Name;
+        return value.Length <= 512 ? value : value[..512];
+    }
+
+    private static string BoundedExceptionMessage(Exception exception)
+    {
+        string value = exception.Message.Replace('\0', '?');
+        return value.Length <= 4096 ? value : value[..4096];
     }
 
     private static AutomationError CreateError(

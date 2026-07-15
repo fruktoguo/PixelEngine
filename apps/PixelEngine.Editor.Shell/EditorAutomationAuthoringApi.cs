@@ -7,6 +7,7 @@ using PixelEngine.Editor.Automation.Protocol;
 using PixelEngine.Editor.Automation.Server;
 using PixelEngine.Hosting;
 using PixelEngine.Scripting;
+using PixelEngine.Simulation;
 using PixelEngine.UI;
 
 namespace PixelEngine.Editor.Shell;
@@ -15,7 +16,10 @@ namespace PixelEngine.Editor.Shell;
 /// 手动 Editor UI 与外部 automation 共用的 authoring 语义注册表。
 /// 所有 delegate 只会由 <see cref="AutomationMainThreadScheduler"/> 在 EditorIngress 调用。
 /// </summary>
-internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDisposable
+internal sealed partial class EditorAutomationAuthoringApi(
+    EditorShellApp app,
+    AutomationArtifactStore artifacts,
+    string[] importRoots) : IDisposable
 {
     internal const long MaximumBrushStrokeCellVisits = 4_000_000;
     private const string WorkspaceResource = "editor:workspace";
@@ -24,8 +28,12 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
     private const string LayoutResource = "editor:layout";
     private const string PanelsResource = "editor:panels";
     private const string TransitionResource = "editor:transition";
+    private const string HistoryResource = "editor:history";
     private readonly EditorShellApp _app = app ?? throw new ArgumentNullException(nameof(app));
+    private readonly AutomationArtifactStore _artifacts = artifacts ?? throw new ArgumentNullException(nameof(artifacts));
+    private readonly string[] _importRoots = importRoots ?? throw new ArgumentNullException(nameof(importRoots));
     private readonly byte[] _cursorKey = RandomNumberGenerator.GetBytes(32);
+    private AutomationEventHub? _eventHub;
     private int _disposed;
 
     public AutomationMethodRegistration[] CreateRegistrations()
@@ -56,6 +64,44 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
                 ["edit"],
                 ["dialog.unsaved-scene.save", "dialog.unsaved-scene.discard", "dialog.unsaved-scene.cancel"],
                 ResolveTransition),
+            Command(
+                AutomationProtocolConstants.WorkspaceProjectCreateMethod,
+                "workspace",
+                "projectCreateRequest",
+                "transitionResult",
+                [AutomationScopes.EditorControl, AutomationScopes.ProjectWrite],
+                ["edit"],
+                ["menu.file.new-project", "project-picker.create"],
+                CreateProject,
+                preparation: PrepareCreateProject),
+            Command(
+                AutomationProtocolConstants.WorkspaceProjectOpenMethod,
+                "workspace",
+                "projectOpenRequest",
+                "transitionResult",
+                [AutomationScopes.EditorControl],
+                ["edit"],
+                ["menu.file.open-project", "menu.file.open-recent", "project-picker.open"],
+                OpenProject,
+                preparation: PrepareOpenProject),
+            Command(
+                AutomationProtocolConstants.WorkspaceProjectCloseMethod,
+                "workspace",
+                "emptyRequest",
+                "transitionResult",
+                [AutomationScopes.EditorControl],
+                ["edit"],
+                ["menu.file.close-project", "project-picker.back"],
+                CloseProject),
+            Command(
+                AutomationProtocolConstants.WorkspaceExitMethod,
+                "workspace",
+                "emptyRequest",
+                "transitionResult",
+                [AutomationScopes.EditorControl],
+                AllModes,
+                ["menu.file.exit", "window.close"],
+                ExitEditor),
             Read(
                 AutomationProtocolConstants.EditorHistoryGetMethod,
                 "workspace",
@@ -179,7 +225,7 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
                 "sceneSnapshot",
                 [AutomationScopes.ProjectWrite],
                 ["edit"],
-                ["menu.file.save-as"],
+                ["menu.file.save-as", "shortcut.ctrl-shift-s"],
                 SaveSceneAs),
             Command(
                 AutomationProtocolConstants.SceneNewMethod,
@@ -416,7 +462,8 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
                 [AutomationScopes.ProjectWrite],
                 ["edit"],
                 ["panel.scene.brush"],
-                ApplyBrush),
+                ApplyBrush,
+                executionPhase: AutomationExecutionPhase.EngineInputAndTime),
             Command(
                 AutomationProtocolConstants.BrushStrokeMethod,
                 "tool",
@@ -425,14 +472,27 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
                 [AutomationScopes.ProjectWrite],
                 ["edit"],
                 ["panel.scene.brush.stroke"],
-                ApplyBrushStroke),
+                ApplyBrushStroke,
+                executionPhase: AutomationExecutionPhase.EngineInputAndTime),
+            .. CreateProductRegistrations(),
         ];
+    }
+
+    internal void AttachEventHub(AutomationEventHub eventHub)
+    {
+        ArgumentNullException.ThrowIfNull(eventHub);
+        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        if (Interlocked.CompareExchange(ref _eventHub, eventHub, null) is not null)
+        {
+            throw new InvalidOperationException("Automation event hub 已经连接。");
+        }
     }
 
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) == 0)
         {
+            _ = Interlocked.Exchange(ref _eventHub, null);
             CryptographicOperations.ZeroMemory(_cursorKey);
         }
     }
@@ -472,7 +532,9 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
         string[] modes,
         string[] uiCommandIds,
         AutomationScheduledOperation operation,
-        bool stateChanging = true)
+        bool stateChanging = true,
+        AutomationExecutionPhase executionPhase = AutomationExecutionPhase.EditorIngress,
+        AutomationScheduledPreparation? preparation = null)
     {
         return Registration(
             method,
@@ -485,9 +547,11 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
             AutomationTransactionMode.Forbidden,
             requiresExpectedRevision: stateChanging,
             requiresIdempotencyKey: stateChanging,
-            eventTypes: stateChanging ? [AutomationProtocolConstants.StateChangedEventType] : [],
+            eventTypes: stateChanging ? EditorAutomationEventRouting.ForCapability(method, domain) : [],
             uiCommandIds,
-            operation);
+            operation,
+            executionPhase: executionPhase,
+            preparation: preparation);
     }
 
     private static AutomationMethodRegistration Write(
@@ -509,7 +573,7 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
             AutomationTransactionMode.Optional,
             requiresExpectedRevision: true,
             requiresIdempotencyKey: true,
-            eventTypes: [AutomationProtocolConstants.StateChangedEventType],
+            eventTypes: EditorAutomationEventRouting.ForCapability(method, domain),
             uiCommandIds,
             operation);
     }
@@ -527,7 +591,10 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
         bool requiresIdempotencyKey,
         string[] eventTypes,
         string[] uiCommandIds,
-        AutomationScheduledOperation operation)
+        AutomationScheduledOperation operation,
+        AutomationArtifactBehavior artifactBehavior = AutomationArtifactBehavior.None,
+        AutomationExecutionPhase executionPhase = AutomationExecutionPhase.EditorIngress,
+        AutomationScheduledPreparation? preparation = null)
     {
         return new AutomationMethodRegistration
         {
@@ -540,14 +607,16 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
                 RequiredScopes = scopes,
                 SupportedModes = modes,
                 OperationKind = operationKind,
-                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                ExecutionPhase = executionPhase,
                 TransactionMode = transactionMode,
                 RequiresExpectedRevision = requiresExpectedRevision,
                 RequiresIdempotencyKey = requiresIdempotencyKey,
+                UsesBackgroundPreparation = preparation is not null,
                 EventTypes = eventTypes,
-                ArtifactBehavior = AutomationArtifactBehavior.None,
+                ArtifactBehavior = artifactBehavior,
                 UiCommandIds = uiCommandIds,
             },
+            Preparation = preparation,
             Operation = operation,
         };
     }
@@ -626,17 +695,173 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
             stateEventAlreadyPublished: eventAlreadyPublished);
     }
 
+    private AutomationBackgroundPreparation PrepareCreateProject(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        AutomationProjectCreateRequest request = Deserialize(
+            payload,
+            AutomationJsonContext.Default.AutomationProjectCreateRequest,
+            AutomationProtocolConstants.WorkspaceProjectCreateMethod);
+        ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.WorkspaceProjectCreateMethod);
+        if (request.LocationPath.Length is < 1 or > 32767 ||
+            request.Name.Length is < 1 or > 256)
+        {
+            throw Invalid("New Project locationPath/name 为空或超过长度上限。");
+        }
+
+        EditorAutomationProjectCreatePrepared? prepared = null;
+        return new AutomationBackgroundPreparation
+        {
+            PrepareAsync = cancellationToken =>
+            {
+                EditorAutomationProjectCreatePrepared result =
+                    EditorAutomationProjectCreatePrepared.Prepare(
+                        request.LocationPath,
+                        request.Name,
+                        cancellationToken);
+                Volatile.Write(ref prepared, result);
+                return ValueTask.FromResult<object?>(result);
+            },
+            AbortAtEditorIngress = () => Volatile.Read(ref prepared)?.Dispose(),
+        };
+    }
+
+    private AutomationBackgroundPreparation PrepareOpenProject(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        AutomationProjectOpenRequest request = Deserialize(
+            payload,
+            AutomationJsonContext.Default.AutomationProjectOpenRequest,
+            AutomationProtocolConstants.WorkspaceProjectOpenMethod);
+        ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.WorkspaceProjectOpenMethod);
+        return request.Path.Length is < 1 or > 32767
+            ? throw Invalid("Open Project path 为空或超过长度上限。")
+            : new AutomationBackgroundPreparation
+            {
+                PrepareAsync = cancellationToken => ValueTask.FromResult<object?>(
+                    EditorAutomationProjectOpenPrepared.Prepare(request.Path, cancellationToken)),
+            };
+    }
+
+    private AutomationOperationResult CreateProject(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = payload;
+        EditorAutomationProjectCreatePrepared prepared =
+            context.RequirePreparedState<EditorAutomationProjectCreatePrepared>();
+        string[] before = CurrentWorkspaceResources(includeTransition: true);
+        context.Revisions.EnsureCanAdvance(before);
+        EditorTransitionResult result = _app.RequestAutomationCreateProject(prepared);
+        return CompleteWorkspaceTransitionRequest(context, result, before);
+    }
+
+    private AutomationOperationResult OpenProject(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = payload;
+        EditorAutomationProjectOpenPrepared prepared =
+            context.RequirePreparedState<EditorAutomationProjectOpenPrepared>();
+        if (!prepared.IsCurrent())
+        {
+            throw StateUnavailable(
+                "workspace.project.open preparation 期间工程文件发生变化；请重试。");
+        }
+
+        string[] before = CurrentWorkspaceResources(includeTransition: true);
+        context.Revisions.EnsureCanAdvance(before);
+        EditorTransitionResult result = _app.RequestAutomationOpenProject(prepared);
+        return CompleteWorkspaceTransitionRequest(context, result, before);
+    }
+
+    private AutomationOperationResult CloseProject(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        EnsureEmpty(payload, AutomationProtocolConstants.WorkspaceProjectCloseMethod);
+        if (_app.CurrentSession is null)
+        {
+            throw StateUnavailable("当前没有打开的工程。");
+        }
+
+        string[] before = CurrentWorkspaceResources(includeTransition: true);
+        context.Revisions.EnsureCanAdvance(before);
+        EditorTransitionResult result = _app.RequestAutomationCloseProject();
+        return CompleteWorkspaceTransitionRequest(context, result, before);
+    }
+
+    private AutomationOperationResult ExitEditor(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        EnsureEmpty(payload, AutomationProtocolConstants.WorkspaceExitMethod);
+        string[] before = CurrentWorkspaceResources(includeTransition: true);
+        context.Revisions.EnsureCanAdvance(before);
+        EditorTransitionResult result = _app.RequestAutomationExit();
+        return CompleteWorkspaceTransitionRequest(context, result, before);
+    }
+
+    private AutomationOperationResult CompleteWorkspaceTransitionRequest(
+        AutomationScheduledContext context,
+        EditorTransitionResult result,
+        string[] beforeResources)
+    {
+        if (result.Status == EditorTransitionStatus.PendingTransitionExists)
+        {
+            throw StateUnavailable(result.Diagnostic);
+        }
+
+        string[] resources =
+        [
+            .. CurrentWorkspaceResources(includeTransition: true)
+                .Concat(beforeResources)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+        AutomationTransitionResult response = MapTransitionResult(result);
+        if (_app.PendingTransition is { } pending)
+        {
+            response = response with
+            {
+                Kind = pending.Kind.ToString(),
+                Target = pending.Target,
+            };
+        }
+
+        if (result.Status != EditorTransitionStatus.ConfirmationRequired)
+        {
+            return Result(
+                response,
+                AutomationJsonContext.Default.AutomationTransitionResult,
+                resources);
+        }
+
+        AutomationRevisionSnapshot revision = AdvanceAndCapture(
+            context.Revisions,
+            [TransitionResource],
+            resources);
+        return Result(
+            response,
+            AutomationJsonContext.Default.AutomationTransitionResult,
+            resources,
+            revision);
+    }
+
     private AutomationOperationResult GetHistory(
         AutomationScheduledContext context,
         JsonElement? payload)
     {
         _ = context;
         EnsureEmpty(payload, AutomationProtocolConstants.EditorHistoryGetMethod);
-        EditorProjectSession session = RequireSession();
         return Result(
-            CaptureHistory(session),
+            CaptureHistory(_app.SharedUndoStack),
             AutomationJsonContext.Default.AutomationHistorySnapshot,
-            [EditorAutomationRuntime.CreateSceneResourceId(session)]);
+            [HistoryResource]);
     }
 
     private AutomationOperationResult Undo(
@@ -659,25 +884,34 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
         AutomationScheduledContext context,
         bool undo)
     {
-        EditorProjectSession session = RequireEditSession();
-        session.FlushPendingAuthoringEdits();
-        string[] resources = [EditorAutomationRuntime.CreateSceneResourceId(session)];
+        EditorProjectSession? session = _app.CurrentSession;
+        session?.FlushPendingAuthoringEdits();
+        EditorUndoStack history = _app.SharedUndoStack;
+        IEditorCommand command = (undo
+            ? history.PendingUndoCommand
+            : history.PendingRedoCommand) ??
+            throw StateUnavailable(undo ? "Undo history 为空。" : "Redo history 为空。");
+        string[] resources = command is IEditorResourceScopedCommand { ResourceIds.Count: > 0 } scoped
+            ? [.. scoped.ResourceIds]
+            : session is not null
+                ? [EditorAutomationRuntime.CreateSceneResourceId(session)]
+                : throw StateUnavailable("无项目 history 只能包含自描述资源的 automation action。");
         context.Revisions.EnsureCanAdvance(resources);
         long revisionBefore = context.Revisions.GlobalRevision;
+        EditorSceneModel historyScene = session?.SceneModel ?? _app.SharedUndoScene;
         bool applied = undo
-            ? session.UndoStack.Undo(session.SceneModel, notifyHistoryApplied: false)
-            : session.UndoStack.Redo(session.SceneModel, notifyHistoryApplied: false);
-        if (!applied)
-        {
-            throw StateUnavailable(undo ? "Undo history 为空。" : "Redo history 为空。");
-        }
+            ? history.Undo(historyScene, notifyHistoryApplied: false)
+            : history.Redo(historyScene, notifyHistoryApplied: false);
+        _ = applied
+            ? true
+            : throw StateUnavailable(undo ? "Undo history 无法应用。" : "Redo history 无法应用。");
 
         bool eventAlreadyPublished = context.Revisions.GlobalRevision != revisionBefore;
         AutomationRevisionSnapshot revision = eventAlreadyPublished
             ? context.Revisions.Capture(resources)
             : context.Revisions.Advance(resources);
         return Result(
-            CaptureHistory(session),
+            CaptureHistory(history),
             AutomationJsonContext.Default.AutomationHistorySnapshot,
             resources,
             revision,
@@ -2285,6 +2519,11 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
         }
 
         EditorProjectSession session = RequireEditSession();
+        if (request.Brush is not null)
+        {
+            ValidateBrushSettings(session, request.Brush);
+        }
+
         string[] resources = [SceneViewResource(session), PanelsResource];
         if (!session.TryCaptureAutomationSceneTool(out AutomationSceneToolSnapshot before))
         {
@@ -2430,6 +2669,39 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
             AutomationJsonContext.Default.AutomationBrushApplyResult,
             resources,
             revision);
+    }
+
+    private static void ValidateBrushSettings(
+        EditorProjectSession session,
+        AutomationBrushSettings settings)
+    {
+        if (!Enum.TryParse(settings.Tool, ignoreCase: true, out EditorBrushTool tool) ||
+            !Enum.IsDefined(tool) ||
+            !Enum.TryParse(settings.Shape, ignoreCase: true, out EditorBrushShape shape) ||
+            !Enum.IsDefined(shape) ||
+            !Enum.TryParse(
+                settings.TemperatureMode,
+                ignoreCase: true,
+                out TemperatureBrushMode temperatureMode) ||
+            !Enum.IsDefined(temperatureMode) ||
+            string.IsNullOrWhiteSpace(settings.MaterialName) ||
+            settings.MaterialName.Length > 256 ||
+            settings.MaterialId is < ushort.MinValue or > ushort.MaxValue ||
+            settings.Radius is < 0 or > 128 ||
+            !float.IsFinite(settings.Probability) || settings.Probability is < 0f or > 1f ||
+            !float.IsFinite(settings.TemperatureCelsius))
+        {
+            throw Invalid(
+                "画刷设置无效：枚举、materialName/materialId、radius、probability 或 temperature " +
+                "超出公共 API 契约。");
+        }
+
+        MaterialTable materials = session.Engine.Context.GetService<MaterialTable>();
+        if (!materials.TryGetId(settings.MaterialName.Trim(), out ushort materialId) ||
+            materials.IsTombstone(materialId))
+        {
+            throw Invalid($"画刷 materialName 不存在或已删除：{settings.MaterialName}");
+        }
     }
 
     private AutomationOperationResult ApplyBrushStroke(
@@ -3038,9 +3310,9 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
         }
     }
 
-    private static AutomationHistorySnapshot CaptureHistory(EditorProjectSession session)
+    private static AutomationHistorySnapshot CaptureHistory(EditorUndoStack history)
     {
-        EditorUndoStack history = session.UndoStack;
+        ArgumentNullException.ThrowIfNull(history);
         return new AutomationHistorySnapshot
         {
             CanUndo = history.CanUndo,
@@ -4103,6 +4375,26 @@ internal sealed class EditorAutomationAuthoringApi(EditorShellApp app) : IDispos
                     $"Number filter field '{clause.Field}' 不支持文本运算 {clause.Operator}。"),
                 _ => throw Invalid(
                                 $"Number filter field '{clause.Field}' 不支持 {clause.Operator}。"),
+            };
+    }
+
+    private static bool MatchNumber(double actual, AutomationFilterClause clause)
+    {
+        return !clause.Value.TryGetDouble(out double expected) || !double.IsFinite(expected)
+            ? throw Invalid($"Filter field '{clause.Field}' 要求有限 number value。")
+            : clause.Operator switch
+            {
+                AutomationFilterOperator.Equals => actual == expected,
+                AutomationFilterOperator.NotEquals => actual != expected,
+                AutomationFilterOperator.LessThan => actual < expected,
+                AutomationFilterOperator.LessThanOrEqual => actual <= expected,
+                AutomationFilterOperator.GreaterThan => actual > expected,
+                AutomationFilterOperator.GreaterThanOrEqual => actual >= expected,
+                AutomationFilterOperator.Contains or
+                AutomationFilterOperator.StartsWith => throw Invalid(
+                    $"Number filter field '{clause.Field}' 不支持文本运算 {clause.Operator}。"),
+                _ => throw Invalid(
+                    $"Number filter field '{clause.Field}' 不支持 {clause.Operator}。"),
             };
     }
 

@@ -150,6 +150,39 @@ internal sealed class EditorProject
         ProjectSettingsDiagnostic = string.Empty;
     }
 
+    internal EditorProjectAutomationSnapshot CaptureAutomationSnapshot()
+    {
+        return new EditorProjectAutomationSnapshot(CloneDocument(Document), ProjectSettingsDiagnostic);
+    }
+
+    internal static EditorProjectAutomationSnapshot CreateAutomationProjectSettingsSnapshot(
+        EditorProjectAutomationSnapshot source,
+        ProjectSettingsDto settings)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(settings);
+        return new EditorProjectAutomationSnapshot(
+            ApplyProjectSettings(source.Document, settings),
+            string.Empty);
+    }
+
+    internal void RestoreAutomationSnapshot(EditorProjectAutomationSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        Document = CloneDocument(snapshot.Document);
+        Scenes = Document.Scenes is { Length: > 0 }
+            ? [.. Document.Scenes.Select(CloneSceneEntry)]
+            :
+            [
+                new EditorProjectSceneEntry
+                {
+                    Name = Path.GetFileNameWithoutExtension(Document.StartScene),
+                    Path = Document.StartScene,
+                },
+            ];
+        ProjectSettingsDiagnostic = snapshot.ProjectSettingsDiagnostic;
+    }
+
     public EngineProject ToEngineProject(string? sceneOverridePath = null)
     {
         string startScenePath = ResolveSceneRelativePath(sceneOverridePath);
@@ -374,6 +407,24 @@ internal sealed class EditorProject
         }
     }
 
+    private static EditorProjectDocument CloneDocument(EditorProjectDocument document)
+    {
+        return new EditorProjectDocument
+        {
+            FormatVersion = document.FormatVersion,
+            Name = document.Name,
+            ContentRoot = document.ContentRoot,
+            ScriptSourceDir = document.ScriptSourceDir,
+            StartScene = document.StartScene,
+            Scenes = document.Scenes is null ? null : [.. document.Scenes.Select(CloneSceneEntry)],
+        };
+    }
+
+    private static EditorProjectSceneEntry CloneSceneEntry(EditorProjectSceneEntry scene)
+    {
+        return new EditorProjectSceneEntry { Name = scene.Name, Path = scene.Path };
+    }
+
     private static EditorProjectDocument ApplyProjectSettings(EditorProjectDocument document, ProjectSettingsDto settings)
     {
         ProjectSettingsDto normalizedSettings = settings.Normalize();
@@ -534,6 +585,14 @@ internal sealed class EditorProject
         }
     }
 }
+
+internal sealed record EditorProjectAutomationSnapshot(
+    EditorProjectDocument Document,
+    string ProjectSettingsDiagnostic);
+
+internal sealed record EditorProjectSettingsAutomationState(
+    EditorProjectAutomationSnapshot Project,
+    Settings.ProjectSettingsPanelAutomationSnapshot Panel);
 
 /// <summary>
 /// EditorProjectDocument JSON 文档模型。
