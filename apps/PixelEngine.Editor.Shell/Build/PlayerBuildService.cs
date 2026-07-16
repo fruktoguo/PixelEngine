@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -24,6 +25,12 @@ internal interface IPlayerBuildService
 internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPlayerBuildService
 {
     private const string EventSchema = "pixelengine.build/v1";
+    internal const int MaximumBuildOutputLineCharacters = 16 * 1024;
+    internal const long MaximumBuildLogBytes = 16L * 1024 * 1024;
+    private const int MaximumToolVersionCharacters = 16 * 1024;
+    private const int OutputReadBufferCharacters = 4096;
+    private const string TruncatedLineSuffix = " [truncated at 16384 characters]";
+    private const string TruncatedLogMessage = "Build output exceeded the 16 MiB build.log limit; remaining output was discarded.";
     private const long MaximumBuildResultBytes = 1024 * 1024;
     private readonly BuildToolLocator _locator = locator ?? new BuildToolLocator();
 
@@ -138,6 +145,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             AutoFlush = true,
         };
         BuildOutputState outputState = new();
+        BuildLogWriteState logState = new();
 
         using Process process = CreateBuildProcess(preflight.Tools, request, outputDirectory);
         try
@@ -162,6 +170,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 tail,
                 logWriter,
                 logLock,
+                logState,
                 outputState,
                 CancellationToken.None);
             Task stderrTask = PumpOutputAsync(
@@ -171,6 +180,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 tail,
                 logWriter,
                 logLock,
+                logState,
                 outputState,
                 CancellationToken.None);
 
@@ -182,7 +192,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 KillProcessTree(process);
                 await waitForExit.WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
                 await Task.WhenAll(stdoutTask, stderrTask).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
-                return CreateCanceledResult(request, progress, logWriter, logLock, tail.Items);
+                return CreateCanceledResult(request, progress, logWriter, logLock, logState, tail.Items);
             }
 
             await waitForExit.ConfigureAwait(false);
@@ -190,7 +200,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         }
         catch (OperationCanceledException)
         {
-            return CreateCanceledResult(request, progress, logWriter, logLock, tail.Items);
+            return CreateCanceledResult(request, progress, logWriter, logLock, logState, tail.Items);
         }
 
         // 子进程已退出后，迟到的取消请求不能把已经完成的构建谎报为 cancelled。
@@ -219,7 +229,9 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             result.Ok ? BuildPhase.Done : BuildPhase.Unknown,
             result.Ok ? 1 : 0,
             resultLevel,
-            result.Ok ? "构建完成。" : result.Error ?? $"构建失败，exit code={process.ExitCode}。"));
+            LimitText(
+                result.Ok ? "构建完成。" : result.Error ?? $"构建失败，exit code={process.ExitCode}。",
+                8192)));
         return result;
     }
 
@@ -418,33 +430,127 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         FixedTail tail,
         StreamWriter logWriter,
         object logLock,
+        BuildLogWriteState logState,
         BuildOutputState outputState,
         CancellationToken cancellationToken)
     {
-        while (true)
+        char[] buffer = ArrayPool<char>.Shared.Rent(OutputReadBufferCharacters);
+        StringBuilder line = new(MaximumBuildOutputLineCharacters);
+        bool truncated = false;
+        try
         {
-            string? line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
-            if (line is null)
+            while (true)
             {
-                break;
+                int read = await reader.ReadAsync(
+                    buffer.AsMemory(0, OutputReadBufferCharacters),
+                    cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                for (int i = 0; i < read; i++)
+                {
+                    char character = buffer[i];
+                    if (character == '\n')
+                    {
+                        EmitBuildOutputLine(
+                            line,
+                            truncated,
+                            fallbackLevel,
+                            progress,
+                            tail,
+                            logWriter,
+                            logLock,
+                            logState,
+                            outputState);
+                        _ = line.Clear();
+                        truncated = false;
+                        continue;
+                    }
+
+                    if (line.Length < MaximumBuildOutputLineCharacters)
+                    {
+                        _ = line.Append(character);
+                    }
+                    else
+                    {
+                        truncated = true;
+                    }
+                }
             }
 
-            BuildProgressEvent buildEvent = TryParseProgressLine(line, out BuildProgressEvent parsed)
-                ? parsed
-                : CreateEvent(BuildEventKind.Log, outputState.CurrentPhase, 0, fallbackLevel, line);
-            if (buildEvent.Phase != BuildPhase.Unknown)
+            if (line.Length != 0 || truncated)
             {
-                outputState.CurrentPhase = buildEvent.Phase;
+                EmitBuildOutputLine(
+                    line,
+                    truncated,
+                    fallbackLevel,
+                    progress,
+                    tail,
+                    logWriter,
+                    logLock,
+                    logState,
+                    outputState);
             }
-
-            tail.Add(line);
-            lock (logLock)
-            {
-                logWriter.WriteLine(FormatLogLine(buildEvent));
-            }
-
-            progress.Report(buildEvent);
         }
+        finally
+        {
+            _ = line.Clear();
+            ArrayPool<char>.Shared.Return(buffer, clearArray: true);
+        }
+    }
+
+    private static void EmitBuildOutputLine(
+        StringBuilder source,
+        bool truncated,
+        BuildLogLevel fallbackLevel,
+        IProgress<BuildProgressEvent> progress,
+        FixedTail tail,
+        StreamWriter logWriter,
+        object logLock,
+        BuildLogWriteState logState,
+        BuildOutputState outputState)
+    {
+        if (source.Length != 0 && source[^1] == '\r')
+        {
+            _ = source.Remove(source.Length - 1, 1);
+        }
+
+        if (truncated)
+        {
+            int retained = Math.Max(0, MaximumBuildOutputLineCharacters - TruncatedLineSuffix.Length);
+            if (source.Length > retained)
+            {
+                _ = source.Remove(retained, source.Length - retained);
+            }
+
+            _ = source.Append(TruncatedLineSuffix);
+        }
+
+        string line = source.ToString();
+        BuildProgressEvent buildEvent = TryParseProgressLine(line, out BuildProgressEvent parsed)
+            ? parsed
+            : CreateEvent(BuildEventKind.Log, outputState.CurrentPhase, 0, fallbackLevel, line);
+        buildEvent = buildEvent with
+        {
+            Message = LimitText(
+                buildEvent.Message,
+                8192,
+                truncated ? TruncatedLineSuffix : null),
+        };
+        if (buildEvent.Phase != BuildPhase.Unknown)
+        {
+            outputState.CurrentPhase = buildEvent.Phase;
+        }
+
+        tail.Add(line);
+        lock (logLock)
+        {
+            WriteBuildLogLine(logWriter, logState, buildEvent, outputState.CurrentPhase);
+        }
+
+        progress.Report(buildEvent);
     }
 
     private sealed class BuildOutputState
@@ -456,6 +562,13 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             get => (BuildPhase)Volatile.Read(ref _currentPhase);
             set => Volatile.Write(ref _currentPhase, (int)value);
         }
+    }
+
+    private sealed class BuildLogWriteState
+    {
+        public long WrittenBytes { get; set; } = Encoding.UTF8.GetPreamble().Length;
+
+        public bool TruncationRecorded { get; set; }
     }
 
     private static async Task<BuildResult?> ReadResultAsync(string resultPath, CancellationToken cancellationToken)
@@ -665,13 +778,67 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                 return string.Empty;
             }
 
-            string output = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
+            using CancellationTokenRegistration registration = cancellationToken.Register(
+                static state => KillProcessTree((Process)state!),
+                process);
+            Task<string?> outputTask = ReadBoundedTextAsync(
+                process.StandardOutput,
+                MaximumToolVersionCharacters,
+                cancellationToken);
+            Task<string?> errorTask = ReadBoundedTextAsync(
+                process.StandardError,
+                MaximumToolVersionCharacters,
+                cancellationToken);
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            return process.ExitCode == 0 ? output.Trim() : string.Empty;
+            string? output = await outputTask.ConfigureAwait(false);
+            _ = await errorTask.ConfigureAwait(false);
+            return process.ExitCode == 0 && output is not null ? output.Trim() : string.Empty;
         }
         catch (Exception) when (!OperatingSystem.IsBrowser())
         {
             return string.Empty;
+        }
+    }
+
+    private static async Task<string?> ReadBoundedTextAsync(
+        StreamReader reader,
+        int maximumCharacters,
+        CancellationToken cancellationToken)
+    {
+        char[] buffer = ArrayPool<char>.Shared.Rent(OutputReadBufferCharacters);
+        StringBuilder text = new(Math.Min(maximumCharacters, OutputReadBufferCharacters));
+        bool exceeded = false;
+        try
+        {
+            while (true)
+            {
+                int read = await reader.ReadAsync(
+                    buffer.AsMemory(0, OutputReadBufferCharacters),
+                    cancellationToken).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+
+                int remaining = maximumCharacters - text.Length;
+                if (remaining > 0)
+                {
+                    int retained = Math.Min(remaining, read);
+                    _ = text.Append(buffer, 0, retained);
+                    exceeded |= retained != read;
+                }
+                else
+                {
+                    exceeded = true;
+                }
+            }
+
+            return exceeded ? null : text.ToString();
+        }
+        finally
+        {
+            _ = text.Clear();
+            ArrayPool<char>.Shared.Return(buffer, clearArray: true);
         }
     }
 
@@ -695,7 +862,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             Configuration = request.Configuration,
             Version = request.Version,
             InformationalVersion = request.InformationalVersion,
-            Error = error,
+            Error = LimitText(error, 32768),
             ExitCode = exitCode,
         };
     }
@@ -705,6 +872,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         IProgress<BuildProgressEvent> progress,
         StreamWriter logWriter,
         object logLock,
+        BuildLogWriteState logState,
         IReadOnlyList<string> tail)
     {
         const string message = "构建已取消，build-player 进程树已终止。";
@@ -712,7 +880,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         progress.Report(canceled);
         lock (logLock)
         {
-            logWriter.WriteLine(FormatLogLine(canceled));
+            WriteBuildLogLine(logWriter, logState, canceled, BuildPhase.Unknown);
         }
 
         return CreateFailedResult(request, message, -2, tail);
@@ -748,6 +916,53 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
     private static string FormatLogLine(BuildProgressEvent item)
     {
         return $"{item.Timestamp:O} [{item.Level}] [{item.Phase}] {item.Message}";
+    }
+
+    private static void WriteBuildLogLine(
+        StreamWriter writer,
+        BuildLogWriteState state,
+        BuildProgressEvent item,
+        BuildPhase currentPhase)
+    {
+        if (state.TruncationRecorded)
+        {
+            return;
+        }
+
+        string formatted = FormatLogLine(item);
+        long encodedBytes = Encoding.UTF8.GetByteCount(formatted) + Encoding.UTF8.GetByteCount(Environment.NewLine);
+        if (state.WrittenBytes + encodedBytes <= MaximumBuildLogBytes)
+        {
+            writer.WriteLine(formatted);
+            state.WrittenBytes += encodedBytes;
+            return;
+        }
+
+        state.TruncationRecorded = true;
+        string marker = FormatLogLine(CreateEvent(
+            BuildEventKind.Log,
+            currentPhase,
+            0,
+            BuildLogLevel.Warning,
+            TruncatedLogMessage));
+        long markerBytes = Encoding.UTF8.GetByteCount(marker) + Encoding.UTF8.GetByteCount(Environment.NewLine);
+        if (state.WrittenBytes + markerBytes <= MaximumBuildLogBytes)
+        {
+            writer.WriteLine(marker);
+            state.WrittenBytes += markerBytes;
+        }
+    }
+
+    private static string LimitText(string? value, int maximumLength, string? retainedSuffix = null)
+    {
+        string text = value ?? string.Empty;
+        return text.Length <= maximumLength
+            ? text
+            : retainedSuffix is { Length: > 0 } suffix &&
+                suffix.Length < maximumLength &&
+                text.EndsWith(suffix, StringComparison.Ordinal)
+                ? text[..(maximumLength - suffix.Length)] + suffix
+                : text[..maximumLength];
     }
 
     private static bool TryGetString(JsonElement element, string propertyName, out string value)

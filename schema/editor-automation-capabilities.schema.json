@@ -1,0 +1,5 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://pixelengine.dev/schema/editor-automation-capabilities.schema.json",
+  "$ref": "editor-automation-protocol.v1.schema.json#/$defs/capabilityMatrixSnapshot"
+}

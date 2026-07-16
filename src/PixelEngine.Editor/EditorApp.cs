@@ -9,6 +9,7 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// Editor 顶层门面，负责 ImGui 帧生命周期、dockspace 与面板调度。
 /// </summary>
+[EditorUiSurface("editor.workspace")]
 public sealed class EditorApp : IDisposable
 {
     private readonly ImGuiController _controller;
@@ -211,6 +212,7 @@ public sealed class EditorApp : IDisposable
     /// <param name="request">已验证的停靠参数；窗口标题将由 registry 覆盖。</param>
     /// <param name="diagnostic">失败诊断。</param>
     /// <returns>dock tree 已变更时为 true。</returns>
+    [EditorUiCommands("panel.drag-dock", "panel.undock", "panel.tab-merge")]
     public bool TrySetPanelDock(
         string panelId,
         string? targetPanelId,
@@ -290,6 +292,7 @@ public sealed class EditorApp : IDisposable
     /// <param name="visible">目标可见性。</param>
     /// <param name="focus">可见时是否请求聚焦。</param>
     /// <returns>是否找到 panel。</returns>
+    [EditorUiCommands("panel.close", "panel.focus")]
     public bool TrySetPanelById(string stableId, bool visible, bool focus)
     {
         int index = FindPanelIndex(stableId);

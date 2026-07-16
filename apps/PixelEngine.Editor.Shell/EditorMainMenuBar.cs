@@ -9,6 +9,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Editor Shell 顶部菜单栏：文件、编辑、构建与帮助。
 /// </summary>
+[EditorUiSurface("editor.panel.main-menu")]
 internal sealed class EditorMainMenuBar
 {
     private const float ToolbarHeight = 38f;
@@ -84,6 +85,13 @@ internal sealed class EditorMainMenuBar
                 : L.Get("status.noProject", "No Project"));
     }
 
+    [EditorUiCommands(
+        "toolbar.play-controls",
+        "toolbar.play",
+        "toolbar.stop",
+        "toolbar.pause",
+        "toolbar.step",
+        "toolbar.layout.reset")]
     private static void DrawToolbar(EditorShellApp app)
     {
         EditorMainToolbarState state = CaptureToolbarState(app);
@@ -191,6 +199,7 @@ internal sealed class EditorMainMenuBar
         ImGui.End();
     }
 
+    [EditorUiCommands("menu.component.add")]
     private static void DrawComponentMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.component", "Component")))
@@ -222,6 +231,7 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiControlPrimitive]
     private static bool PlayControlButton(
         EditorToolbarPlayIcon icon,
         bool selected,
@@ -316,6 +326,23 @@ internal sealed class EditorMainMenuBar
         }
     }
 
+    [EditorUiCommands(
+        "menu.file",
+        "menu.file.project",
+        "menu.file.new-project",
+        "menu.file.open-project",
+        "menu.file.open-recent",
+        "menu.file.scene",
+        "menu.file.new-scene",
+        "menu.file.open-scene",
+        "menu.file.save",
+        "menu.file.save-as",
+        "menu.file.project-settings",
+        "menu.file.player-settings",
+        "menu.file.build-settings",
+        "menu.file.build-and-run",
+        "menu.file.close-project",
+        "menu.file.exit")]
     private static void DrawFileMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.file", "File")))
@@ -441,6 +468,12 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands(
+        "menu.edit.undo",
+        "menu.edit.redo",
+        "menu.edit.delete",
+        "menu.edit.duplicate",
+        "menu.edit.preferences")]
     private static void DrawEditMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.edit", "Edit")))
@@ -491,6 +524,13 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands(
+        "menu.game-object.create",
+        "menu.game-object.create-empty",
+        "menu.game-object.create-child",
+        "menu.game-object.create-with-component",
+        "menu.game-object.rename",
+        "menu.game-object.delete")]
     private static void DrawGameObjectMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.gameObject", "GameObject")))
@@ -558,6 +598,7 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands("menu.assets.open-csharp-project")]
     private static void DrawAssetsMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.assets", "Assets")))
@@ -577,6 +618,10 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands(
+        "menu.window",
+        "menu.window.project-picker",
+        "menu.window.reset-layout")]
     private static void DrawWindowMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.window", "Window")))
@@ -638,6 +683,7 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands("menu.window.panel.open")]
     private static void DrawPanelMenuItem(EditorShellApp app, string label, string panelTitle)
     {
         bool visible = false;
@@ -650,6 +696,12 @@ internal sealed class EditorMainMenuBar
         }
     }
 
+    [EditorUiCommands(
+        "menu.play.play",
+        "menu.play.stop",
+        "menu.play.pause",
+        "menu.play.resume",
+        "menu.play.step")]
     private static void DrawPlayMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.play", "Play")))
@@ -684,6 +736,7 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands("menu.help.about", "menu.help.shortcuts")]
     private static void DrawHelpMenu(EditorShellApp app)
     {
         if (!ImGui.BeginMenu(L.Get("menu.help", "Help")))
@@ -716,6 +769,18 @@ internal sealed class EditorMainMenuBar
         ImGui.EndMenu();
     }
 
+    [EditorUiCommands(
+        "shortcut.ctrl-s",
+        "shortcut.ctrl-shift-s",
+        "shortcut.ctrl-z",
+        "shortcut.ctrl-y",
+        "shortcut.ctrl-d",
+        "shortcut.ctrl-p",
+        "shortcut.ctrl-shift-b",
+        "shortcut.ctrl-b",
+        "shortcut.ctrl-comma",
+        "shortcut.delete",
+        "shortcut.f2")]
     internal static void DispatchShortcuts(EditorShellApp app)
     {
         if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.OpenPreferences))
@@ -751,6 +816,18 @@ internal sealed class EditorMainMenuBar
             app.CurrentSession.SceneModel.SelectedStableId is not null)
         {
             app.DuplicateSelectedGameObject();
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.Delete) &&
+            app.CurrentSession.SceneModel.SelectedStableId is not null)
+        {
+            app.DeleteSelectedGameObject();
+        }
+
+        if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.Rename) &&
+            app.CurrentSession.SceneModel.SelectedStableId is not null)
+        {
+            app.RenameSelectedGameObject();
         }
 
         if (EditorShortcutCatalog.IsPressed(EditorShortcutCommand.TogglePlayMode))

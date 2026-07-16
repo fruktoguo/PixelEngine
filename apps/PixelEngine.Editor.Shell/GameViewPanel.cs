@@ -9,6 +9,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Game View ImGui 面板：用独立 presentation 显示运行时纹理，并提供 Unity 风格分辨率、缩放与最大化控制。
 /// </summary>
+[EditorUiSurface("editor.panel.game")]
 internal sealed class GameViewPanel : IEditorMaximizedPanel
 {
     private const string OverflowPopupName = "game-view-overflow";
@@ -265,6 +266,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         return _hasPendingPresentation;
     }
 
+    [EditorUiCommands("panel.game")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -446,6 +448,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         ImGui.SetNextWindowSize(viewport.WorkSize, ImGuiCond.Always);
     }
 
+    [EditorUiCommands("shortcut.shift-space")]
     private void HandleMaximizeShortcut()
     {
         ImGuiIOPtr io = ImGui.GetIO();
@@ -455,6 +458,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
+    [EditorUiCommands(
+        "panel.game.toolbar",
+        "panel.game.presentation",
+        "panel.game.maximize")]
     private bool DrawToolbar()
     {
         float available = ImGui.GetContentRegionAvail().X;
@@ -713,6 +720,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
+    [EditorUiCommands("panel.game.presentation.preset")]
     private void DrawPresetChoice(in GameViewPresentationPreset preset)
     {
         bool selected = string.Equals(SelectedPresetId, preset.Id, StringComparison.Ordinal);
@@ -727,6 +735,15 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
+    [EditorUiCommands(
+        "panel.game.overflow.scale",
+        "panel.game.overflow.maximize",
+        "panel.game.overflow.maximize-on-play",
+        "panel.game.custom-resolution.add",
+        "panel.game.custom-resolution.edit",
+        "panel.game.custom-resolution.delete",
+        "panel.game.scale.fit",
+        "panel.game.scale.pixel-100")]
     private bool DrawOverflowPopup(
         in GameViewToolbarLayout layout,
         in GameViewPresentationPreset selected)
@@ -846,6 +863,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawPresetMenuChoice(in GameViewPresentationPreset preset)
     {
         bool selected = string.Equals(SelectedPresetId, preset.Id, StringComparison.Ordinal);
@@ -883,6 +901,9 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         _customPopupRequested = true;
     }
 
+    [EditorUiCommands(
+        "panel.game.custom-resolution.commit",
+        "panel.game.custom-resolution.cancel")]
     private bool DrawCustomPresetPopup()
     {
         if (_customPopupRequested)

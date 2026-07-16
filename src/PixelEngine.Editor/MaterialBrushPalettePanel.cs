@@ -7,6 +7,7 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// 材质调色板与世界画刷面板。
 /// </summary>
+[EditorUiSurface("editor.panel.brush")]
 public sealed class MaterialBrushPalettePanel : IEditorPanel
 {
     private readonly MaterialPaletteEntry[] _entries;
@@ -135,6 +136,7 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.brush")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -159,6 +161,10 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
     /// <summary>
     /// 绘制不含顶层窗口 chrome 的画刷参数内容，供 Scene View overlay 复用。
     /// </summary>
+    [EditorUiCommands(
+        "panel.brush.active",
+        "panel.brush.radius",
+        "panel.brush.strength")]
     public void DrawContents()
     {
         bool active = IsActive;
@@ -214,6 +220,7 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         return [.. entries];
     }
 
+    [EditorUiCommands("panel.brush.tool")]
     private void DrawToolSelector()
     {
         int tool = (int)Settings.Tool;
@@ -227,6 +234,7 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         Settings.Tool = (EditorBrushTool)tool;
     }
 
+    [EditorUiCommands("panel.brush.shape")]
     private void DrawShapeSelector()
     {
         int shape = (int)Settings.Shape;
@@ -238,6 +246,7 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         Settings.Shape = (EditorBrushShape)shape;
     }
 
+    [EditorUiCommands("panel.brush.material")]
     private void DrawMaterialSelector()
     {
         if (_entries.Length == 0)
@@ -255,6 +264,7 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         ImGui.TextUnformatted(selected.Name);
     }
 
+    [EditorUiCommands("panel.brush.temperature")]
     private void DrawTemperatureControls()
     {
         int mode = (int)Settings.TemperatureMode;

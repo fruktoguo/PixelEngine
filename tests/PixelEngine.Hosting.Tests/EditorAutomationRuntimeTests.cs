@@ -94,6 +94,37 @@ public sealed class EditorAutomationRuntimeTests
                 Assert.Equal(runtime.Scheduler.CapabilityDigest, instance.Descriptor.CapabilityDigest);
                 Assert.Equal(runtime.Scheduler.CapabilityDigest, capabilities.CapabilityDigest);
                 Assert.Equal(capabilities.Page.Total, capabilities.Items.Length);
+                Task<AutomationTypedInvocationResult<AutomationCapabilityMatrixSnapshot>> matrixPending =
+                    client.GetCapabilityMatrixAsync().AsTask();
+                Assert.True(SpinWait.SpinUntil(
+                    () => runtime.Scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+                    TimeSpan.FromSeconds(5)));
+                runtime.DrainEditorIngress();
+                AutomationCapabilityMatrixSnapshot matrix = matrixPending.GetAwaiter().GetResult().Response;
+                Assert.Equal(runtime.Scheduler.CapabilityDigest, matrix.CapabilityDigest);
+                Assert.Equal(runtime.Scheduler.UiCommandDigest, matrix.UiCommandDigest);
+                Assert.Equal(runtime.Scheduler.MatrixDigest, matrix.MatrixDigest);
+                Assert.Equal(capabilities.Items.Length, matrix.Capabilities.Length);
+                Assert.True(matrix.UiCommands.Length >= 200);
+                Assert.Contains(matrix.UiCommands, command =>
+                    command.Id == "context.hierarchy.delete" &&
+                    command.SurfaceId == "editor.panel.hierarchy" &&
+                    command.CapabilityIds.Contains(
+                        AutomationProtocolConstants.GameObjectDeleteMethod,
+                        StringComparer.Ordinal));
+                Assert.Contains(matrix.UiCommands, command =>
+                    command.Id == "shortcut.delete" &&
+                    command.HandlerId.Contains(
+                        "EditorMainMenuBar.DispatchShortcuts",
+                        StringComparison.Ordinal));
+                Assert.Contains(matrix.UiCommands, command =>
+                    command.Id == "menu.file.new-project" &&
+                    command.CapabilityIds.SequenceEqual(
+                        [AutomationProtocolConstants.WorkspaceProjectPickerSetMethod]));
+                Assert.Contains(matrix.UiCommands, command =>
+                    command.Id == "menu.edit.preferences" &&
+                    command.CapabilityIds.SequenceEqual(
+                        [AutomationProtocolConstants.WindowPanelSetMethod]));
                 using (JsonDocument schema = JsonDocument.Parse(
                     File.ReadAllBytes(FindRepositoryFile(
                         "schema/editor-automation-protocol.v1.schema.json"))))
@@ -401,7 +432,7 @@ public sealed class EditorAutomationRuntimeTests
                     descriptor.OperationKind == AutomationOperationKind.Write &&
                     descriptor.TransactionMode == AutomationTransactionMode.Optional &&
                     descriptor.UsesBackgroundPreparation &&
-                    descriptor.UiCommandIds.Contains("panel.inspector.asset.edit", StringComparer.Ordinal));
+                    !descriptor.UiCommandIds.Contains("panel.inspector.asset.edit", StringComparer.Ordinal));
                 Assert.Contains(capabilities.Items, descriptor =>
                     descriptor.Id == AutomationProtocolConstants.ProjectUiManifestGetMethod &&
                     descriptor.ResponseSchema == "#/$defs/uiManifestSnapshot" &&
@@ -513,6 +544,81 @@ public sealed class EditorAutomationRuntimeTests
                     descriptor.ResponseSchema == "#/$defs/playerProcessSnapshot" &&
                     descriptor.RequiresExpectedRevision &&
                     descriptor.RequiresIdempotencyKey);
+
+                Task<AutomationInvocationResult> pickerGetPending = client.InvokeDetailedAsync(
+                    AutomationProtocolConstants.WorkspaceProjectPickerGetMethod).AsTask();
+                Assert.True(SpinWait.SpinUntil(
+                    () => runtime.Scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+                    TimeSpan.FromSeconds(5)));
+                runtime.DrainEditorIngress();
+                AutomationInvocationResult pickerGet = pickerGetPending.GetAwaiter().GetResult();
+                AutomationProjectPickerSnapshot pickerBefore = pickerGet.Payload?.Deserialize(
+                    AutomationJsonContext.Default.AutomationProjectPickerSnapshot)
+                    ?? throw new InvalidOperationException("workspace.project-picker.get 未返回 DTO。");
+                AutomationProjectPickerSetRequest pickerTarget = new()
+                {
+                    Visible = false,
+                    Mode = AutomationProjectPickerMode.OpenProject,
+                };
+                Task<AutomationInvocationResult> pickerSetPending = client.InvokeDetailedAsync(
+                    AutomationProtocolConstants.WorkspaceProjectPickerSetMethod,
+                    JsonSerializer.SerializeToElement(
+                        pickerTarget,
+                        AutomationJsonContext.Default.AutomationProjectPickerSetRequest),
+                    new AutomationInvocationOptions
+                    {
+                        ExpectedRevision = ToPrecondition(pickerGet.Revision),
+                        IdempotencyKey = "set-project-picker",
+                    }).AsTask();
+                Assert.True(SpinWait.SpinUntil(
+                    () => runtime.Scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+                    TimeSpan.FromSeconds(5)));
+                runtime.DrainEditorIngress();
+                AutomationInvocationResult pickerSet = pickerSetPending.GetAwaiter().GetResult();
+                Assert.Equal(
+                    new AutomationProjectPickerSnapshot
+                    {
+                        Visible = false,
+                        Mode = AutomationProjectPickerMode.OpenProject,
+                    },
+                    pickerSet.Payload?.Deserialize(AutomationJsonContext.Default.AutomationProjectPickerSnapshot));
+
+                Task<AutomationInvocationResult> pickerNoChangePending = client.InvokeDetailedAsync(
+                    AutomationProtocolConstants.WorkspaceProjectPickerSetMethod,
+                    JsonSerializer.SerializeToElement(
+                        pickerTarget,
+                        AutomationJsonContext.Default.AutomationProjectPickerSetRequest),
+                    new AutomationInvocationOptions
+                    {
+                        ExpectedRevision = ToPrecondition(pickerSet.Revision),
+                        IdempotencyKey = "set-project-picker-no-change",
+                    }).AsTask();
+                Assert.True(SpinWait.SpinUntil(
+                    () => runtime.Scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+                    TimeSpan.FromSeconds(5)));
+                runtime.DrainEditorIngress();
+                AutomationInvocationResult pickerNoChange = pickerNoChangePending.GetAwaiter().GetResult();
+                Assert.Equal(pickerSet.Revision?.GlobalRevision, pickerNoChange.Revision?.GlobalRevision);
+
+                Task<AutomationInvocationResult> pickerRestorePending = client.InvokeDetailedAsync(
+                    AutomationProtocolConstants.WorkspaceProjectPickerSetMethod,
+                    JsonSerializer.SerializeToElement(
+                        new AutomationProjectPickerSetRequest
+                        {
+                            Visible = pickerBefore.Visible,
+                            Mode = pickerBefore.Mode,
+                        },
+                        AutomationJsonContext.Default.AutomationProjectPickerSetRequest),
+                    new AutomationInvocationOptions
+                    {
+                        ExpectedRevision = ToPrecondition(pickerNoChange.Revision),
+                        IdempotencyKey = "restore-project-picker",
+                    }).AsTask();
+                Assert.True(SpinWait.SpinUntil(
+                    () => runtime.Scheduler.HasPendingWork(AutomationExecutionPhase.EditorIngress),
+                    TimeSpan.FromSeconds(5)));
+                runtime.DrainEditorIngress();
+                _ = pickerRestorePending.GetAwaiter().GetResult();
 
                 Task<AutomationInvocationResult> consoleOptionsGetPending = client.InvokeDetailedAsync(
                     AutomationProtocolConstants.ConsoleOptionsGetMethod).AsTask();
@@ -997,6 +1103,77 @@ public sealed class EditorAutomationRuntimeTests
         {
             Assert.Equal(1, phases.Count((EnginePhase)raw));
         }
+    }
+
+    /// <summary>checked-in capability matrix 必须与当前 production semantic/UI registry 同源。</summary>
+    [Fact]
+    public async Task PublishedCapabilityMatrixMatchesProductionRegistry()
+    {
+        string root = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine",
+            "AutomationMatrixTests",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            EditorShellApp app = EditorShellApp.CreateForTests();
+            await using AutomationArtifactStore artifacts = new(new AutomationArtifactStoreOptions
+            {
+                RootPath = root,
+            });
+            using EditorAutomationAuthoringApi api = new(app, artifacts, []);
+            using AutomationMainThreadScheduler scheduler = new(
+                api.CreateRegistrations(),
+                new AutomationRevisionStore(),
+                new NoopUndoSink(),
+                new NoopTransactionParticipant(),
+                uiCommands: EditorUiCommandCatalog.CreateRegistrations());
+            AutomationCapabilityMatrixSnapshot production = scheduler.CaptureCapabilityMatrix();
+            AutomationCapabilityMatrixSnapshot published = JsonSerializer.Deserialize(
+                File.ReadAllBytes(FindRepositoryFile(
+                    "schema/editor-automation-capabilities.v1.json")),
+                AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot)
+                ?? throw new InvalidOperationException("发布 capability matrix 返回 null。");
+
+            Assert.Equal(production.CapabilityDigest, published.CapabilityDigest);
+            Assert.Equal(production.UiCommandDigest, published.UiCommandDigest);
+            Assert.Equal(production.MatrixDigest, published.MatrixDigest);
+            Assert.Equal(production.Capabilities.Length, published.Capabilities.Length);
+            Assert.Equal(production.UiCommands.Length, published.UiCommands.Length);
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>空闲 phase hook 只做原子 pending 读取，十万次调用保持当前线程零托管分配。</summary>
+    [Fact]
+    public void IdlePhaseDriverHasZeroManagedAllocation()
+    {
+        using AutomationMainThreadScheduler scheduler = new(
+            [],
+            new AutomationRevisionStore(),
+            new NoopUndoSink(),
+            new NoopTransactionParticipant());
+        EditorAutomationPhaseDriver driver = new(scheduler);
+        EngineTickContext context = default;
+        for (int i = 0; i < 1024; i++)
+        {
+            driver.Drain(context);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 100_000; i++)
+        {
+            driver.Drain(context);
+        }
+
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.False(scheduler.HasPendingWork(AutomationExecutionPhase.EngineInputAndTime));
     }
 
     /// <summary>验证手动 Execute/Undo/Redo 发通知，而 scheduler 的 RecordExecuted 不被重复计数。</summary>

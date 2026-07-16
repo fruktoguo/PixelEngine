@@ -7,6 +7,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// 启动时全工作区项目浏览、创建与打开界面。
 /// </summary>
+[EditorUiSurface("editor.project-picker")]
 internal sealed class ProjectPickerWindow
 {
     private const float SidebarWidth = 188f;
@@ -138,6 +139,10 @@ internal sealed class ProjectPickerWindow
         _selectModeOnNextDraw = false;
     }
 
+    [EditorUiCommands(
+        "project-picker.navigation.projects",
+        "project-picker.back",
+        "project-picker.settings")]
     private void DrawNavigation(EditorShellApp app, float scale)
     {
         float padding = EditorUiScale.Scale(18f, scale);
@@ -183,6 +188,7 @@ internal sealed class ProjectPickerWindow
         }
     }
 
+    [EditorUiCommands("project-picker.add-from-disk", "project-picker.new")]
     private void DrawProjectsPage(EditorShellApp app, float scale)
     {
         float padding = EditorUiScale.Scale(ContentPadding, scale);
@@ -250,6 +256,12 @@ internal sealed class ProjectPickerWindow
         DrawRecentProjects(app, contentWidth, padding);
     }
 
+    [EditorUiCommands(
+        "project-picker.recent",
+        "project-picker.recent.open",
+        "project-picker.recent.favorite",
+        "project-picker.recent.remove",
+        "project-picker.recent.add-from-disk")]
     private void DrawRecentProjects(EditorShellApp app, float contentWidth, float padding)
     {
         IReadOnlyList<RecentProjectEntry> entries = app.RecentProjects.Entries;
@@ -500,13 +512,14 @@ internal sealed class ProjectPickerWindow
     {
         ImGui.TextUnformatted("Templates");
         ImGui.Separator();
-        ImGui.PushStyleColor(ImGuiCol.Header, SelectedNavigationColor);
-        _ = ImGui.Selectable("PixelEngine 2D\nFalling-sand world, scripting, UI and editor-ready scene", selected: true);
+        ImGui.PushStyleColor(ImGuiCol.Text, SelectedNavigationColor);
+        ImGui.TextWrapped("PixelEngine 2D\nFalling-sand world, scripting, UI and editor-ready scene");
         ImGui.PopStyleColor();
         ImGui.Spacing();
         ImGui.TextWrapped("The built-in template creates a complete PixelEngine project with content, scripts and a playable main scene.");
     }
 
+    [EditorUiCommands("project-picker.create")]
     private void DrawNewProjectSettings(EditorShellApp app, float scale)
     {
         ImGui.TextUnformatted("Project name");
@@ -549,6 +562,7 @@ internal sealed class ProjectPickerWindow
         }
     }
 
+    [EditorUiCommands("project-picker.open")]
     private void DrawOpenProjectPage(EditorShellApp app, float scale)
     {
         float padding = EditorUiScale.Scale(ContentPadding, scale);
@@ -581,6 +595,7 @@ internal sealed class ProjectPickerWindow
         }
     }
 
+    [EditorUiCommands("project-picker.navigation.back")]
     private void DrawPageHeader(string title, float padding)
     {
         ImGui.SetCursorPos(new Vector2(padding, padding));
@@ -595,6 +610,7 @@ internal sealed class ProjectPickerWindow
         ImGui.Separator();
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawPrimaryButton(string label, Vector2 size)
     {
         ImGui.PushStyleColor(ImGuiCol.Button, PrimaryButtonColor);
@@ -623,6 +639,9 @@ internal sealed class ProjectPickerWindow
         ImGui.Separator();
     }
 
+    [EditorUiCommands(
+        "project-picker.create.browse-location",
+        "project-picker.open.browse-location")]
     private void DrawPathInputWithBrowse(string label, ref string path, string id, float uiScale)
     {
         ImGui.TextUnformatted(label);

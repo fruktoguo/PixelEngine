@@ -696,6 +696,53 @@
         "page": { "$ref": "#/$defs/pageInfo" }
       }
     },
+    "uiCommandDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "surfaceId", "handlerId", "capabilityIds"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "surfaceId": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,127}$" },
+        "handlerId": { "type": "string", "minLength": 3, "maxLength": 512 },
+        "capabilityIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9._-]{0,255}$" }
+        }
+      }
+    },
+    "capabilityMatrixSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "capabilityDigest",
+        "uiCommandDigest",
+        "matrixDigest",
+        "capabilities",
+        "uiCommands"
+      ],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "capabilityDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "uiCommandDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "matrixDigest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "capabilities": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/capabilityDescriptor" }
+        },
+        "uiCommands": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": { "$ref": "#/$defs/uiCommandDescriptor" }
+        }
+      }
+    },
     "workspaceSnapshot": {
       "type": "object",
       "additionalProperties": false,
@@ -719,6 +766,26 @@
         "transitionPending": { "type": "boolean" },
         "transitionKind": { "type": "string", "minLength": 1, "maxLength": 64 },
         "transitionTarget": { "type": "string", "minLength": 1, "maxLength": 32767 }
+      }
+    },
+    "projectPickerSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "visible", "mode"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "visible": { "type": "boolean" },
+        "mode": { "enum": ["RecentProjects", "NewProject", "OpenProject"] }
+      }
+    },
+    "projectPickerSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "visible", "mode"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "visible": { "type": "boolean" },
+        "mode": { "enum": ["RecentProjects", "NewProject", "OpenProject"] }
       }
     },
     "projectCreateRequest": {
@@ -3222,6 +3289,27 @@
         "packageWholeContent": { "type": "boolean" },
         "runAfterBuild": { "type": "boolean" },
         "scenes": { "type": "array", "minItems": 1, "maxItems": 4096, "items": { "$ref": "#/$defs/buildScene" } }
+      }
+    },
+    "buildPanelSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "logAutoScroll", "buildRunning", "requiresRepair", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "logAutoScroll": { "type": "boolean" },
+        "buildRunning": { "type": "boolean" },
+        "requiresRepair": { "type": "boolean" },
+        "diagnostic": { "type": "string", "maxLength": 8192 }
+      }
+    },
+    "buildPanelSetRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "logAutoScroll"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "logAutoScroll": { "type": "boolean" }
       }
     },
     "buildPreflightResult": {

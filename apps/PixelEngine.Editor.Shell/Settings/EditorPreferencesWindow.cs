@@ -14,6 +14,7 @@ internal enum EditorPreferencesCategory
 /// <summary>
 /// Unity-like 用户级 Preferences 窗口；不依赖当前是否打开工程。
 /// </summary>
+[EditorUiSurface("editor.panel.preferences")]
 internal sealed class EditorPreferencesWindow(
     EditorPreferencesStore store,
     Action resetLayout,
@@ -62,6 +63,7 @@ internal sealed class EditorPreferencesWindow(
         Draw();
     }
 
+    [EditorUiCommands("panel.preferences")]
     public void Draw()
     {
         if (!Visible)
@@ -144,6 +146,7 @@ internal sealed class EditorPreferencesWindow(
         return width < navigationWidth + minimumSettingsWidth;
     }
 
+    [EditorUiControlPrimitive]
     private void DrawCompactCategorySelector()
     {
         string preview = GetCategoryLabel(SelectedCategory);
@@ -217,6 +220,7 @@ internal sealed class EditorPreferencesWindow(
         }
     }
 
+    [EditorUiCommands("panel.preferences.appearance")]
     private void DrawAppearance()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.appearance", "Appearance"));
@@ -252,6 +256,7 @@ internal sealed class EditorPreferencesWindow(
         ImGui.EndTable();
     }
 
+    [EditorUiCommands("panel.preferences.language")]
     private void DrawLanguageSelector()
     {
         IReadOnlyList<EditorLanguageInfo> languages = EditorLocalization.AvailableLanguages;
@@ -289,6 +294,9 @@ internal sealed class EditorPreferencesWindow(
         ImGui.EndCombo();
     }
 
+    [EditorUiCommands(
+        "panel.preferences.general",
+        "panel.preferences.reset-layout")]
     private void DrawGeneral()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.general", "General"));
@@ -337,6 +345,10 @@ internal sealed class EditorPreferencesWindow(
         ImGui.EndTable();
     }
 
+    [EditorUiCommands(
+        "panel.preferences.external-tools",
+        "panel.preferences.apply",
+        "panel.preferences.revert")]
     private void DrawExternalTools()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.externalTools", "External Tools"));
@@ -415,6 +427,7 @@ internal sealed class EditorPreferencesWindow(
         ImGui.EndTable();
     }
 
+    [EditorUiControlPrimitive]
     private void DrawEditorPreset(ExternalCodeEditorKind kind, string value, ExternalCodeEditorKind currentKind)
     {
         bool selected = kind == currentKind;
@@ -479,6 +492,7 @@ internal sealed class EditorPreferencesWindow(
         };
     }
 
+    [EditorUiCommands("panel.preferences.shortcuts")]
     private static void DrawShortcuts()
     {
         ImGui.SeparatorText(EditorLocalization.Get("prefs.shortcuts", "Shortcuts"));

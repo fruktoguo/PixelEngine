@@ -8,6 +8,27 @@ namespace PixelEngine.Hosting.Tests;
 /// <summary>UI 与 automation 共用的 build/player 语义状态机回归。</summary>
 public sealed class EditorAutomationBuildTests
 {
+    /// <summary>Build panel 可观察 UI 状态由 automation 真实读取与设置，不混入持久 build profile。</summary>
+    [Fact]
+    public void AutomationBuildPanelStateControlsLogAutoScroll()
+    {
+        using TemporaryDirectory temp = new();
+        EditorProject project = EditorProject.CreateNew(
+            Path.Combine(temp.Path, "project"),
+            "Automation Build Panel");
+        using BuildSettingsPanel panel = new(project, new ControlledBuildService());
+
+        BuildSettingsPanelUiSnapshot before = panel.CaptureAutomationUiState();
+        Assert.True(before.LogAutoScroll);
+        Assert.False(before.BuildRunning);
+
+        panel.SetAutomationLogAutoScroll(enabled: false);
+        BuildSettingsPanelUiSnapshot after = panel.CaptureAutomationUiState();
+        Assert.False(after.LogAutoScroll);
+        Assert.Equal(before.RequiresRepair, after.RequiresRepair);
+        Assert.Equal(before.Diagnostic, after.Diagnostic);
+    }
+
     /// <summary>Automation build 使用稳定 ID、逐次 launch 语义与有界 job log。</summary>
     [Fact]
     public void AutomationBuildKeepsCommandLaunchModeEphemeralAndBoundsLogs()

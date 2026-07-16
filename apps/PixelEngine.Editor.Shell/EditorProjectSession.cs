@@ -248,6 +248,18 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.CaptureAutomationBuildSettingsState();
     }
 
+    internal BuildSettingsPanelUiSnapshot CaptureAutomationBuildPanelState()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuildPanelState();
+    }
+
+    internal void SetAutomationBuildLogAutoScroll(bool enabled)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _editorHost.SetAutomationBuildLogAutoScroll(enabled);
+    }
+
     internal BuildSettingsPanelAutomationSnapshot CreateAutomationBuildSettingsState(
         BuildProfileDto settings)
     {

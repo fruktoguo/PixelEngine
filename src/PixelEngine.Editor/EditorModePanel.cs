@@ -6,6 +6,7 @@ namespace PixelEngine.Editor;
 /// 编辑/运行模式切换面板。
 /// </summary>
 /// <param name="service">Editor Play session 服务。</param>
+[EditorUiSurface("editor.panel.play-mode")]
 public sealed class EditorModePanel(IEditorPlaySessionService service) : IEditorPanel
 {
     private readonly IEditorPlaySessionService _service = service ?? throw new ArgumentNullException(nameof(service));
@@ -54,6 +55,11 @@ public sealed class EditorModePanel(IEditorPlaySessionService service) : IEditor
     }
 
     /// <inheritdoc />
+    [EditorUiCommands(
+        "panel.play-mode",
+        "panel.play-mode.exit",
+        "panel.play-mode.play-current",
+        "panel.play-mode.play-temp")]
     public void Draw(in EditorContext context)
     {
         bool visible = Visible;

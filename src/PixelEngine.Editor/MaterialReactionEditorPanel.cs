@@ -7,6 +7,7 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// 材质与反应实时编辑器，负责编辑 JSON 文档并通过内容服务触发稳定热重载。
 /// </summary>
+[EditorUiSurface("editor.panel.materials")]
 public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService content) : IEditorPanel
 {
     private readonly IMaterialReactionContentService _content = content ?? throw new ArgumentNullException(nameof(content));
@@ -131,6 +132,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.materials")]
     public void Draw(in EditorContext context)
     {
         bool visible = Visible;
@@ -153,6 +155,10 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         ImGui.End();
     }
 
+    [EditorUiCommands(
+        "panel.materials.reload",
+        "panel.materials.preview",
+        "panel.materials.apply")]
     private void DrawToolbar()
     {
         if (ImGui.Button("重新加载"))
@@ -190,6 +196,9 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         return count == 0 ? 0 : Math.Clamp(selection, 0, count - 1);
     }
 
+    [EditorUiCommands(
+        "panel.materials.list",
+        "panel.materials.add")]
     private void DrawMaterials()
     {
         if (ImGui.Button("新增材质"))
@@ -255,6 +264,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         _legendPreview.Draw();
     }
 
+    [EditorUiCommands("panel.materials.definition", "panel.materials.edit")]
     private static void DrawSelectedMaterial(MaterialEditorRow row)
     {
         ImGui.TextUnformatted($"编辑材质：{row.Name}  id={(row.RuntimeId.HasValue ? row.RuntimeId.Value.ToString() : "new")}");
@@ -313,6 +323,9 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         _ = InputInt("audio ambient", row.AmbientCue, value => row.AmbientCue = value);
     }
 
+    [EditorUiCommands(
+        "panel.materials.reactions",
+        "panel.materials.reactions.add")]
     private void DrawReactions()
     {
         if (ImGui.Button("新增反应"))
@@ -364,6 +377,9 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         }
     }
 
+    [EditorUiCommands(
+        "panel.materials.tag-representatives",
+        "panel.materials.tag-representatives.add")]
     private void DrawTagRepresentatives()
     {
         if (ImGui.Button("新增 tag representative"))
@@ -390,6 +406,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         }
     }
 
+    [EditorUiControlPrimitive]
     private static void DrawNullableFloat(string label, float? value, Action<float?> assign)
     {
         bool enabled = value.HasValue;
@@ -409,6 +426,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         }
     }
 
+    [EditorUiControlPrimitive]
     private static bool InputText(string label, string value, Action<string> assign, uint maxLength)
     {
         string editable = value;
@@ -421,6 +439,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         return changed;
     }
 
+    [EditorUiControlPrimitive]
     private static bool InputInt(string label, int value, Action<int> assign)
     {
         int editable = value;
@@ -433,6 +452,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         return changed;
     }
 
+    [EditorUiControlPrimitive]
     private static bool InputFloat(string label, float value, Action<float> assign)
     {
         float editable = value;
@@ -445,6 +465,7 @@ public sealed class MaterialReactionEditorPanel(IMaterialReactionContentService 
         return changed;
     }
 
+    [EditorUiControlPrimitive]
     private static bool Checkbox(string label, bool value, Action<bool> assign)
     {
         bool editable = value;

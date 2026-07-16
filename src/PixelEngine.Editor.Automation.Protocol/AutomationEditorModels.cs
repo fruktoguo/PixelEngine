@@ -227,6 +227,51 @@ public sealed record AutomationCapabilityListResponse
 }
 
 /// <summary>
+/// 一个人工 Editor UI command 与实际 production handler、capability 的双向绑定。
+/// </summary>
+public sealed record AutomationUiCommandDescriptor
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>菜单、快捷键、面板、工具栏、上下文或窗口动作的稳定 ID。</summary>
+    public required string Id { get; init; }
+
+    /// <summary>拥有该动作的稳定 UI surface ID。</summary>
+    public required string SurfaceId { get; init; }
+
+    /// <summary>已验证的 production method 身份；仅用于审计，不作为调用 ID。</summary>
+    public required string HandlerId { get; init; }
+
+    /// <summary>调用相同语义的 capability IDs，按 ordinal 排序且至少一项。</summary>
+    public required string[] CapabilityIds { get; init; }
+}
+
+/// <summary>
+/// 从真实 semantic registrations 与 production UI handlers 联结生成的完整能力矩阵。
+/// </summary>
+public sealed record AutomationCapabilityMatrixSnapshot
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>完整 capability descriptor 数组的 canonical SHA256。</summary>
+    public required string CapabilityDigest { get; init; }
+
+    /// <summary>完整 UI command descriptor 数组的 canonical SHA256。</summary>
+    public required string UiCommandDigest { get; init; }
+
+    /// <summary>同时绑定两个 digest 的 canonical SHA256。</summary>
+    public required string MatrixDigest { get; init; }
+
+    /// <summary>按 capability ID 排序的全部可执行 descriptors。</summary>
+    public required AutomationCapabilityDescriptor[] Capabilities { get; init; }
+
+    /// <summary>按 UI command ID 排序的全部 production UI bindings。</summary>
+    public required AutomationUiCommandDescriptor[] UiCommands { get; init; }
+}
+
+/// <summary>
 /// Editor 的 edit/play 状态。
 /// </summary>
 [JsonConverter(typeof(JsonStringEnumConverter<AutomationEditorMode>))]
@@ -282,6 +327,46 @@ public sealed record AutomationWorkspaceSnapshot
 
     /// <summary>等待转场的目标。</summary>
     public string? TransitionTarget { get; init; }
+}
+
+/// <summary>Project Picker 页面。</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<AutomationProjectPickerMode>))]
+public enum AutomationProjectPickerMode
+{
+    /// <summary>最近工程列表。</summary>
+    RecentProjects,
+
+    /// <summary>创建新工程。</summary>
+    NewProject,
+
+    /// <summary>从磁盘打开工程。</summary>
+    OpenProject,
+}
+
+/// <summary>Project Picker 可见性与页面快照。</summary>
+public sealed record AutomationProjectPickerSnapshot
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>Project Picker 是否覆盖工作区。</summary>
+    public required bool Visible { get; init; }
+
+    /// <summary>当前或下次显示的页面。</summary>
+    public required AutomationProjectPickerMode Mode { get; init; }
+}
+
+/// <summary>显示、隐藏或切换 Project Picker 页面。</summary>
+public sealed record AutomationProjectPickerSetRequest
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>目标可见性。</summary>
+    public required bool Visible { get; init; }
+
+    /// <summary>显示时的目标页面；隐藏时仍保存为下次页面。</summary>
+    public required AutomationProjectPickerMode Mode { get; init; }
 }
 
 /// <summary>在 location 下创建名为 name 的新 PixelEngine 工程。</summary>

@@ -12,6 +12,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Inspector 面板：Transform 与组件字段编辑。
 /// </summary>
+[EditorUiSurface("editor.panel.inspector")]
 internal sealed class GameObjectInspectorPanel(
     EditorSceneModel scene,
     EditorUndoStack undo,
@@ -109,6 +110,9 @@ internal sealed class GameObjectInspectorPanel(
         _focusRequested = true;
     }
 
+    [EditorUiCommands(
+        "panel.inspector",
+        "context.inspector.transform.reset")]
     public void Draw(in EditorContext context)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -566,6 +570,10 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiCommands(
+        "panel.inspector.asset",
+        "panel.inspector.asset.primary-action",
+        "panel.inspector.asset.open-script")]
     private void DrawAssetInspector(string assetPath)
     {
         AssetInspectorSnapshot asset = CaptureAssetInspector(assetPath);
@@ -609,6 +617,10 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiCommands(
+        "panel.inspector.asset.preview",
+        "panel.inspector.asset.preview-audio",
+        "panel.inspector.asset.references")]
     private void DrawAssetPreview(in AssetBrowserItem item, AssetBrowserDetailedPreview preview)
     {
         TextWrappedUnformatted(preview.Summary);
@@ -1128,6 +1140,7 @@ internal sealed class GameObjectInspectorPanel(
         _lastMode = mode;
     }
 
+    [EditorUiCommands("panel.inspector.runtime")]
     private void DrawRuntimeEntityInspector(string handle)
     {
         if (_runtimeSource is null || !_runtimeSource.TryGetEntity(handle, out ScriptEntityInspection entity))
@@ -1242,6 +1255,7 @@ internal sealed class GameObjectInspectorPanel(
             RenderRevision: ++_runtimeInspectorRenderRevision);
     }
 
+    [EditorUiCommands("panel.inspector.runtime.transform")]
     private bool DrawRuntimeTransform(ScriptEntityInspection entity)
     {
         Transform transform = entity.Transform!;
@@ -1349,6 +1363,7 @@ internal sealed class GameObjectInspectorPanel(
         return true;
     }
 
+    [EditorUiCommands("panel.inspector.runtime.field")]
     private void DrawRuntimeField(string handle, int componentIndex, ScriptFieldDescriptor field)
     {
         ImGui.TableNextRow();
@@ -1419,6 +1434,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawRuntimeNumber(
         string handle,
         int componentIndex,
@@ -1476,6 +1492,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawComponentDragTooltip();
     }
 
+    [EditorUiControlPrimitive]
     private void DrawRuntimeDecimalNumber(
         string handle,
         int componentIndex,
@@ -1521,6 +1538,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawRuntimeVector(string handle, int componentIndex, ScriptFieldDescriptor field)
     {
         Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
@@ -1568,6 +1586,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawRuntimeVectorComponents(handle, componentIndex, field, values[..count]);
     }
 
+    [EditorUiControlPrimitive]
     private void DrawRuntimeVectorComponents(
         string handle,
         int componentIndex,
@@ -1635,6 +1654,7 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.EndTable();
     }
 
+    [EditorUiCommands("panel.inspector.runtime-body")]
     private void DrawRuntimeBodyInspector(int bodyKey)
     {
         if (_runtimeSource is null || !_runtimeSource.TryGetBody(bodyKey, out RigidBodySnapshot body))
@@ -1915,6 +1935,10 @@ internal sealed class GameObjectInspectorPanel(
         return applied;
     }
 
+    [EditorUiCommands(
+        "panel.inspector.enabled",
+        "panel.inspector.rename",
+        "panel.inspector.prefab.revert-overrides")]
     private void DrawHeader(EditorGameObject gameObject)
     {
         bool enabled = gameObject.Enabled;
@@ -1976,6 +2000,7 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.Separator();
     }
 
+    [EditorUiCommands("panel.inspector.transform")]
     private void DrawTransform(EditorGameObject gameObject)
     {
         EditorSceneTransform transform = gameObject.Transform.Clone();
@@ -2174,6 +2199,7 @@ internal sealed class GameObjectInspectorPanel(
         _nameEditBuffer = name;
     }
 
+    [EditorUiControlPrimitive]
     private void HandleTransformInput(EditorGameObject gameObject, EditorSceneTransform transform, bool changed)
     {
         if (ImGui.IsItemActivated())
@@ -2459,6 +2485,7 @@ internal sealed class GameObjectInspectorPanel(
         return string.Equals(component.TypeName, edit.ComponentTypeName, StringComparison.Ordinal);
     }
 
+    [EditorUiControlPrimitive]
     private void HandleComponentFieldInput(
         int stableId,
         int componentIndex,
@@ -2482,6 +2509,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiCommands("panel.inspector.add-component")]
     private void DrawComponents(EditorGameObject gameObject)
     {
         // 遍历已有组件并提供 Unity 式 Add Component 搜索弹层。
@@ -2583,6 +2611,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawBuiltInCanvasComponents(EditorGameObject gameObject)
     {
         CanvasInspectorSnapshot snapshot = CaptureCanvasInspector(gameObject.StableId);
@@ -2628,6 +2657,11 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiCommands(
+        "panel.inspector.canvas",
+        "panel.inspector.canvas.primary",
+        "context.inspector.canvas.reset",
+        "context.inspector.canvas.remove")]
     private void DrawWebCanvasComponent(EditorGameObject gameObject, CanvasInspectorSnapshot snapshot)
     {
         bool open = DrawInspectorComponentHeader(
@@ -2794,6 +2828,10 @@ internal sealed class GameObjectInspectorPanel(
         DrawCanvasSnapshotDiagnostic(snapshot);
     }
 
+    [EditorUiCommands(
+        "panel.inspector.canvas-scaler",
+        "context.inspector.canvas-scaler.reset",
+        "context.inspector.canvas-scaler.remove")]
     private void DrawCanvasScalerComponent(EditorGameObject gameObject, CanvasInspectorSnapshot snapshot)
     {
         bool open = DrawInspectorComponentHeader(
@@ -3078,12 +3116,14 @@ internal sealed class GameObjectInspectorPanel(
         ImGui.TableSetupColumn(L.Get("settings.value", "Value"), ImGuiTableColumnFlags.WidthStretch);
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawBooleanProperty(string label, string id, ref bool value)
     {
         BeginPropertyRow(label);
         return ImGui.Checkbox(id, ref value);
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawTextProperty(string label, string id, ref string value, uint capacity)
     {
         BeginPropertyRow(label);
@@ -3091,6 +3131,7 @@ internal sealed class GameObjectInspectorPanel(
         return ImGui.InputText(id, ref value, capacity);
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawIntegerProperty(string label, string id, ref int value, float speed)
     {
         BeginPropertyRow(label);
@@ -3098,6 +3139,7 @@ internal sealed class GameObjectInspectorPanel(
         return ImGui.DragInt(id, ref value, speed);
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawPositiveFloatProperty(string label, string id, ref float value, float speed)
     {
         BeginPropertyRow(label);
@@ -3113,6 +3155,7 @@ internal sealed class GameObjectInspectorPanel(
         return false;
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawUnitFloatProperty(string label, string id, ref float value)
     {
         BeginPropertyRow(label);
@@ -3128,6 +3171,7 @@ internal sealed class GameObjectInspectorPanel(
         return false;
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawComboProperty(string label, string id, ref int value, string[] labels)
     {
         BeginPropertyRow(label);
@@ -3308,6 +3352,7 @@ internal sealed class GameObjectInspectorPanel(
         return true;
     }
 
+    [EditorUiControlPrimitive]
     private void HandleBuiltInCanvasInput(
         EditorGameObject gameObject,
         EditorWebCanvasComponent? webCanvas,
@@ -3370,6 +3415,13 @@ internal sealed class GameObjectInspectorPanel(
                 gameObject.PrefabLink));
     }
 
+    [EditorUiCommands(
+        "panel.inspector.component.enabled",
+        "panel.inspector.component.move",
+        "panel.inspector.component.remove",
+        "context.inspector.component.move-up",
+        "context.inspector.component.move-down",
+        "context.inspector.component.remove")]
     private void DrawComponent(EditorGameObject gameObject, int componentIndex)
     {
         EditorComponentModel component = gameObject.Components[componentIndex];
@@ -3486,6 +3538,7 @@ internal sealed class GameObjectInspectorPanel(
         EndInspectorPropertyTable();
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawInspectorComponentHeader(string label)
     {
         ImGui.PushStyleColor(ImGuiCol.Header, new Vector4(0.22f, 0.22f, 0.22f, 1f));
@@ -3538,6 +3591,7 @@ internal sealed class GameObjectInspectorPanel(
             : typeName;
     }
 
+    [EditorUiCommands("panel.inspector.component.field")]
     private void DrawField(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         ImGui.TableNextRow();
@@ -3586,6 +3640,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawBoolean(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         bool value = bool.TryParse(ReadFieldValue(component, field), out bool parsed) && parsed;
@@ -3595,6 +3650,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawNumber(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         string current = ReadFieldValue(component, field);
@@ -3657,6 +3713,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawComponentDragTooltip();
     }
 
+    [EditorUiControlPrimitive]
     private void DrawDecimalNumber(
         int stableId,
         int componentIndex,
@@ -3787,6 +3844,7 @@ internal sealed class GameObjectInspectorPanel(
         return true;
     }
 
+    [EditorUiControlPrimitive]
     private void DrawInvalidNumericValue(
         int stableId,
         int componentIndex,
@@ -4039,6 +4097,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private static unsafe bool DragScalarValue<T>(
         string id,
         ImGuiDataType dataType,
@@ -4249,6 +4308,7 @@ internal sealed class GameObjectInspectorPanel(
             : value >= ulong.MaxValue ? ulong.MaxValue : (ulong)value;
     }
 
+    [EditorUiControlPrimitive]
     private void DrawVector(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         Type target = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
@@ -4298,6 +4358,7 @@ internal sealed class GameObjectInspectorPanel(
         DrawVectorComponents(stableId, componentIndex, field.Name, values[..count]);
     }
 
+    [EditorUiControlPrimitive]
     private void DrawVectorComponents(
         int stableId,
         int componentIndex,
@@ -4398,6 +4459,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawString(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         string value = ReadFieldValue(component, field);
@@ -4406,6 +4468,7 @@ internal sealed class GameObjectInspectorPanel(
         HandleComponentFieldInput(stableId, componentIndex, field.Name, value, changed);
     }
 
+    [EditorUiControlPrimitive]
     private void DrawEnum(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         Type enumType = Nullable.GetUnderlyingType(field.FieldType) ?? field.FieldType;
@@ -4419,6 +4482,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiCommands("panel.inspector.asset-reference.clear")]
     private void DrawAssetReference(int stableId, int componentIndex, EditorComponentModel component, ScriptFieldDescriptor field)
     {
         string value = ReadFieldValue(component, field);
@@ -4441,6 +4505,7 @@ internal sealed class GameObjectInspectorPanel(
         }
     }
 
+    [EditorUiCommands("panel.inspector.asset-reference.drop")]
     private void DrawAssetReferenceDropTarget(int stableId, int componentIndex, ScriptFieldDescriptor field)
     {
         if (!ImGui.BeginDragDropTarget())

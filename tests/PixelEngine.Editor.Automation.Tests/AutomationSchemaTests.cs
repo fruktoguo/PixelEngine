@@ -1,4 +1,5 @@
 using System.Text.Json;
+using PixelEngine.Editor.Automation.Client;
 using PixelEngine.Editor.Automation.Protocol;
 
 namespace PixelEngine.Editor.Automation.Tests;
@@ -55,7 +56,11 @@ public sealed class AutomationSchemaTests
             "pageInfo",
             "capabilityDescriptor",
             "capabilityListResponse",
+            "uiCommandDescriptor",
+            "capabilityMatrixSnapshot",
             "workspaceSnapshot",
+            "projectPickerSnapshot",
+            "projectPickerSetRequest",
             "commandResult",
             "transitionResolveRequest",
             "transitionResult",
@@ -180,6 +185,41 @@ public sealed class AutomationSchemaTests
             .TryGetProperty("serverProof", out _));
     }
 
+    /// <summary>发布 capability matrix 受独立 Schema 约束，并通过 Client canonical 闭包验证。</summary>
+    [Fact]
+    public void PublishedCapabilityMatrixIsCanonicalAndReferencesPublishedWireSchemas()
+    {
+        string protocolSchemaPath = FindRepositoryFile("schema/editor-automation-protocol.v1.schema.json");
+        string matrixSchemaPath = FindRepositoryFile("schema/editor-automation-capabilities.schema.json");
+        string matrixPath = FindRepositoryFile("schema/editor-automation-capabilities.v1.json");
+        using JsonDocument protocolSchema = JsonDocument.Parse(File.ReadAllBytes(protocolSchemaPath));
+        using JsonDocument matrixSchema = JsonDocument.Parse(File.ReadAllBytes(matrixSchemaPath));
+        AutomationCapabilityMatrixSnapshot matrix = JsonSerializer.Deserialize(
+            File.ReadAllBytes(matrixPath),
+            AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot)
+            ?? throw new InvalidOperationException("发布 capability matrix 返回 null。");
+
+        Assert.Equal(
+            "editor-automation-protocol.v1.schema.json#/$defs/capabilityMatrixSnapshot",
+            matrixSchema.RootElement.GetProperty("$ref").GetString());
+        EditorAutomationClient.ValidateCapabilityMatrix(matrix);
+        Assert.True(matrix.Capabilities.Length >= 150);
+        Assert.True(matrix.UiCommands.Length >= 300);
+        JsonElement definitions = protocolSchema.RootElement.GetProperty("$defs");
+        Assert.All(matrix.Capabilities, capability =>
+        {
+            Assert.StartsWith("#/$defs/", capability.RequestSchema, StringComparison.Ordinal);
+            Assert.StartsWith("#/$defs/", capability.ResponseSchema, StringComparison.Ordinal);
+            Assert.True(definitions.TryGetProperty(capability.RequestSchema["#/$defs/".Length..], out _));
+            Assert.True(definitions.TryGetProperty(capability.ResponseSchema["#/$defs/".Length..], out _));
+        });
+        Assert.Contains(matrix.UiCommands, static command =>
+            command.Id == "shortcut.delete" &&
+            command.CapabilityIds.Contains(
+                AutomationProtocolConstants.GameObjectDeleteMethod,
+                StringComparer.Ordinal));
+    }
+
     /// <summary>验证 source-generated descriptor 使用 schema 的 camelCase 名称。</summary>
     [Fact]
     public void SourceGeneratedDescriptorMatchesPublishedPropertyNames()
@@ -241,6 +281,55 @@ public sealed class AutomationSchemaTests
             {"schemaVersion":1,"name":"Player","unexpected":true}
             """,
             AutomationJsonContext.Default.AutomationGameObjectCreateRequest));
+    }
+
+    /// <summary>能力矩阵与 Project Picker 合同保持显式版本、字符串枚举和 strict JSON。</summary>
+    [Fact]
+    public void CapabilityMatrixAndProjectPickerDtosRoundTripStrictly()
+    {
+        AutomationCapabilityMatrixSnapshot matrix = new()
+        {
+            CapabilityDigest = new string('a', 64),
+            UiCommandDigest = new string('b', 64),
+            MatrixDigest = new string('c', 64),
+            Capabilities = [],
+            UiCommands = [],
+        };
+        JsonElement matrixJson = JsonSerializer.SerializeToElement(
+            matrix,
+            AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot);
+        Assert.Equal(1, matrixJson.GetProperty("schemaVersion").GetInt32());
+        AutomationCapabilityMatrixSnapshot matrixRoundTrip = matrixJson.Deserialize(
+            AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot)
+            ?? throw new InvalidOperationException("capability matrix round-trip 返回 null。");
+        Assert.Equal(matrix.CapabilityDigest, matrixRoundTrip.CapabilityDigest);
+        Assert.Equal(matrix.UiCommandDigest, matrixRoundTrip.UiCommandDigest);
+        Assert.Equal(matrix.MatrixDigest, matrixRoundTrip.MatrixDigest);
+        Assert.Empty(matrixRoundTrip.Capabilities);
+        Assert.Empty(matrixRoundTrip.UiCommands);
+
+        AutomationProjectPickerSetRequest picker = new()
+        {
+            Visible = true,
+            Mode = AutomationProjectPickerMode.OpenProject,
+        };
+        JsonElement pickerJson = JsonSerializer.SerializeToElement(
+            picker,
+            AutomationJsonContext.Default.AutomationProjectPickerSetRequest);
+        Assert.Equal("OpenProject", pickerJson.GetProperty("mode").GetString());
+        Assert.Equal(
+            picker,
+            pickerJson.Deserialize(AutomationJsonContext.Default.AutomationProjectPickerSetRequest));
+        _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(
+            """
+            {"schemaVersion":1,"visible":true,"mode":"OpenProject","unknown":true}
+            """,
+            AutomationJsonContext.Default.AutomationProjectPickerSetRequest));
+        _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(
+            """
+            {"schemaVersion":1,"capabilityDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","uiCommandDigest":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","matrixDigest":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc","capabilities":[],"uiCommands":[],"unknown":true}
+            """,
+            AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot));
     }
 
     /// <summary>Asset replace 必须用 stable ID 与获准 canonical source，且拒绝未知成员。</summary>

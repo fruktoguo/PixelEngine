@@ -11,6 +11,7 @@ namespace PixelEngine.Editor.Shell.Build;
 /// <summary>
 /// Build Settings ImGui 面板。
 /// </summary>
+[EditorUiSurface("editor.panel.build-settings")]
 internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
 {
     public const string PanelTitle = EditorDockSpace.BuildSettingsWindowTitle;
@@ -159,6 +160,24 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
             _persistentSettingsDiagnostic,
             RequiresRepair,
             _view.IsRunning);
+    }
+
+    internal BuildSettingsPanelUiSnapshot CaptureAutomationUiState()
+    {
+        DrainEvents();
+        RefreshTasks();
+        return new BuildSettingsPanelUiSnapshot(
+            _autoScroll,
+            _view.IsRunning,
+            RequiresRepair,
+            string.IsNullOrWhiteSpace(_persistentSettingsDiagnostic)
+                ? _validationMessage
+                : _persistentSettingsDiagnostic);
+    }
+
+    internal void SetAutomationLogAutoScroll(bool enabled)
+    {
+        _autoScroll = enabled;
     }
 
     internal BuildSettingsPanelAutomationSnapshot CreateAutomationAppliedState(
@@ -472,6 +491,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         return true;
     }
 
+    [EditorUiCommands("panel.build-settings", "panel.build-settings.repair")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -521,6 +541,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         ImGui.End();
     }
 
+    [EditorUiCommands("panel.build-settings.save", "panel.build-settings.settings")]
     private void DrawSettings()
     {
         float availableWidth = ImGui.GetContentRegionAvail().X;
@@ -606,6 +627,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         }
     }
 
+    [EditorUiCommands("panel.build-settings.scenes")]
     private void DrawScenes()
     {
         bool changed = false;
@@ -750,6 +772,9 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         };
     }
 
+    [EditorUiCommands(
+        "panel.build-settings.build",
+        "panel.build-settings.build-and-run")]
     private void DrawPrimaryActions(bool canBuild, string buildLabel, string buildAndRunLabel)
     {
         ImGui.BeginDisabled(!canBuild);
@@ -767,6 +792,9 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         ImGui.EndDisabled();
     }
 
+    [EditorUiCommands(
+        "panel.build-settings.cancel",
+        "panel.build-settings.preflight")]
     private void DrawInlineSecondaryActions(string cancelLabel, string preflightLabel)
     {
         ImGui.BeginDisabled(!_view.IsRunning);
@@ -783,6 +811,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         }
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawActionsOverflowButton(
         float overflowWidth,
         string tooltip,
@@ -806,6 +835,11 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         return requested;
     }
 
+    [EditorUiCommands(
+        "panel.build-settings.overflow.build",
+        "panel.build-settings.overflow.build-and-run",
+        "panel.build-settings.overflow.cancel",
+        "panel.build-settings.overflow.preflight")]
     private bool DrawActionsOverflowPopup(
         bool includePrimaryActions,
         bool canBuild,
@@ -932,6 +966,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         return preflight?.Ok == true;
     }
 
+    [EditorUiCommands("panel.build-settings.progress")]
     private void DrawProgress()
     {
         ImGui.ProgressBar(_view.Percent, new System.Numerics.Vector2(-1, 0), $"{PhaseLabel(_view.Phase)} {_view.Percent:P0}");
@@ -945,6 +980,11 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         }
     }
 
+    [EditorUiCommands(
+        "panel.build-settings.copy-log",
+        "panel.build-settings.open-log",
+        "panel.build-settings.open-output",
+        "panel.build-settings.log.auto-scroll")]
     private void DrawLog()
     {
         bool autoScroll = _autoScroll;
@@ -1662,6 +1702,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         ImGui.EndTooltip();
     }
 
+    [EditorUiControlPrimitive]
     private static bool InputTextValue(string id, string value, Action<string> assign, uint maxLength)
     {
         string editable = value;
@@ -1748,6 +1789,12 @@ internal sealed record BuildSettingsPanelAutomationSnapshot(
     string PersistentDiagnostic,
     bool RequiresRepair,
     bool BuildRunning);
+
+internal readonly record struct BuildSettingsPanelUiSnapshot(
+    bool LogAutoScroll,
+    bool BuildRunning,
+    bool RequiresRepair,
+    string Diagnostic);
 
 /// <summary>Build 提交前当前 authoring scene 的校验/持久化结果。</summary>
 internal readonly record struct BuildScenePreparationResult(bool Succeeded, string Diagnostic);

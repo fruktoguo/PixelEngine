@@ -181,7 +181,21 @@ internal static class CliApplication
     {
         string? domain = arguments.TakeOption("--domain");
         string? scope = arguments.TakeOption("--scope");
+        bool matrix = arguments.TakeFlag("--matrix");
         arguments.EnsureEmpty();
+        if (matrix)
+        {
+            if (domain is not null || scope is not null)
+            {
+                throw new CliUsageException("--matrix 需要完整闭包，不能与 --domain/--scope 过滤组合。");
+            }
+
+            AutomationTypedInvocationResult<AutomationCapabilityMatrixSnapshot> result =
+                await client.GetCapabilityMatrixAsync(cancellationToken).ConfigureAwait(false);
+            output.WriteCapabilityMatrix(result.Response, result.Revision);
+            return 0;
+        }
+
         AutomationCapabilityCatalog catalog = await client.GetCapabilitiesAsync(
             cancellationToken: cancellationToken).ConfigureAwait(false);
         AutomationCapabilityDescriptor[] filtered =
@@ -834,6 +848,7 @@ internal static class CliApplication
         Console.WriteLine("writes:   --expected-global N --expected-resource ID=N --idempotency-key KEY");
         Console.WriteLine("          --transaction ID --request-timeout SEC");
         Console.WriteLine("call:     --payload JSON | --payload-file PATH [--verify-artifact]");
+        Console.WriteLine("matrix:   capabilities --matrix（独立校验双向 UI/capability 闭包与 SHA256）");
         Console.WriteLine("lists:    --page-size N --filter-json JSON --sort field[:asc|desc] --cursor TOKEN");
     }
 }

@@ -98,6 +98,36 @@ public sealed class AutomationBuildProtocolTests
                 .Deserialize(AutomationJsonContext.Default.AutomationPlayerProcessSnapshot));
     }
 
+    /// <summary>Build Settings 面板状态使用独立 strict DTO，不污染 build job 状态机。</summary>
+    [Fact]
+    public void BuildPanelDtosRoundTripStrictly()
+    {
+        AutomationBuildPanelSnapshot snapshot = new()
+        {
+            LogAutoScroll = false,
+            BuildRunning = true,
+            RequiresRepair = false,
+            Diagnostic = "publishing",
+        };
+        JsonElement snapshotJson = JsonSerializer.SerializeToElement(
+            snapshot,
+            AutomationJsonContext.Default.AutomationBuildPanelSnapshot);
+        Assert.Equal(
+            snapshot,
+            snapshotJson.Deserialize(AutomationJsonContext.Default.AutomationBuildPanelSnapshot));
+
+        AutomationBuildPanelSetRequest request = new() { LogAutoScroll = true };
+        JsonElement requestJson = JsonSerializer.SerializeToElement(
+            request,
+            AutomationJsonContext.Default.AutomationBuildPanelSetRequest);
+        Assert.True(requestJson.GetProperty("logAutoScroll").GetBoolean());
+        _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(
+            """
+            {"schemaVersion":1,"logAutoScroll":true,"unknown":true}
+            """,
+            AutomationJsonContext.Default.AutomationBuildPanelSetRequest));
+    }
+
     /// <summary>发布 Schema 完整声明 build/player 请求、响应与日志制品项。</summary>
     [Fact]
     public void PublishedSchemaDefinesEveryBuildAndPlayerContract()
@@ -108,6 +138,8 @@ public sealed class AutomationBuildProtocolTests
         string[] expected =
         [
             "buildPreflightResult",
+            "buildPanelSnapshot",
+            "buildPanelSetRequest",
             "buildStartRequest",
             "buildRequest",
             "buildPhaseTiming",

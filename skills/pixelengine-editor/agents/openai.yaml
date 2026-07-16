@@ -1,0 +1,4 @@
+interface:
+  display_name: "PixelEngine Editor"
+  short_description: "Drive PixelEngine Editor through its secure local CLI"
+  default_prompt: "Use $pixelengine-editor to inspect the live PixelEngine Editor and complete the requested authoring workflow through its CLI."

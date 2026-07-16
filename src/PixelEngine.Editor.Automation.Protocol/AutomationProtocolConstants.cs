@@ -68,6 +68,9 @@ public static class AutomationProtocolConstants
     /// <summary>分页读取真实 semantic registry。</summary>
     public const string CapabilityListMethod = "automation.capabilities.list";
 
+    /// <summary>读取 capability 与人工 UI command 的双向闭包矩阵。</summary>
+    public const string CapabilityMatrixGetMethod = "automation.capability-matrix.get";
+
     /// <summary>读取当前 workspace。</summary>
     public const string WorkspaceGetMethod = "workspace.get";
 
@@ -97,6 +100,12 @@ public static class AutomationProtocolConstants
 
     /// <summary>按稳定工程 ID 原子移除最近工程。</summary>
     public const string WorkspaceRecentRemoveMethod = "workspace.recent.remove";
+
+    /// <summary>读取 Project Picker 可见性与页面。</summary>
+    public const string WorkspaceProjectPickerGetMethod = "workspace.project-picker.get";
+
+    /// <summary>显示、隐藏或切换 Project Picker 页面。</summary>
+    public const string WorkspaceProjectPickerSetMethod = "workspace.project-picker.set";
 
     /// <summary>读取 Editor 顶层窗口。</summary>
     public const string WindowGetMethod = "window.get";
@@ -520,6 +529,12 @@ public static class AutomationProtocolConstants
 
     /// <summary>把一个 build job 的有界日志导出为 JSON 制品。</summary>
     public const string BuildLogExportMethod = "build.logs.export";
+
+    /// <summary>读取 Build Settings 面板的可观察 UI 状态。</summary>
+    public const string BuildPanelGetMethod = "build.panel.get";
+
+    /// <summary>设置 Build Settings 面板的可观察 UI 状态。</summary>
+    public const string BuildPanelSetMethod = "build.panel.set";
 
     /// <summary>从成功 build 的受信 launcher 启动玩家进程。</summary>
     public const string PlayerLaunchMethod = "player.launch";

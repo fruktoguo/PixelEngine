@@ -6,6 +6,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// 把 Silk 平台 file-drop 路由到上一完整帧命中的 Project folder，并把批量结果写入 Console。
 /// </summary>
+[EditorUiSurface("editor.window.file-drop")]
 internal sealed class EditorExternalAssetDropConnector : IDisposable
 {
     private readonly RenderWindow _window;
@@ -40,6 +41,7 @@ internal sealed class EditorExternalAssetDropConnector : IDisposable
         return new Vector2(logicalPoint.X * scaleX, logicalPoint.Y * scaleY);
     }
 
+    [EditorUiCommands("window.file-drop.import")]
     private void OnFilesDropped(string[] paths)
     {
         if (_disposed)

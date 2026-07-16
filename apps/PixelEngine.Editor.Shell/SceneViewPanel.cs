@@ -9,6 +9,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Scene View ImGui 面板：使用独立 authoring 相机绘制声明式/受控 procedural preview 与编辑 overlay。
 /// </summary>
+[EditorUiSurface("editor.panel.scene")]
 internal sealed class SceneViewPanel(
     EditorSceneModel scene,
     EditorUndoStack undo,
@@ -223,6 +224,7 @@ internal sealed class SceneViewPanel(
         }
     }
 
+    [EditorUiCommands("panel.scene")]
     public void Draw(in EditorContext context)
     {
         PrepareFrame(context.Selection.GameObjectStableId ?? _scene.SelectedStableId, _preparedMode);
@@ -477,6 +479,16 @@ internal sealed class SceneViewPanel(
         }
     }
 
+    [EditorUiCommands(
+        "panel.scene.toolbar",
+        "panel.scene.toolbar.gizmo",
+        "panel.scene.frame",
+        "panel.scene.brush",
+        "shortcut.w",
+        "shortcut.e",
+        "shortcut.r",
+        "shortcut.b",
+        "shortcut.f")]
     private void DrawToolbar(EditorSelection selection)
     {
         if (SceneToolbarButton(
@@ -731,6 +743,7 @@ internal sealed class SceneViewPanel(
         _cameraAutoFit = false;
     }
 
+    [EditorUiCommands("panel.scene.snap")]
     private void DrawSnapControls()
     {
         ImGui.SameLine(0f, 6f);
@@ -772,6 +785,7 @@ internal sealed class SceneViewPanel(
         ImGui.EndPopup();
     }
 
+    [EditorUiControlPrimitive]
     private static bool SceneToolbarButton(
         SceneToolbarIcon icon,
         bool selected,
@@ -993,6 +1007,12 @@ internal sealed class SceneViewPanel(
         ImGui.Dummy(Vector2.Zero);
     }
 
+    [EditorUiCommands(
+        "panel.scene.brush-overlay.drag",
+        "panel.scene.brush-overlay.dock-left",
+        "panel.scene.brush-overlay.float",
+        "panel.scene.brush-overlay.dock-right",
+        "panel.scene.brush-overlay.close")]
     private void DrawSceneToolOverlayHeader(SceneToolOverlayLayout layout, MaterialBrushPalettePanel brushPanel)
     {
         float buttonWidth = ImGui.GetFrameHeight();
@@ -1484,6 +1504,7 @@ internal sealed class SceneViewPanel(
         return sign * Math.Clamp(MathF.Abs(scale), 0.25f, 4f);
     }
 
+    [EditorUiCommands("panel.scene.camera")]
     private void HandleCameraInput()
     {
         if (!_canvasHovered || _toolOverlayHovered)
@@ -1505,6 +1526,7 @@ internal sealed class SceneViewPanel(
         }
     }
 
+    [EditorUiCommands("panel.scene.selection", "panel.scene.brush.stroke")]
     private void HandleSceneMouse(EditorSelection selection)
     {
         bool hasSelection = selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
@@ -1571,6 +1593,7 @@ internal sealed class SceneViewPanel(
             _hoveredGizmoHandle != SceneGizmoHandle.None;
     }
 
+    [EditorUiCommands("panel.scene.gizmo")]
     private void DrawGizmo(EditorSelection selection)
     {
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;

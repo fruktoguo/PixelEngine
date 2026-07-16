@@ -6,6 +6,7 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// 调试叠层开关面板。
 /// </summary>
+[EditorUiSurface("editor.panel.overlays")]
 public sealed class DebugOverlayPanel(DebugOverlaySettings settings) : IEditorPanel
 {
     private readonly DebugOverlaySettings _settings = settings ?? throw new ArgumentNullException(nameof(settings));
@@ -17,6 +18,7 @@ public sealed class DebugOverlayPanel(DebugOverlaySettings settings) : IEditorPa
     public bool Visible { get; set; } = true;
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.overlays")]
     public void Draw(in EditorContext context)
     {
         bool visible = Visible;
@@ -40,6 +42,7 @@ public sealed class DebugOverlayPanel(DebugOverlaySettings settings) : IEditorPa
         ImGui.End();
     }
 
+    [EditorUiCommands("panel.overlays.toggle")]
     private void DrawToggle(string label, DebugOverlayFlags flag)
     {
         bool enabled = _settings.IsEnabled(flag);

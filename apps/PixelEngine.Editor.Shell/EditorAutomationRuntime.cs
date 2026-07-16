@@ -83,7 +83,8 @@ internal sealed class EditorAutomationRuntime : IDisposable
                 authoringApi.CreateRegistrations(),
                 new AutomationRevisionStore(),
                 new EditorAutomationUndoSink(app),
-                new EditorAutomationTransactionParticipant(app));
+                new EditorAutomationTransactionParticipant(app),
+                uiCommands: EditorUiCommandCatalog.CreateRegistrations());
             authoringApi.AttachEventHub(scheduler.Events);
             server = new EditorAutomationServer(
                 new AutomationServerOptions
@@ -730,7 +731,7 @@ internal sealed class EditorAutomationPhaseDriver(AutomationMainThreadScheduler 
         }
     }
 
-    private void Drain(EngineTickContext context)
+    internal void Drain(EngineTickContext context)
     {
         AutomationExecutionPhase phase = context.Phase switch
         {

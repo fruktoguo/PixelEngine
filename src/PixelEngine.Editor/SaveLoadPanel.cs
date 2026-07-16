@@ -290,6 +290,7 @@ public sealed class WorldSaveLoadPanelService(
 /// 存读档面板。
 /// </summary>
 /// <param name="service">存读档服务。</param>
+[EditorUiSurface("editor.panel.save-load")]
 public sealed class SaveLoadPanel(ISaveLoadService service) : IEditorPanel
 {
     private readonly ISaveLoadService _service = service ?? throw new ArgumentNullException(nameof(service));
@@ -350,6 +351,10 @@ public sealed class SaveLoadPanel(ISaveLoadService service) : IEditorPanel
     }
 
     /// <inheritdoc />
+    [EditorUiCommands(
+        "panel.save-load.slots",
+        "panel.save-load.save",
+        "panel.save-load.refresh")]
     public void Draw(in EditorContext context)
     {
         bool visible = Visible;
@@ -384,6 +389,7 @@ public sealed class SaveLoadPanel(ISaveLoadService service) : IEditorPanel
         ImGui.End();
     }
 
+    [EditorUiCommands("panel.save-load.load")]
     private void DrawSlot(SaveSlotInfo slot)
     {
         ImGui.TextUnformatted($"{slot.Id}  v{slot.FormatVersion}  chunks={slot.ChunkCount}  seed={slot.WorldSeed}  ticks={slot.GameTimeTicks}");

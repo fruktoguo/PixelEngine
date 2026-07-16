@@ -16,6 +16,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Editor Shell 主应用：项目会话、Engine 生命周期与 ImGui 工作台编排。
 /// </summary>
+[EditorUiSurface("editor.shell")]
 internal sealed class EditorShellApp
 {
     private const string DefaultWorkbenchBehaviourTypeName = "DefaultWorkbenchBehaviour";
@@ -2345,6 +2346,20 @@ internal sealed class EditorShellApp
         ProjectPicker.Focus(mode);
     }
 
+    internal (bool Visible, ProjectPickerMode Mode) CaptureProjectPickerState()
+    {
+        return (ProjectPicker.Visible, ProjectPicker.Mode);
+    }
+
+    internal void SetProjectPickerState(bool visible, ProjectPickerMode mode)
+    {
+        ProjectPicker.Focus(mode);
+        if (!visible)
+        {
+            ProjectPicker.Close();
+        }
+    }
+
     public void SetRecentProjectFavorite(string projectPath, bool favorite)
     {
         PersistRecentProjectsChange(
@@ -2445,6 +2460,13 @@ internal sealed class EditorShellApp
         return TrySetAutomationWindow(request, out diagnostic, out _);
     }
 
+    [EditorUiCommands(
+        "window.move",
+        "window.resize",
+        "window.minimize",
+        "window.maximize",
+        "window.fullscreen",
+        "window.focus")]
     internal bool TrySetAutomationWindow(
         AutomationWindowSetRequest request,
         out string diagnostic,
@@ -3228,6 +3250,7 @@ internal sealed class EditorShellApp
         return opened;
     }
 
+    [EditorUiCommands("window.close")]
     public void RequestExit()
     {
         HandleTransitionResult(_transitions.Request(
@@ -3254,6 +3277,11 @@ internal sealed class EditorShellApp
         return isDirty();
     }
 
+    [EditorUiCommands(
+        "dialog.unsaved-scene",
+        "dialog.unsaved-scene.save",
+        "dialog.unsaved-scene.discard",
+        "dialog.unsaved-scene.cancel")]
     internal void DrawTransitionPrompt()
     {
         if (_transitions.Pending is not { } pending)

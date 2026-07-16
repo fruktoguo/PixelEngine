@@ -9,6 +9,7 @@ namespace PixelEngine.Editor.Shell.Settings;
 /// <summary>
 /// Project Settings ImGui 面板。
 /// </summary>
+[EditorUiSurface("editor.panel.project-settings")]
 internal sealed class ProjectSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.ProjectSettingsWindowTitle;
@@ -199,6 +200,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         RefreshDraftState();
     }
 
+    [EditorUiCommands("panel.project-settings")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -247,6 +249,7 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         ImGui.End();
     }
 
+    [EditorUiCommands("panel.project-settings.fields")]
     private void DrawSettings(float scale)
     {
         float availableWidth = ImGui.GetContentRegionAvail().X;
@@ -341,6 +344,9 @@ internal sealed class ProjectSettingsPanel : IEditorPanel
         ImGui.EndTable();
     }
 
+    [EditorUiCommands(
+        "panel.project-settings.apply",
+        "panel.project-settings.revert")]
     private void DrawActions(float scale)
     {
         float buttonWidth = EditorUiScale.Scale(82f, scale);

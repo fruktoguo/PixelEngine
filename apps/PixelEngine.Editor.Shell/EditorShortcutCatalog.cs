@@ -13,6 +13,8 @@ internal enum EditorShortcutCommand
     OpenBuildSettings,
     BuildAndRun,
     OpenPreferences,
+    Delete,
+    Rename,
 }
 
 internal readonly record struct EditorShortcutDefinition(
@@ -43,6 +45,8 @@ internal static class EditorShortcutCatalog
         Create(EditorShortcutCommand.OpenBuildSettings, "shortcut.ctrl-shift-b", "Build Settings", "B", ImGuiKey.B, control: true, shift: true),
         Create(EditorShortcutCommand.BuildAndRun, "shortcut.ctrl-b", "Build And Run", "B", ImGuiKey.B, control: true),
         Create(EditorShortcutCommand.OpenPreferences, "shortcut.ctrl-comma", "Preferences", ",", ImGuiKey.Comma, control: true),
+        Create(EditorShortcutCommand.Delete, "shortcut.delete", "Delete", "Delete", ImGuiKey.Delete),
+        Create(EditorShortcutCommand.Rename, "shortcut.f2", "Rename", "F2", ImGuiKey.F2),
     ];
 
     public static ReadOnlySpan<EditorShortcutDefinition> All => Definitions;

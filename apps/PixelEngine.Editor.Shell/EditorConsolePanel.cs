@@ -194,6 +194,7 @@ internal static class EditorConsoleActions
 /// <summary>
 /// Unity-like Console：严重度计数过滤、Collapse、Play 联动、可选日志行与完整详情。
 /// </summary>
+[EditorUiSurface("editor.panel.console")]
 internal sealed class EditorConsolePanel : IEditorPanel
 {
     private static readonly Vector4 LogColor = new(0.78f, 0.80f, 0.84f, 1f);
@@ -225,6 +226,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
         ObservePlayTransitions();
     }
 
+    [EditorUiCommands("panel.console")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -258,6 +260,12 @@ internal sealed class EditorConsolePanel : IEditorPanel
         }
     }
 
+    [EditorUiCommands(
+        "panel.console.toolbar",
+        "panel.console.clear",
+        "panel.console.filters",
+        "panel.console.options",
+        "panel.console.search")]
     private void DrawToolbar()
     {
         EditorConsoleOptionsSnapshot before = _app.ConsoleOptions.Capture();
@@ -362,6 +370,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
             autoScroll));
     }
 
+    [EditorUiControlPrimitive]
     private static void DrawToolbarToggle(string label, string tooltip, ref bool value)
     {
         if (value)
@@ -385,6 +394,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
         }
     }
 
+    [EditorUiControlPrimitive]
     private static void DrawSeverityToggle(string tooltip, int count, ref bool value, Vector4 color)
     {
         if (value)
@@ -466,6 +476,13 @@ internal sealed class EditorConsolePanel : IEditorPanel
         ImGui.EndChild();
     }
 
+    [EditorUiCommands(
+        "panel.console.selection",
+        "panel.console.copy",
+        "panel.console.open-source",
+        "panel.console.double-click",
+        "context.console.copy",
+        "context.console.open-source")]
     private void DrawEntryRow(EditorConsoleRow row)
     {
         EditorConsoleOptionsSnapshot options = _app.ConsoleOptions.Capture();
@@ -525,6 +542,7 @@ internal sealed class EditorConsolePanel : IEditorPanel
             : selectedSequence == row.Sequence;
     }
 
+    [EditorUiCommands("panel.console.details")]
     private void DrawSelectedDetails(EditorConsoleRow? selectedRow)
     {
         if (selectedRow is not { } selected)

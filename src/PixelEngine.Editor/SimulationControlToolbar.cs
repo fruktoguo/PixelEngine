@@ -54,6 +54,7 @@ public interface ISimulationControlService
 /// Play/Pause/单步/60-30Hz 控制条；所有 sim 决策委托给 Hosting/FrameClock。
 /// </summary>
 /// <param name="control">运行时控制服务。</param>
+[EditorUiSurface("editor.panel.simulation")]
 public sealed class SimulationControlToolbar(ISimulationControlService control) : IEditorPanel
 {
     private readonly ISimulationControlService _control = control ?? throw new ArgumentNullException(nameof(control));
@@ -115,6 +116,7 @@ public sealed class SimulationControlToolbar(ISimulationControlService control) 
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.simulation")]
     public void Draw(in EditorContext context)
     {
         bool visible = Visible;
@@ -132,6 +134,12 @@ public sealed class SimulationControlToolbar(ISimulationControlService control) 
         ImGui.End();
     }
 
+    [EditorUiCommands(
+        "panel.simulation.play",
+        "panel.simulation.pause",
+        "panel.simulation.step",
+        "panel.simulation.rate-60",
+        "panel.simulation.rate-30")]
     private void DrawButtons()
     {
         if (LastSnapshot.IsPlaying)

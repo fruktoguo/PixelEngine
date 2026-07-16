@@ -59,6 +59,35 @@ public enum AutomationBuildLogLevel
     Error,
 }
 
+/// <summary>Build Settings 面板的可观察状态。</summary>
+public sealed record AutomationBuildPanelSnapshot
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>新增日志时是否自动滚到底部。</summary>
+    public required bool LogAutoScroll { get; init; }
+
+    /// <summary>当前是否有 build job 运行。</summary>
+    public required bool BuildRunning { get; init; }
+
+    /// <summary>持久 settings 是否需要人工修复。</summary>
+    public required bool RequiresRepair { get; init; }
+
+    /// <summary>当前稳定校验诊断。</summary>
+    public required string Diagnostic { get; init; }
+}
+
+/// <summary>更新 Build Settings 面板的可观察状态。</summary>
+public sealed record AutomationBuildPanelSetRequest
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+
+    /// <summary>新增日志时是否自动滚到底部。</summary>
+    public required bool LogAutoScroll { get; init; }
+}
+
 /// <summary>build tool preflight 结果。</summary>
 public sealed record AutomationBuildPreflightResult
 {

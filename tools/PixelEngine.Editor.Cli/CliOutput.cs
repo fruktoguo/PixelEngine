@@ -175,6 +175,32 @@ internal sealed class CliOutput(CliOutputMode mode)
         WriteInvocation(payload, revision: null);
     }
 
+    public void WriteCapabilityMatrix(
+        AutomationCapabilityMatrixSnapshot matrix,
+        AutomationRevisionSnapshot? revision)
+    {
+        ArgumentNullException.ThrowIfNull(matrix);
+        if (Mode == CliOutputMode.Compact)
+        {
+            for (int i = 0; i < matrix.UiCommands.Length; i++)
+            {
+                AutomationUiCommandDescriptor command = matrix.UiCommands[i];
+                Console.WriteLine(
+                    $"{command.Id}\t{command.SurfaceId}\t{string.Join(',', command.CapabilityIds)}\t{command.HandlerId}");
+            }
+
+            Console.Error.WriteLine(
+                $"matrixDigest={matrix.MatrixDigest} capabilityDigest={matrix.CapabilityDigest} " +
+                $"uiCommandDigest={matrix.UiCommandDigest} capabilities={matrix.Capabilities.Length} " +
+                $"uiCommands={matrix.UiCommands.Length} revision={revision?.GlobalRevision.ToString() ?? "-"}");
+            return;
+        }
+
+        Console.WriteLine(JsonSerializer.Serialize(
+            matrix,
+            AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot));
+    }
+
     public void WriteEvent(AutomationEventRecord record)
     {
         JsonElement payload = JsonSerializer.SerializeToElement(

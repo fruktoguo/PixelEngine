@@ -15,6 +15,23 @@ internal sealed partial class EditorAutomationAuthoringApi
         return
         [
             ExternalRead(
+                AutomationProtocolConstants.BuildPanelGetMethod,
+                "build",
+                "emptyRequest",
+                "buildPanelSnapshot",
+                [AutomationScopes.EditorRead],
+                [],
+                GetBuildPanel),
+            ExternalCommand(
+                AutomationProtocolConstants.BuildPanelSetMethod,
+                "build",
+                "buildPanelSetRequest",
+                "buildPanelSnapshot",
+                [AutomationScopes.EditorControl],
+                AllModes,
+                ["panel.build-settings.log.auto-scroll"],
+                SetBuildPanel),
+            ExternalRead(
                 AutomationProtocolConstants.BuildPreflightMethod,
                 "build",
                 "emptyRequest",
@@ -119,6 +136,86 @@ internal sealed partial class EditorAutomationAuthoringApi
                 [],
                 TerminatePlayer),
         ];
+    }
+
+    private AutomationOperationResult GetBuildPanel(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        EnsureEmpty(payload, AutomationProtocolConstants.BuildPanelGetMethod);
+        return Result(
+            CaptureBuildPanel(),
+            AutomationJsonContext.Default.AutomationBuildPanelSnapshot,
+            [BuildResource]);
+    }
+
+    private AutomationOperationResult SetBuildPanel(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        AutomationBuildPanelSetRequest request = Deserialize(
+            payload,
+            AutomationJsonContext.Default.AutomationBuildPanelSetRequest,
+            AutomationProtocolConstants.BuildPanelSetMethod);
+        ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.BuildPanelSetMethod);
+        EditorProjectSession session = RequireSession();
+        AutomationBuildPanelSnapshot before = CaptureBuildPanel(session);
+        if (before.LogAutoScroll == request.LogAutoScroll)
+        {
+            return NoChange(
+                before,
+                AutomationJsonContext.Default.AutomationBuildPanelSnapshot,
+                [BuildResource]);
+        }
+
+        try
+        {
+            session.SetAutomationBuildLogAutoScroll(request.LogAutoScroll);
+            AutomationBuildPanelSnapshot after = CaptureBuildPanel(session);
+            return new AutomationOperationResult
+            {
+                Payload = JsonSerializer.SerializeToElement(
+                    after,
+                    AutomationJsonContext.Default.AutomationBuildPanelSnapshot),
+                ResourceIds = [BuildResource],
+                WriteStateChanged = true,
+            };
+        }
+        catch (Exception exception)
+        {
+            try
+            {
+                session.SetAutomationBuildLogAutoScroll(before.LogAutoScroll);
+            }
+            catch (Exception rollbackException)
+            {
+                throw new AggregateException(
+                    "Build panel 更新失败且无法恢复 before state。",
+                    exception,
+                    rollbackException);
+            }
+
+            throw;
+        }
+    }
+
+    private AutomationBuildPanelSnapshot CaptureBuildPanel()
+    {
+        return CaptureBuildPanel(RequireSession());
+    }
+
+    private static AutomationBuildPanelSnapshot CaptureBuildPanel(EditorProjectSession session)
+    {
+        BuildSettingsPanelUiSnapshot snapshot = session.CaptureAutomationBuildPanelState();
+        return new AutomationBuildPanelSnapshot
+        {
+            LogAutoScroll = snapshot.LogAutoScroll,
+            BuildRunning = snapshot.BuildRunning,
+            RequiresRepair = snapshot.RequiresRepair,
+            Diagnostic = snapshot.Diagnostic,
+        };
     }
 
     private static AutomationMethodRegistration ExternalRead(

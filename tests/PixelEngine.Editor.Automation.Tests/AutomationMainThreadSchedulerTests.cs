@@ -1667,6 +1667,86 @@ public sealed class AutomationMainThreadSchedulerTests
         Assert.Equal(AutomationErrorCodes.RevisionConflict, exception.Error.Code);
     }
 
+    /// <summary>UI 与 capability 任一方向缺失时，启动错误必须同时报告完整差集。</summary>
+    [Fact]
+    public void CapabilityMatrixRejectsBothDirectionsOfIncompleteClosure()
+    {
+        AutomationMethodRegistration registration = CreateUiTestRegistration(
+            "test.ui.capability",
+            ["menu.test.from-capability"]);
+        AutomationUiCommandRegistration binding = new()
+        {
+            Id = "menu.test.from-ui",
+            SurfaceId = "editor.test.surface",
+            Handler = TestOnlyUiHandlerMethod(),
+        };
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            new AutomationMainThreadScheduler(
+                [registration],
+                new AutomationRevisionStore(),
+                new TestUndoSink(),
+                new TestTransactionParticipant(),
+                uiCommands: [binding]));
+
+        Assert.Contains("ui_without_capability=[menu.test.from-ui]", exception.Message, StringComparison.Ordinal);
+        Assert.Contains(
+            "capability_without_ui=[menu.test.from-capability]",
+            exception.Message,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>同一稳定 UI command ID 不得由多个 production registration 覆盖。</summary>
+    [Fact]
+    public void CapabilityMatrixRejectsDuplicateUiCommandRegistration()
+    {
+        AutomationMethodRegistration registration = CreateUiTestRegistration(
+            "test.ui.duplicate",
+            ["menu.test.duplicate"]);
+        AutomationUiCommandRegistration binding = new()
+        {
+            Id = "menu.test.duplicate",
+            SurfaceId = "editor.test.surface",
+            Handler = TestOnlyUiHandlerMethod(),
+        };
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            new AutomationMainThreadScheduler(
+                [registration],
+                new AutomationRevisionStore(),
+                new TestUndoSink(),
+                new TestTransactionParticipant(),
+                uiCommands: [binding, binding]));
+
+        Assert.Contains("重复登记", exception.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>双向 ID 虽闭合，test-only semantic handler 仍不得冒充 production capability。</summary>
+    [Fact]
+    public void CapabilityMatrixRejectsTestAssemblySemanticHandler()
+    {
+        AutomationMethodRegistration registration = CreateUiTestRegistration(
+            "test.ui.test-only",
+            ["menu.test.test-only"]);
+        AutomationUiCommandRegistration binding = new()
+        {
+            Id = "menu.test.test-only",
+            SurfaceId = "editor.test.surface",
+            Handler = TestOnlyUiHandlerMethod(),
+        };
+
+        ArgumentException exception = Assert.Throws<ArgumentException>(() =>
+            new AutomationMainThreadScheduler(
+                [registration],
+                new AutomationRevisionStore(),
+                new TestUndoSink(),
+                new TestTransactionParticipant(),
+                uiCommands: [binding]));
+
+        Assert.Contains("semantic handler", exception.Message, StringComparison.Ordinal);
+        Assert.Contains("非测试 production assembly", exception.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// 非事务 command 只要会改变权威状态，也必须在执行点复核 expected revision；
     /// 缺失或排队后变 stale 时 delegate 不得运行。
@@ -2084,6 +2164,45 @@ public sealed class AutomationMainThreadSchedulerTests
                 },
             ],
         };
+    }
+
+    private static AutomationMethodRegistration CreateUiTestRegistration(
+        string method,
+        string[] uiCommandIds)
+    {
+        return new AutomationMethodRegistration
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = method,
+                RequiredScopes = [AutomationScopes.EditorRead],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                UiCommandIds = uiCommandIds,
+            },
+            Operation = TestOnlySemanticHandler,
+        };
+    }
+
+    private static System.Reflection.MethodInfo TestOnlyUiHandlerMethod()
+    {
+        return typeof(AutomationMainThreadSchedulerTests).GetMethod(
+            nameof(TestOnlyUiHandler),
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
+    }
+
+    private static void TestOnlyUiHandler()
+    {
+    }
+
+    private static AutomationOperationResult TestOnlySemanticHandler(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        _ = payload;
+        return new AutomationOperationResult();
     }
 
     private sealed class TestState

@@ -10,6 +10,7 @@ namespace PixelEngine.Editor.Shell.Settings;
 /// <summary>
 /// Player Settings ImGui 面板。
 /// </summary>
+[EditorUiSurface("editor.panel.player-settings")]
 internal sealed class PlayerSettingsPanel : IEditorPanel
 {
     public const string PanelTitle = EditorDockSpace.PlayerSettingsWindowTitle;
@@ -216,6 +217,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         RefreshDraftState();
     }
 
+    [EditorUiCommands("panel.player-settings")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -264,6 +266,7 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ImGui.End();
     }
 
+    [EditorUiCommands("panel.player-settings.fields")]
     private void DrawSettings(float scale)
     {
         RefreshLocalizedOptionLabels();
@@ -387,6 +390,9 @@ internal sealed class PlayerSettingsPanel : IEditorPanel
         ImGui.EndTable();
     }
 
+    [EditorUiCommands(
+        "panel.player-settings.apply",
+        "panel.player-settings.revert")]
     private void DrawActions(float scale)
     {
         float buttonWidth = EditorUiScale.Scale(82f, scale);

@@ -94,6 +94,41 @@ public sealed class EditorShellBuildTests
         Assert.False(PlayerBuildService.TryParseProgressLine("not-json", out _));
     }
 
+    /// <summary>超长单行与高容量 stdout 必须被有界读取，build.log 不得越过硬配额。</summary>
+    [Fact]
+    public async Task PlayerBuildServiceBoundsOutputLinesEventsAndBuildLog()
+    {
+        using TempDir temp = new();
+        string script = WriteBuildPlayerScript(
+            temp.Path,
+            """
+            $oversized = 'x' * 1000000
+            [Console]::Out.WriteLine($oversized)
+            $line = 'y' * 9000
+            for ($i = 0; $i -lt 2200; $i++) {
+              [Console]::Out.WriteLine($line)
+            }
+            exit 9
+            """);
+        PlayerBuildService service = new(new FakeLocator(temp.Path, script));
+        OutputProbeProgress progress = new();
+
+        BuildResult result = await service.RunAsync(
+            CreateRequest(temp.Path),
+            progress,
+            CancellationToken.None);
+
+        Assert.False(result.Ok);
+        Assert.Equal(9, result.ExitCode);
+        Assert.InRange(result.Error?.Length ?? 0, 1, 32768);
+        Assert.True(progress.Count >= 2202, progress.Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.InRange(progress.MaximumMessageLength, 1, 8192);
+        Assert.True(progress.SawTruncatedLine);
+        FileInfo buildLog = new(Path.Combine(temp.Path, "build.log"));
+        Assert.True(buildLog.Exists);
+        Assert.InRange(buildLog.Length, 1, PlayerBuildService.MaximumBuildLogBytes);
+    }
+
     /// <summary>
     /// 验证非零退出码不会被 ok=true 结果掩盖，且缺失 build-result 时回退到尾部日志。
     /// </summary>
@@ -1370,6 +1405,46 @@ public sealed class EditorShellBuildTests
         public void Report(BuildProgressEvent value)
         {
             _events.Enqueue(value);
+        }
+    }
+
+    private sealed class OutputProbeProgress : IProgress<BuildProgressEvent>
+    {
+        private int _count;
+        private int _maximumMessageLength;
+        private int _sawTruncatedLine;
+
+        public int Count => Volatile.Read(ref _count);
+
+        public int MaximumMessageLength => Volatile.Read(ref _maximumMessageLength);
+
+        public bool SawTruncatedLine => Volatile.Read(ref _sawTruncatedLine) != 0;
+
+        public void Report(BuildProgressEvent value)
+        {
+            _ = Interlocked.Increment(ref _count);
+            int length = value.Message?.Length ?? 0;
+            int observed = Volatile.Read(ref _maximumMessageLength);
+            while (length > observed)
+            {
+                int replaced = Interlocked.CompareExchange(
+                    ref _maximumMessageLength,
+                    length,
+                    observed);
+                if (replaced == observed)
+                {
+                    break;
+                }
+
+                observed = replaced;
+            }
+
+            if (value.Message?.EndsWith(
+                    " [truncated at 16384 characters]",
+                    StringComparison.Ordinal) == true)
+            {
+                _ = Interlocked.Exchange(ref _sawTruncatedLine, 1);
+            }
         }
     }
 

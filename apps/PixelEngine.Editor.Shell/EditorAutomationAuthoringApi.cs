@@ -23,6 +23,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
 {
     internal const long MaximumBrushStrokeCellVisits = 4_000_000;
     private const string WorkspaceResource = "editor:workspace";
+    private const string ProjectPickerResource = "editor:project-picker";
     private const string ProjectResource = "editor:project";
     private const string WindowResource = "editor:window";
     private const string LayoutResource = "editor:layout";
@@ -48,6 +49,31 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 "workspaceSnapshot",
                 ["menu.file", "toolbar.play-controls"],
                 GetWorkspace),
+            Read(
+                AutomationProtocolConstants.WorkspaceProjectPickerGetMethod,
+                "workspace",
+                "emptyRequest",
+                "projectPickerSnapshot",
+                [],
+                GetProjectPicker),
+            Command(
+                AutomationProtocolConstants.WorkspaceProjectPickerSetMethod,
+                "workspace",
+                "projectPickerSetRequest",
+                "projectPickerSnapshot",
+                [AutomationScopes.EditorControl],
+                AllModes,
+                [
+                    "menu.window.project-picker",
+                    "project-picker.add-from-disk",
+                    "project-picker.back",
+                    "project-picker.navigation.back",
+                    "project-picker.navigation.projects",
+                    "project-picker.new",
+                    "project-picker.open.browse-location",
+                    "project-picker.recent.add-from-disk",
+                ],
+                SetProjectPicker),
             Read(
                 AutomationProtocolConstants.WorkspaceTransitionGetMethod,
                 "workspace",
@@ -91,7 +117,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 "transitionResult",
                 [AutomationScopes.EditorControl],
                 ["edit"],
-                ["menu.file.close-project", "project-picker.back"],
+                ["menu.file.close-project"],
                 CloseProject),
             Command(
                 AutomationProtocolConstants.WorkspaceExitMethod,
@@ -614,7 +640,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 UsesBackgroundPreparation = preparation is not null,
                 EventTypes = eventTypes,
                 ArtifactBehavior = artifactBehavior,
-                UiCommandIds = uiCommandIds,
+                UiCommandIds = EditorAutomationUiCommandMappings.Resolve(method, uiCommandIds),
             },
             Preparation = preparation,
             Operation = operation,
@@ -637,6 +663,101 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 EditorAutomationRuntime.CreateSceneResourceId(_app.CurrentSession),
             ];
         return Result(snapshot, AutomationJsonContext.Default.AutomationWorkspaceSnapshot, resources);
+    }
+
+    private AutomationOperationResult GetProjectPicker(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        EnsureEmpty(payload, AutomationProtocolConstants.WorkspaceProjectPickerGetMethod);
+        return Result(
+            CaptureProjectPicker(),
+            AutomationJsonContext.Default.AutomationProjectPickerSnapshot,
+            [ProjectPickerResource]);
+    }
+
+    private AutomationOperationResult SetProjectPicker(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        AutomationProjectPickerSetRequest request = Deserialize(
+            payload,
+            AutomationJsonContext.Default.AutomationProjectPickerSetRequest,
+            AutomationProtocolConstants.WorkspaceProjectPickerSetMethod);
+        ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.WorkspaceProjectPickerSetMethod);
+        if (!Enum.IsDefined(request.Mode))
+        {
+            throw Invalid("Project Picker mode 无效。");
+        }
+
+        AutomationProjectPickerSnapshot before = CaptureProjectPicker();
+        if (before.Visible == request.Visible && before.Mode == request.Mode)
+        {
+            return NoChange(
+                before,
+                AutomationJsonContext.Default.AutomationProjectPickerSnapshot,
+                [ProjectPickerResource]);
+        }
+
+        try
+        {
+            ApplyProjectPicker(request.Visible, request.Mode);
+            AutomationProjectPickerSnapshot after = CaptureProjectPicker();
+            return new AutomationOperationResult
+            {
+                Payload = JsonSerializer.SerializeToElement(
+                    after,
+                    AutomationJsonContext.Default.AutomationProjectPickerSnapshot),
+                ResourceIds = [ProjectPickerResource],
+                WriteStateChanged = true,
+            };
+        }
+        catch (Exception exception)
+        {
+            try
+            {
+                ApplyProjectPicker(before.Visible, before.Mode);
+            }
+            catch (Exception rollbackException)
+            {
+                throw new AggregateException(
+                    "Project Picker 更新失败且无法恢复 before state。",
+                    exception,
+                    rollbackException);
+            }
+
+            throw;
+        }
+    }
+
+    private AutomationProjectPickerSnapshot CaptureProjectPicker()
+    {
+        (bool visible, ProjectPickerMode mode) = _app.CaptureProjectPickerState();
+        return new AutomationProjectPickerSnapshot
+        {
+            Visible = visible,
+            Mode = mode switch
+            {
+                ProjectPickerMode.RecentProjects => AutomationProjectPickerMode.RecentProjects,
+                ProjectPickerMode.NewProject => AutomationProjectPickerMode.NewProject,
+                ProjectPickerMode.OpenProject => AutomationProjectPickerMode.OpenProject,
+                _ => throw new InvalidOperationException("未知 Project Picker mode。"),
+            },
+        };
+    }
+
+    private void ApplyProjectPicker(bool visible, AutomationProjectPickerMode mode)
+    {
+        ProjectPickerMode target = mode switch
+        {
+            AutomationProjectPickerMode.RecentProjects => ProjectPickerMode.RecentProjects,
+            AutomationProjectPickerMode.NewProject => ProjectPickerMode.NewProject,
+            AutomationProjectPickerMode.OpenProject => ProjectPickerMode.OpenProject,
+            _ => throw Invalid("Project Picker mode 无效。"),
+        };
+        _app.SetProjectPickerState(visible, target);
     }
 
     private AutomationOperationResult GetTransition(

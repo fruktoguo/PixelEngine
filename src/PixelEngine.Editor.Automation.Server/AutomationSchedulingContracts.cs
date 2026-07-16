@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using PixelEngine.Editor.Automation.Protocol;
 
@@ -277,6 +278,22 @@ public sealed record AutomationMethodRegistration
 
     /// <summary>可选 safe-point freeze → background prepare 阶段。</summary>
     public AutomationScheduledPreparation? Preparation { get; init; }
+}
+
+/// <summary>
+/// 一个人工 UI command 到实际 production method 的登记；scheduler 将它与 semantic
+/// registration 双向联结，任何未映射或 test-only/空 handler 都会拒绝启动。
+/// </summary>
+public sealed record AutomationUiCommandRegistration
+{
+    /// <summary>稳定 UI command ID。</summary>
+    public required string Id { get; init; }
+
+    /// <summary>稳定 UI surface ID。</summary>
+    public required string SurfaceId { get; init; }
+
+    /// <summary>实际渲染或分派该人工动作的 production method。</summary>
+    public required MethodInfo Handler { get; init; }
 }
 
 /// <summary>

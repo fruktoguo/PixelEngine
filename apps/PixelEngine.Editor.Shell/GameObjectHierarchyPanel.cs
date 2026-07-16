@@ -6,6 +6,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// Hierarchy 面板：场景树选择与 GameObject 操作。
 /// </summary>
+[EditorUiSurface("editor.panel.hierarchy")]
 internal sealed class GameObjectHierarchyPanel(
     EditorSceneModel scene,
     EditorUndoStack undo,
@@ -29,6 +30,7 @@ internal sealed class GameObjectHierarchyPanel(
 
     public bool Visible { get; set; } = true;
 
+    [EditorUiCommands("panel.hierarchy")]
     public void Draw(in EditorContext context)
     {
         string windowTitle = EditorLocalization.GetWindowTitle("window.hierarchy", "Hierarchy", Title);
@@ -109,6 +111,7 @@ internal sealed class GameObjectHierarchyPanel(
         ImGui.End();
     }
 
+    [EditorUiControlPrimitive]
     private void DrawGeneratedMarkers()
     {
         SceneAuthoringPreview preview = SceneAuthoringPreviewBuilder.Build(
@@ -142,6 +145,7 @@ internal sealed class GameObjectHierarchyPanel(
         ImGui.TreePop();
     }
 
+    [EditorUiCommands("panel.hierarchy.runtime", "panel.hierarchy.runtime-bodies")]
     private void DrawRuntimeHierarchy(EditorSelection selection)
     {
         if (_runtimeSnapshot is null || _modeProvider?.Invoke() == EditorMode.Edit)
@@ -235,6 +239,7 @@ internal sealed class GameObjectHierarchyPanel(
         return (_modeProvider?.Invoke() ?? EditorMode.Edit) == EditorMode.Edit;
     }
 
+    [EditorUiCommands("panel.hierarchy.create")]
     private void DrawToolbar(bool canModify)
     {
         ImGui.BeginDisabled(!canModify);
@@ -272,6 +277,9 @@ internal sealed class GameObjectHierarchyPanel(
         _ = ImGui.InputTextWithHint("##hierarchy-search", "Search", ref _search, 128);
     }
 
+    [EditorUiCommands(
+        "panel.hierarchy.visibility-all",
+        "panel.hierarchy.pickability-all")]
     private void DrawSceneStateHeader(bool canModify)
     {
         bool allVisible = true;
@@ -300,6 +308,10 @@ internal sealed class GameObjectHierarchyPanel(
         ImGui.Separator();
     }
 
+    [EditorUiCommands(
+        "panel.hierarchy.selection",
+        "panel.hierarchy.visibility",
+        "panel.hierarchy.pickability")]
     private void DrawNode(int stableId, EditorSelection selection, bool canModify)
     {
         EditorGameObject gameObject = _scene.Get(stableId);
@@ -401,6 +413,7 @@ internal sealed class GameObjectHierarchyPanel(
         return false;
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawVisibilityToggle(string id, bool visible, bool allObjects)
     {
         float size = ImGui.GetFrameHeight();
@@ -436,6 +449,7 @@ internal sealed class GameObjectHierarchyPanel(
         return clicked;
     }
 
+    [EditorUiControlPrimitive]
     private static bool DrawPickingToggle(string id, bool pickable, bool allObjects)
     {
         float size = ImGui.GetFrameHeight();
@@ -519,6 +533,7 @@ internal sealed class GameObjectHierarchyPanel(
         _renameBuffer = gameObject.Name;
     }
 
+    [EditorUiCommands("panel.hierarchy.rename")]
     private void DrawRenameInline(int stableId)
     {
         ImGui.SetNextItemWidth(-1);
@@ -544,6 +559,7 @@ internal sealed class GameObjectHierarchyPanel(
         _renameBuffer = string.Empty;
     }
 
+    [EditorUiControlPrimitive]
     private void TrackManualDrag(int stableId, string label)
     {
         if (ImGui.IsItemHovered() && ImGui.IsMouseDragging(ImGuiMouseButton.Left, 6f))
@@ -553,6 +569,7 @@ internal sealed class GameObjectHierarchyPanel(
         }
     }
 
+    [EditorUiCommands("panel.hierarchy.drag-drop")]
     private void DrawManualDropTarget(int targetStableId)
     {
         if (_draggingStableId is not { } sourceStableId ||
@@ -567,6 +584,7 @@ internal sealed class GameObjectHierarchyPanel(
         _draggingStableId = null;
     }
 
+    [EditorUiCommands("panel.hierarchy.drag-drop-root")]
     private void DrawRootDropTarget()
     {
         if (_draggingStableId is not { } sourceStableId ||
@@ -592,6 +610,16 @@ internal sealed class GameObjectHierarchyPanel(
         }
     }
 
+    [EditorUiCommands(
+        "panel.hierarchy.create-prefab",
+        "panel.hierarchy.delete",
+        "panel.hierarchy.duplicate",
+        "context.hierarchy.create-child",
+        "context.hierarchy.rename",
+        "context.hierarchy.duplicate",
+        "context.hierarchy.create-prefab",
+        "context.hierarchy.delete",
+        "context.hierarchy.create-root")]
     private void DrawContextMenu(int? stableId)
     {
         string popupId = stableId.HasValue ? $"go_context_{stableId.Value}" : "scene_root_context";

@@ -1255,6 +1255,20 @@ internal sealed class EditorShellHostExtension :
             .CaptureAutomationState();
     }
 
+    internal BuildSettingsPanelUiSnapshot CaptureAutomationBuildPanelState()
+    {
+        return (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .CaptureAutomationUiState();
+    }
+
+    internal void SetAutomationBuildLogAutoScroll(bool enabled)
+    {
+        (_buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。"))
+            .SetAutomationLogAutoScroll(enabled);
+    }
+
     internal BuildSettingsPanelAutomationSnapshot CreateAutomationBuildSettingsState(
         BuildProfileDto settings)
     {

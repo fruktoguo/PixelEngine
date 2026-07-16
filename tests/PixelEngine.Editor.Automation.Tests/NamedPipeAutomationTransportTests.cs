@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using PixelEngine.Editor.Automation.Client;
 using PixelEngine.Editor.Automation.Protocol;
@@ -77,6 +78,88 @@ public sealed class NamedPipeAutomationTransportTests
             Assert.DoesNotContain("proof", line, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(credential, line, StringComparison.Ordinal);
         });
+    }
+
+    /// <summary>同一认证长连接在持续并发调用后仍保持 correlation、顺序与可用性。</summary>
+    [Fact]
+    public async Task LongLivedConnectionSurvivesRepeatedConcurrentBatches()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        TestHandler handler = new();
+        await using EditorAutomationServer server = CreateServer(temporary.Path, handler);
+        await server.StartAsync();
+        AutomationDiscoveredInstance instance = await DiscoverSingleAsync(temporary.Path);
+        await using EditorAutomationClient client = await ConnectAsync(
+            instance,
+            [AutomationScopes.EditorRead]);
+
+        const int BatchCount = 32;
+        const int BatchSize = 32;
+        for (int batch = 0; batch < BatchCount; batch++)
+        {
+            int batchStart = batch * BatchSize;
+            Task<JsonElement?>[] calls =
+            [
+                .. Enumerable.Range(batchStart, BatchSize).Select(index =>
+                    client.InvokeRawAsync(
+                        TestHandler.EchoMethod,
+                        JsonSerializer.SerializeToElement(new { index })).AsTask()),
+            ];
+            JsonElement?[] responses = await Task.WhenAll(calls);
+            Assert.Equal(
+                Enumerable.Range(batchStart, BatchSize),
+                responses.Select(static response => response!.Value.GetProperty("index").GetInt32()).Order());
+        }
+
+        Assert.Equal(server.InstanceId, (await client.PingAsync()).InstanceId);
+    }
+
+    /// <summary>Server restart 后旧实例消失，稳定 client instance ID 可重新发现并认证新实例。</summary>
+    [Fact]
+    public async Task ClientRediscoversAndReconnectsAfterServerRestart()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        const string ClientInstanceId = "restart-reconnect-client";
+        string firstInstanceId;
+        TestHandler firstHandler = new();
+        await using (EditorAutomationServer firstServer = CreateServer(temporary.Path, firstHandler))
+        {
+            await firstServer.StartAsync();
+            AutomationDiscoveredInstance firstInstance = await DiscoverSingleAsync(temporary.Path);
+            firstInstanceId = firstInstance.Descriptor.InstanceId;
+            await using EditorAutomationClient firstClient = await EditorAutomationClient.ConnectAsync(
+                firstInstance,
+                CreateClientOptions([AutomationScopes.EditorRead]) with
+                {
+                    ClientInstanceId = ClientInstanceId,
+                });
+            Assert.Equal(firstInstanceId, (await firstClient.PingAsync()).InstanceId);
+        }
+
+        Assert.Empty((await AutomationDiscovery.DiscoverAsync(temporary.Path)).Instances);
+        TestHandler secondHandler = new();
+        await using EditorAutomationServer secondServer = CreateServer(temporary.Path, secondHandler);
+        await secondServer.StartAsync();
+        AutomationDiscoveredInstance secondInstance = await DiscoverSingleAsync(temporary.Path);
+        await using EditorAutomationClient secondClient = await EditorAutomationClient.ConnectAsync(
+            secondInstance,
+            CreateClientOptions([AutomationScopes.EditorRead]) with
+            {
+                ClientInstanceId = ClientInstanceId,
+            });
+
+        Assert.NotEqual(firstInstanceId, secondInstance.Descriptor.InstanceId);
+        Assert.Equal(secondInstance.Descriptor.InstanceId, (await secondClient.PingAsync()).InstanceId);
     }
 
     /// <summary>验证公开 Client 的 typed、分页、build 与 artifact 完整性辅助层。</summary>
@@ -204,6 +287,49 @@ public sealed class NamedPipeAutomationTransportTests
         Assert.Equal("artifact 文件长度不匹配。", tampered.Diagnostic);
     }
 
+    /// <summary>认证成功也不得接受与 discovery digest 不同的 catalog 或完整矩阵。</summary>
+    [Fact]
+    public async Task ClientRejectsCatalogAndMatrixThatDoNotMatchDiscoveryDigest()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        TestHandler handler = new();
+        string mismatchedDigest = string.Equals(
+            handler.CapabilityDigest,
+            new string('f', 64),
+            StringComparison.Ordinal)
+                ? new string('e', 64)
+                : new string('f', 64);
+        await using EditorAutomationServer server = new(
+            new AutomationServerOptions
+            {
+                DiscoveryRoot = temporary.Path,
+                EditorVersion = "transport-test",
+                SupportedScopes = AutomationScopes.All,
+                CapabilityDigest = mismatchedDigest,
+            },
+            handler);
+        await server.StartAsync();
+        AutomationDiscoveredInstance instance = await DiscoverSingleAsync(temporary.Path);
+        await using EditorAutomationClient client = await ConnectAsync(
+            instance,
+            [AutomationScopes.EditorRead]);
+
+        AutomationConnectionException catalogException =
+            await Assert.ThrowsAsync<AutomationConnectionException>(
+                async () => await client.GetCapabilitiesAsync());
+        AutomationConnectionException matrixException =
+            await Assert.ThrowsAsync<AutomationConnectionException>(
+                async () => await client.GetCapabilityMatrixAsync());
+
+        Assert.Contains("discovery descriptor", catalogException.Message, StringComparison.Ordinal);
+        Assert.Contains("discovery descriptor", matrixException.Message, StringComparison.Ordinal);
+    }
+
     /// <summary>验证独立 CLI OS 进程通过 discovery、HMAC 与 capability catalog 调用真实 Pipe。</summary>
     [Fact]
     public async Task CliProcessDiscoversAuthenticatesAndInvokesCapability()
@@ -251,6 +377,28 @@ public sealed class NamedPipeAutomationTransportTests
             static record =>
                 record.GetProperty("capability").GetString() == TestHandler.EchoMethod &&
                 record.GetProperty("result").GetString() == "success");
+
+        CliProcessResult matrixResult = await RunCliAsync(
+            "--discovery-root",
+            temporary.Path,
+            "--instance",
+            instance.Descriptor.InstanceId,
+            "--scopes",
+            AutomationScopes.EditorRead,
+            "--output",
+            "json",
+            "capabilities",
+            "--matrix");
+        Assert.Equal(0, matrixResult.ExitCode);
+        Assert.Equal(string.Empty, matrixResult.StandardError);
+        AutomationCapabilityMatrixSnapshot matrix = JsonSerializer.Deserialize(
+            matrixResult.StandardOutput,
+            AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot)
+            ?? throw new InvalidOperationException("CLI capability matrix 返回 null。");
+        Assert.Equal(instance.Descriptor.CapabilityDigest, matrix.CapabilityDigest);
+        Assert.Contains(matrix.UiCommands, static command =>
+            command.Id == "menu.test.echo" &&
+            command.CapabilityIds.SequenceEqual([TestHandler.EchoMethod]));
 
         string failedBuildId = $"f{new string('0', 31)}";
         CliProcessResult buildGet = await RunCliAsync(
@@ -888,6 +1036,9 @@ public sealed class NamedPipeAutomationTransportTests
                 DiscoveryRoot = root,
                 EditorVersion = "transport-test",
                 SupportedScopes = AutomationScopes.All,
+                CapabilityDigest = handler is TestHandler testHandler
+                    ? testHandler.CapabilityDigest
+                    : null,
             },
             handler);
     }
@@ -1077,6 +1228,7 @@ public sealed class NamedPipeAutomationTransportTests
                     OperationKind = AutomationOperationKind.Read,
                     ExecutionPhase = AutomationExecutionPhase.Background,
                     TransactionMode = AutomationTransactionMode.Forbidden,
+                    UiCommandIds = ["menu.test.echo"],
                 },
                 [ControlMethod] = new AutomationMethodDescriptor
                 {
@@ -1204,11 +1356,62 @@ public sealed class NamedPipeAutomationTransportTests
                     ExecutionPhase = AutomationExecutionPhase.Background,
                     TransactionMode = AutomationTransactionMode.Forbidden,
                 },
+                [AutomationProtocolConstants.CapabilityMatrixGetMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.CapabilityMatrixGetMethod,
+                    Domain = "system",
+                    RequestSchema = "#/$defs/emptyRequest",
+                    ResponseSchema = "#/$defs/capabilityMatrixSnapshot",
+                    RequiredScopes = [AutomationScopes.EditorRead],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
             });
+
+        public TestHandler()
+        {
+            AutomationCapabilityDescriptor[] capabilities = CaptureCapabilities();
+            CapabilityDigest = ComputeDigest(
+                capabilities,
+                AutomationJsonContext.Default.AutomationCapabilityDescriptorArray);
+            AutomationUiCommandDescriptor[] uiCommands =
+            [
+                new AutomationUiCommandDescriptor
+                {
+                    Id = "menu.test.echo",
+                    SurfaceId = "editor.test",
+                    HandlerId = "PixelEngine.Editor.Automation.Tests/TestHandler.Echo",
+                    CapabilityIds = [EchoMethod],
+                },
+            ];
+            string uiCommandDigest = ComputeDigest(
+                uiCommands,
+                AutomationJsonContext.Default.AutomationUiCommandDescriptorArray);
+            byte[] matrixBytes = Encoding.UTF8.GetBytes(
+                $"v1\n{CapabilityDigest}\n{uiCommandDigest}\n");
+            try
+            {
+                CapabilityMatrix = new AutomationCapabilityMatrixSnapshot
+                {
+                    CapabilityDigest = CapabilityDigest,
+                    UiCommandDigest = uiCommandDigest,
+                    MatrixDigest = Convert.ToHexStringLower(SHA256.HashData(matrixBytes)),
+                    Capabilities = capabilities,
+                    UiCommands = uiCommands,
+                };
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(matrixBytes);
+            }
+        }
 
         public bool DeferredFactoryInvoked { get; private set; }
 
-        public string CapabilityDigest { get; set; } = new string('0', 64);
+        public string CapabilityDigest { get; set; }
+
+        public AutomationCapabilityMatrixSnapshot CapabilityMatrix { get; }
 
         public AutomationArtifactReference? Artifact { get; set; }
 
@@ -1234,34 +1437,7 @@ public sealed class NamedPipeAutomationTransportTests
                 AutomationPageRequest request = payload?.Deserialize(
                     AutomationJsonContext.Default.AutomationPageRequest)
                     ?? throw new InvalidOperationException("capability list 缺少 page request。");
-                AutomationCapabilityDescriptor[] source =
-                [
-                    .. _descriptors.Values
-                        .OrderBy(static descriptor => descriptor.Method, StringComparer.Ordinal)
-                        .Select(static descriptor => new AutomationCapabilityDescriptor
-                        {
-                            Id = descriptor.Method,
-                            Domain = string.IsNullOrWhiteSpace(descriptor.Domain) ? "test" : descriptor.Domain,
-                            OperationKind = descriptor.OperationKind,
-                            RequestSchema = string.IsNullOrWhiteSpace(descriptor.RequestSchema)
-                                ? "#/$defs/emptyRequest"
-                                : descriptor.RequestSchema,
-                            ResponseSchema = string.IsNullOrWhiteSpace(descriptor.ResponseSchema)
-                                ? "#/$defs/emptyRequest"
-                                : descriptor.ResponseSchema,
-                            RequiredScopes = descriptor.RequiredScopes,
-                            SupportedModes = descriptor.SupportedModes.Length == 0
-                                ? ["edit", "play", "paused"]
-                                : descriptor.SupportedModes,
-                            ExecutionPhase = descriptor.ExecutionPhase,
-                            TransactionMode = descriptor.TransactionMode,
-                            RequiresExpectedRevision = descriptor.RequiresExpectedRevision,
-                            RequiresIdempotencyKey = descriptor.RequiresIdempotencyKey,
-                            EventTypes = descriptor.EventTypes,
-                            ArtifactBehavior = descriptor.ArtifactBehavior,
-                            UiCommandIds = descriptor.UiCommandIds,
-                        }),
-                ];
+                AutomationCapabilityDescriptor[] source = CaptureCapabilities();
                 int offset = request.Cursor is null
                     ? 0
                     : int.Parse(request.Cursor, System.Globalization.CultureInfo.InvariantCulture);
@@ -1286,6 +1462,19 @@ public sealed class NamedPipeAutomationTransportTests
                             },
                         },
                         AutomationJsonContext.Default.AutomationCapabilityListResponse),
+                };
+            }
+
+            if (string.Equals(
+                    method,
+                    AutomationProtocolConstants.CapabilityMatrixGetMethod,
+                    StringComparison.Ordinal))
+            {
+                return new AutomationHandlerResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(
+                        CapabilityMatrix,
+                        AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot),
                 };
             }
 
@@ -1461,6 +1650,53 @@ public sealed class NamedPipeAutomationTransportTests
                         },
                     }
                     : throw new InvalidOperationException($"Unexpected method {method}.");
+        }
+
+        private AutomationCapabilityDescriptor[] CaptureCapabilities()
+        {
+            return
+            [
+                .. _descriptors.Values
+                    .OrderBy(static descriptor => descriptor.Method, StringComparer.Ordinal)
+                    .Select(static descriptor => new AutomationCapabilityDescriptor
+                    {
+                        Id = descriptor.Method,
+                        Domain = string.IsNullOrWhiteSpace(descriptor.Domain) ? "test" : descriptor.Domain,
+                        OperationKind = descriptor.OperationKind,
+                        RequestSchema = string.IsNullOrWhiteSpace(descriptor.RequestSchema)
+                            ? "#/$defs/emptyRequest"
+                            : descriptor.RequestSchema,
+                        ResponseSchema = string.IsNullOrWhiteSpace(descriptor.ResponseSchema)
+                            ? "#/$defs/emptyRequest"
+                            : descriptor.ResponseSchema,
+                        RequiredScopes = descriptor.RequiredScopes,
+                        SupportedModes = descriptor.SupportedModes.Length == 0
+                            ? ["edit", "play", "paused"]
+                            : descriptor.SupportedModes,
+                        ExecutionPhase = descriptor.ExecutionPhase,
+                        TransactionMode = descriptor.TransactionMode,
+                        RequiresExpectedRevision = descriptor.RequiresExpectedRevision,
+                        RequiresIdempotencyKey = descriptor.RequiresIdempotencyKey,
+                        EventTypes = descriptor.EventTypes,
+                        ArtifactBehavior = descriptor.ArtifactBehavior,
+                        UiCommandIds = descriptor.UiCommandIds,
+                    }),
+            ];
+        }
+
+        private static string ComputeDigest<T>(
+            T value,
+            System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
+        {
+            byte[] utf8 = JsonSerializer.SerializeToUtf8Bytes(value, typeInfo);
+            try
+            {
+                return Convert.ToHexStringLower(SHA256.HashData(utf8));
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(utf8);
+            }
         }
     }
 }

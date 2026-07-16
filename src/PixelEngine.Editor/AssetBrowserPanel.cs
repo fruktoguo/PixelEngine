@@ -45,6 +45,7 @@ public delegate bool SceneAssetOpenHandler(string assetPath, out string diagnost
 /// <param name="importAsset">可选资产导入回调。</param>
 /// <param name="pickImportSource">可选导入源文件选择回调。</param>
 /// <param name="tryInstantiatePrefab">可返回失败诊断的 prefab 实例化回调；新调用方优先使用。</param>
+[EditorUiSurface("editor.panel.project")]
 public sealed class AssetBrowserPanel(
     IAssetBrowserDataSource source,
     IAudioPreviewService? audioPreview = null,
@@ -762,6 +763,7 @@ public sealed class AssetBrowserPanel(
     /// <param name="path">资产路径。</param>
     /// <param name="payload">可传递给 Shell drop 服务的 payload。</param>
     /// <returns>资产存在且有 stable asset id 时返回 true。</returns>
+    [EditorUiCommands("project.prefab.drag-to-hierarchy")]
     public bool TryCreateDragPayload(string path, out AssetBrowserDragPayload payload)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
@@ -1228,6 +1230,7 @@ public sealed class AssetBrowserPanel(
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.project")]
     public void Draw(in EditorContext context)
     {
         _externalDropTargets.Clear();
@@ -1313,6 +1316,10 @@ public sealed class AssetBrowserPanel(
         ImGui.EndChild();
     }
 
+    [EditorUiCommands(
+        "panel.project.search",
+        "panel.project.grid-view",
+        "panel.project.list-view")]
     private void DrawToolbar(EditorSelection selection)
     {
         if (ImGui.Button("+##project-create"))
@@ -1367,6 +1374,7 @@ public sealed class AssetBrowserPanel(
         ImGui.Separator();
     }
 
+    [EditorUiCommands("panel.project.create", "panel.project.import")]
     private void DrawCreateMenu(EditorSelection selection)
     {
         if (!ImGui.BeginPopup("project-create-menu"))
@@ -1402,6 +1410,7 @@ public sealed class AssetBrowserPanel(
         ImGui.EndPopup();
     }
 
+    [EditorUiCommands("panel.project.kind-filter")]
     private void DrawKindFilter()
     {
         string label = KindFilter.HasValue ? KindFilter.Value.ToString() : "All";
@@ -1432,6 +1441,7 @@ public sealed class AssetBrowserPanel(
         ImGui.EndPopup();
     }
 
+    [EditorUiCommands("panel.project.refresh", "panel.project.sort")]
     private void DrawOptionsMenu(EditorSelection selection)
     {
         if (!ImGui.BeginPopup("project-options-menu"))
@@ -1461,6 +1471,7 @@ public sealed class AssetBrowserPanel(
         ImGui.EndPopup();
     }
 
+    [EditorUiCommands("panel.project.thumbnail-size")]
     private void DrawFooter()
     {
         ImGui.Separator();
@@ -1496,6 +1507,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiCommands("panel.project.create.commit")]
     private void DrawCreateControls(EditorSelection selection)
     {
         int createKindIndex = Array.IndexOf(CreateKinds, CreateKind);
@@ -1527,6 +1539,9 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiCommands(
+        "panel.project.import.browse",
+        "panel.project.import.commit")]
     private void DrawImportControls(EditorSelection selection)
     {
         int importKindIndex = Array.IndexOf(ImportKinds, ImportKind);
@@ -1569,6 +1584,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiCommands("panel.project.folders", "panel.project.folder")]
     private void DrawFolderTree(EditorSelection selection)
     {
         bool rootSelected = string.IsNullOrWhiteSpace(selection.FolderPath);
@@ -1588,6 +1604,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawFolderTreeNode(AssetBrowserFolderItem folder, EditorSelection selection)
     {
         bool hasChildren = FolderTargets.Any(candidate => IsDirectFolderChild(candidate.Path, folder.Path));
@@ -1631,6 +1648,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiCommands("panel.project.assets", "panel.project.selection")]
     private void DrawFolderContents(EditorSelection selection)
     {
         if (ViewMode == AssetBrowserViewMode.Grid)
@@ -1677,6 +1695,7 @@ public sealed class AssetBrowserPanel(
         ImGui.EndTable();
     }
 
+    [EditorUiControlPrimitive]
     private void DrawFolderContentTile(AssetBrowserFolderItem folder, EditorSelection selection, float cellWidth)
     {
         bool selected = string.Equals(selection.FolderPath, folder.Path, StringComparison.OrdinalIgnoreCase);
@@ -1710,6 +1729,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawAssetTile(AssetBrowserItem item, EditorSelection selection, float cellWidth)
     {
         bool selected = IsAssetSelected(selection, item);
@@ -1795,6 +1815,7 @@ public sealed class AssetBrowserPanel(
         return ellipsis;
     }
 
+    [EditorUiControlPrimitive]
     private void DrawFolderContentRow(AssetBrowserFolderItem folder, EditorSelection selection)
     {
         DrawInlinePreview(AssetBrowserIconKind.Folder, thumbnail: null);
@@ -1821,6 +1842,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiCommands("panel.project.drag-drop")]
     private void DrawFolderDropTarget(AssetBrowserFolderItem folder)
     {
         if (!ImGui.BeginDragDropTarget())
@@ -1837,6 +1859,14 @@ public sealed class AssetBrowserPanel(
         ImGui.EndDragDropTarget();
     }
 
+    [EditorUiCommands(
+        "panel.project.folder.move",
+        "panel.project.folder.rename",
+        "panel.project.folder.delete",
+        "context.project.folder.create",
+        "context.project.folder.import",
+        "context.project.folder.move",
+        "context.project.folder.delete")]
     private void DrawFolderContextMenu(AssetBrowserFolderItem folder)
     {
         if (!ImGui.BeginPopupContextItem($"folder-context-{folder.Path}"))
@@ -1875,6 +1905,7 @@ public sealed class AssetBrowserPanel(
         ImGui.EndPopup();
     }
 
+    [EditorUiControlPrimitive]
     private void DrawBreadcrumbs(EditorSelection selection)
     {
         for (int i = 0; i < Breadcrumbs.Count; i++)
@@ -1896,6 +1927,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawAssetRow(AssetBrowserItem item, EditorSelection selection)
     {
         bool rowVisible = ImGui.IsRectVisible(new Vector2(Math.Max(1f, ImGui.GetContentRegionAvail().X), 28f));
@@ -1951,6 +1983,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private static void DrawInlinePreview(AssetBrowserIconKind iconKind, AssetThumbnail? thumbnail)
     {
         const float size = 18f;
@@ -2171,6 +2204,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiControlPrimitive]
     private void DrawViewModeButton(AssetBrowserViewMode mode, string id)
     {
         const float buttonSize = 25f;
@@ -2221,6 +2255,7 @@ public sealed class AssetBrowserPanel(
         }
     }
 
+    [EditorUiCommands("project.open-scene", "project.prefab.open")]
     private void OpenPrimaryAsset(AssetBrowserItem item)
     {
         if (item.Kind == AssetBrowserItemKind.Scene)
@@ -2235,8 +2270,24 @@ public sealed class AssetBrowserPanel(
         {
             _ = TryPreviewAudio(item.Path);
         }
+        else if (item.Kind == AssetBrowserItemKind.Prefab)
+        {
+            _ = TryInstantiatePrefabAsset(item.Path);
+        }
     }
 
+    [EditorUiCommands(
+        "panel.project.open-external",
+        "panel.project.open-script",
+        "panel.project.preview-audio",
+        "panel.project.move",
+        "panel.project.delete",
+        "context.project.asset.open-scene",
+        "context.project.asset.open-script",
+        "context.project.asset.preview-audio",
+        "context.project.asset.instantiate-prefab",
+        "context.project.asset.move",
+        "context.project.asset.delete")]
     private void DrawAssetContextMenu(AssetBrowserItem item)
     {
         if (!ImGui.BeginPopupContextItem($"asset-context-{item.AssetId ?? item.Path}"))
@@ -2278,6 +2329,17 @@ public sealed class AssetBrowserPanel(
         ImGui.EndPopup();
     }
 
+    [EditorUiCommands(
+        "panel.project.delete-preflight",
+        "panel.project.rename",
+        "panel.project.move.commit",
+        "panel.project.move.cancel",
+        "panel.project.folder.move.commit",
+        "panel.project.folder.move.cancel",
+        "panel.project.delete.commit",
+        "panel.project.delete.cancel",
+        "panel.project.folder.delete.commit",
+        "panel.project.folder.delete.cancel")]
     private void DrawPendingActionEditors()
     {
         if (_pendingMoveRequest is { } move)

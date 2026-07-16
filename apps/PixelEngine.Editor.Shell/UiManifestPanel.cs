@@ -5,6 +5,7 @@ namespace PixelEngine.Editor.Shell;
 /// <summary>
 /// content/ui/ui-manifest.json 的可视化登记与 preload 管理面板。
 /// </summary>
+[EditorUiSurface("editor.panel.ui-manifest")]
 internal sealed class UiManifestPanel(EditorAssetManifestStore assets) : IEditorPanel
 {
     public const string PanelTitle = "UI Manifest";
@@ -69,6 +70,10 @@ internal sealed class UiManifestPanel(EditorAssetManifestStore assets) : IEditor
         return updated;
     }
 
+    [EditorUiCommands(
+        "panel.ui-manifest",
+        "panel.ui-manifest.sync",
+        "panel.ui-manifest.refresh")]
     public void Draw(in EditorContext context)
     {
         _ = context;
@@ -122,6 +127,7 @@ internal sealed class UiManifestPanel(EditorAssetManifestStore assets) : IEditor
         ImGui.End();
     }
 
+    [EditorUiCommands("panel.ui-manifest.preload")]
     private void DrawScreenRow(EditorUiManifestScreenEntry screen)
     {
         ImGui.TableNextRow();

@@ -8,6 +8,7 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// 架构 §17.1 性能 HUD，只读展示 plan/02 诊断与计时快照。
 /// </summary>
+[EditorUiSurface("editor.panel.profiler")]
 public sealed class PerformanceHudPanel : IEditorPanel
 {
     private const int HistoryLength = 512;
@@ -110,6 +111,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
     public event Action<bool>? VSyncChanged;
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.profiler")]
     public void Draw(in EditorContext context)
     {
         PerformanceHudSample sample = CaptureSample(in context);
@@ -438,6 +440,7 @@ public sealed class PerformanceHudPanel : IEditorPanel
         UpdateStatistics(sample);
     }
 
+    [EditorUiCommands("panel.profiler.vsync")]
     private void DrawSummary(PerformanceHudSample sample)
     {
         ImGui.TextUnformatted($"Frame {sample.TotalFrameMs:F2} ms   Sim {sample.SimHz:F0} Hz   TimeScale {sample.TimeScale:F2}");

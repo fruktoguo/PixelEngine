@@ -73,21 +73,54 @@ public sealed partial class EditorAutomationClient
             }
         }
 
-        return descriptors.Count == total
-            ? new AutomationCapabilityCatalog
-            {
-                CapabilityDigest = digest ?? throw new AutomationConnectionException(
-                    "Capability catalog 缺少 digest。"),
-                Items = [.. descriptors],
-                Revision = revision,
-            }
-            : throw new AutomationConnectionException(
+        if (descriptors.Count != total)
+        {
+            throw new AutomationConnectionException(
                 $"Capability catalog 条目数 {descriptors.Count} 与 total {total} 不一致。");
+        }
+
+        AutomationCapabilityDescriptor[] items = [.. descriptors];
+        for (int i = 1; i < items.Length; i++)
+        {
+            if (string.CompareOrdinal(items[i - 1].Id, items[i].Id) >= 0)
+            {
+                throw new AutomationConnectionException("Capability catalog IDs 未严格按 ordinal 排序。");
+            }
+        }
+
+        string publishedDigest = digest ?? throw new AutomationConnectionException(
+            "Capability catalog 缺少 digest。");
+        string canonicalDigest = ComputeDigest(
+            items,
+            AutomationJsonContext.Default.AutomationCapabilityDescriptorArray);
+        ValidatePublishedCapabilityDigest(publishedDigest, canonicalDigest, "catalog response");
+        ValidatePublishedCapabilityDigest(
+            publishedDigest,
+            Instance.Descriptor.CapabilityDigest,
+            "discovery descriptor");
+        return new AutomationCapabilityCatalog
+        {
+            CapabilityDigest = publishedDigest,
+            Items = items,
+            Revision = revision,
+        };
     }
 
     private static bool IsLowerSha256(string value)
     {
         return value is { Length: 64 } && value.All(static character =>
             char.IsAsciiDigit(character) || character is >= 'a' and <= 'f');
+    }
+
+    private static void ValidatePublishedCapabilityDigest(
+        string actual,
+        string expected,
+        string source)
+    {
+        if (!string.Equals(actual, expected, StringComparison.Ordinal))
+        {
+            throw new AutomationConnectionException(
+                $"Capability digest 与 {source} 不匹配。");
+        }
     }
 }

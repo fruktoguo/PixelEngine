@@ -215,6 +215,7 @@ public sealed class RenderPipelineLightingTuningService(RenderPipelineSettings s
 /// 物理调参面板。
 /// </summary>
 /// <param name="service">物理调参服务。</param>
+[EditorUiSurface("editor.panel.physics")]
 public sealed class PhysicsTuningPanel(IPhysicsTuningService service) : TuningPanelBase<PhysicsTuningState>(EditorDockSpace.PhysicsTuningWindowTitle)
 {
     private readonly IPhysicsTuningService _service = service ?? throw new ArgumentNullException(nameof(service));
@@ -226,12 +227,14 @@ public sealed class PhysicsTuningPanel(IPhysicsTuningService service) : TuningPa
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.physics.apply")]
     protected override void Apply(PhysicsTuningState state)
     {
         _service.Apply(state);
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.physics")]
     protected override PhysicsTuningState DrawState(PhysicsTuningState state)
     {
         float ppm = state.PixelsPerMeter;
@@ -260,6 +263,7 @@ public sealed class PhysicsTuningPanel(IPhysicsTuningService service) : TuningPa
 /// 粒子调参面板。
 /// </summary>
 /// <param name="service">粒子调参服务。</param>
+[EditorUiSurface("editor.panel.particles")]
 public sealed class ParticleTuningPanel(IParticleTuningService service) : TuningPanelBase<ParticleTuningState>(EditorDockSpace.ParticleTuningWindowTitle)
 {
     private readonly IParticleTuningService _service = service ?? throw new ArgumentNullException(nameof(service));
@@ -271,12 +275,14 @@ public sealed class ParticleTuningPanel(IParticleTuningService service) : Tuning
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.particles.apply")]
     protected override void Apply(ParticleTuningState state)
     {
         _service.Apply(state);
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.particles")]
     protected override ParticleTuningState DrawState(ParticleTuningState state)
     {
         int maxCount = state.MaxCount;
@@ -308,6 +314,7 @@ public sealed class ParticleTuningPanel(IParticleTuningService service) : Tuning
 /// 光照调参面板。
 /// </summary>
 /// <param name="service">光照调参服务。</param>
+[EditorUiSurface("editor.panel.lighting")]
 public sealed class LightingTuningPanel(ILightingTuningService service) : TuningPanelBase<LightingTuningState>(EditorDockSpace.LightingTuningWindowTitle)
 {
     private readonly ILightingTuningService _service = service ?? throw new ArgumentNullException(nameof(service));
@@ -319,12 +326,14 @@ public sealed class LightingTuningPanel(ILightingTuningService service) : Tuning
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.lighting.apply")]
     protected override void Apply(LightingTuningState state)
     {
         _service.Apply(state);
     }
 
     /// <inheritdoc />
+    [EditorUiCommands("panel.lighting")]
     protected override LightingTuningState DrawState(LightingTuningState state)
     {
         LightingQualityLevel quality = state.QualityLevel;

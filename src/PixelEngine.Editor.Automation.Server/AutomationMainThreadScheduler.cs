@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -23,6 +24,7 @@ public sealed class AutomationMainThreadScheduler :
     private readonly ConcurrentQueue<InternalWork> _internalEditorIngress = new();
     private readonly FrozenDictionary<string, AutomationMethodRegistration> _registrations;
     private readonly AutomationCapabilityDescriptor[] _capabilities;
+    private readonly AutomationUiCommandDescriptor[] _uiCommands;
     private readonly byte[] _capabilityCursorKey = RandomNumberGenerator.GetBytes(32);
     private readonly IAutomationUndoSink _undoSink;
     private readonly AutomationTransactionManager _transactions;
@@ -44,13 +46,17 @@ public sealed class AutomationMainThreadScheduler :
     /// <param name="transactionParticipant">transaction before state adapter。</param>
     /// <param name="options">容量、lease、时钟与 wake signal。</param>
     /// <param name="eventHub">可选共享 event hub；scheduler 接管其生命周期。</param>
+    /// <param name="uiCommands">
+    /// 可选 production UI bindings；传入时强制验证 UI 与 capability 双向闭包、真实方法体和非测试程序集。
+    /// </param>
     public AutomationMainThreadScheduler(
         IEnumerable<AutomationMethodRegistration> registrations,
         AutomationRevisionStore revisions,
         IAutomationUndoSink undoSink,
         IAutomationTransactionParticipant transactionParticipant,
         AutomationMainThreadSchedulerOptions? options = null,
-        AutomationEventHub? eventHub = null)
+        AutomationEventHub? eventHub = null,
+        IEnumerable<AutomationUiCommandRegistration>? uiCommands = null)
     {
         ArgumentNullException.ThrowIfNull(registrations);
         Revisions = revisions ?? throw new ArgumentNullException(nameof(revisions));
@@ -67,6 +73,7 @@ public sealed class AutomationMainThreadScheduler :
         all.AddRange(CreateTransactionRegistrations());
         all.AddRange(CreateEventRegistrations());
         all.Add(CreateCapabilityRegistration());
+        all.Add(CreateCapabilityMatrixRegistration());
         ValidateRegistrations(all);
         _registrations = all.ToFrozenDictionary(
             static registration => registration.Descriptor.Method,
@@ -78,6 +85,9 @@ public sealed class AutomationMainThreadScheduler :
                 .OrderBy(static descriptor => descriptor.Id, StringComparer.Ordinal),
         ];
         CapabilityDigest = ComputeCapabilityDigest(_capabilities);
+        _uiCommands = CreateUiCommandDescriptors(all, uiCommands);
+        UiCommandDigest = ComputeUiCommandDigest(_uiCommands);
+        MatrixDigest = ComputeMatrixDigest(CapabilityDigest, UiCommandDigest);
         _idempotency = new AutomationIdempotencyCache(
             _options.TimeProvider,
             _options.IdempotencyRetention,
@@ -114,11 +124,31 @@ public sealed class AutomationMainThreadScheduler :
     /// <summary>真实 semantic registry 的 SHA256 digest。</summary>
     public string CapabilityDigest { get; }
 
+    /// <summary>production UI command bindings 的 SHA256 digest。</summary>
+    public string UiCommandDigest { get; }
+
+    /// <summary>同时绑定 capability 与 UI command digests 的 SHA256。</summary>
+    public string MatrixDigest { get; }
+
     /// <summary>返回按 capability ID 排序的深复制 descriptor 快照。</summary>
     /// <returns>不可与 scheduler 内部数组共享可变集合的 descriptor 数组。</returns>
     public AutomationCapabilityDescriptor[] CaptureCapabilities()
     {
         return [.. _capabilities.Select(CloneCapability)];
+    }
+
+    /// <summary>返回从真实 semantic registry 与 production UI handlers 联结的完整矩阵快照。</summary>
+    /// <returns>不与 scheduler 内部数组共享可变集合的快照。</returns>
+    public AutomationCapabilityMatrixSnapshot CaptureCapabilityMatrix()
+    {
+        return new AutomationCapabilityMatrixSnapshot
+        {
+            CapabilityDigest = CapabilityDigest,
+            UiCommandDigest = UiCommandDigest,
+            MatrixDigest = MatrixDigest,
+            Capabilities = CaptureCapabilities(),
+            UiCommands = [.. _uiCommands.Select(CloneUiCommand)],
+        };
     }
 
     /// <summary>当前主线程是否存在全局互斥 automation transaction 写租约。</summary>
@@ -1231,6 +1261,46 @@ public sealed class AutomationMainThreadScheduler :
         };
     }
 
+    private AutomationMethodRegistration CreateCapabilityMatrixRegistration()
+    {
+        return new AutomationMethodRegistration
+        {
+            Descriptor = new AutomationMethodDescriptor
+            {
+                Method = AutomationProtocolConstants.CapabilityMatrixGetMethod,
+                Domain = "automation",
+                RequestSchema = "#/$defs/emptyRequest",
+                ResponseSchema = "#/$defs/capabilityMatrixSnapshot",
+                RequiredScopes = [AutomationScopes.EditorRead],
+                SupportedModes = ["edit", "play", "paused"],
+                OperationKind = AutomationOperationKind.Read,
+                ExecutionPhase = AutomationExecutionPhase.EditorIngress,
+                TransactionMode = AutomationTransactionMode.Forbidden,
+                RequiresExpectedRevision = false,
+                RequiresIdempotencyKey = false,
+                EventTypes = [],
+                ArtifactBehavior = AutomationArtifactBehavior.None,
+                UiCommandIds = [],
+            },
+            Operation = GetCapabilityMatrix,
+        };
+    }
+
+    private AutomationOperationResult GetCapabilityMatrix(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        _ = context;
+        ValidateEmptyPayload(payload, AutomationProtocolConstants.CapabilityMatrixGetMethod);
+        return new AutomationOperationResult
+        {
+            Payload = JsonSerializer.SerializeToElement(
+                CaptureCapabilityMatrix(),
+                AutomationJsonContext.Default.AutomationCapabilityMatrixSnapshot),
+            ResourceIds = ["automation:capabilities", "automation:ui-commands"],
+        };
+    }
+
     private AutomationOperationResult ListCapabilities(
         AutomationScheduledContext context,
         JsonElement? payload)
@@ -2179,11 +2249,182 @@ public sealed class AutomationMainThreadScheduler :
         return revision with { Resources = resources };
     }
 
+    private static AutomationUiCommandDescriptor[] CreateUiCommandDescriptors(
+        IReadOnlyList<AutomationMethodRegistration> registrations,
+        IEnumerable<AutomationUiCommandRegistration>? uiCommands)
+    {
+        if (uiCommands is null)
+        {
+            return [];
+        }
+
+        List<AutomationUiCommandRegistration> bindings = [.. uiCommands];
+        if (bindings.Count > 4096)
+        {
+            throw new ArgumentException("Production UI command registration 超过 4096 项上限。", nameof(uiCommands));
+        }
+
+        HashSet<string> declaredUiCommands = new(StringComparer.Ordinal);
+        for (int i = 0; i < bindings.Count; i++)
+        {
+            AutomationUiCommandRegistration binding = bindings[i]
+                ?? throw new ArgumentException("Production UI command registration 不能为 null。", nameof(uiCommands));
+            ArgumentNullException.ThrowIfNull(binding.Handler);
+            if (!IsSemanticIdentifier(binding.Id, 128) || !IsSemanticIdentifier(binding.SurfaceId, 128))
+            {
+                throw new ArgumentException(
+                    $"Production UI command '{binding.Id}' 的 ID 或 surface ID 无效。",
+                    nameof(uiCommands));
+            }
+
+            if (!declaredUiCommands.Add(binding.Id))
+            {
+                throw new ArgumentException(
+                    $"Production UI command '{binding.Id}' 重复登记。",
+                    nameof(uiCommands));
+            }
+        }
+
+        Dictionary<string, List<string>> capabilityIdsByCommand = new(StringComparer.Ordinal);
+        for (int registrationIndex = 0; registrationIndex < registrations.Count; registrationIndex++)
+        {
+            AutomationMethodRegistration registration = registrations[registrationIndex];
+            for (int commandIndex = 0; commandIndex < registration.Descriptor.UiCommandIds.Length; commandIndex++)
+            {
+                string commandId = registration.Descriptor.UiCommandIds[commandIndex];
+                if (!capabilityIdsByCommand.TryGetValue(commandId, out List<string>? capabilityIds))
+                {
+                    capabilityIds = [];
+                    capabilityIdsByCommand.Add(commandId, capabilityIds);
+                }
+
+                capabilityIds.Add(registration.Descriptor.Method);
+            }
+        }
+
+        string[] uiCommandsWithoutCapability =
+        [
+            .. declaredUiCommands
+                .Where(commandId => !capabilityIdsByCommand.ContainsKey(commandId))
+                .Order(StringComparer.Ordinal),
+        ];
+        string[] capabilitiesWithoutUiHandler =
+        [
+            .. capabilityIdsByCommand.Keys
+                .Where(commandId => !declaredUiCommands.Contains(commandId))
+                .Order(StringComparer.Ordinal),
+        ];
+        if (uiCommandsWithoutCapability.Length != 0 || capabilitiesWithoutUiHandler.Length != 0)
+        {
+            throw new ArgumentException(
+                $"Production UI/capability 闭包不完整。ui_without_capability=[{string.Join(',', uiCommandsWithoutCapability)}]; " +
+                $"capability_without_ui=[{string.Join(',', capabilitiesWithoutUiHandler)}]。",
+                nameof(uiCommands));
+        }
+
+        for (int registrationIndex = 0; registrationIndex < registrations.Count; registrationIndex++)
+        {
+            AutomationMethodRegistration registration = registrations[registrationIndex];
+            if (registration.Descriptor.UiCommandIds.Length != 0)
+            {
+                ValidateProductionHandler(
+                    registration.Operation.Method,
+                    $"capability '{registration.Descriptor.Method}' semantic handler");
+            }
+        }
+
+        AutomationUiCommandDescriptor[] descriptors = new AutomationUiCommandDescriptor[bindings.Count];
+        for (int i = 0; i < bindings.Count; i++)
+        {
+            AutomationUiCommandRegistration binding = bindings[i];
+            ValidateProductionHandler(binding.Handler, $"UI command '{binding.Id}' handler");
+            if (!capabilityIdsByCommand.TryGetValue(binding.Id, out List<string>? capabilityIds) ||
+                capabilityIds.Count == 0)
+            {
+                throw new ArgumentException(
+                    $"Production UI command '{binding.Id}' 没有映射真实 capability。",
+                    nameof(uiCommands));
+            }
+
+            descriptors[i] = new AutomationUiCommandDescriptor
+            {
+                Id = binding.Id,
+                SurfaceId = binding.SurfaceId,
+                HandlerId = CreateHandlerId(binding.Handler),
+                CapabilityIds =
+                [
+                    .. capabilityIds.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal),
+                ],
+            };
+        }
+
+        Array.Sort(descriptors, static (left, right) => string.CompareOrdinal(left.Id, right.Id));
+        return descriptors;
+    }
+
+    private static void ValidateProductionHandler(MethodInfo method, string role)
+    {
+        Type? declaringType = method.DeclaringType;
+        Assembly assembly = declaringType?.Assembly ?? method.Module.Assembly;
+        string assemblyName = assembly.GetName().Name ?? string.Empty;
+        if (assembly.IsDynamic ||
+            assemblyName.EndsWith(".Tests", StringComparison.Ordinal) ||
+            assemblyName.Contains(".Tests.", StringComparison.Ordinal) ||
+            declaringType is null)
+        {
+            throw new ArgumentException($"{role} 必须来自非测试 production assembly。", nameof(method));
+        }
+
+        MethodImplAttributes implementation = method.GetMethodImplementationFlags();
+        if (method.IsAbstract ||
+            method.ContainsGenericParameters ||
+            (method.Attributes & MethodAttributes.PinvokeImpl) != 0 ||
+            (implementation & (MethodImplAttributes.Runtime | MethodImplAttributes.InternalCall)) != 0)
+        {
+            throw new ArgumentException($"{role} 必须是可直接执行的 managed production handler。", nameof(method));
+        }
+    }
+
+    private static string CreateHandlerId(MethodInfo method)
+    {
+        string assembly = method.Module.Assembly.GetName().Name ?? "unknown";
+        string type = method.DeclaringType?.FullName ?? "unknown";
+        return $"{assembly}/{type}.{method.Name}";
+    }
+
     private static string ComputeCapabilityDigest(AutomationCapabilityDescriptor[] capabilities)
     {
         byte[] utf8 = JsonSerializer.SerializeToUtf8Bytes(
             capabilities,
             AutomationJsonContext.Default.AutomationCapabilityDescriptorArray);
+        try
+        {
+            return Convert.ToHexStringLower(SHA256.HashData(utf8));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(utf8);
+        }
+    }
+
+    private static string ComputeUiCommandDigest(AutomationUiCommandDescriptor[] uiCommands)
+    {
+        byte[] utf8 = JsonSerializer.SerializeToUtf8Bytes(
+            uiCommands,
+            AutomationJsonContext.Default.AutomationUiCommandDescriptorArray);
+        try
+        {
+            return Convert.ToHexStringLower(SHA256.HashData(utf8));
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(utf8);
+        }
+    }
+
+    private static string ComputeMatrixDigest(string capabilityDigest, string uiCommandDigest)
+    {
+        byte[] utf8 = Encoding.UTF8.GetBytes($"v1\n{capabilityDigest}\n{uiCommandDigest}\n");
         try
         {
             return Convert.ToHexStringLower(SHA256.HashData(utf8));
@@ -2206,6 +2447,15 @@ public sealed class AutomationMainThreadScheduler :
         };
     }
 
+    private static AutomationUiCommandDescriptor CloneUiCommand(
+        AutomationUiCommandDescriptor descriptor)
+    {
+        return descriptor with
+        {
+            CapabilityIds = [.. descriptor.CapabilityIds],
+        };
+    }
+
     private static void ValidateSchemaVersion(int schemaVersion, string method)
     {
         if (schemaVersion != AutomationProtocolConstants.WireSchemaVersion)
@@ -2214,6 +2464,39 @@ public sealed class AutomationMainThreadScheduler :
                 AutomationErrorCodes.InvalidRequest,
                 AutomationErrorCategory.Validation,
                 $"Automation method '{method}' schemaVersion 必须为 {AutomationProtocolConstants.WireSchemaVersion}。");
+        }
+    }
+
+    private static void ValidateEmptyPayload(JsonElement? payload, string method)
+    {
+        if (payload is null)
+        {
+            return;
+        }
+
+        if (payload.Value.ValueKind != JsonValueKind.Object)
+        {
+            throw RequestError(
+                AutomationErrorCodes.InvalidRequest,
+                AutomationErrorCategory.Validation,
+                $"Automation method '{method}' payload 必须是 emptyRequest object。");
+        }
+
+        bool sawSchemaVersion = false;
+        foreach (JsonProperty property in payload.Value.EnumerateObject())
+        {
+            if (sawSchemaVersion ||
+                !string.Equals(property.Name, "schemaVersion", StringComparison.Ordinal) ||
+                !property.Value.TryGetInt32(out int schemaVersion))
+            {
+                throw RequestError(
+                    AutomationErrorCodes.InvalidRequest,
+                    AutomationErrorCategory.Validation,
+                    $"Automation method '{method}' payload 包含 emptyRequest 之外的字段。");
+            }
+
+            ValidateSchemaVersion(schemaVersion, method);
+            sawSchemaVersion = true;
         }
     }
 

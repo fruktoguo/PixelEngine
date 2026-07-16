@@ -6,6 +6,7 @@ namespace PixelEngine.Editor;
 /// <summary>
 /// 世界 cell 检视器面板。
 /// </summary>
+[EditorUiSurface("editor.panel.world-inspector")]
 public sealed class WorldInspectorPanel(ISimulationInspectApi source) : IEditorPanel
 {
     private readonly ISimulationInspectApi _source = source ?? throw new ArgumentNullException(nameof(source));
@@ -124,6 +125,12 @@ public sealed class WorldInspectorPanel(ISimulationInspectApi source) : IEditorP
     }
 
     /// <inheritdoc />
+    [EditorUiCommands(
+        "panel.world-inspector",
+        "panel.world-inspector.follow",
+        "panel.world-inspector.lock",
+        "panel.world-inspector.coordinates",
+        "panel.world-inspector.inspect")]
     public void Draw(in EditorContext context)
     {
         bool visible = Visible;

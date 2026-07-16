@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>PixelEngine.Editor.Automation.Matrix</AssemblyName>
+    <RootNamespace>PixelEngine.Editor.Automation.Matrix</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Server/PixelEngine.Editor.Automation.Server.csproj" />
+  </ItemGroup>
+</Project>
