@@ -41,6 +41,10 @@ Read the narrowest snapshot first. For a write:
 
 Do not treat a timeout or local cancellation as proof that an executing mutation did not commit. Reread the affected resource.
 
+For CLI transactions, use one bounded `transaction execute --plan-file` invocation. Never split begin,
+staging calls, and commit across CLI processes: each process owns one connection, and disconnect discards
+uncommitted staging. Use a long-lived .NET Client only when manual transaction control is required.
+
 ## Events And Reconnect
 
 Use `events follow` with a stable subscription key. Persist the emitted resume token and acknowledged sequence. Reconnect with the same client instance ID, subscription key, token, and `--after-sequence`. On `resync_required` or `event_overflow`, fetch authoritative snapshots before continuing.

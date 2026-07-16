@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.Security.Cryptography;
+using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -305,11 +307,16 @@ public sealed class HostingProjectDisciplineTests
         int replaceIndex = finalOutputScript.IndexOf("Replace-FinalOutput $nextRoot $outputRootFull", StringComparison.Ordinal);
         int verifyIndex = finalOutputScript.IndexOf("-Name 'verify-final-output'", StringComparison.Ordinal);
         int gameViewProbeIndex = finalOutputScript.IndexOf("-Name 'editor-gameview-presentation-probe'", StringComparison.Ordinal);
+        int automationE2EIndex = finalOutputScript.IndexOf("-Name 'editor-automation-e2e'", StringComparison.Ordinal);
 
         Assert.True(replaceIndex >= 0, "update-final-output.ps1 应包含原子替换正式输出目录步骤。");
         Assert.True(verifyIndex >= 0 && verifyIndex < replaceIndex, "update-final-output.ps1 应在替换前调用独立 verifier，失败时保留旧正式输出。");
         Assert.True(gameViewProbeIndex >= 0 && gameViewProbeIndex < verifyIndex, "update-final-output.ps1 应在独立 verifier 前使用已发布 Editor 运行 Game View 六场景门禁。");
+        Assert.True(automationE2EIndex >= 0 && automationE2EIndex < verifyIndex, "update-final-output.ps1 应在独立 verifier 前运行无跳过的外部 CLI E2E。");
         Assert.Contains("tools/run-editor-gameview-presentation-probe.ps1", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("tools/run-editor-automation-e2e.ps1", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("externalCliProcessCount", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("requiredScopeCount = $automationE2ERequiredScopes.Count", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("editorGameViewPresentationProbe", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("uiStackLifecycle = '1->0->1'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("tools/verify-final-output.ps1", finalOutputScript, StringComparison.Ordinal);
@@ -353,6 +360,12 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("demoWindowMode", verifier, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendActive", verifier, StringComparison.Ordinal);
         Assert.Contains("demoRuntimeUiBackendFallback", verifier, StringComparison.Ordinal);
+        Assert.Contains("manifest 缺少 automation 节点", verifier, StringComparison.Ordinal);
+        Assert.Contains("Assert-NuGetPackageEntries", verifier, StringComparison.Ordinal);
+        Assert.Contains("automation Skill 文件数量不匹配", verifier, StringComparison.Ordinal);
+        Assert.Contains("canonical SHA256 不匹配", verifier, StringComparison.Ordinal);
+        Assert.Contains("Editor automation E2E operation", verifier, StringComparison.Ordinal);
+        Assert.Contains("automationCliProcesses", verifier, StringComparison.Ordinal);
         Assert.Contains("demoWindowProbe.unicodePath -ne $true", verifier, StringComparison.Ordinal);
         Assert.Contains("'content_path_non_ascii' 'True'", verifier, StringComparison.Ordinal);
         Assert.Contains("Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'", verifier, StringComparison.Ordinal);
@@ -404,6 +417,88 @@ public sealed class HostingProjectDisciplineTests
             ProcessResult missing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
             Assert.NotEqual(0, missing.ExitCode);
             Assert.Contains("SHA256SUMS 登记了不存在的文件", missing.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证自动化发行物不能靠 manifest 自报成功：SDK、Skill、矩阵和每条 CLI operation 证据都必须独立成立。
+    /// </summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsAutomationPackageSkillMatrixAndE2ETampering()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            string protocolPackage = Path.Combine(
+                outputRoot,
+                "自动化",
+                "SDK",
+                "PixelEngine.Editor.Automation.Protocol.1.0.0.nupkg");
+            File.Delete(protocolPackage);
+            WriteNuGetFixturePackage(
+                outputRoot,
+                "自动化/SDK/PixelEngine.Editor.Automation.Protocol.1.0.0.nupkg",
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["PixelEngine.Editor.Automation.Protocol.nuspec"] = "<package />",
+                });
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult missingPackageEntry = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, missingPackageEntry.ExitCode);
+            Assert.Contains("automation Protocol nupkg 缺少 package entry", missingPackageEntry.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            File.Delete(Path.Combine(outputRoot, "自动化", "Skill", "pixelengine-editor", "references", "workflows.md"));
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult missingSkillFile = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, missingSkillFile.ExitCode);
+            Assert.Contains("automation Skill 文件数量不匹配", missingSkillFile.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            string matrixPath = Path.Combine(
+                outputRoot,
+                "自动化",
+                "Schema",
+                "editor-automation-capabilities.v1.json");
+            JsonObject matrix = JsonNode.Parse(File.ReadAllText(matrixPath))!.AsObject();
+            matrix["matrixDigest"] = new string('0', 64);
+            File.WriteAllText(matrixPath, matrix.ToJsonString());
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult matrixTampering = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, matrixTampering.ExitCode);
+            Assert.Contains("automation matrix matrixDigest canonical SHA256 不匹配", matrixTampering.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            string reportPath = Path.Combine(
+                outputRoot,
+                "_验证记录",
+                "editor-automation-e2e",
+                "report.json");
+            JsonObject report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+            report["operations"]!.AsArray()[0]!.AsObject()["stdoutSha256"] = new string('0', 64);
+            File.WriteAllText(reportPath, report.ToJsonString());
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult e2eTampering = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, e2eTampering.ExitCode);
+            Assert.Contains("stdout SHA256 不匹配", e2eTampering.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -2347,17 +2442,17 @@ public sealed class HostingProjectDisciplineTests
         EngineSceneEntityDocument gameUi = Assert.Single(entities, item => item.Name == "Game UI Canvas");
         Assert.True(gameUi.WebCanvas!.Primary);
         Assert.Equal(0, gameUi.WebCanvas.SortingOrder);
-        Assert.Equal(PixelEngine.UI.UiScaleMode.ScaleWithScreenSize, gameUi.CanvasScaler!.ScaleMode);
+        Assert.Equal(UI.UiScaleMode.ScaleWithScreenSize, gameUi.CanvasScaler!.ScaleMode);
         EngineSceneEntityDocument pixelOverlay = Assert.Single(entities, item => item.Name == "Pixel Overlay Canvas");
         Assert.False(pixelOverlay.WebCanvas!.Primary);
         Assert.Equal(100, pixelOverlay.WebCanvas.SortingOrder);
         Assert.Null(pixelOverlay.WebCanvas.InitialScreenId);
-        Assert.Equal(PixelEngine.UI.UiScaleMode.ConstantPixelSize, pixelOverlay.CanvasScaler!.ScaleMode);
+        Assert.Equal(UI.UiScaleMode.ConstantPixelSize, pixelOverlay.CanvasScaler!.ScaleMode);
         EngineSceneEntityDocument physicalOverlay = Assert.Single(entities, item => item.Name == "Physical Overlay Canvas");
         Assert.False(physicalOverlay.WebCanvas!.Primary);
         Assert.Equal(200, physicalOverlay.WebCanvas.SortingOrder);
         Assert.Null(physicalOverlay.WebCanvas.InitialScreenId);
-        Assert.Equal(PixelEngine.UI.UiScaleMode.ConstantPhysicalSize, physicalOverlay.CanvasScaler!.ScaleMode);
+        Assert.Equal(UI.UiScaleMode.ConstantPhysicalSize, physicalOverlay.CanvasScaler!.ScaleMode);
         Assert.DoesNotContain(
             entities.SelectMany(static item => item.Behaviours ?? []),
             item => item.TypeName is
@@ -2702,6 +2797,272 @@ public sealed class HostingProjectDisciplineTests
             outputRoot,
             "编辑器/System.Collections.Immutable.dll",
             typeof(System.Collections.Immutable.ImmutableArray<>).Assembly.Location);
+
+        WriteTextFile(outputRoot, "自动化/CLI/pixelengine-editor.exe", "automation cli");
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "自动化/CLI/pixelengine-editor.dll",
+            typeof(JsonSerializer).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "自动化/CLI/PixelEngine.Editor.Automation.Client.dll",
+            typeof(JsonSerializer).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "自动化/CLI/PixelEngine.Editor.Automation.Protocol.dll",
+            typeof(JsonSerializer).Assembly.Location);
+        const string protocolPackageRelative =
+            "自动化/SDK/PixelEngine.Editor.Automation.Protocol.1.0.0.nupkg";
+        const string clientPackageRelative =
+            "自动化/SDK/PixelEngine.Editor.Automation.Client.1.0.0.nupkg";
+        WriteNuGetFixturePackage(
+            outputRoot,
+            protocolPackageRelative,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["PixelEngine.Editor.Automation.Protocol.nuspec"] = "<package />",
+                ["lib/net10.0/PixelEngine.Editor.Automation.Protocol.dll"] = "protocol",
+                ["schema/editor-automation-protocol.v1.schema.json"] = "{}",
+            });
+        WriteNuGetFixturePackage(
+            outputRoot,
+            clientPackageRelative,
+            new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["PixelEngine.Editor.Automation.Client.nuspec"] = "<package />",
+                ["lib/net10.0/PixelEngine.Editor.Automation.Client.dll"] = "client",
+            });
+
+        WriteTextFile(
+            outputRoot,
+            "自动化/Schema/editor-automation-protocol.v1.schema.json",
+                                 /*lang=json,strict*/
+                                 "{\"$defs\":{\"emptyRequest\":{\"type\":\"object\"}}}");
+        WriteTextFile(
+            outputRoot,
+            "自动化/Schema/editor-automation-capabilities.schema.json",
+                                 /*lang=json,strict*/
+                                 "{\"$ref\":\"editor-automation-protocol.v1.schema.json#/$defs/capabilityMatrixSnapshot\"}");
+        object[] automationCapabilities =
+        [
+            .. Enumerable.Range(0, 150).Select(index => new
+            {
+                schemaVersion = 1,
+                id = $"capability.{index:D3}",
+                requestSchema = "#/$defs/emptyRequest",
+                responseSchema = "#/$defs/emptyRequest",
+                uiCommandIds = Enumerable.Range(index * 2, 2)
+                    .Select(commandIndex => $"ui.command.{commandIndex:D3}")
+                    .ToArray(),
+            }),
+        ];
+        object[] automationUiCommands =
+        [
+            .. Enumerable.Range(0, 300).Select(index => new
+            {
+                schemaVersion = 1,
+                id = $"ui.command.{index:D3}",
+                capabilityIds = new[] { $"capability.{index / 2:D3}" },
+            }),
+        ];
+        string capabilityArrayJson = JsonSerializer.Serialize(automationCapabilities);
+        string uiCommandArrayJson = JsonSerializer.Serialize(automationUiCommands);
+        string capabilityDigest = Sha256Text(capabilityArrayJson);
+        string uiCommandDigest = Sha256Text(uiCommandArrayJson);
+        string matrixDigest = Sha256Text($"v1\n{capabilityDigest}\n{uiCommandDigest}\n");
+        WriteTextFile(
+            outputRoot,
+            "自动化/Schema/editor-automation-capabilities.v1.json",
+            JsonSerializer.Serialize(new
+            {
+                schemaVersion = 1,
+                capabilityDigest,
+                uiCommandDigest,
+                matrixDigest,
+                capabilities = automationCapabilities,
+                uiCommands = automationUiCommands,
+            }));
+        WriteTextFile(
+            outputRoot,
+            "自动化/文档/editor-automation-api.md",
+            "# PixelEngine Editor Automation API");
+        WriteTextFile(
+            outputRoot,
+            "自动化/Skill/pixelengine-editor/SKILL.md",
+            "---\nname: pixelengine-editor\ndescription: Drive PixelEngine through its CLI.\n---\n\nUse scripts/invoke.ps1.\n");
+        WriteTextFile(
+            outputRoot,
+            "自动化/Skill/pixelengine-editor/agents/openai.yaml",
+            "interface:\n  display_name: PixelEngine Editor\n");
+        WriteTextFile(
+            outputRoot,
+            "自动化/Skill/pixelengine-editor/references/workflows.md",
+            "# Workflows\n");
+        WriteTextFile(
+            outputRoot,
+            "自动化/Skill/pixelengine-editor/scripts/invoke.ps1",
+            "$cliPath = 'pixelengine-editor'\n& $cliPath @args\nexit $LASTEXITCODE\n");
+
+        string[] automationOperationNames =
+        [
+            "capability-matrix",
+            "transaction-execute-rollback",
+            "hierarchy-after-rollback",
+            "transaction-execute",
+            "history-undo",
+            "history-redo",
+            "scene-capture",
+            "play-enter-first",
+            "play-pause",
+            "play-step",
+            "play-stop-first",
+            "game-capture",
+            "play-enter-second",
+            "play-stop-second",
+            "marker-transform-set",
+            "scene-save-after-play",
+            "build-settings-set",
+            "build-preflight",
+            "build-start-wait",
+            "build-logs",
+            "player-launch",
+            "player-get-running",
+            "player-terminate",
+            "workspace-exit",
+            "discover-after-exit",
+            "discover",
+            "ping",
+            "describe",
+            "workspace-get",
+            "scene-get",
+            "hierarchy-after-commit",
+            "hierarchy-after-undo",
+            "hierarchy-after-redo",
+            "scene-save-before-play",
+            "console-counts",
+            "console-entries",
+            "profiler-get",
+        ];
+        var automationOperations = automationOperationNames.Select((name, index) =>
+        {
+            string prefix = $"{index + 1:D3}-{name}";
+            string stdoutRelative = $"{prefix}.stdout.log";
+            string stderrRelative = $"{prefix}.stderr.log";
+            const string stdoutContent = "{}";
+            WriteTextFile(
+                outputRoot,
+                $"_验证记录/editor-automation-e2e/{stdoutRelative}",
+                stdoutContent);
+            WriteTextFile(
+                outputRoot,
+                $"_验证记录/editor-automation-e2e/{stderrRelative}",
+                string.Empty);
+            return new
+            {
+                sequence = index + 1,
+                name,
+                processId = 2_000 + index,
+                exitCode = 0,
+                outcome = "passed",
+                allowedExitCodes = new[] { 0 },
+                durationMilliseconds = 1L,
+                stdout = stdoutRelative,
+                stderr = stderrRelative,
+                stdoutSha256 = Sha256Text(stdoutContent),
+                stderrSha256 = Sha256Text(string.Empty),
+            };
+        }).ToArray();
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/editor-automation-e2e/editor.stdout.log",
+            "editor output");
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/editor-automation-e2e/editor.stderr.log",
+            string.Empty);
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/editor-automation-e2e/report.json",
+            JsonSerializer.Serialize(new
+            {
+                schema = "pixelengine.editor-automation-e2e/v1",
+                generatedAtUtc = DateTimeOffset.UnixEpoch,
+                gitCommit,
+                allPassed = true,
+                cliOnly = true,
+                externalEditorProcess = true,
+                externalCliProcessCount = automationOperations.Length,
+                skipped = Array.Empty<object>(),
+                editor = new
+                {
+                    executableSha256 = Sha256Hex(Path.Combine(outputRoot, "编辑器", "PixelEngine.Editor.Shell.exe")),
+                    processId = 1_000,
+                    processStartUtc = DateTimeOffset.UnixEpoch,
+                    exitCode = 0,
+                    stdout = "editor.stdout.log",
+                    stderr = "editor.stderr.log",
+                    allowedStderr = "libpng-iCCP-known-incorrect-sRGB-profile-only",
+                    allowedStderrCount = 0,
+                    descriptorRemoved = true,
+                },
+                cli = new
+                {
+                    executableSha256 = Sha256Hex(Path.Combine(outputRoot, "自动化", "CLI", "pixelengine-editor.exe")),
+                    clientInstanceId = "fixture-client",
+                    processCount = automationOperations.Length,
+                },
+                workflow = new
+                {
+                    capabilityCount = automationCapabilities.Length,
+                    uiCommandCount = automationUiCommands.Length,
+                    capabilityDigest,
+                    uiCommandDigest,
+                    matrixDigest,
+                    markerStableId = 42,
+                    transactionFailureRollback = true,
+                    transactionUndoRedo = true,
+                    sceneCaptureSha256 = new string('a', 64),
+                    firstPlaySessionId = "play-session-first",
+                    firstRuntimeEntityCount = 1,
+                    consoleEntryCount = 0,
+                    consoleErrorCount = 0,
+                    profilerFrameIndex = 1,
+                    gameCaptureSha256 = new string('b', 64),
+                    secondPlaySessionId = "play-session-second",
+                    secondRuntimeEntityCount = 1,
+                    modifiedAndSavedAfterSecondPlay = true,
+                    buildId = "fixture-build",
+                    buildState = "Succeeded",
+                    buildPackageSha256 = new string('c', 64),
+                    launcherSha256 = new string('d', 64),
+                    buildLogSha256 = new string('e', 64),
+                    playerProcessId = "fixture-player",
+                    playerProcessIdObserved = 3_000,
+                    playerRunningVerified = true,
+                    playerTerminated = true,
+                    exitStatus = "executed",
+                    allowedLibPngWarningCount = 0,
+                },
+                requiredScopes = new[]
+                {
+                    new { id = "discover-and-capability-matrix", status = "passed" },
+                    new { id = "transaction-and-undo-redo", status = "passed" },
+                    new { id = "scene-authoring-and-save", status = "passed" },
+                    new { id = "first-play-runtime-console-profiler-pause-step-stop", status = "passed" },
+                    new { id = "second-play-runtime-stop", status = "passed" },
+                    new { id = "post-play-modify-and-save", status = "passed" },
+                    new { id = "artifact-sha256", status = "passed" },
+                    new { id = "build", status = "passed" },
+                    new { id = "player-launch-verify-terminate", status = "passed" },
+                    new { id = "editor-public-exit-and-discovery-cleanup", status = "passed" },
+                },
+                operations = automationOperations,
+            }));
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/logs/editor-automation-e2e.stdout.log",
+            "automation_e2e schema=pixelengine.editor-automation-e2e/v1, allPassed=True");
+        WriteTextFile(outputRoot, "_验证记录/logs/editor-automation-e2e.stderr.log", string.Empty);
         WriteTextFile(
             outputRoot,
             "_验证记录/logs/editor-default-workbench.stdout.log",
@@ -2814,6 +3175,30 @@ public sealed class HostingProjectDisciplineTests
                 },
                 editorExecutable = "编辑器/PixelEngine.Editor.Shell.exe",
                 demoExecutable = "游戏Demo/PixelEngine Demo.exe",
+                automation = new
+                {
+                    cliExecutable = "自动化/CLI/pixelengine-editor.exe",
+                    cliDeveloperMetadataPolicy = "runtime-pdb-and-xml-pruned",
+                    protocolPackage = protocolPackageRelative,
+                    clientPackage = clientPackageRelative,
+                    protocolSchema = "自动化/Schema/editor-automation-protocol.v1.schema.json",
+                    capabilitySchema = "自动化/Schema/editor-automation-capabilities.schema.json",
+                    capabilityMatrix = "自动化/Schema/editor-automation-capabilities.v1.json",
+                    documentation = "自动化/文档/editor-automation-api.md",
+                    skillRoot = "自动化/Skill/pixelengine-editor",
+                    skillFiles = new[]
+                    {
+                        "SKILL.md",
+                        "agents/openai.yaml",
+                        "references/workflows.md",
+                        "scripts/invoke.ps1",
+                    },
+                    capabilityCount = automationCapabilities.Length,
+                    uiCommandCount = automationUiCommands.Length,
+                    capabilityDigest,
+                    uiCommandDigest,
+                    matrixDigest,
+                },
                 checksumFile = "SHA256SUMS",
                 validation = new
                 {
@@ -2835,6 +3220,18 @@ public sealed class HostingProjectDisciplineTests
                         stdout = "_验证记录/logs/editor-gameview-presentation.stdout.log",
                         stderr = "_验证记录/logs/editor-gameview-presentation.stderr.log",
                         report = "_验证记录/editor-gameview-presentation/report.json",
+                    },
+                    editorAutomationE2E = new
+                    {
+                        completed = true,
+                        allPassed = true,
+                        cliOnly = true,
+                        externalCliProcessCount = automationOperations.Length,
+                        requiredScopeCount = 10,
+                        skippedCount = 0,
+                        stdout = "_验证记录/logs/editor-automation-e2e.stdout.log",
+                        stderr = "_验证记录/logs/editor-automation-e2e.stderr.log",
+                        report = "_验证记录/editor-automation-e2e/report.json",
                     },
                     demoWindowProbe = new
                     {
@@ -2873,6 +3270,29 @@ public sealed class HostingProjectDisciplineTests
         string fullPath = Path.Combine(outputRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
         _ = Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
         File.WriteAllText(fullPath, content);
+    }
+
+    private static void WriteNuGetFixturePackage(
+        string outputRoot,
+        string relativePath,
+        IReadOnlyDictionary<string, string> entries)
+    {
+        string fullPath = Path.Combine(outputRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        using FileStream package = File.Create(fullPath);
+        using ZipArchive archive = new(package, ZipArchiveMode.Create);
+        foreach ((string name, string content) in entries)
+        {
+            ZipArchiveEntry entry = archive.CreateEntry(name, CompressionLevel.NoCompression);
+            using Stream stream = entry.Open();
+            using StreamWriter writer = new(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            writer.Write(content);
+        }
+    }
+
+    private static string Sha256Text(string text)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
     }
 
     private static void WriteFinalOutputChecksums(string outputRoot)

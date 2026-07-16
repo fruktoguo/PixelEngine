@@ -31,6 +31,7 @@ public sealed class EditorAutomationSkillTests
         string wrapper = File.ReadAllText(Path.Combine(skillRoot, "scripts", "invoke.ps1"));
         Assert.StartsWith("---\nname: pixelengine-editor\n", NormalizeLines(skill), StringComparison.Ordinal);
         Assert.Contains("capabilities --matrix", skill, StringComparison.Ordinal);
+        Assert.Contains("transaction execute --plan-file", skill, StringComparison.Ordinal);
         Assert.Contains(
             "Use the versioned local automation API only through `pixelengine-editor`",
             skill,
@@ -75,6 +76,36 @@ public sealed class EditorAutomationSkillTests
         Assert.True(
             violations.Length == 0,
             "存在会被 PowerShell 拆分的未加引号 --scopes CSV：" + string.Join(", ", violations));
+    }
+
+    /// <summary>最终验收 runner 必须只启动公开 CLI，并覆盖完整 author→run→build→player 生命周期。</summary>
+    [Fact]
+    public void FinalE2ERunnerUsesOnlyExternalCliProcessesAndHasNoScriptedBypass()
+    {
+        string root = RepositoryRoot();
+        string runner = File.ReadAllText(Path.Combine(root, "tools", "run-editor-automation-e2e.ps1"));
+
+        Assert.Contains("Invoke-CapturedProcess", runner, StringComparison.Ordinal);
+        Assert.Contains("-FilePath $cliPath", runner, StringComparison.Ordinal);
+        Assert.Contains("externalCliProcessCount", runner, StringComparison.Ordinal);
+        Assert.Contains("@('transaction', 'execute'", runner, StringComparison.Ordinal);
+        Assert.Contains("transaction-execute-rollback", runner, StringComparison.Ordinal);
+        Assert.Contains("hierarchy-after-rollback", runner, StringComparison.Ordinal);
+        Assert.Contains("history-undo", runner, StringComparison.Ordinal);
+        Assert.Contains("history-redo", runner, StringComparison.Ordinal);
+        Assert.Contains("play-enter-first", runner, StringComparison.Ordinal);
+        Assert.Contains("play-enter-second", runner, StringComparison.Ordinal);
+        Assert.Contains("marker-transform-set", runner, StringComparison.Ordinal);
+        Assert.Contains("build-start-wait", runner, StringComparison.Ordinal);
+        Assert.Contains("player-get-running", runner, StringComparison.Ordinal);
+        Assert.Contains("player-terminate", runner, StringComparison.Ordinal);
+        Assert.Contains("discover-after-exit", runner, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.editor-automation-e2e/v1", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("NamedPipeClientStream", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("EditorAutomationClient", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("credential.json", runner, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("--scripted-", runner, StringComparison.Ordinal);
+        Assert.DoesNotContain("Computer Use", runner, StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeLines(string value)

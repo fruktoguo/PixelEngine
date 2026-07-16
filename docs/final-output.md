@@ -1,14 +1,27 @@
 # 正式输出目录
 
-`最终输出/` 是本仓库本机可运行产物的稳定入口，只放已经完整验证过的编辑器应用和游戏 Demo。
+`最终输出/` 是本仓库本机可运行产物的稳定入口，只放已经完整验证过的编辑器应用、游戏 Demo
+与外部编辑器自动化公共 API 交付物。
 
 目录结构：
 
 - `最终输出/编辑器/`：编辑器应用，入口为 `PixelEngine.Editor.Shell.exe`。
   - `ScriptReferenceAssemblies/`：供 VS Code / Visual Studio 等独立 IDE 工程使用的脚本开发产品 SDK。编辑器生成的脚本 `.csproj` 通过 `HintPath` 引用这里的程序集，不依赖源码仓库中的 `src/*.csproj`。
 - `最终输出/游戏Demo/`：玩家 Demo 包，入口为 `PixelEngine Demo.exe`。
+- `最终输出/自动化/`：与本次 Editor 同源构建并通过真实外部进程验收的公共自动化产品面。
+  - `CLI/pixelengine-editor.exe`：独立 CLI，不需要源码工程、MCP、屏幕坐标或 Computer Use。
+  - `SDK/`：`PixelEngine.Editor.Automation.Protocol` 与
+    `PixelEngine.Editor.Automation.Client` 的版本化 NuGet 包。
+  - `Schema/`：wire Schema、capability Schema 与包含 canonical SHA256 的完整能力矩阵。
+  - `文档/editor-automation-api.md`：发行版 API/CLI/.NET Client 使用合同。
+  - `Skill/pixelengine-editor/`：经 `$skill-creator` validator 和真实 CLI forward test 验证的
+    Codex Skill。
 - `最终输出/_验证记录/`：本次替换前的验证日志、截图和 `manifest.json`。
-  - `manifest.json` 会记录 `gitCommit`、`sourceWorktreePolicy=tracked-clean-required`、`sourceTrackedWorktreeClean=true`、脚本 SDK path/policy/primary assembly/managed dependency 清单、校验清单位置和验证日志路径。
+  - `editor-automation-e2e/report.json`：每个外部 CLI 进程的 PID、退出码、日志路径与 SHA256，
+    以及完整 author→play→debug→stop→rerun→modify→build→launch→terminate 结果。
+  - `manifest.json` 会记录 `gitCommit`、`sourceWorktreePolicy=tracked-clean-required`、
+    `sourceTrackedWorktreeClean=true`、脚本 SDK、自动化 CLI/SDK/Schema/Skill、能力矩阵 digest、
+    校验清单位置和验证日志路径。
 
 更新规则：
 
@@ -16,7 +29,15 @@
 - 只通过 `tools/update-final-output.ps1` 更新正式输出。
 - 脚本要求已跟踪工作树干净；如有未提交的源码/计划/工具改动，会拒绝更新正式输出。未跟踪或已忽略的 `最终输出/`、`artifacts/` 产物不会被这个门禁阻挡。
 - 脚本先把所有中间产物写入 `artifacts/final-output-staging/<timestamp>/`。
-- 编辑器默认工作台/出包探针、使用已发布 Editor 的 Game View 六场景矩阵（16:9、4:3、portrait、固定 1920×1080、Maximize On Play、360px 窄工具栏）和 Demo 窗口短跑全部通过后，会先对待发布目录运行 `tools/verify-final-output.ps1` 独立审计，审计通过后才原子替换 `最终输出/`。
+- 编辑器默认工作台/出包探针、使用已发布 Editor 的 Game View 六场景矩阵（16:9、4:3、
+  portrait、固定 1920×1080、Maximize On Play、360px 窄工具栏）、无 skipped 的外部 CLI
+  自动化 E2E 和 Demo 窗口短跑全部通过后，会先对待发布目录运行
+  `tools/verify-final-output.ps1` 独立审计，审计通过后才原子替换 `最终输出/`。
+- 自动化 E2E 启动全新 Editor OS 进程；每次 API 动作都启动发行版
+  `pixelengine-editor.exe`，runner 不引用 .NET Client、Named Pipe、credential、MCP、Computer
+  Use 或坐标旁路。事务使用单 CLI 连接的 `transaction execute`，并真实验证共享 Undo/Redo。
+- E2E 工作工程与 credential 位于当前用户 `%TEMP%` 的随机 ACL 根，成功或失败都清理；构建与
+  验证报告留在仓库 staging 供失败诊断。
 - 任一步失败时保留旧的 `最终输出/`，不会把半成品发布成正式版。
 - 编辑器运行目录默认清理 `.pdb` / `.xml` 开发元数据；需要诊断符号时显式传 `-IncludeEditorSymbols` 重新生成。
 - `编辑器/ScriptReferenceAssemblies/` 是上述清理规则的产品 SDK 边界：固定保留 `PixelEngine.Audio/Content/Core/Gui/Hosting/Interop/Physics/Rendering/Scripting/Serialization/Simulation/UI/World` 的 managed DLL 与同名 XML IntelliSense 文档，并带齐编辑器 publish 中可识别的第三方 managed dependency DLL。它不包含 `PixelEngine.Editor*`、native DLL 或任何 PDB；第三方 dependency 不复制无关 XML 文档。
@@ -34,7 +55,18 @@ pwsh -NoProfile -File tools/update-final-output.ps1
 pwsh -NoProfile -File tools/verify-final-output.ps1
 ```
 
-该校验会读取 `最终输出/_验证记录/manifest.json` 与 `SHA256SUMS`，确认 manifest 绑定当前 `HEAD`、来源门禁为 `tracked-clean-required`、入口文件和验证记录存在、脚本 SDK primary DLL+XML 与 managed dependency 精确匹配 manifest、SDK 不含 PDB/Editor/native、SDK 外默认不泄漏 `.pdb` / `.xml`、编辑器默认工作台与 Demo probe stdout 含成功 marker、Game View 报告绑定同一 commit 且六场景逐项满足 UI stack `1→0→1`、presentation 同步、toolbar fit/overflow 和 framebuffer SHA256、Demo build-result 为 `ok=true`，再逐项重算根级 SHA256，并拒绝未登记的额外文件或登记了不存在文件的清单。若只审计历史提交生成的旧产物，可显式传 `-AllowCommitMismatch`。
+该校验会读取 `最终输出/_验证记录/manifest.json` 与 `SHA256SUMS`，确认 manifest 绑定当前
+`HEAD`、来源门禁为 `tracked-clean-required`、入口文件和验证记录存在、脚本 SDK primary
+DLL+XML 与 managed dependency 精确匹配 manifest、SDK 不含 PDB/Editor/native、SDK 外默认
+不泄漏 `.pdb` / `.xml`；同时独立检查自动化 CLI runtime、两个 NuGet archive 的必需 entry、
+四文件 Skill、协议 Schema 引用、至少 150 capability / 300 UI command 的排序与双向闭包，并
+从矩阵数组原文重算三组 canonical SHA256。E2E 报告必须绑定同一 Editor/CLI hash、精确 10 个
+通过 scope、零 skipped、至少 35 个外部 CLI operation；每条 operation 的序号、PID、允许退出
+码、受限日志路径和 stdout/stderr SHA256 都会复验。验证器还确认两次 Play session 不复用、
+transaction Undo/Redo、Stop 后修改保存、Build Succeeded、Player 保持 Running 后被终止、Editor
+退出码 0 且 descriptor 已删除。之后才检查默认工作台、Game View 六场景、Demo build/window
+probe 和根级 SHA256，并拒绝未登记的额外文件或登记了不存在文件的清单。若只审计历史提交
+生成的旧产物，可显式传 `-AllowCommitMismatch`。
 
 可选参数：
 

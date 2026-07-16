@@ -68,6 +68,88 @@ function Assert-TextContains([string]$Text, [string]$Needle, [string]$Label) {
   }
 }
 
+function Assert-LowerSha256([string]$Value, [string]$Label) {
+  if ($Value -cnotmatch '^[a-f0-9]{64}$') {
+    throw "$Label 必须是 64 位小写 SHA256：$Value"
+  }
+}
+
+function Get-TextSha256([string]$Value) {
+  $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+  try {
+    return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+  }
+  finally {
+    [Security.Cryptography.CryptographicOperations]::ZeroMemory($bytes)
+  }
+}
+
+function Resolve-ContainedPath([string]$Root, [string]$RelativePath, [string]$Label) {
+  if ([string]::IsNullOrWhiteSpace($RelativePath) -or [IO.Path]::IsPathRooted($RelativePath)) {
+    throw "$Label 必须是非空相对路径：$RelativePath"
+  }
+
+  $rootFull = [IO.Path]::GetFullPath($Root)
+  $rootPrefix = $rootFull.TrimEnd(
+    [IO.Path]::DirectorySeparatorChar,
+    [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+  $full = [IO.Path]::GetFullPath((Join-Path $rootFull $RelativePath))
+  if (-not $full.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "$Label 逃逸其权威根目录：$RelativePath"
+  }
+
+  return $full
+}
+
+function Test-OrdinalContains([object[]]$Values, [string]$Expected) {
+  foreach ($value in $Values) {
+    if ([string]::Equals([string]$value, $Expected, [StringComparison]::Ordinal)) {
+      return $true
+    }
+  }
+
+  return $false
+}
+
+function Assert-NuGetPackageEntries(
+  [string]$Path,
+  [string]$Label,
+  [string[]]$RequiredEntries
+) {
+  $archive = [IO.Compression.ZipFile]::OpenRead($Path)
+  try {
+    $entries = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+    foreach ($entry in $archive.Entries) {
+      $name = $entry.FullName.Replace('\', '/')
+      if ([string]::IsNullOrWhiteSpace($name) -or $name.EndsWith('/', [StringComparison]::Ordinal)) {
+        continue
+      }
+
+      if ($name.StartsWith('/', [StringComparison]::Ordinal) -or
+          ($name -split '/') -contains '..') {
+        throw "$Label 包含非法 archive entry：$name"
+      }
+
+      if (-not $entries.Add($name)) {
+        throw "$Label 包含重复 archive entry：$name"
+      }
+
+      if ($name.EndsWith('.pdb', [StringComparison]::OrdinalIgnoreCase)) {
+        throw "$Label 不得包含 PDB：$name"
+      }
+    }
+
+    foreach ($requiredEntry in $RequiredEntries) {
+      if (-not $entries.Contains($requiredEntry)) {
+        throw "$Label 缺少 package entry：$requiredEntry"
+      }
+    }
+  }
+  finally {
+    $archive.Dispose()
+  }
+}
+
 function Get-ManagedEditorDependencyFileNames(
   [string]$EditorRoot,
   [string[]]$PrimaryAssemblyNames
@@ -310,6 +392,249 @@ foreach ($dependencyFileName in $declaredScriptReferenceManagedDependencies) {
   }
 }
 
+$automation = $manifest.automation
+if ($null -eq $automation) {
+  throw 'manifest 缺少 automation 节点。'
+}
+
+$automationCliRelative = [string]$automation.cliExecutable
+$automationProtocolPackageRelative = [string]$automation.protocolPackage
+$automationClientPackageRelative = [string]$automation.clientPackage
+$automationProtocolSchemaRelative = [string]$automation.protocolSchema
+$automationCapabilitySchemaRelative = [string]$automation.capabilitySchema
+$automationCapabilityMatrixRelative = [string]$automation.capabilityMatrix
+$automationDocumentationRelative = [string]$automation.documentation
+$automationSkillRootRelative = [string]$automation.skillRoot
+if ($automationCliRelative -ne '自动化/CLI/pixelengine-editor.exe' -or
+    $automationProtocolSchemaRelative -ne '自动化/Schema/editor-automation-protocol.v1.schema.json' -or
+    $automationCapabilitySchemaRelative -ne '自动化/Schema/editor-automation-capabilities.schema.json' -or
+    $automationCapabilityMatrixRelative -ne '自动化/Schema/editor-automation-capabilities.v1.json' -or
+    $automationDocumentationRelative -ne '自动化/文档/editor-automation-api.md' -or
+    $automationSkillRootRelative -ne '自动化/Skill/pixelengine-editor') {
+  throw 'manifest automation 的固定发行路径不匹配。'
+}
+
+if ($automationProtocolPackageRelative -cnotmatch
+      '^自动化/SDK/PixelEngine\.Editor\.Automation\.Protocol\.[0-9A-Za-z][0-9A-Za-z.-]*\.nupkg$' -or
+    $automationClientPackageRelative -cnotmatch
+      '^自动化/SDK/PixelEngine\.Editor\.Automation\.Client\.[0-9A-Za-z][0-9A-Za-z.-]*\.nupkg$') {
+  throw 'manifest automation SDK package 路径或文件名非法。'
+}
+
+$automationCli = Resolve-OutputPath $automationCliRelative 'automation cliExecutable'
+$automationProtocolPackage = Resolve-OutputPath $automationProtocolPackageRelative 'automation protocolPackage'
+$automationClientPackage = Resolve-OutputPath $automationClientPackageRelative 'automation clientPackage'
+$automationProtocolSchema = Resolve-OutputPath $automationProtocolSchemaRelative 'automation protocolSchema'
+$automationCapabilitySchema = Resolve-OutputPath $automationCapabilitySchemaRelative 'automation capabilitySchema'
+$automationCapabilityMatrix = Resolve-OutputPath $automationCapabilityMatrixRelative 'automation capabilityMatrix'
+$automationDocumentation = Resolve-OutputPath $automationDocumentationRelative 'automation documentation'
+$automationSkillRoot = Resolve-OutputPath $automationSkillRootRelative 'automation skillRoot'
+foreach ($automationFile in @(
+    $automationCli,
+    $automationProtocolPackage,
+    $automationClientPackage,
+    $automationProtocolSchema,
+    $automationCapabilitySchema,
+    $automationCapabilityMatrix,
+    $automationDocumentation)) {
+  Assert-FileExists $automationFile 'automation 发行文件'
+}
+if (-not (Test-Path -LiteralPath $automationSkillRoot -PathType Container)) {
+  throw "automation Skill 根目录不存在：$automationSkillRoot"
+}
+
+$expectedCliMetadataPolicy = if ($editorSymbolsIncluded) {
+  'included-for-diagnostics'
+} else {
+  'runtime-pdb-and-xml-pruned'
+}
+if ($automation.cliDeveloperMetadataPolicy -ne $expectedCliMetadataPolicy) {
+  throw "manifest automation CLI metadata policy 不匹配：$($automation.cliDeveloperMetadataPolicy)"
+}
+
+$automationCliRoot = Split-Path -Parent $automationCli
+foreach ($requiredCliFile in @(
+    'pixelengine-editor.dll',
+    'PixelEngine.Editor.Automation.Client.dll',
+    'PixelEngine.Editor.Automation.Protocol.dll')) {
+  Assert-FileExists (Join-Path $automationCliRoot $requiredCliFile) "automation CLI runtime $requiredCliFile"
+}
+if (-not $editorSymbolsIncluded) {
+  $cliMetadata = Get-ChildItem -LiteralPath $automationCliRoot -File -Recurse -Force |
+    Where-Object {
+      $_.Extension.Equals('.pdb', [StringComparison]::OrdinalIgnoreCase) -or
+      $_.Extension.Equals('.xml', [StringComparison]::OrdinalIgnoreCase)
+    } |
+    Select-Object -First 1
+  if ($cliMetadata) {
+    throw "automation CLI 运行目录不应包含 .pdb/.xml 开发元数据：$($cliMetadata.FullName)"
+  }
+}
+
+$automationSdkRoot = Split-Path -Parent $automationProtocolPackage
+$actualAutomationPackages = @(Get-ChildItem -LiteralPath $automationSdkRoot -File -Force)
+if ($actualAutomationPackages.Count -ne 2 -or
+    -not (Test-Path -LiteralPath $automationClientPackage -PathType Leaf)) {
+  throw "automation SDK 目录必须精确包含 Protocol/Client 两个 nupkg：actual=$($actualAutomationPackages.Count)"
+}
+Assert-NuGetPackageEntries `
+  $automationProtocolPackage `
+  'automation Protocol nupkg' `
+  @(
+    'lib/net10.0/PixelEngine.Editor.Automation.Protocol.dll',
+    'schema/editor-automation-protocol.v1.schema.json'
+  )
+Assert-NuGetPackageEntries `
+  $automationClientPackage `
+  'automation Client nupkg' `
+  @('lib/net10.0/PixelEngine.Editor.Automation.Client.dll')
+
+$expectedSkillFiles = @(
+  'SKILL.md',
+  'agents/openai.yaml',
+  'references/workflows.md',
+  'scripts/invoke.ps1'
+)
+$declaredSkillFiles = @($automation.skillFiles)
+$declaredSkillFileSet = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($skillFileValue in $declaredSkillFiles) {
+  $skillFile = ([string]$skillFileValue).Replace('\', '/')
+  if (-not $declaredSkillFileSet.Add($skillFile)) {
+    throw "manifest automation skillFiles 包含重复项：$skillFile"
+  }
+}
+if ($declaredSkillFileSet.Count -ne $expectedSkillFiles.Count) {
+  throw "manifest automation skillFiles 数量不匹配：expected=$($expectedSkillFiles.Count), actual=$($declaredSkillFileSet.Count)"
+}
+foreach ($expectedSkillFile in $expectedSkillFiles) {
+  if (-not $declaredSkillFileSet.Contains($expectedSkillFile)) {
+    throw "manifest automation skillFiles 缺少：$expectedSkillFile"
+  }
+}
+$actualSkillFiles = @(Get-ChildItem -LiteralPath $automationSkillRoot -File -Recurse -Force)
+if ($actualSkillFiles.Count -ne $expectedSkillFiles.Count) {
+  throw "automation Skill 文件数量不匹配：expected=$($expectedSkillFiles.Count), actual=$($actualSkillFiles.Count)"
+}
+foreach ($actualSkillFile in $actualSkillFiles) {
+  $relative = [IO.Path]::GetRelativePath($automationSkillRoot, $actualSkillFile.FullName).Replace('\', '/')
+  if (-not $declaredSkillFileSet.Contains($relative)) {
+    throw "automation Skill 包含未规定文件：$relative"
+  }
+}
+$skillText = Get-Content -Raw -LiteralPath (Join-Path $automationSkillRoot 'SKILL.md')
+$skillInvokerText = Get-Content -Raw -LiteralPath (Join-Path $automationSkillRoot 'scripts/invoke.ps1')
+Assert-TextContains $skillText 'name: pixelengine-editor' 'automation Skill'
+Assert-TextContains $skillText 'scripts/invoke.ps1' 'automation Skill'
+Assert-TextContains $skillInvokerText '& $cliPath @args' 'automation Skill CLI wrapper'
+if ($skillInvokerText.Contains('NamedPipeClientStream', [StringComparison]::Ordinal) -or
+    $skillInvokerText.Contains('Invoke-WebRequest', [StringComparison]::OrdinalIgnoreCase) -or
+    $skillInvokerText.Contains('Start-Process', [StringComparison]::OrdinalIgnoreCase)) {
+  throw 'automation Skill wrapper 必须直接调用 CLI，不得自行实现 transport 或旁路进程。'
+}
+
+$capabilitySchemaDocument = Get-Content -Raw -LiteralPath $automationCapabilitySchema | ConvertFrom-Json -Depth 100
+if ($capabilitySchemaDocument.'$ref' -ne
+    'editor-automation-protocol.v1.schema.json#/$defs/capabilityMatrixSnapshot') {
+  throw 'automation capability Schema 未引用发布的 protocol capabilityMatrixSnapshot。'
+}
+$protocolSchemaDocument = Get-Content -Raw -LiteralPath $automationProtocolSchema | ConvertFrom-Json -Depth 100
+$protocolDefinitions = $protocolSchemaDocument.PSObject.Properties['$defs'].Value
+if ($null -eq $protocolDefinitions) {
+  throw 'automation protocol Schema 缺少 $defs。'
+}
+
+$matrixText = Get-Content -Raw -LiteralPath $automationCapabilityMatrix
+$matrixDocument = [Text.Json.JsonDocument]::Parse($matrixText)
+try {
+  $capabilityArrayText = $matrixDocument.RootElement.GetProperty('capabilities').GetRawText()
+  $uiCommandArrayText = $matrixDocument.RootElement.GetProperty('uiCommands').GetRawText()
+}
+finally {
+  $matrixDocument.Dispose()
+}
+$matrixSnapshot = $matrixText | ConvertFrom-Json -Depth 100
+$computedCapabilityDigest = Get-TextSha256 $capabilityArrayText
+$computedUiCommandDigest = Get-TextSha256 $uiCommandArrayText
+$computedMatrixDigest = Get-TextSha256 (
+  "v1`n$computedCapabilityDigest`n$computedUiCommandDigest`n")
+foreach ($digestEntry in @(
+    @('capabilityDigest', [string]$matrixSnapshot.capabilityDigest, $computedCapabilityDigest),
+    @('uiCommandDigest', [string]$matrixSnapshot.uiCommandDigest, $computedUiCommandDigest),
+    @('matrixDigest', [string]$matrixSnapshot.matrixDigest, $computedMatrixDigest))) {
+  Assert-LowerSha256 $digestEntry[1] "automation matrix $($digestEntry[0])"
+  if ($digestEntry[1] -cne $digestEntry[2]) {
+    throw "automation matrix $($digestEntry[0]) canonical SHA256 不匹配。"
+  }
+}
+
+$matrixCapabilities = @($matrixSnapshot.capabilities)
+$matrixUiCommands = @($matrixSnapshot.uiCommands)
+if ($matrixSnapshot.schemaVersion -ne 1 -or
+    $matrixCapabilities.Count -lt 150 -or
+    $matrixUiCommands.Count -lt 300 -or
+    $automation.capabilityCount -ne $matrixCapabilities.Count -or
+    $automation.uiCommandCount -ne $matrixUiCommands.Count -or
+    $automation.capabilityDigest -cne $computedCapabilityDigest -or
+    $automation.uiCommandDigest -cne $computedUiCommandDigest -or
+    $automation.matrixDigest -cne $computedMatrixDigest) {
+  throw 'manifest automation matrix schema、count 或 digest 与发布矩阵不一致。'
+}
+
+$capabilityById = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+$previousCapabilityId = $null
+foreach ($capability in $matrixCapabilities) {
+  $capabilityId = [string]$capability.id
+  if ([string]::IsNullOrWhiteSpace($capabilityId) -or
+      ($null -ne $previousCapabilityId -and [string]::CompareOrdinal($previousCapabilityId, $capabilityId) -ge 0) -or
+      -not $capabilityById.TryAdd($capabilityId, $capability)) {
+    throw "automation matrix capability ID 未严格排序或重复：$capabilityId"
+  }
+  foreach ($schemaReference in @([string]$capability.requestSchema, [string]$capability.responseSchema)) {
+    if (-not $schemaReference.StartsWith('#/$defs/', [StringComparison]::Ordinal)) {
+      throw "automation capability $capabilityId 的 Schema ref 非法：$schemaReference"
+    }
+    $definitionName = $schemaReference.Substring('#/$defs/'.Length)
+    if ($null -eq $protocolDefinitions.PSObject.Properties[$definitionName]) {
+      throw "automation capability $capabilityId 引用了不存在的 Schema：$schemaReference"
+    }
+  }
+  $previousCapabilityId = $capabilityId
+}
+
+$uiCommandById = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+$previousUiCommandId = $null
+foreach ($uiCommand in $matrixUiCommands) {
+  $uiCommandId = [string]$uiCommand.id
+  $capabilityIds = @($uiCommand.capabilityIds)
+  if ([string]::IsNullOrWhiteSpace($uiCommandId) -or
+      ($null -ne $previousUiCommandId -and [string]::CompareOrdinal($previousUiCommandId, $uiCommandId) -ge 0) -or
+      -not $uiCommandById.TryAdd($uiCommandId, $uiCommand) -or
+      $capabilityIds.Count -eq 0) {
+    throw "automation matrix UI command ID 未严格排序、重复或无 capability：$uiCommandId"
+  }
+  $previousLinkedCapabilityId = $null
+  foreach ($linkedCapabilityIdValue in $capabilityIds) {
+    $linkedCapabilityId = [string]$linkedCapabilityIdValue
+    if (($null -ne $previousLinkedCapabilityId -and
+         [string]::CompareOrdinal($previousLinkedCapabilityId, $linkedCapabilityId) -ge 0) -or
+        -not $capabilityById.ContainsKey($linkedCapabilityId) -or
+        -not (Test-OrdinalContains @($capabilityById[$linkedCapabilityId].uiCommandIds) $uiCommandId)) {
+      throw "automation UI command $uiCommandId 的 capability 引用不存在、未排序或不对称：$linkedCapabilityId"
+    }
+    $previousLinkedCapabilityId = $linkedCapabilityId
+  }
+  $previousUiCommandId = $uiCommandId
+}
+foreach ($capability in $matrixCapabilities) {
+  foreach ($linkedUiCommandIdValue in @($capability.uiCommandIds)) {
+    $linkedUiCommandId = [string]$linkedUiCommandIdValue
+    if (-not $uiCommandById.ContainsKey($linkedUiCommandId) -or
+        -not (Test-OrdinalContains @($uiCommandById[$linkedUiCommandId].capabilityIds) ([string]$capability.id))) {
+      throw "automation capability $($capability.id) 的 UI command 引用不存在或不对称：$linkedUiCommandId"
+    }
+  }
+}
+
 $validation = $manifest.validation
 if ($null -eq $validation) {
   throw 'manifest 缺少 validation 节点。'
@@ -330,6 +655,17 @@ if ($null -eq $editorGameViewValidation -or
   throw '编辑器 Game View presentation probe 记录不是六场景 1->0->1 通过状态。'
 }
 
+$automationE2EValidation = $validation.editorAutomationE2E
+if ($null -eq $automationE2EValidation -or
+    $automationE2EValidation.completed -ne $true -or
+    $automationE2EValidation.allPassed -ne $true -or
+    $automationE2EValidation.cliOnly -ne $true -or
+    [int]$automationE2EValidation.externalCliProcessCount -lt 35 -or
+    [int]$automationE2EValidation.requiredScopeCount -ne 10 -or
+    [int]$automationE2EValidation.skippedCount -ne 0) {
+  throw 'Editor automation E2E 记录不是无跳过的外部 CLI 全链路通过状态。'
+}
+
 if ($validation.demoWindowProbe.completed -ne $true) {
   throw 'Demo 窗口 probe 记录不是完成状态。'
 }
@@ -348,6 +684,9 @@ $validationPaths = @(
   [string]$editorGameViewValidation.stdout,
   [string]$editorGameViewValidation.stderr,
   [string]$editorGameViewValidation.report,
+  [string]$automationE2EValidation.stdout,
+  [string]$automationE2EValidation.stderr,
+  [string]$automationE2EValidation.report,
   [string]$validation.demoWindowProbe.stdout,
   [string]$validation.demoWindowProbe.stderr,
   [string]$validation.demoWindowProbe.capture,
@@ -448,6 +787,236 @@ foreach ($scenario in $editorGameViewScenarios) {
   }
 }
 
+$automationE2EWrapperStdout = Get-OutputFileText `
+  ([string]$automationE2EValidation.stdout) `
+  'Editor automation E2E stdout'
+Assert-TextContains `
+  $automationE2EWrapperStdout `
+  'automation_e2e schema=pixelengine.editor-automation-e2e/v1' `
+  'Editor automation E2E stdout'
+$automationE2EWrapperStderr = Get-OutputFileText `
+  ([string]$automationE2EValidation.stderr) `
+  'Editor automation E2E stderr'
+if (-not [string]::IsNullOrWhiteSpace($automationE2EWrapperStderr)) {
+  throw 'Editor automation E2E wrapper stderr 必须为空。'
+}
+
+$automationE2EReportPath = Resolve-OutputPath `
+  ([string]$automationE2EValidation.report) `
+  'Editor automation E2E report'
+$automationE2EReportRoot = [IO.Path]::GetFullPath((Split-Path -Parent $automationE2EReportPath))
+$automationE2EReport = Get-Content -Raw -LiteralPath $automationE2EReportPath | ConvertFrom-Json -Depth 100
+$automationE2EOperations = @($automationE2EReport.operations)
+$automationE2ERequiredScopes = @($automationE2EReport.requiredScopes)
+$automationE2EProcessCount = [int]$automationE2EReport.externalCliProcessCount
+if ($automationE2EReport.schema -ne 'pixelengine.editor-automation-e2e/v1' -or
+    $automationE2EReport.gitCommit -ne $manifest.gitCommit -or
+    $automationE2EReport.allPassed -ne $true -or
+    $automationE2EReport.cliOnly -ne $true -or
+    $automationE2EReport.externalEditorProcess -ne $true -or
+    @($automationE2EReport.skipped).Count -ne 0 -or
+    $automationE2EProcessCount -lt 35 -or
+    $automationE2EProcessCount -ne [int]$automationE2EValidation.externalCliProcessCount -or
+    $automationE2EProcessCount -ne [int]$automationE2EReport.cli.processCount -or
+    $automationE2EOperations.Count -ne $automationE2EProcessCount) {
+  throw 'Editor automation E2E 报告身份、外部进程数量或无跳过状态不匹配。'
+}
+
+$expectedAutomationScopeIds = @(
+  'discover-and-capability-matrix',
+  'transaction-and-undo-redo',
+  'scene-authoring-and-save',
+  'first-play-runtime-console-profiler-pause-step-stop',
+  'second-play-runtime-stop',
+  'post-play-modify-and-save',
+  'artifact-sha256',
+  'build',
+  'player-launch-verify-terminate',
+  'editor-public-exit-and-discovery-cleanup'
+)
+$reportedAutomationScopeIds = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach ($scope in $automationE2ERequiredScopes) {
+  $scopeId = [string]$scope.id
+  if ($scope.status -ne 'passed' -or -not $reportedAutomationScopeIds.Add($scopeId)) {
+    throw "Editor automation E2E scope 未通过或重复：$scopeId"
+  }
+}
+if ($reportedAutomationScopeIds.Count -ne $expectedAutomationScopeIds.Count) {
+  throw "Editor automation E2E scope 数量不匹配：expected=$($expectedAutomationScopeIds.Count), actual=$($reportedAutomationScopeIds.Count)"
+}
+foreach ($scopeId in $expectedAutomationScopeIds) {
+  if (-not $reportedAutomationScopeIds.Contains($scopeId)) {
+    throw "Editor automation E2E 缺少必需 scope：$scopeId"
+  }
+}
+
+$packagedEditorSha256 = (Get-FileHash -LiteralPath $editorExe -Algorithm SHA256).Hash.ToLowerInvariant()
+$packagedCliSha256 = (Get-FileHash -LiteralPath $automationCli -Algorithm SHA256).Hash.ToLowerInvariant()
+Assert-LowerSha256 ([string]$automationE2EReport.editor.executableSha256) 'Editor automation E2E editor hash'
+Assert-LowerSha256 ([string]$automationE2EReport.cli.executableSha256) 'Editor automation E2E CLI hash'
+if ($automationE2EReport.editor.executableSha256 -cne $packagedEditorSha256 -or
+    $automationE2EReport.cli.executableSha256 -cne $packagedCliSha256 -or
+    [int]$automationE2EReport.editor.processId -le 0 -or
+    [int]$automationE2EReport.editor.exitCode -ne 0 -or
+    $automationE2EReport.editor.descriptorRemoved -ne $true -or
+    [string]::IsNullOrWhiteSpace([string]$automationE2EReport.cli.clientInstanceId)) {
+  throw 'Editor automation E2E 未绑定发布的 Editor/CLI，或进程退出与 discovery 清理证据无效。'
+}
+
+$automationEditorStdout = Resolve-ContainedPath `
+  $automationE2EReportRoot `
+  ([string]$automationE2EReport.editor.stdout) `
+  'Editor automation E2E editor stdout'
+$automationEditorStderr = Resolve-ContainedPath `
+  $automationE2EReportRoot `
+  ([string]$automationE2EReport.editor.stderr) `
+  'Editor automation E2E editor stderr'
+Assert-FileExists $automationEditorStdout 'Editor automation E2E editor stdout'
+Assert-FileExists $automationEditorStderr 'Editor automation E2E editor stderr'
+if ($automationE2EReport.editor.allowedStderr -ne
+    'libpng-iCCP-known-incorrect-sRGB-profile-only') {
+  throw 'Editor automation E2E editor.allowedStderr 策略不匹配。'
+}
+$automationEditorStderrLines = @(
+  (Get-Content -LiteralPath $automationEditorStderr) |
+    Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+)
+foreach ($stderrLine in $automationEditorStderrLines) {
+  if ($stderrLine -cne 'libpng warning: iCCP: known incorrect sRGB profile') {
+    throw "Editor automation E2E Editor stderr 含未允许诊断：$stderrLine"
+  }
+}
+if ($automationEditorStderrLines.Count -ne [int]$automationE2EReport.editor.allowedStderrCount -or
+    $automationEditorStderrLines.Count -ne [int]$automationE2EReport.workflow.allowedLibPngWarningCount) {
+  throw 'Editor automation E2E Editor stderr 计数与报告不匹配。'
+}
+
+$workflow = $automationE2EReport.workflow
+if ([int]$workflow.capabilityCount -ne $matrixCapabilities.Count -or
+    [int]$workflow.uiCommandCount -ne $matrixUiCommands.Count -or
+    $workflow.capabilityDigest -cne $computedCapabilityDigest -or
+    $workflow.uiCommandDigest -cne $computedUiCommandDigest -or
+    $workflow.matrixDigest -cne $computedMatrixDigest -or
+    $workflow.transactionFailureRollback -ne $true -or
+    $workflow.transactionUndoRedo -ne $true -or
+    $workflow.modifiedAndSavedAfterSecondPlay -ne $true -or
+    [int]$workflow.firstRuntimeEntityCount -le 0 -or
+    [int]$workflow.secondRuntimeEntityCount -le 0 -or
+    [int]$workflow.consoleErrorCount -ne 0 -or
+    $workflow.buildState -ne 'Succeeded' -or
+    $workflow.playerRunningVerified -ne $true -or
+    $workflow.playerTerminated -ne $true -or
+    [int]$workflow.playerProcessIdObserved -le 0 -or
+    $workflow.exitStatus -ne 'executed') {
+  throw 'Editor automation E2E 工作流矩阵、事务、运行态、构建、Player 或退出状态不匹配。'
+}
+if ([string]::IsNullOrWhiteSpace([string]$workflow.firstPlaySessionId) -or
+    [string]::IsNullOrWhiteSpace([string]$workflow.secondPlaySessionId) -or
+    [string]::Equals(
+      [string]$workflow.firstPlaySessionId,
+      [string]$workflow.secondPlaySessionId,
+      [StringComparison]::Ordinal) -or
+    [string]::IsNullOrWhiteSpace([string]$workflow.buildId) -or
+    [string]::IsNullOrWhiteSpace([string]$workflow.playerProcessId)) {
+  throw 'Editor automation E2E Play session、build 或 player stable ID 无效。'
+}
+foreach ($workflowHash in @(
+    @('sceneCaptureSha256', [string]$workflow.sceneCaptureSha256),
+    @('gameCaptureSha256', [string]$workflow.gameCaptureSha256),
+    @('buildPackageSha256', [string]$workflow.buildPackageSha256),
+    @('launcherSha256', [string]$workflow.launcherSha256),
+    @('buildLogSha256', [string]$workflow.buildLogSha256))) {
+  Assert-LowerSha256 $workflowHash[1] "Editor automation E2E $($workflowHash[0])"
+}
+
+$requiredAutomationOperationNames = @(
+  'capability-matrix',
+  'transaction-execute-rollback',
+  'hierarchy-after-rollback',
+  'transaction-execute',
+  'history-undo',
+  'history-redo',
+  'scene-capture',
+  'play-enter-first',
+  'play-pause',
+  'play-step',
+  'play-stop-first',
+  'game-capture',
+  'play-enter-second',
+  'play-stop-second',
+  'marker-transform-set',
+  'scene-save-after-play',
+  'build-settings-set',
+  'build-preflight',
+  'build-start-wait',
+  'build-logs',
+  'player-launch',
+  'player-get-running',
+  'player-terminate',
+  'workspace-exit',
+  'discover-after-exit'
+)
+$reportedAutomationOperationNames = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+$automationE2ELogRelativePaths = [Collections.Generic.List[string]]::new()
+$automationOperationLogPaths = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+for ($operationIndex = 0; $operationIndex -lt $automationE2EOperations.Count; $operationIndex++) {
+  $operation = $automationE2EOperations[$operationIndex]
+  $operationName = [string]$operation.name
+  $expectedSequence = $operationIndex + 1
+  $allowedExitCodes = @($operation.allowedExitCodes)
+  $expectedOutcome = if ([int]$operation.exitCode -eq 0) { 'passed' } else { 'accepted-nonzero' }
+  [void]$reportedAutomationOperationNames.Add($operationName)
+  if ([int]$operation.sequence -ne $expectedSequence -or
+      [string]::IsNullOrWhiteSpace($operationName) -or
+      [int]$operation.processId -le 0 -or
+      [long]$operation.durationMilliseconds -lt 0 -or
+      $allowedExitCodes.Count -eq 0 -or
+      $allowedExitCodes -notcontains [int]$operation.exitCode -or
+      $operation.outcome -ne $expectedOutcome) {
+    throw "Editor automation E2E operation 记录无效：sequence=$expectedSequence, name=$operationName"
+  }
+
+  foreach ($streamName in @('stdout', 'stderr')) {
+    $relativeLog = [string]$operation.$streamName
+    if (-not $automationOperationLogPaths.Add($relativeLog)) {
+      throw "Editor automation E2E operation 日志路径重复：$relativeLog"
+    }
+    $logPath = Resolve-ContainedPath `
+      $automationE2EReportRoot `
+      $relativeLog `
+      "Editor automation E2E operation $operationName $streamName"
+    Assert-FileExists $logPath "Editor automation E2E operation $operationName $streamName"
+    $expectedLogHash = [string]$operation.("${streamName}Sha256")
+    Assert-LowerSha256 $expectedLogHash "Editor automation E2E operation $operationName $streamName hash"
+    $actualLogHash = (Get-FileHash -LiteralPath $logPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualLogHash -cne $expectedLogHash) {
+      throw "Editor automation E2E operation $operationName $streamName SHA256 不匹配。"
+    }
+    $automationE2ELogRelativePaths.Add(
+      [IO.Path]::GetRelativePath($outputRootFull, $logPath).Replace('\', '/'))
+  }
+
+  $operationStdoutPath = Resolve-ContainedPath `
+    $automationE2EReportRoot `
+    ([string]$operation.stdout) `
+    "Editor automation E2E operation $operationName stdout"
+  $operationStdoutText = Get-Content -Raw -LiteralPath $operationStdoutPath
+  if ([string]::IsNullOrWhiteSpace($operationStdoutText)) {
+    throw "Editor automation E2E operation $operationName stdout 不能为空。"
+  }
+  try {
+    [void]($operationStdoutText | ConvertFrom-Json -Depth 100)
+  }
+  catch {
+    throw "Editor automation E2E operation $operationName stdout 不是合法 JSON。"
+  }
+}
+foreach ($requiredOperationName in $requiredAutomationOperationNames) {
+  if (-not $reportedAutomationOperationNames.Contains($requiredOperationName)) {
+    throw "Editor automation E2E 缺少必需 operation：$requiredOperationName"
+  }
+}
+
 $demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'window_frame_probe' 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'PixelEngine.Demo' 'Demo 窗口 probe stdout'
@@ -517,6 +1086,33 @@ Assert-ChecksumContains $relativePaths 'README.txt' 'README'
 Assert-ChecksumContains $relativePaths ([string]$manifest.editorExecutable) '编辑器入口'
 Assert-ChecksumContains $relativePaths ([string]$manifest.demoExecutable) 'Demo 入口'
 Assert-ChecksumContains $relativePaths ([string]$editorGameViewValidation.report) '编辑器 Game View presentation report'
+Assert-ChecksumContains $relativePaths $automationCliRelative 'automation CLI'
+Assert-ChecksumContains $relativePaths $automationProtocolPackageRelative 'automation Protocol nupkg'
+Assert-ChecksumContains $relativePaths $automationClientPackageRelative 'automation Client nupkg'
+Assert-ChecksumContains $relativePaths $automationProtocolSchemaRelative 'automation protocol Schema'
+Assert-ChecksumContains $relativePaths $automationCapabilitySchemaRelative 'automation capability Schema'
+Assert-ChecksumContains $relativePaths $automationCapabilityMatrixRelative 'automation capability matrix'
+Assert-ChecksumContains $relativePaths $automationDocumentationRelative 'automation documentation'
+Assert-ChecksumContains $relativePaths ([string]$automationE2EValidation.stdout) 'automation E2E stdout'
+Assert-ChecksumContains $relativePaths ([string]$automationE2EValidation.stderr) 'automation E2E stderr'
+Assert-ChecksumContains $relativePaths ([string]$automationE2EValidation.report) 'automation E2E report'
+Assert-ChecksumContains `
+  $relativePaths `
+  ([IO.Path]::GetRelativePath($outputRootFull, $automationEditorStdout).Replace('\', '/')) `
+  'automation E2E Editor stdout'
+Assert-ChecksumContains `
+  $relativePaths `
+  ([IO.Path]::GetRelativePath($outputRootFull, $automationEditorStderr).Replace('\', '/')) `
+  'automation E2E Editor stderr'
+foreach ($skillFile in $expectedSkillFiles) {
+  Assert-ChecksumContains `
+    $relativePaths `
+    "$automationSkillRootRelative/$skillFile" `
+    "automation Skill $skillFile"
+}
+foreach ($automationLogRelative in $automationE2ELogRelativePaths) {
+  Assert-ChecksumContains $relativePaths $automationLogRelative 'automation E2E operation log'
+}
 Assert-ChecksumContains $relativePaths ([string]$validation.demoBuildResult) 'demo-build-result'
 foreach ($assemblyName in $requiredScriptReferenceAssemblies) {
   Assert-ChecksumContains $relativePaths "$scriptReferenceAssembliesRelative/$assemblyName.dll" "脚本引用 DLL $assemblyName"
@@ -600,4 +1196,4 @@ if (-not $editorSymbolsIncluded) {
   }
 }
 
-Write-Host "final_output_verify schema=pixelengine.final-output-verify/v1, ok=True, gitCommit=$($manifest.gitCommit), checksum_count=$checksumCount, editor=$($manifest.editorExecutable), demo=$($manifest.demoExecutable)"
+Write-Host "final_output_verify schema=pixelengine.final-output-verify/v1, ok=True, gitCommit=$($manifest.gitCommit), checksum_count=$checksumCount, editor=$($manifest.editorExecutable), demo=$($manifest.demoExecutable), capabilities=$($matrixCapabilities.Count), uiCommands=$($matrixUiCommands.Count), automationCliProcesses=$automationE2EProcessCount"

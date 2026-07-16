@@ -18,9 +18,9 @@ Always use the exact scope list from `help <capability-id>`.
 
 1. Read `workspace.get`, `scene.get`, and the relevant hierarchy/Inspector snapshot.
 2. Preserve stable IDs and the returned revision.
-3. Begin a transaction when all intended writes allow it.
-4. Invoke writes with expected revisions, stable idempotency keys, and the transaction ID.
-5. Commit once, reread the affected resources, then test Undo and Redo if requested.
+3. Put every transaction-compatible write in one bounded plan file.
+4. Run `transaction execute --plan-file` once so begin, staging, and commit share one CLI connection.
+5. Reread the affected resources, then test Undo and Redo if requested.
 6. Save through `scene.save` only after the committed authoring state is verified.
 
 Use payload files for nested requests so JSON quoting cannot alter values:
@@ -31,6 +31,33 @@ Use payload files for nested requests so JSON quoting cannot alter values:
   --expected-global 17 --expected-resource editor:selection=4 `
   --idempotency-key select-player-01
 ```
+
+For an atomic batch, create a strict plan such as:
+
+```json
+{
+  "schemaVersion": 1,
+  "name": "Create and configure marker",
+  "leaseMilliseconds": 60000,
+  "idempotencyKey": "marker-batch-42",
+  "operations": [
+    {
+      "method": "hierarchy.gameObject.create",
+      "payload": { "schemaVersion": 1, "name": "Marker" },
+      "idempotencyKey": "marker-batch-42-create"
+    }
+  ]
+}
+```
+
+```powershell
+& $pe --discovery-root $discovery --scopes 'editor.read,editor.control,project.write' `
+  --output json transaction execute --plan-file transaction.json
+```
+
+Do not split begin, staging calls, and commit across separate CLI invocations. Each CLI process owns one
+connection, and disconnect intentionally discards uncommitted staging. Use one long-lived .NET Client only
+when manual transaction control is required.
 
 ## Runtime Debug Sequence
 

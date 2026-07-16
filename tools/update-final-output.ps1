@@ -16,6 +16,9 @@ param(
 
   [int]$DemoWindowTicks = 80,
 
+  [ValidateRange(300, 3600)]
+  [int]$AutomationE2ETimeoutSeconds = 1800,
+
   [ValidateSet('ManagedFallback', 'RmlUi', 'Ultralight')]
   [string]$DemoRuntimeUiBackend = 'RmlUi',
 
@@ -71,15 +74,35 @@ Assert-CleanTrackedWorktree
 $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stagingRoot = Join-Path $repoRoot "artifacts/final-output-staging/$timestamp"
 $editorPublish = Join-Path $stagingRoot 'editor-publish'
+$automationCliPublish = Join-Path $stagingRoot 'automation-cli-publish'
+$automationSdkPackages = Join-Path $stagingRoot 'automation-sdk-packages'
 $editorBuildOutput = Join-Path $stagingRoot 'editor-probe-build'
 # 故意在中文路径中构建并运行 Player，覆盖 Windows native fopen/UTF-8 路径边界；
 # 正式目录“最终输出/游戏Demo”不能由纯 ASCII staging probe 冒充。
 $demoBuildOutput = Join-Path $stagingRoot '游戏Demo构建'
 $validationRoot = Join-Path $stagingRoot 'validation'
+$automationE2EValidationRoot = Join-Path $validationRoot 'editor-automation-e2e'
+$automationE2EWorkRoot = Join-Path ([IO.Path]::GetTempPath()) `
+  ("pixelengine-final-output-automation-e2e-" + [Guid]::NewGuid().ToString('N'))
+$automationE2EBuildRoot = Join-Path $stagingRoot 'automation-e2e-build'
 $nextRoot = Join-Path $stagingRoot 'next-final-output'
 $logRoot = Join-Path $validationRoot 'logs'
 
-New-Item -ItemType Directory -Force -Path $editorPublish, $editorBuildOutput, $demoBuildOutput, $validationRoot, $logRoot | Out-Null
+New-Item -ItemType Directory -Force -Path `
+  $editorPublish, `
+  $automationCliPublish, `
+  $automationSdkPackages, `
+  $editorBuildOutput, `
+  $demoBuildOutput, `
+  $validationRoot, `
+  $logRoot | Out-Null
+
+$tempPrefix = [IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd(
+  [IO.Path]::DirectorySeparatorChar,
+  [IO.Path]::AltDirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
+if (-not $automationE2EWorkRoot.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+  throw "Editor automation E2E 临时根不在系统 temp：$automationE2EWorkRoot"
+}
 
 function Get-LogTail([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
@@ -314,10 +337,20 @@ $gitCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 
 $nativeBuildScript = Join-Path $repoRoot 'tools/build-native.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
+$automationCliProject = Join-Path $repoRoot 'tools/PixelEngine.Editor.Cli/PixelEngine.Editor.Cli.csproj'
+$automationProtocolProject = Join-Path $repoRoot 'src/PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj'
+$automationClientProject = Join-Path $repoRoot 'src/PixelEngine.Editor.Automation.Client/PixelEngine.Editor.Automation.Client.csproj'
+$automationE2EScript = Join-Path $repoRoot 'tools/run-editor-automation-e2e.ps1'
+$automationProtocolSchema = Join-Path $repoRoot 'schema/editor-automation-protocol.v1.schema.json'
+$automationCapabilitySchema = Join-Path $repoRoot 'schema/editor-automation-capabilities.schema.json'
+$automationCapabilityMatrix = Join-Path $repoRoot 'schema/editor-automation-capabilities.v1.json'
+$automationDocumentation = Join-Path $repoRoot 'docs/editor-automation-api.md'
+$automationSkillSource = Join-Path $repoRoot 'skills/pixelengine-editor'
 $editorGameViewProbeScript = Join-Path $repoRoot 'tools/run-editor-gameview-presentation-probe.ps1'
 $demoProjectRoot = Join-Path $repoRoot 'demo/PixelEngine.Demo'
 $demoBuildScript = Join-Path $repoRoot 'tools/build-player.ps1'
 $editorExe = Join-Path $editorPublish 'PixelEngine.Editor.Shell.exe'
+$automationCliExe = Join-Path $automationCliPublish 'pixelengine-editor.exe'
 $scriptReferenceAssemblyNames = @(
   'PixelEngine.Audio',
   'PixelEngine.Content',
@@ -334,6 +367,7 @@ $scriptReferenceAssemblyNames = @(
   'PixelEngine.World'
 )
 
+try {
 $nativeBuildResult = Invoke-ProcessChecked `
   -Name 'native-build' `
   -FilePath $pwsh `
@@ -353,6 +387,55 @@ $editorPublishResult = Invoke-ProcessChecked `
 if (-not (Test-Path -LiteralPath $editorExe -PathType Leaf)) {
   throw "编辑器发布后缺少入口：$editorExe"
 }
+
+$automationCliPublishResult = Invoke-ProcessChecked `
+  -Name 'automation-cli-publish' `
+  -FilePath $dotnet `
+  -Arguments @(
+    'publish', $automationCliProject,
+    '-c', $Configuration,
+    '-r', $Rid,
+    '--self-contained', 'false',
+    '-o', $automationCliPublish
+  ) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'automation-cli-publish.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'automation-cli-publish.stderr.log')
+
+if (-not (Test-Path -LiteralPath $automationCliExe -PathType Leaf)) {
+  throw "自动化 CLI 发布后缺少入口：$automationCliExe"
+}
+
+$automationProtocolPackResult = Invoke-ProcessChecked `
+  -Name 'automation-protocol-pack' `
+  -FilePath $dotnet `
+  -Arguments @('pack', $automationProtocolProject, '-c', $Configuration, '-o', $automationSdkPackages) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'automation-protocol-pack.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'automation-protocol-pack.stderr.log')
+
+$automationClientPackResult = Invoke-ProcessChecked `
+  -Name 'automation-client-pack' `
+  -FilePath $dotnet `
+  -Arguments @('pack', $automationClientProject, '-c', $Configuration, '-o', $automationSdkPackages) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'automation-client-pack.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'automation-client-pack.stderr.log')
+
+$automationProtocolPackages = @(
+  Get-ChildItem -LiteralPath $automationSdkPackages -File -Filter 'PixelEngine.Editor.Automation.Protocol.*.nupkg' |
+    Where-Object { -not $_.Name.EndsWith('.snupkg', [StringComparison]::OrdinalIgnoreCase) }
+)
+$automationClientPackages = @(
+  Get-ChildItem -LiteralPath $automationSdkPackages -File -Filter 'PixelEngine.Editor.Automation.Client.*.nupkg' |
+    Where-Object { -not $_.Name.EndsWith('.snupkg', [StringComparison]::OrdinalIgnoreCase) }
+)
+if ($automationProtocolPackages.Count -ne 1 -or $automationClientPackages.Count -ne 1) {
+  throw "自动化 SDK pack 数量不唯一：protocol=$($automationProtocolPackages.Count), client=$($automationClientPackages.Count)"
+}
+
+$automationProtocolPackage = $automationProtocolPackages[0]
+$automationClientPackage = $automationClientPackages[0]
 
 $editorProbeCapture = Join-Path $validationRoot 'editor-default-workbench.bmp'
 $editorProbeResult = Invoke-ProcessChecked `
@@ -405,6 +488,54 @@ if ($editorGameViewProbeReport.schema -ne 'pixelengine.editor-gameview-presentat
     $editorGameViewProbeReport.gitCommit -ne $gitCommit -or
     @($editorGameViewProbeReport.scenarios).Count -ne 6) {
   throw "编辑器 Game View presentation probe 报告身份或结果不匹配：$editorGameViewProbeReportPath"
+}
+
+$automationE2EResult = Invoke-ProcessChecked `
+  -Name 'editor-automation-e2e' `
+  -FilePath $pwsh `
+  -Arguments @(
+    '-NoProfile',
+    '-File', $automationE2EScript,
+    '-EditorExecutable', $editorExe,
+    '-CliExecutable', $automationCliExe,
+    '-ProjectSource', $demoProjectRoot,
+    '-OutputRoot', $automationE2EValidationRoot,
+    '-WorkRoot', $automationE2EWorkRoot,
+    '-BuildOutputRoot', $automationE2EBuildRoot,
+    '-RepositoryRoot', $repoRoot,
+    '-ExpectedGitCommit', $gitCommit,
+    '-BuildTimeoutSeconds', '900'
+  ) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'editor-automation-e2e.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'editor-automation-e2e.stderr.log') `
+  -TimeoutSeconds $AutomationE2ETimeoutSeconds
+
+$automationE2EReportPath = Join-Path $automationE2EValidationRoot 'report.json'
+if (-not (Test-Path -LiteralPath $automationE2EReportPath -PathType Leaf)) {
+  throw "Editor automation E2E 缺少报告：$automationE2EReportPath"
+}
+
+$automationE2EReport = Get-Content -Raw -LiteralPath $automationE2EReportPath | ConvertFrom-Json
+$automationE2ERequiredScopes = @($automationE2EReport.requiredScopes)
+if ($automationE2EReport.schema -ne 'pixelengine.editor-automation-e2e/v1' -or
+    $automationE2EReport.allPassed -ne $true -or
+    $automationE2EReport.cliOnly -ne $true -or
+    $automationE2EReport.externalEditorProcess -ne $true -or
+    $automationE2EReport.gitCommit -ne $gitCommit -or
+    @($automationE2EReport.skipped).Count -ne 0 -or
+    $automationE2ERequiredScopes.Count -ne 10 -or
+    @($automationE2ERequiredScopes | Where-Object { $_.status -ne 'passed' }).Count -ne 0) {
+  throw "Editor automation E2E 报告身份、必需 scope 或结果不匹配：$automationE2EReportPath"
+}
+
+$capabilityMatrix = Get-Content -Raw -LiteralPath $automationCapabilityMatrix | ConvertFrom-Json
+if ($automationE2EReport.workflow.capabilityDigest -ne $capabilityMatrix.capabilityDigest -or
+    $automationE2EReport.workflow.uiCommandDigest -ne $capabilityMatrix.uiCommandDigest -or
+    $automationE2EReport.workflow.matrixDigest -ne $capabilityMatrix.matrixDigest -or
+    $automationE2EReport.workflow.capabilityCount -ne @($capabilityMatrix.capabilities).Count -or
+    $automationE2EReport.workflow.uiCommandCount -ne @($capabilityMatrix.uiCommands).Count) {
+  throw 'Editor automation E2E 矩阵 digest/count 与发布快照不一致。'
 }
 
 $demoBuildResult = Invoke-ProcessChecked `
@@ -481,18 +612,55 @@ if (-not $demoProbeOk) {
 
 $finalEditorDir = Join-Path $nextRoot '编辑器'
 $finalDemoDir = Join-Path $nextRoot '游戏Demo'
+$finalAutomationDir = Join-Path $nextRoot '自动化'
+$finalAutomationCliDir = Join-Path $finalAutomationDir 'CLI'
+$finalAutomationSdkDir = Join-Path $finalAutomationDir 'SDK'
+$finalAutomationSchemaDir = Join-Path $finalAutomationDir 'Schema'
+$finalAutomationDocsDir = Join-Path $finalAutomationDir '文档'
+$finalAutomationSkillDir = Join-Path $finalAutomationDir 'Skill/pixelengine-editor'
 $finalValidationDir = Join-Path $nextRoot '_验证记录'
-New-Item -ItemType Directory -Force -Path $finalEditorDir, $finalDemoDir, $finalValidationDir | Out-Null
+New-Item -ItemType Directory -Force -Path `
+  $finalEditorDir, `
+  $finalDemoDir, `
+  $finalAutomationCliDir, `
+  $finalAutomationSdkDir, `
+  $finalAutomationSchemaDir, `
+  $finalAutomationDocsDir, `
+  $finalAutomationSkillDir, `
+  $finalValidationDir | Out-Null
 Copy-Directory $editorPublish $finalEditorDir
 Copy-Directory $demoPlayerDir $finalDemoDir
+Copy-Directory $automationCliPublish $finalAutomationCliDir
+Copy-Item -LiteralPath $automationProtocolPackage.FullName -Destination $finalAutomationSdkDir -Force
+Copy-Item -LiteralPath $automationClientPackage.FullName -Destination $finalAutomationSdkDir -Force
+Copy-Item -LiteralPath $automationProtocolSchema -Destination $finalAutomationSchemaDir -Force
+Copy-Item -LiteralPath $automationCapabilitySchema -Destination $finalAutomationSchemaDir -Force
+Copy-Item -LiteralPath $automationCapabilityMatrix -Destination $finalAutomationSchemaDir -Force
+Copy-Item -LiteralPath $automationDocumentation -Destination $finalAutomationDocsDir -Force
+Copy-Directory $automationSkillSource $finalAutomationSkillDir
 Copy-Directory $validationRoot $finalValidationDir
 if (-not $IncludeEditorSymbols.IsPresent) {
   Remove-EditorDeveloperMetadata $finalEditorDir
+  Remove-EditorDeveloperMetadata $finalAutomationCliDir
 }
 $scriptReferenceAssembliesRelative = '编辑器/ScriptReferenceAssemblies'
 $scriptReferenceAssembliesDir = Join-Path $nextRoot $scriptReferenceAssembliesRelative
 $scriptReferenceManagedDependencies = @(
   Copy-ScriptReferenceAssemblies $editorPublish $scriptReferenceAssembliesDir $scriptReferenceAssemblyNames
+)
+$automationCliRelative = '自动化/CLI/pixelengine-editor.exe'
+$automationProtocolPackageRelative = "自动化/SDK/$($automationProtocolPackage.Name)"
+$automationClientPackageRelative = "自动化/SDK/$($automationClientPackage.Name)"
+$automationProtocolSchemaRelative = '自动化/Schema/editor-automation-protocol.v1.schema.json'
+$automationCapabilitySchemaRelative = '自动化/Schema/editor-automation-capabilities.schema.json'
+$automationCapabilityMatrixRelative = '自动化/Schema/editor-automation-capabilities.v1.json'
+$automationDocumentationRelative = '自动化/文档/editor-automation-api.md'
+$automationSkillRootRelative = '自动化/Skill/pixelengine-editor'
+$automationSkillFiles = @(
+  'SKILL.md',
+  'agents/openai.yaml',
+  'references/workflows.md',
+  'scripts/invoke.ps1'
 )
 
 $manifest = [ordered]@{
@@ -517,6 +685,23 @@ $manifest = [ordered]@{
   editorScriptReferenceManagedDependencies = $scriptReferenceManagedDependencies
   editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
+  automation = [ordered]@{
+    cliExecutable = $automationCliRelative
+    cliDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'runtime-pdb-and-xml-pruned' }
+    protocolPackage = $automationProtocolPackageRelative
+    clientPackage = $automationClientPackageRelative
+    protocolSchema = $automationProtocolSchemaRelative
+    capabilitySchema = $automationCapabilitySchemaRelative
+    capabilityMatrix = $automationCapabilityMatrixRelative
+    documentation = $automationDocumentationRelative
+    skillRoot = $automationSkillRootRelative
+    skillFiles = $automationSkillFiles
+    capabilityCount = @($capabilityMatrix.capabilities).Count
+    uiCommandCount = @($capabilityMatrix.uiCommands).Count
+    capabilityDigest = [string]$capabilityMatrix.capabilityDigest
+    uiCommandDigest = [string]$capabilityMatrix.uiCommandDigest
+    matrixDigest = [string]$capabilityMatrix.matrixDigest
+  }
   updatePolicy = 'staged-build-and-verify-before-replace'
   checksumFile = 'SHA256SUMS'
   validation = [ordered]@{
@@ -536,6 +721,17 @@ $manifest = [ordered]@{
       stdout = '_验证记录/logs/editor-gameview-presentation.stdout.log'
       stderr = '_验证记录/logs/editor-gameview-presentation.stderr.log'
       report = '_验证记录/editor-gameview-presentation/report.json'
+    }
+    editorAutomationE2E = [ordered]@{
+      completed = $true
+      allPassed = $true
+      cliOnly = $true
+      externalCliProcessCount = [int]$automationE2EReport.externalCliProcessCount
+      requiredScopeCount = $automationE2ERequiredScopes.Count
+      skippedCount = 0
+      stdout = '_验证记录/logs/editor-automation-e2e.stdout.log'
+      stderr = '_验证记录/logs/editor-automation-e2e.stderr.log'
+      report = '_验证记录/editor-automation-e2e/report.json'
     }
     demoWindowProbe = [ordered]@{
       completed = $true
@@ -563,8 +759,13 @@ PixelEngine 正式输出
 - 编辑器：编辑器\PixelEngine.Editor.Shell.exe
 - 脚本开发 SDK：编辑器\ScriptReferenceAssemblies\
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe
+- 自动化 CLI：自动化\CLI\pixelengine-editor.exe
+- 自动化 .NET SDK：自动化\SDK\
+- 自动化 Schema 与能力矩阵：自动化\Schema\
+- pixelengine-editor Skill：自动化\Skill\pixelengine-editor\
 - 验证记录：_验证记录\manifest.json
 - Game View 六场景报告：_验证记录\editor-gameview-presentation\report.json
+- 外部 CLI 全流程报告：_验证记录\editor-automation-e2e\report.json
 - 完整性校验：SHA256SUMS
 "@ | Set-Content -LiteralPath (Join-Path $nextRoot 'README.txt') -Encoding UTF8
 
@@ -584,6 +785,14 @@ Write-Host "正式输出已更新：$outputRootFull"
 Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.Editor.Shell.exe')"
 Write-Host "脚本开发 SDK：$(Join-Path $outputRootFull '编辑器/ScriptReferenceAssemblies')"
 Write-Host "Demo 入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
+Write-Host "自动化 CLI：$(Join-Path $outputRootFull $automationCliRelative)"
+Write-Host "自动化 SDK：$(Join-Path $outputRootFull '自动化/SDK')"
 Write-Host "验证 manifest：$(Join-Path $outputRootFull '_验证记录/manifest.json')"
 Write-Host "完整性校验：$(Join-Path $outputRootFull 'SHA256SUMS')"
 Write-Host "独立审计：$($verifyFinalOutputResult.StdoutPath)"
+}
+finally {
+  if (Test-Path -LiteralPath $automationE2EWorkRoot) {
+    Remove-Item -LiteralPath $automationE2EWorkRoot -Recurse -Force
+  }
+}

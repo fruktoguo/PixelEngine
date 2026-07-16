@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
@@ -158,6 +159,9 @@ internal static class CliApplication
                     .ConfigureAwait(false);
             case "events":
                 return await RunEventsAsync(arguments, client, output, cancellationToken)
+                    .ConfigureAwait(false);
+            case "transaction":
+                return await RunTransactionAsync(arguments, client, output, cancellationToken)
                     .ConfigureAwait(false);
             case "build":
                 return await RunBuildAsync(arguments, client, output, cancellationToken)
@@ -331,6 +335,222 @@ internal static class CliApplication
 
         output.WriteResumeState(subscription);
         return 0;
+    }
+
+    private static async Task<int> RunTransactionAsync(
+        CliArguments arguments,
+        EditorAutomationClient client,
+        CliOutput output,
+        CancellationToken cancellationToken)
+    {
+        string subcommand = arguments.TakeRequiredPositional("transaction subcommand");
+        if (!string.Equals(subcommand, "execute", StringComparison.Ordinal))
+        {
+            throw new CliUsageException("transaction 只支持 execute。");
+        }
+
+        string planPath = arguments.TakeOption("--plan-file") ??
+            throw new CliUsageException("transaction execute 需要 --plan-file PATH。");
+        arguments.EnsureEmpty();
+        JsonElement planJson = await ReadPayloadFileAsync(planPath, cancellationToken).ConfigureAwait(false);
+        CliTransactionPlan plan = CliTransactionPlanReader.Parse(planJson);
+        AutomationCapabilityCatalog catalog = await client.GetCapabilitiesAsync(
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        AutomationCapabilityDescriptor[] descriptors = new AutomationCapabilityDescriptor[plan.Operations.Length];
+        for (int i = 0; i < plan.Operations.Length; i++)
+        {
+            descriptors[i] = RequireCapability(catalog, plan.Operations[i].Method);
+            if (descriptors[i].OperationKind == AutomationOperationKind.Read ||
+                descriptors[i].TransactionMode == AutomationTransactionMode.Forbidden)
+            {
+                throw new CliUsageException(
+                    $"Capability '{descriptors[i].Id}' 不支持 transaction staging。");
+            }
+        }
+
+        string beginKey = DeriveTransactionIdempotencyKey("begin", plan.IdempotencyKey);
+        string commitKey = DeriveTransactionIdempotencyKey("commit", plan.IdempotencyKey);
+        string rollbackKey = DeriveTransactionIdempotencyKey("rollback", plan.IdempotencyKey);
+        AutomationInvocationResult begun = await client.InvokeDetailedAsync(
+            AutomationProtocolConstants.TransactionBeginMethod,
+            JsonSerializer.SerializeToElement(
+                new AutomationTransactionBeginRequest
+                {
+                    SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                    Name = plan.Name,
+                    LeaseMilliseconds = plan.LeaseMilliseconds,
+                },
+                AutomationJsonContext.Default.AutomationTransactionBeginRequest),
+            new AutomationInvocationOptions { IdempotencyKey = beginKey },
+            cancellationToken).ConfigureAwait(false);
+        AutomationTransactionInfo transaction = begun.Payload?.Deserialize(
+            AutomationJsonContext.Default.AutomationTransactionInfo)
+            ?? throw new InvalidDataException("transaction.begin 未返回 transactionInfo。");
+        bool completed = false;
+        try
+        {
+            for (int i = 0; i < plan.Operations.Length; i++)
+            {
+                CliTransactionOperation operation = plan.Operations[i];
+                AutomationInvocationResult staged = await client.InvokeDetailedAsync(
+                    operation.Method,
+                    operation.Payload,
+                    new AutomationInvocationOptions
+                    {
+                        ExpectedRevision = AutomationRevisionPreconditions.FromSnapshot(transaction.BaseRevision),
+                        IdempotencyKey = operation.IdempotencyKey,
+                        TransactionId = transaction.TransactionId,
+                    },
+                    cancellationToken).ConfigureAwait(false);
+                AutomationTransactionStagedOperationInfo stagedInfo = staged.Payload?.Deserialize(
+                    AutomationJsonContext.Default.AutomationTransactionStagedOperationInfo)
+                    ?? throw new InvalidDataException(
+                        $"Transaction operation[{i}] 未返回 staging 回执。");
+                if (stagedInfo.Ordinal != i ||
+                    !string.Equals(stagedInfo.TransactionId, transaction.TransactionId, StringComparison.Ordinal) ||
+                    !string.Equals(stagedInfo.Method, operation.Method, StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException($"Transaction operation[{i}] staging 回执身份不匹配。");
+                }
+            }
+
+            AutomationInvocationResult committed = await client.InvokeDetailedAsync(
+                AutomationProtocolConstants.TransactionCommitMethod,
+                SerializeTransactionRequest(transaction.TransactionId),
+                new AutomationInvocationOptions { IdempotencyKey = commitKey },
+                cancellationToken).ConfigureAwait(false);
+            AutomationTransactionCommitResult commitResult = committed.Payload?.Deserialize(
+                AutomationJsonContext.Default.AutomationTransactionCommitResult)
+                ?? throw new InvalidDataException("transaction.commit 未返回 transactionCommitResult。");
+            if (commitResult.Operations.Length != plan.Operations.Length ||
+                commitResult.Transaction.Status != AutomationTransactionStatus.Committed)
+            {
+                throw new InvalidDataException("transaction.commit 返回的 operation 数量或终态不匹配。");
+            }
+
+            for (int i = 0; i < commitResult.Operations.Length; i++)
+            {
+                if (!string.Equals(
+                        commitResult.Operations[i].Method,
+                        plan.Operations[i].Method,
+                        StringComparison.Ordinal))
+                {
+                    throw new InvalidDataException($"transaction.commit operation[{i}] method 不匹配。");
+                }
+            }
+
+            completed = true;
+            output.WriteInvocation(committed.Payload, committed.Revision);
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            if (!completed)
+            {
+                try
+                {
+                    await RecoverTransactionAfterFailureAsync(
+                        client,
+                        transaction.TransactionId,
+                        rollbackKey).ConfigureAwait(false);
+                }
+                catch (Exception recoveryException)
+                {
+                    throw new InvalidOperationException(
+                        "Transaction execute 失败，且同 session 终态恢复或验证也失败。",
+                        new AggregateException(exception, recoveryException));
+                }
+            }
+
+            throw;
+        }
+    }
+
+    private static async Task RecoverTransactionAfterFailureAsync(
+        EditorAutomationClient client,
+        string transactionId,
+        string rollbackKey)
+    {
+        JsonElement request = SerializeTransactionRequest(transactionId);
+        Exception? statusFailure = null;
+        try
+        {
+            using CancellationTokenSource statusTimeout = new(TimeSpan.FromSeconds(10));
+            AutomationInvocationResult statusResult = await client.InvokeDetailedAsync(
+                AutomationProtocolConstants.TransactionStatusMethod,
+                request,
+                cancellationToken: statusTimeout.Token).ConfigureAwait(false);
+            AutomationTransactionInfo status = statusResult.Payload?.Deserialize(
+                AutomationJsonContext.Default.AutomationTransactionInfo)
+                ?? throw new InvalidDataException("transaction.status 未返回 transactionInfo。");
+            ValidateRecoveredTransaction(status, transactionId, allowActive: true);
+            if (status.Status != AutomationTransactionStatus.Active)
+            {
+                return;
+            }
+        }
+        catch (Exception exception)
+        {
+            statusFailure = exception;
+        }
+
+        try
+        {
+            using CancellationTokenSource rollbackTimeout = new(TimeSpan.FromSeconds(10));
+            AutomationInvocationResult rollbackResult = await client.InvokeDetailedAsync(
+                AutomationProtocolConstants.TransactionRollbackMethod,
+                request,
+                new AutomationInvocationOptions { IdempotencyKey = rollbackKey },
+                rollbackTimeout.Token).ConfigureAwait(false);
+            AutomationTransactionInfo rolledBack = rollbackResult.Payload?.Deserialize(
+                AutomationJsonContext.Default.AutomationTransactionInfo)
+                ?? throw new InvalidDataException("transaction.rollback 未返回 transactionInfo。");
+            ValidateRecoveredTransaction(rolledBack, transactionId, allowActive: false);
+        }
+        catch (Exception rollbackFailure) when (statusFailure is not null)
+        {
+            throw new AggregateException(
+                "transaction.status 与 transaction.rollback 均失败。",
+                statusFailure,
+                rollbackFailure);
+        }
+    }
+
+    internal static void ValidateRecoveredTransaction(
+        AutomationTransactionInfo transaction,
+        string expectedTransactionId,
+        bool allowActive)
+    {
+        bool validStatus = allowActive
+            ? transaction.Status is
+                AutomationTransactionStatus.Active or
+                AutomationTransactionStatus.RolledBack or
+                AutomationTransactionStatus.Expired or
+                AutomationTransactionStatus.Committed
+            : transaction.Status == AutomationTransactionStatus.RolledBack;
+        if (!string.Equals(transaction.TransactionId, expectedTransactionId, StringComparison.Ordinal) ||
+            !validStatus)
+        {
+            throw new InvalidDataException(
+                $"Transaction 恢复状态不匹配：id={transaction.TransactionId}, status={transaction.Status}。");
+        }
+    }
+
+    private static JsonElement SerializeTransactionRequest(string transactionId)
+    {
+        return JsonSerializer.SerializeToElement(
+            new AutomationTransactionRequest
+            {
+                SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                TransactionId = transactionId,
+            },
+            AutomationJsonContext.Default.AutomationTransactionRequest);
+    }
+
+    private static string DeriveTransactionIdempotencyKey(string operation, string planKey)
+    {
+        byte[] digest = SHA256.HashData(Encoding.UTF8.GetBytes(planKey));
+        return $"cli-tx-{operation}-{Convert.ToHexString(digest.AsSpan(0, 16)).ToLowerInvariant()}";
     }
 
     private static async Task<int> RunBuildAsync(
@@ -840,7 +1060,7 @@ internal static class CliApplication
     {
         Console.WriteLine("pixelengine-editor [global options] <command>");
         Console.WriteLine("commands: discover, ping, describe, capabilities, help <method>, call <method>");
-        Console.WriteLine("          events follow, build preflight|start|list|get|wait|cancel|logs");
+        Console.WriteLine("          events follow, transaction execute, build preflight|start|list|get|wait|cancel|logs");
         Console.WriteLine("          player launch|list|get|wait|terminate, artifact verify");
         Console.WriteLine("global:   --discovery-root PATH --instance ID --credential PATH --scopes CSV");
         Console.WriteLine("          --client-instance-id ID --connect-timeout SEC --timeout SEC");
@@ -848,6 +1068,7 @@ internal static class CliApplication
         Console.WriteLine("writes:   --expected-global N --expected-resource ID=N --idempotency-key KEY");
         Console.WriteLine("          --transaction ID --request-timeout SEC");
         Console.WriteLine("call:     --payload JSON | --payload-file PATH [--verify-artifact]");
+        Console.WriteLine("tx:       transaction execute --plan-file PATH（同一连接 begin→stage→commit/rollback）");
         Console.WriteLine("matrix:   capabilities --matrix（独立校验双向 UI/capability 闭包与 SHA256）");
         Console.WriteLine("lists:    --page-size N --filter-json JSON --sort field[:asc|desc] --cursor TOKEN");
     }
