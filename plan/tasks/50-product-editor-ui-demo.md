@@ -4,7 +4,7 @@
 
 ## 外部编辑器自动化
 
-- [~] `AUTO-001` 实现覆盖全部编辑器数据与人工操作的版本化外部自动化公共 API，并以全新外部进程闭合 author→play→debug→build→run。
+- [x] `AUTO-001` 实现覆盖全部编辑器数据与人工操作的版本化外部自动化公共 API，并以全新外部进程闭合 author→play→debug→build→run。
   - 优先级：P0。
   - 依赖：`BASE-013`、`BASE-014`、`BASE-015`、`EDITOR-010`。
   - 设计来源：`docs/PixelEngine-核心目标与产品定位.md` §5.7；`docs/PixelEngine-架构与需求设计.md` §17.5；`plan/19-standalone-editor-app.md` §外部编辑器自动化公共 API（2026-07-14）。
@@ -15,6 +15,7 @@
   - 安全与一致性验收：UI 与 API 复用同一 semantic command、转场/校验/dirty guard、asset/build/play service 和 Undo stack；禁止 UI 私有状态旁路、影子场景/选择/设置、路径/reparse-point 逃逸、secret 进入 argv/log/descriptor、无界消息/事件/artifact、player 包携带 Server/Editor automation 闭包；所有失败保持内存、磁盘、选择、dirty、revision 和可重试状态一致。
   - 最终验收：从 detached clean worktree 构建并发布 Editor、SDK、CLI、schema、文档与 Skill；在空 user-data/discovery/artifact root 中启动全新 Editor，由另一个全新 OS 进程仅通过 CLI 完成“编辑场景→运行→读取 runtime/Console/Profiler 并 Pause/Step→停止→再次运行→停止→继续修改并保存→构建→启动/验证/终止产物”，全程不调用 MCP、Computer Use、OCR、屏幕坐标或 `--scripted-*` probe。能力矩阵、schema compatibility、权限、路径安全、revision 冲突、事务/Undo、事件重连、性能、clean final-output 与 Skill forward test 必需 scope 必须全部 passed，任何 skipped/not-executed 都不得转 `[x]`。
   - 提交节点：一，canonical task、产品目标、架构和详细设计；二，Protocol/Schema/发现/认证与 Server/Client transport；三，主线程/Engine phase scheduler、revision、事务、Undo、事件与 artifact；四，workspace/window/layout/scene/hierarchy/inspector/tool 能力；五，project/asset/preview/settings/console/profiler/runtime/canvas 能力；六，build/player、.NET Client、CLI 与文档；七，能力矩阵闭包、性能/安全/重连测试和 `pixelengine-editor` Skill；八，clean final-output 与全新外部进程 E2E 证据。每个节点完成即按 `AGENTS.md §6` 中文提交，不跨节点攒提交。
+  - 完成证据：`docs/evidence-2026-07-17-auto-001-editor-automation-api.md`（Evidence Index: `auto-001-editor-automation-api-20260717`）；172 capabilities / 329 UI commands 双向闭包，外部 Editor + 42 个独立 CLI 进程、10/10 必需 scope、0 skipped，clean final-output 518 项 SHA256 独立审计，171 个发行文本文件 0 乱码，Automation 125/125、Editor 133/133、Hosting 936 passed / 7 条显式环境条件 skipped、Rendering 197 passed / 27 条 native GL 条件 skipped、Demo 142 passed / 1 条 native GL 条件 skipped，Solution Release 0 warning / 0 error；`pixelengine-editor` Skill 官方 validator、4/4 文件 SHA256 和打包 CLI 前向调用均通过。
 
 ## Unity-like Editor
 

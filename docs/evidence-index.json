@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
-  "generatedAt": "2026-07-14",
-  "generatedFromCommit": "5ccfbd895323d6e7ed2bdf1cbe1186ba20776e41",
+  "generatedAt": "2026-07-17",
+  "generatedFromCommit": "23b03b54a76e3da869ae7aada252ab72e288be82",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -779,6 +779,19 @@
       "reportPath": "docs/evidence-2026-07-11-ci-002-local-remediation.md",
       "sha256": "94833a822df9d0215cfd91e3a83fe1bc8288187d80869aa4f41ffc4f0a2394ff",
       "notes": "远端 run 29166221230 在完整 SHA 1148ca87 上确认 win-x64 build/test、13-TRX 聚合、disassembly、benchmark regression、verify-publish 与 win-arm64 build-only 全部成功；1776 total、1739 executed/passed、0 failed、37 个 native GPU scope NotExecuted。真实 ANGLE runner 仍由 TEST-003 阻塞，Linux/macOS 长期矩阵由 CI-003 跟踪。"
+    },
+    {
+      "entryId": "auto-001-editor-automation-api-20260717",
+      "taskIds": ["AUTO-001"],
+      "evidenceState": "complete",
+      "commit": "23b03b54a76e3da869ae7aada252ab72e288be82",
+      "runSessionId": "local-20260717-auto001-clean-23b03b54",
+      "runIdentityStatus": "captured_commit_bound_clean_external_process_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8-Core Processor; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64",
+      "command": "dotnet build PixelEngine.sln -c Release --no-restore -p:TreatWarningsAsErrors=true; full Automation/Editor/Hosting/Rendering/Demo/FinalOutput Release tests; pwsh -NoProfile -File tools/update-final-output.ps1 from detached clean worktree; 42-process tools/run-editor-automation-e2e.ps1 CLI-only workflow; pwsh -NoProfile -File tools/verify-final-output.ps1 -OutputRoot 最终输出; skill-creator quick_validate.py and packaged CLI forward test; 171-file UTF-8 corruption scan",
+      "reportPath": "docs/evidence-2026-07-17-auto-001-editor-automation-api.md",
+      "sha256": "4bc786c2e4b4fa85b60cb206858bbd5025ca687c65a64f845eb4c53ab59dfc00",
+      "notes": "All eight AUTO-001 nodes are complete. The clean Windows Named Pipe release contains Protocol/Schema/Server/.NET Client/CLI/docs/Skill, a 172-capability and 329-UI-command bidirectional matrix, and a 42-process author-play-debug-rerun-modify-build-launch-terminate workflow with 10/10 scopes passed and zero skipped. Independent verification covers 518 checksums; all 171 packaged text records are free of replacement/mojibake output. Runtime physical UI clicking remains tracked by separate UI/editor tasks."
     }
   ]
 }
