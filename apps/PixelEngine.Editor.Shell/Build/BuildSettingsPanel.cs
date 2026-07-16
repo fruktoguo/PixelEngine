@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text;
 using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Hosting;
@@ -10,10 +11,14 @@ namespace PixelEngine.Editor.Shell.Build;
 /// <summary>
 /// Build Settings ImGui 面板。
 /// </summary>
-internal sealed class BuildSettingsPanel : IEditorPanel
+internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
 {
     public const string PanelTitle = EditorDockSpace.BuildSettingsWindowTitle;
     private const string ActionsOverflowPopupName = "build-settings-actions-overflow";
+    private const int MaximumRetainedBuilds = 64;
+    private const int MaximumPendingBuildEvents = 512;
+    private const int MaximumBuildLogEntries = 2048;
+    private const long MaximumBuildLogBytes = 4L * 1024 * 1024;
     private static readonly string[] RidOptions = ["win-x64", "win-arm64"];
     private static readonly string[] ChannelOptions = ["R2R", "NativeAOT"];
     private static readonly string[] ConfigurationOptions = ["Release", "Debug"];
@@ -22,25 +27,35 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     private readonly IPlayerBuildService _buildService;
     private readonly IEditorConsoleSink? _console;
     private readonly Func<BuildScenePreparationResult> _prepareScene;
-    private readonly ConcurrentQueue<BuildProgressEvent> _pendingEvents = new();
+    private readonly EditorPlayerProcessManager _playerProcesses;
+    private readonly bool _ownsPlayerProcesses;
+    private readonly ConcurrentQueue<PendingBuildEvent> _pendingEvents = new();
     private readonly BuildLog _log = new();
+    private readonly Dictionary<string, BuildExecutionRecord> _builds = new(StringComparer.Ordinal);
+    private readonly Queue<string> _buildOrder = [];
     private readonly BuildProfileDto _settings;
     private readonly BuildProfileDto _persistedSettings;
     private BuildRunView _view = new();
     private CancellationTokenSource? _buildCancellation;
+    private CancellationTokenSource? _preflightCancellation;
     private Task<BuildPreflight>? _preflightTask;
     private Task<BuildResult>? _buildTask;
+    private string? _activeBuildId;
     private string _validationMessage = string.Empty;
     private string _persistentSettingsDiagnostic = string.Empty;
+    private int _pendingEventCount;
+    private int _refreshRequested;
     private bool _autoScroll = true;
     private bool _scriptedOpenActionsOverflow;
+    private int _disposed;
     private ScriptedBuildSettingsFooterProbeSnapshot _lastFooterProbe = new();
 
     public BuildSettingsPanel(
         EditorProject project,
         IPlayerBuildService? buildService = null,
         IEditorConsoleSink? console = null,
-        Func<BuildScenePreparationResult>? prepareScene = null)
+        Func<BuildScenePreparationResult>? prepareScene = null,
+        EditorPlayerProcessManager? playerProcesses = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _project = project;
@@ -48,6 +63,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         _buildService = buildService ?? new PlayerBuildService();
         _console = console;
         _prepareScene = prepareScene ?? (static () => new BuildScenePreparationResult(true, string.Empty));
+        _ownsPlayerProcesses = playerProcesses is null;
+        _playerProcesses = playerProcesses ?? new EditorPlayerProcessManager();
         _settings = _store.LoadRecoverable(out _persistentSettingsDiagnostic);
         _persistedSettings = CloneProfile(_settings);
         RequiresRepair = !string.IsNullOrWhiteSpace(_persistentSettingsDiagnostic);
@@ -66,9 +83,33 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
     internal event Action? SettingsApplied;
 
+    internal event Action<string?>? BuildChanged;
+
+    internal bool HasPendingWork =>
+        Volatile.Read(ref _refreshRequested) != 0 || _playerProcesses.HasPendingChanges;
+
     internal bool RequiresRepair { get; private set; }
 
     internal string SettingsDiagnostic => _persistentSettingsDiagnostic;
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        _buildCancellation?.Cancel();
+        _buildCancellation?.Dispose();
+        _buildCancellation = null;
+        _preflightCancellation?.Cancel();
+        _preflightCancellation?.Dispose();
+        _preflightCancellation = null;
+        if (_ownsPlayerProcesses)
+        {
+            _playerProcesses.Dispose();
+        }
+    }
 
     internal BuildProfileDto CaptureAutomationSettings()
     {
@@ -243,6 +284,115 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         return true;
     }
 
+    internal void PrepareFrame()
+    {
+        if (!HasPendingWork)
+        {
+            return;
+        }
+
+        _ = Interlocked.Exchange(ref _refreshRequested, 0);
+        DrainEvents();
+        RefreshTasks();
+        _playerProcesses.Pump();
+    }
+
+    internal EditorBuildPreflightWorkspace CaptureAutomationBuildPreflightWorkspace()
+    {
+        return new EditorBuildPreflightWorkspace(_buildService);
+    }
+
+    internal bool TryStartAutomationBuild(
+        string buildId,
+        bool launchOnSuccess,
+        out EditorBuildExecutionSnapshot snapshot,
+        out string diagnostic)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(buildId);
+        DrainEvents();
+        RefreshTasks();
+        if (!CanStartBuild(out diagnostic))
+        {
+            _validationMessage = diagnostic;
+            snapshot = null!;
+            return false;
+        }
+
+        if (!StartBuild(
+            launchOnSuccess,
+            notifyChanged: false,
+            requestedBuildId: buildId,
+            persistRunAfterBuild: false))
+        {
+            diagnostic = _validationMessage;
+            snapshot = null!;
+            return false;
+        }
+
+        snapshot = CaptureBuildCore(RequireBuild(_activeBuildId!));
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal EditorBuildExecutionSnapshot CaptureAutomationBuild(string buildId)
+    {
+        DrainEvents();
+        RefreshTasks();
+        return CaptureBuildCore(RequireBuild(buildId));
+    }
+
+    internal EditorBuildExecutionSnapshot[] CaptureAutomationBuilds()
+    {
+        DrainEvents();
+        RefreshTasks();
+        return
+        [
+            .. _buildOrder
+                .Select(id => CaptureBuildCore(_builds[id]))
+                .OrderByDescending(static snapshot => snapshot.StartedAtUtc),
+        ];
+    }
+
+    internal EditorBuildExecutionLogSnapshot CaptureAutomationBuildLog(string buildId)
+    {
+        DrainEvents();
+        RefreshTasks();
+        BuildExecutionRecord record = RequireBuild(buildId);
+        return new EditorBuildExecutionLogSnapshot(buildId, [.. record.LogEntries]);
+    }
+
+    internal Task<BuildResult> CaptureAutomationBuildCompletion(string buildId)
+    {
+        DrainEvents();
+        RefreshTasks();
+        return RequireBuild(buildId).Completion;
+    }
+
+    internal bool RequestAutomationBuildCancellation(
+        string buildId,
+        bool notifyChanged,
+        out EditorBuildExecutionSnapshot snapshot)
+    {
+        DrainEvents();
+        RefreshTasks();
+        BuildExecutionRecord record = RequireBuild(buildId);
+        bool changed = record.State == EditorBuildExecutionState.Running &&
+            !record.CancellationRequested;
+        if (changed)
+        {
+            record.CancellationRequested = true;
+            record.Cancellation.Cancel();
+        }
+
+        snapshot = CaptureBuildCore(record);
+        if (changed && notifyChanged)
+        {
+            BuildChanged?.Invoke(buildId);
+        }
+
+        return changed;
+    }
+
     public ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
@@ -325,8 +475,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel
     public void Draw(in EditorContext context)
     {
         _ = context;
-        DrainEvents();
-        RefreshTasks();
+        PrepareFrame();
         // 构建面板主布局：设置 → 场景 → 操作 → 进度 → 日志 → 结果
         bool visible = Visible;
         if (!ImGui.Begin(Title, ref visible))
@@ -892,37 +1041,40 @@ internal sealed class BuildSettingsPanel : IEditorPanel
 
     private void StartPreflight()
     {
-        _preflightTask = _buildService.PreflightAsync();
+        _preflightCancellation?.Cancel();
+        _preflightCancellation?.Dispose();
+        _preflightCancellation = new CancellationTokenSource();
+        _preflightTask = _buildService.PreflightAsync(_preflightCancellation.Token);
+        ObserveCompletion(_preflightTask);
         _view = _view with { Preflight = null };
     }
 
     // 校验并持久化 profile，异步调用 PlayerBuildService 启动子进程构建
-    private bool StartBuild(bool runAfterBuild)
+    private bool StartBuild(
+        bool runAfterBuild,
+        bool notifyChanged = true,
+        string? requestedBuildId = null,
+        bool persistRunAfterBuild = true)
     {
         if (_view.IsRunning || !_settings.TryNormalize(out _validationMessage))
         {
             return false;
         }
 
-        BuildScenePreparationResult preparation = _prepareScene();
-        if (!preparation.Succeeded)
+        string buildId = requestedBuildId ?? Guid.NewGuid().ToString("N");
+        if (_builds.ContainsKey(buildId))
         {
-            _validationMessage = string.IsNullOrWhiteSpace(preparation.Diagnostic)
-                ? L.Get("build.sceneNotReady", "The current scene is not ready; the build was not started.")
-                : preparation.Diagnostic;
+            _validationMessage = $"Build '{buildId}' 已存在。";
             return false;
         }
 
-        // Build 与 Build And Run 是逐次命令；不能把上一次的启动选择粘滞到下一次 Build。
-        _settings.RunAfterBuild = runAfterBuild;
-        if (!Save())
+        if (_builds.Count >= MaximumRetainedBuilds &&
+            !_builds.Values.Any(static record => record.State != EditorBuildExecutionState.Running))
         {
+            _validationMessage = $"保留的 build job 已达到 {MaximumRetainedBuilds} 上限。";
             return false;
         }
 
-        _buildCancellation?.Dispose();
-        _buildCancellation = new CancellationTokenSource();
-        IProgress<BuildProgressEvent> progress = new Progress<BuildProgressEvent>(_pendingEvents.Enqueue);
         PlayerSettingsDto playerSettings = new PlayerSettingsStore(_project).LoadRecoverable(
             out string playerSettingsDiagnostic);
         if (!string.IsNullOrWhiteSpace(playerSettingsDiagnostic))
@@ -934,23 +1086,88 @@ internal sealed class BuildSettingsPanel : IEditorPanel
             _settings.ToRequest() with
             {
                 ContentRoot = _project.ContentRootPath,
+                RunAfterBuild = runAfterBuild,
             },
             playerSettings);
-        _buildTask = _buildService.RunAsync(request, progress, _buildCancellation.Token);
+
+        BuildScenePreparationResult preparation = _prepareScene();
+        if (!preparation.Succeeded)
+        {
+            _validationMessage = string.IsNullOrWhiteSpace(preparation.Diagnostic)
+                ? L.Get("build.sceneNotReady", "The current scene is not ready; the build was not started.")
+                : preparation.Diagnostic;
+            return false;
+        }
+
+        // Build 与 Build And Run 是逐次命令；不能把上一次的启动选择粘滞到下一次 Build。
+        bool previousRunAfterBuild = _settings.RunAfterBuild;
+        if (persistRunAfterBuild)
+        {
+            _settings.RunAfterBuild = runAfterBuild;
+        }
+
+        if (!Save())
+        {
+            _settings.RunAfterBuild = previousRunAfterBuild;
+            Validate();
+            return false;
+        }
+
+        TrimCompletedBuildHistory(MaximumRetainedBuilds - 1);
+        if (_builds.Count >= MaximumRetainedBuilds)
+        {
+            _validationMessage = $"保留的 build job 已达到 {MaximumRetainedBuilds} 上限。";
+            return false;
+        }
+
+        _buildCancellation?.Dispose();
+        _buildCancellation = new CancellationTokenSource();
+        BuildProgressSink progress = new(this, buildId);
+        Task<BuildResult> rawBuildTask;
+        try
+        {
+            rawBuildTask = _buildService.RunAsync(request, progress, _buildCancellation.Token);
+        }
+        catch (Exception ex)
+        {
+            rawBuildTask = Task.FromException<BuildResult>(ex);
+        }
+
+        _buildTask = NormalizeBuildCompletionAsync(rawBuildTask);
+        ObserveCompletion(_buildTask);
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+        BuildExecutionRecord record = new(
+            buildId,
+            _buildTask,
+            _buildCancellation,
+            startedAt,
+            runAfterBuild,
+            progress);
+        _builds.Add(buildId, record);
+        _buildOrder.Enqueue(buildId);
+        _activeBuildId = buildId;
         _view = _view with
         {
             IsRunning = true,
             Phase = BuildPhase.Native,
             Percent = 0,
-            StartedAt = DateTimeOffset.UtcNow,
+            StartedAt = startedAt,
             Result = null,
         };
+        if (notifyChanged)
+        {
+            BuildChanged?.Invoke(buildId);
+        }
+
         return true;
     }
 
     public void CancelScriptedBuildProbe()
     {
-        _buildCancellation?.Cancel();
+        if (_activeBuildId is { } buildId)
+        {
+            _ = RequestAutomationBuildCancellation(buildId, notifyChanged: true, out _);
+        }
     }
 
     // 轮询预检/构建 Task 完成态并更新 UI 视图与控制台
@@ -959,6 +1176,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         if (_preflightTask is { IsCompleted: true } preflightTask)
         {
             _preflightTask = null;
+            _preflightCancellation?.Dispose();
+            _preflightCancellation = null;
             BuildPreflight preflight = preflightTask.Status == TaskStatus.RanToCompletion
                 ? preflightTask.Result
                 : new BuildPreflight
@@ -967,30 +1186,24 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                     Diagnostic = preflightTask.Exception?.GetBaseException().Message ??
                         L.Get("build.preflightFailed", "Build tool preflight failed."),
                 };
-            _view = _view with { Preflight = preflight };
-            BuildProgressEvent preflightEvent = new(
-                BuildEventKind.Log,
-                BuildPhase.Unknown,
-                _view.Percent,
-                preflight.Ok ? BuildLogLevel.Info : BuildLogLevel.Error,
-                preflight.Diagnostic,
-                DateTimeOffset.UtcNow);
-            _log.Add(preflightEvent);
-            _console?.AddBuildPreflight(preflight);
+            PublishPreflight(preflight);
+            BuildChanged?.Invoke(null);
         }
 
         if (_buildTask is { IsCompleted: true } buildTask)
         {
             _buildTask = null;
-            BuildResult result = buildTask.Status == TaskStatus.RanToCompletion
-                ? buildTask.Result
-                : new BuildResult
-                {
-                    Ok = false,
-                    Error = buildTask.Exception?.GetBaseException().Message ??
-                        L.Get("build.taskFailed", "Build task failed."),
-                    ExitCode = -3,
-                };
+            BuildResult result = buildTask.Result;
+            BuildExecutionRecord record = RequireBuild(_activeBuildId!);
+            record.Result = result;
+            record.CompletedAtUtc = DateTimeOffset.UtcNow;
+            record.State = result.Ok
+                ? EditorBuildExecutionState.Succeeded
+                : result.ExitCode == -2
+                    ? EditorBuildExecutionState.Cancelled
+                    : EditorBuildExecutionState.Failed;
+            record.Phase = result.Ok ? BuildPhase.Done : record.Phase;
+            record.Percent = result.Ok ? 1 : record.Percent;
             _view = _view with
             {
                 IsRunning = false,
@@ -999,82 +1212,249 @@ internal sealed class BuildSettingsPanel : IEditorPanel
                 Result = result,
             };
             _console?.AddBuildResult(result);
-            if (result.Ok && _settings.RunAfterBuild)
+            if (result.Ok && record.LaunchOnSuccess)
             {
-                LaunchBuildResult(result);
+                try
+                {
+                    EditorPlayerProcessSnapshot player = _playerProcesses.Launch(
+                        record.BuildId,
+                        result,
+                        notifyChanged: true);
+                    record.PlayerProcessId = player.PlayerProcessId;
+                }
+                catch (Exception ex) when (!OperatingSystem.IsBrowser())
+                {
+                    BuildProgressEvent launchFailure = NormalizeBuildEvent(new BuildProgressEvent(
+                        BuildEventKind.Log,
+                        BuildPhase.Done,
+                        1,
+                        BuildLogLevel.Error,
+                        L.Format("build.launchFailed", "Failed to launch the player package: {0}", ex.Message),
+                        DateTimeOffset.UtcNow));
+                    record.PlayerLaunchError = launchFailure.Message;
+                    AddBuildEvent(record, launchFailure);
+                }
             }
+
+            record.Cancellation.Dispose();
+            _buildCancellation = null;
+            _activeBuildId = null;
+            BuildChanged?.Invoke(record.BuildId);
         }
     }
 
     // 从并发队列取出 build-player JSON 事件，刷新进度条与日志
     private void DrainEvents()
     {
-        while (_pendingEvents.TryDequeue(out BuildProgressEvent? item))
+        HashSet<string>? changedBuilds = null;
+        while (_pendingEvents.TryDequeue(out PendingBuildEvent? pending))
         {
-            if (item is null)
+            _ = Interlocked.Decrement(ref _pendingEventCount);
+            if (pending is null || !_builds.TryGetValue(pending.BuildId, out BuildExecutionRecord? record))
             {
                 continue;
             }
 
-            _log.Add(item);
-            _console?.AddBuildEvent(item);
-            if (item.Kind is BuildEventKind.Progress or BuildEventKind.Result)
+            BuildProgressEvent item = NormalizeBuildEvent(pending.Event);
+            AddBuildEvent(record, item);
+            if (record.State == EditorBuildExecutionState.Running &&
+                item.Kind is BuildEventKind.Progress or BuildEventKind.Result)
             {
                 BuildPhase nextPhase = item.Phase == BuildPhase.Unknown && item.Level == BuildLogLevel.Error
-                    ? _view.Phase
+                    ? record.Phase
                     : item.Phase;
-                _view = _view with
+                record.Phase = nextPhase;
+                record.Percent = Math.Clamp(item.Percent, 0, 1);
+                if (string.Equals(_activeBuildId, record.BuildId, StringComparison.Ordinal))
                 {
-                    Phase = nextPhase,
-                    Percent = item.Percent,
-                };
+                    _view = _view with
+                    {
+                        Phase = record.Phase,
+                        Percent = record.Percent,
+                    };
+                }
+            }
+
+            _ = (changedBuilds ??= []).Add(record.BuildId);
+        }
+
+        foreach (BuildExecutionRecord record in _builds.Values)
+        {
+            long dropped = record.Progress.TakeDroppedCount();
+            if (dropped == 0)
+            {
+                continue;
+            }
+
+            AddBuildEvent(record, new BuildProgressEvent(
+                BuildEventKind.Log,
+                record.Phase,
+                record.Percent,
+                BuildLogLevel.Warning,
+                L.Format(
+                    "build.progressBacklogOverflow",
+                    "Build progress backlog is full; dropped {0} intermediate log/progress events. The final result remains available.",
+                    dropped),
+                DateTimeOffset.UtcNow));
+            _ = (changedBuilds ??= []).Add(record.BuildId);
+        }
+
+        if (changedBuilds is not null)
+        {
+            foreach (string buildId in changedBuilds)
+            {
+                BuildChanged?.Invoke(buildId);
             }
         }
     }
 
-    private void LaunchBuildResult(BuildResult result)
+    private void PublishPreflight(BuildPreflight preflight)
     {
-        if (string.IsNullOrWhiteSpace(result.LauncherExe))
+        _view = _view with { Preflight = preflight };
+        BuildProgressEvent preflightEvent = new(
+            BuildEventKind.Log,
+            BuildPhase.Unknown,
+            _view.Percent,
+            preflight.Ok ? BuildLogLevel.Info : BuildLogLevel.Error,
+            preflight.Diagnostic,
+            DateTimeOffset.UtcNow);
+        _log.Add(preflightEvent);
+        _console?.AddBuildPreflight(preflight);
+    }
+
+    private void AddBuildEvent(BuildExecutionRecord record, BuildProgressEvent item)
+    {
+        _log.Add(item);
+        _console?.AddBuildEvent(item);
+        long eventBytes = Encoding.UTF8.GetByteCount(item.Message) + 128L;
+        record.LogEntries.Enqueue(item);
+        record.LogBytes += eventBytes;
+        while (record.LogEntries.Count > MaximumBuildLogEntries ||
+            record.LogBytes > MaximumBuildLogBytes)
         {
-            BuildProgressEvent missingLauncher = new(
-                BuildEventKind.Log,
-                BuildPhase.Done,
-                1,
-                BuildLogLevel.Warning,
-                L.Get(
-                    "build.missingLauncher",
-                    "The build result has no LauncherExe; Build And Run cannot continue."),
-                DateTimeOffset.UtcNow);
-            _log.Add(missingLauncher);
-            _console?.AddBuildEvent(missingLauncher, "build-run");
+            BuildProgressEvent removed = record.LogEntries.Dequeue();
+            record.LogBytes -= Encoding.UTF8.GetByteCount(removed.Message) + 128L;
+        }
+    }
+
+    private static BuildProgressEvent NormalizeBuildEvent(BuildProgressEvent item)
+    {
+        const int maximumMessageLength = 8192;
+        string sourceMessage = item.Message ?? string.Empty;
+        string message = sourceMessage.Length <= maximumMessageLength
+            ? sourceMessage
+            : sourceMessage[..maximumMessageLength];
+        return item with
+        {
+            Percent = float.IsFinite(item.Percent) ? Math.Clamp(item.Percent, 0, 1) : 0,
+            Message = message,
+        };
+    }
+
+    private static async Task<BuildResult> NormalizeBuildCompletionAsync(Task<BuildResult> task)
+    {
+        try
+        {
+            return await task.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new BuildResult
+            {
+                Ok = false,
+                Error = L.Get("build.cancelled", "Build cancelled."),
+                ExitCode = -2,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new BuildResult
+            {
+                Ok = false,
+                Error = ex.Message,
+                ExitCode = -3,
+            };
+        }
+    }
+
+    private void EnqueueBuildEvent(BuildProgressSink source, string buildId, BuildProgressEvent value)
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
             return;
         }
 
-        string workingDirectory = string.IsNullOrWhiteSpace(result.PlayerDir)
-            ? Path.GetDirectoryName(result.LauncherExe) ?? Environment.CurrentDirectory
-            : result.PlayerDir;
-        ProcessStartInfo startInfo = new()
+        BuildProgressEvent normalized = NormalizeBuildEvent(value);
+        if (Interlocked.Increment(ref _pendingEventCount) <= MaximumPendingBuildEvents)
         {
-            FileName = result.LauncherExe,
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-        try
-        {
-            _ = Process.Start(startInfo);
+            _pendingEvents.Enqueue(new PendingBuildEvent(buildId, normalized));
         }
-        catch (Exception ex) when (!OperatingSystem.IsBrowser())
+        else
         {
-            BuildProgressEvent launchFailure = new(
-                BuildEventKind.Log,
-                BuildPhase.Done,
-                1,
-                BuildLogLevel.Error,
-                L.Format("build.launchFailed", "Failed to launch the player package: {0}", ex.Message),
-                DateTimeOffset.UtcNow);
-            _log.Add(launchFailure);
-            _console?.AddBuildEvent(launchFailure, "build-run");
+            _ = Interlocked.Decrement(ref _pendingEventCount);
+            source.RecordDropped();
+        }
+
+        RequestRefresh();
+    }
+
+    private void ObserveCompletion(Task task)
+    {
+        _ = task.ContinueWith(
+            static (_, state) => ((BuildSettingsPanel)state!).RequestRefresh(),
+            this,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    private void RequestRefresh()
+    {
+        if (Volatile.Read(ref _disposed) == 0)
+        {
+            Volatile.Write(ref _refreshRequested, 1);
+        }
+    }
+
+    private BuildExecutionRecord RequireBuild(string buildId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(buildId);
+        return _builds.TryGetValue(buildId, out BuildExecutionRecord? record)
+            ? record
+            : throw new KeyNotFoundException($"Build '{buildId}' 不存在或已淘汰。");
+    }
+
+    private static EditorBuildExecutionSnapshot CaptureBuildCore(BuildExecutionRecord record)
+    {
+        return new EditorBuildExecutionSnapshot(
+            record.BuildId,
+            record.State,
+            record.Phase,
+            record.Percent,
+            record.StartedAtUtc,
+            record.CompletedAtUtc,
+            record.LaunchOnSuccess,
+            record.CancellationRequested,
+            record.PlayerProcessId,
+            record.PlayerLaunchError,
+            record.Result);
+    }
+
+    private void TrimCompletedBuildHistory(int maximumCount)
+    {
+        int inspected = 0;
+        while (_builds.Count > maximumCount && inspected < _buildOrder.Count)
+        {
+            string buildId = _buildOrder.Dequeue();
+            BuildExecutionRecord record = _builds[buildId];
+            if (record.State == EditorBuildExecutionState.Running)
+            {
+                _buildOrder.Enqueue(buildId);
+                inspected++;
+                continue;
+            }
+
+            _ = _builds.Remove(buildId);
         }
     }
 
@@ -1292,6 +1672,72 @@ internal sealed class BuildSettingsPanel : IEditorPanel
         }
 
         return changed;
+    }
+
+    private sealed record PendingBuildEvent(string BuildId, BuildProgressEvent Event);
+
+    private sealed class BuildProgressSink(
+        BuildSettingsPanel owner,
+        string buildId) : IProgress<BuildProgressEvent>
+    {
+        private long _droppedCount;
+
+        public void Report(BuildProgressEvent value)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            owner.EnqueueBuildEvent(this, buildId, value);
+        }
+
+        public void RecordDropped()
+        {
+            _ = Interlocked.Increment(ref _droppedCount);
+        }
+
+        public long TakeDroppedCount()
+        {
+            return Interlocked.Exchange(ref _droppedCount, 0);
+        }
+    }
+
+    private sealed class BuildExecutionRecord(
+        string buildId,
+        Task<BuildResult> completion,
+        CancellationTokenSource cancellation,
+        DateTimeOffset startedAtUtc,
+        bool launchOnSuccess,
+        BuildProgressSink progress)
+    {
+        public string BuildId { get; } = buildId;
+
+        public Task<BuildResult> Completion { get; } = completion;
+
+        public CancellationTokenSource Cancellation { get; } = cancellation;
+
+        public DateTimeOffset StartedAtUtc { get; } = startedAtUtc;
+
+        public bool LaunchOnSuccess { get; } = launchOnSuccess;
+
+        public BuildProgressSink Progress { get; } = progress;
+
+        public Queue<BuildProgressEvent> LogEntries { get; } = [];
+
+        public EditorBuildExecutionState State { get; set; } = EditorBuildExecutionState.Running;
+
+        public BuildPhase Phase { get; set; } = BuildPhase.Native;
+
+        public float Percent { get; set; }
+
+        public DateTimeOffset? CompletedAtUtc { get; set; }
+
+        public bool CancellationRequested { get; set; }
+
+        public string? PlayerProcessId { get; set; }
+
+        public string? PlayerLaunchError { get; set; }
+
+        public BuildResult? Result { get; set; }
+
+        public long LogBytes { get; set; }
     }
 }
 

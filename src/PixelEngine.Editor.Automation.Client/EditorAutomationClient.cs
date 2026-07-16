@@ -13,7 +13,7 @@ namespace PixelEngine.Editor.Automation.Client;
 /// <summary>
 /// 支持并发 correlation、deadline 与显式 cancel 的 .NET Editor automation Client。
 /// </summary>
-public sealed class EditorAutomationClient : IAsyncDisposable
+public sealed partial class EditorAutomationClient : IAsyncDisposable
 {
     private readonly AutomationClientOptions _options;
     private readonly NamedPipeClientStream _pipe;
@@ -249,16 +249,95 @@ public sealed class EditorAutomationClient : IAsyncDisposable
         TimeSpan? timeout = null,
         CancellationToken cancellationToken = default)
     {
+        AutomationTypedInvocationResult<TResponse> result = await InvokeDetailedAsync(
+            method,
+            request,
+            requestTypeInfo,
+            responseTypeInfo,
+            new AutomationInvocationOptions { Timeout = timeout },
+            cancellationToken).ConfigureAwait(false);
+        return result.Response;
+    }
+
+    /// <summary>用 source-generated metadata 调用 typed method，并保留同一安全点 revision。</summary>
+    /// <typeparam name="TRequest">请求 DTO。</typeparam>
+    /// <typeparam name="TResponse">响应 DTO。</typeparam>
+    /// <param name="method">稳定 method/capability id。</param>
+    /// <param name="request">请求 DTO。</param>
+    /// <param name="requestTypeInfo">请求 source-generated metadata。</param>
+    /// <param name="responseTypeInfo">响应 source-generated metadata。</param>
+    /// <param name="options">timeout、revision、幂等与 transaction 选项。</param>
+    /// <param name="cancellationToken">调用方取消令牌。</param>
+    /// <returns>typed response 与 revision。</returns>
+    public async ValueTask<AutomationTypedInvocationResult<TResponse>> InvokeDetailedAsync<TRequest, TResponse>(
+        string method,
+        TRequest request,
+        JsonTypeInfo<TRequest> requestTypeInfo,
+        JsonTypeInfo<TResponse> responseTypeInfo,
+        AutomationInvocationOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(requestTypeInfo);
+        ArgumentNullException.ThrowIfNull(responseTypeInfo);
         JsonElement payload = JsonSerializer.SerializeToElement(request, requestTypeInfo);
-        JsonElement? response = await InvokeRawAsync(method, payload, timeout, cancellationToken)
-            .ConfigureAwait(false);
-        JsonElement responsePayload = response
+        AutomationInvocationResult result = await InvokeDetailedAsync(
+            method,
+            payload,
+            options,
+            cancellationToken).ConfigureAwait(false);
+        JsonElement responsePayload = result.Payload
             ?? throw new AutomationConnectionException($"Automation method '{method}' 没有返回所需 payload。");
 
         try
         {
-            return responsePayload.Deserialize(responseTypeInfo)
+            TResponse response = responsePayload.Deserialize(responseTypeInfo)
                 ?? throw new AutomationConnectionException($"Automation method '{method}' 返回 null payload。");
+            return new AutomationTypedInvocationResult<TResponse>
+            {
+                Response = response,
+                Revision = result.Revision,
+            };
+        }
+        catch (JsonException exception)
+        {
+            throw new AutomationConnectionException(
+                $"Automation method '{method}' 响应不符合 Client schema。",
+                exception);
+        }
+    }
+
+    /// <summary>调用无 typed request 的 method，并严格反序列化响应与 revision。</summary>
+    /// <typeparam name="TResponse">响应 DTO。</typeparam>
+    /// <param name="method">稳定 method/capability id。</param>
+    /// <param name="responseTypeInfo">响应 source-generated metadata。</param>
+    /// <param name="payload">可选 raw payload。</param>
+    /// <param name="options">timeout、revision、幂等与 transaction 选项。</param>
+    /// <param name="cancellationToken">调用方取消令牌。</param>
+    /// <returns>typed response 与 revision。</returns>
+    public async ValueTask<AutomationTypedInvocationResult<TResponse>> InvokeDetailedAsync<TResponse>(
+        string method,
+        JsonTypeInfo<TResponse> responseTypeInfo,
+        JsonElement? payload = null,
+        AutomationInvocationOptions? options = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(responseTypeInfo);
+        AutomationInvocationResult result = await InvokeDetailedAsync(
+            method,
+            payload,
+            options,
+            cancellationToken).ConfigureAwait(false);
+        JsonElement responsePayload = result.Payload
+            ?? throw new AutomationConnectionException($"Automation method '{method}' 没有返回所需 payload。");
+        try
+        {
+            TResponse response = responsePayload.Deserialize(responseTypeInfo)
+                ?? throw new AutomationConnectionException($"Automation method '{method}' 返回 null payload。");
+            return new AutomationTypedInvocationResult<TResponse>
+            {
+                Response = response,
+                Revision = result.Revision,
+            };
         }
         catch (JsonException exception)
         {

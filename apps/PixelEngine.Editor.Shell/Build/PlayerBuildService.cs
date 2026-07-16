@@ -24,6 +24,7 @@ internal interface IPlayerBuildService
 internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPlayerBuildService
 {
     private const string EventSchema = "pixelengine.build/v1";
+    private const long MaximumBuildResultBytes = 1024 * 1024;
     private readonly BuildToolLocator _locator = locator ?? new BuildToolLocator();
 
     public async Task<BuildPreflight> PreflightAsync(CancellationToken cancellationToken = default)
@@ -123,8 +124,13 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         }
 
         string outputDirectory = ResolveOutputDirectory(preflight.Tools.RepositoryRoot, request.OutputDirectory);
+        EnsureLocalBuildPath(outputDirectory);
         _ = Directory.CreateDirectory(outputDirectory);
+        EditorAutomationPathSafety.EnsureNoReparsePoints(outputDirectory, requireLeaf: true);
         string logPath = Path.Combine(outputDirectory, "build.log");
+        string resultPath = Path.Combine(outputDirectory, "build-result.json");
+        PrepareOutputLeaf(logPath, deleteExisting: false);
+        PrepareOutputLeaf(resultPath, deleteExisting: true);
         FixedTail tail = new(64);
         object logLock = new();
         using StreamWriter logWriter = new(logPath, append: false, Encoding.UTF8)
@@ -187,7 +193,8 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             return CreateCanceledResult(request, progress, logWriter, logLock, tail.Items);
         }
 
-        BuildResult result = await ReadResultAsync(outputDirectory, cancellationToken).ConfigureAwait(false)
+        // 子进程已退出后，迟到的取消请求不能把已经完成的构建谎报为 cancelled。
+        BuildResult result = await ReadResultAsync(resultPath, CancellationToken.None).ConfigureAwait(false)
             ?? CreateFailedResult(
                 request,
                 process.ExitCode == 0
@@ -195,7 +202,6 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                     : $"build-player 失败，exit code={process.ExitCode}。{Environment.NewLine}{string.Join(Environment.NewLine, tail.Items)}",
                 process.ExitCode,
                 tail.Items);
-
         if (process.ExitCode != 0 && result.Ok)
         {
             result = result with
@@ -205,6 +211,7 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             };
         }
 
+        result = ValidateBuildResultPaths(result, outputDirectory);
         result = result with { ExitCode = process.ExitCode };
         BuildLogLevel resultLevel = result.Ok && process.ExitCode == 0 ? BuildLogLevel.Info : BuildLogLevel.Error;
         progress.Report(CreateEvent(
@@ -451,20 +458,180 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
         }
     }
 
-    private static async Task<BuildResult?> ReadResultAsync(string outputDirectory, CancellationToken cancellationToken)
+    private static async Task<BuildResult?> ReadResultAsync(string resultPath, CancellationToken cancellationToken)
     {
-        string resultPath = Path.Combine(outputDirectory, "build-result.json");
         if (!File.Exists(resultPath))
         {
             return null;
         }
 
-        await using FileStream stream = File.OpenRead(resultPath);
+        EditorAutomationPathSafety.EnsureNoReparsePoints(resultPath, requireLeaf: true);
+        await using FileStream stream = new(
+            resultPath,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 64 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+        long resultLength = stream.Length;
+        _ = resultLength is > 0 and <= MaximumBuildResultBytes
+            ? resultLength
+            : throw new InvalidDataException(
+                $"build-result.json 必须为 1..{MaximumBuildResultBytes} 字节。");
+
         return await JsonSerializer.DeserializeAsync(
                 stream,
                 PixelEngineEditorShellBuildJsonContext.Default.BuildResult,
                 cancellationToken)
             .ConfigureAwait(false);
+    }
+
+    private static void PrepareOutputLeaf(string path, bool deleteExisting)
+    {
+        if (Directory.Exists(path))
+        {
+            EditorAutomationPathSafety.EnsureNoReparsePoints(path, requireLeaf: true);
+            throw new IOException($"Build 输出文件路径被目录占用：{path}");
+        }
+
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        EditorAutomationPathSafety.EnsureNoReparsePoints(path, requireLeaf: true);
+        if (deleteExisting)
+        {
+            File.Delete(path);
+        }
+    }
+
+    internal static BuildResult ValidateBuildResultPaths(BuildResult result, string outputDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputDirectory);
+        try
+        {
+            string outputRoot = Path.GetFullPath(outputDirectory);
+            EnsureLocalBuildPath(outputRoot);
+            if (!Directory.Exists(outputRoot))
+            {
+                throw new DirectoryNotFoundException($"Build output root 不存在：{outputRoot}");
+            }
+
+            EditorAutomationPathSafety.EnsureNoReparsePoints(outputRoot, requireLeaf: true);
+            string? packageArchive = ValidateResultPath(
+                result.PackageArchive,
+                outputRoot,
+                requireDirectory: false);
+            string? packageDirectory = ValidateResultPath(
+                result.PackageDir,
+                outputRoot,
+                requireDirectory: true);
+            string? playerDirectory = ValidateResultPath(
+                result.PlayerDir,
+                outputRoot,
+                requireDirectory: true);
+            string? launcher = ValidateResultPath(
+                result.LauncherExe,
+                outputRoot,
+                requireDirectory: false);
+            if (result.Ok)
+            {
+                string expectedPlayerDirectory = Path.GetFullPath(Path.Combine(outputRoot, "player"));
+                if (playerDirectory is null || launcher is null ||
+                    !PathEquals(playerDirectory, expectedPlayerDirectory) ||
+                    !IsStrictDescendant(playerDirectory, launcher))
+                {
+                    throw new InvalidOperationException(
+                        "成功 build 的 playerDir/launcherExe 未绑定到本次 output/player root。");
+                }
+            }
+
+            return result with
+            {
+                PackageArchive = packageArchive,
+                PackageDir = packageDirectory,
+                PlayerDir = playerDirectory,
+                LauncherExe = launcher,
+            };
+        }
+        catch (Exception exception) when (exception is
+            IOException or
+            UnauthorizedAccessException or
+            InvalidOperationException or
+            ArgumentException or
+            NotSupportedException)
+        {
+            return result with
+            {
+                Ok = false,
+                PackageArchive = null,
+                PackageDir = null,
+                PlayerDir = null,
+                LauncherExe = null,
+                Error = result.Ok
+                    ? $"build-result 路径校验失败：{exception.Message}"
+                    : result.Error,
+            };
+        }
+    }
+
+    private static string? ValidateResultPath(
+        string? path,
+        string outputRoot,
+        bool requireDirectory)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path))
+        {
+            throw new InvalidOperationException("build-result 只能包含 fully-qualified path。");
+        }
+
+        string fullPath = Path.GetFullPath(path);
+        EnsureLocalBuildPath(fullPath);
+        if (!IsStrictDescendant(outputRoot, fullPath))
+        {
+            throw new InvalidOperationException("build-result path 越出本次 output root。");
+        }
+
+        bool exists = requireDirectory ? Directory.Exists(fullPath) : File.Exists(fullPath);
+        if (!exists)
+        {
+            throw new FileNotFoundException("build-result path 不存在。", fullPath);
+        }
+
+        EditorAutomationPathSafety.EnsureNoReparsePoints(fullPath, requireLeaf: true);
+        return fullPath;
+    }
+
+    private static bool IsStrictDescendant(string root, string candidate)
+    {
+        string prefix = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) +
+            Path.DirectorySeparatorChar;
+        return candidate.StartsWith(
+            prefix,
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static bool PathEquals(string left, string right)
+    {
+        return string.Equals(
+            left.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            right.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    }
+
+    private static void EnsureLocalBuildPath(string path)
+    {
+        if (OperatingSystem.IsWindows() && path.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("Build path 不得使用 UNC 或 device root。");
+        }
     }
 
     private static async Task<string> TryReadVersionAsync(

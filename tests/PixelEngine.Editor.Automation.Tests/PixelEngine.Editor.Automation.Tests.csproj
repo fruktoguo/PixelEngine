@@ -8,6 +8,7 @@
     <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Server/PixelEngine.Editor.Automation.Server.csproj" />
     <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Client/PixelEngine.Editor.Automation.Client.csproj" />
+    <ProjectReference Include="../../tools/PixelEngine.Editor.Cli/PixelEngine.Editor.Cli.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

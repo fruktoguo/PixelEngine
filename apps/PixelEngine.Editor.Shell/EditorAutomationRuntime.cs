@@ -293,6 +293,33 @@ internal sealed class EditorAutomationRuntime : IDisposable
         PublishStateChanged(method, normalized, "execute", revision);
     }
 
+    internal void NotifyBuildChanged(string? buildId)
+    {
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = string.IsNullOrWhiteSpace(buildId)
+            ? ["editor:build"]
+            : ["editor:build", $"editor:build:{buildId}"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("build.changed", resources, "execute", revision);
+    }
+
+    internal void NotifyPlayerChanged(string playerProcessId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(playerProcessId);
+        if (Volatile.Read(ref _disposed) != 0)
+        {
+            return;
+        }
+
+        string[] resources = ["editor:player", $"editor:player:{playerProcessId}"];
+        AutomationRevisionSnapshot revision = Scheduler.Revisions.Advance(resources);
+        PublishStateChanged("player.changed", resources, "execute", revision);
+    }
+
     internal void NotifySimulationChanged(EditorProjectSession session)
     {
         ArgumentNullException.ThrowIfNull(session);

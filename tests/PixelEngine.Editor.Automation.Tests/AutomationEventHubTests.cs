@@ -192,12 +192,17 @@ public sealed class AutomationEventHubTests
             RequestTimeout = TimeSpan.FromSeconds(5),
             MaxBufferedEvents = 16,
         };
-        AutomationEventSubscribeRequest request = SubscribeRequest("pipe-scene-events", ["scene.changed"], 8);
-        AutomationSubscriptionInfo subscription;
+        AutomationEventResumeState resumeState = new()
+        {
+            SubscriptionKey = "pipe-scene-events",
+            EventTypes = ["scene.changed"],
+            BacklogLimit = 8,
+        };
+        AutomationEventSubscription subscription;
 
         await using (EditorAutomationClient firstClient = await EditorAutomationClient.ConnectAsync(instance, options))
         {
-            subscription = await firstClient.SubscribeEventsAsync(request);
+            subscription = await firstClient.SubscribeOrResumeEventsAsync(resumeState);
             _ = host.Scheduler.Events.Publish(
                 "scene.changed",
                 host.Scheduler.Revisions.CaptureAll(),
@@ -206,12 +211,8 @@ public sealed class AutomationEventHubTests
             AutomationEventRecord first = await ReadOneAsync(firstClient);
             Assert.Equal(1, first.Sequence);
             Assert.Equal("pipe-request-1", first.CausationRequestId);
-            _ = await firstClient.AcknowledgeEventsAsync(new AutomationEventAckRequest
-            {
-                SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
-                SubscriptionId = subscription.SubscriptionId,
-                Sequence = first.Sequence,
-            });
+            subscription = await firstClient.AcknowledgeEventsAsync(subscription, first.Sequence);
+            resumeState = subscription.ResumeState;
         }
 
         _ = host.Scheduler.Events.Publish(
@@ -219,17 +220,13 @@ public sealed class AutomationEventHubTests
             host.Scheduler.Revisions.CaptureAll(),
             payload: JsonSerializer.SerializeToElement(new { value = 2 }));
         await using EditorAutomationClient secondClient = await EditorAutomationClient.ConnectAsync(instance, options);
-        AutomationSubscriptionInfo resumed = await secondClient.SubscribeEventsAsync(request with
-        {
-            ResumeToken = subscription.ResumeToken,
-            AfterSequence = 1,
-        });
+        AutomationEventSubscription resumed = await secondClient.SubscribeOrResumeEventsAsync(resumeState);
         AutomationEventRecord replay = await ReadOneAsync(secondClient);
 
         Assert.Equal(2, replay.Sequence);
         Assert.Equal(2, replay.Payload?.GetProperty("value").GetInt32());
-        Assert.Equal(2, resumed.ReplayFromSequence);
-        Assert.Equal(1, resumed.BacklogCount);
+        Assert.Equal(2, resumed.Info.ReplayFromSequence);
+        Assert.Equal(1, resumed.Info.BacklogCount);
     }
 
     /// <summary>验证 Client 的全局 event 字节配额满时主动断线，而不是只受 record 数量约束。</summary>

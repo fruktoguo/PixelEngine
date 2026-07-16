@@ -894,6 +894,102 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.TryStartBuild(runAfterBuild, out diagnostic);
     }
 
+    internal EditorBuildPreflightWorkspace CaptureAutomationBuildPreflightWorkspace()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuildPreflightWorkspace();
+    }
+
+    internal bool TryStartAutomationBuild(
+        string buildId,
+        bool launchOnSuccess,
+        out EditorBuildExecutionSnapshot snapshot,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.TryStartAutomationBuild(
+            buildId,
+            launchOnSuccess,
+            out snapshot,
+            out diagnostic);
+    }
+
+    internal EditorBuildExecutionSnapshot CaptureAutomationBuild(string buildId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuild(buildId);
+    }
+
+    internal EditorBuildExecutionSnapshot[] CaptureAutomationBuilds()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuilds();
+    }
+
+    internal EditorBuildExecutionLogSnapshot CaptureAutomationBuildLog(string buildId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuildLog(buildId);
+    }
+
+    internal Task<BuildResult> CaptureAutomationBuildCompletion(string buildId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationBuildCompletion(buildId);
+    }
+
+    internal bool RequestAutomationBuildCancellation(
+        string buildId,
+        bool notifyChanged,
+        out EditorBuildExecutionSnapshot snapshot)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.RequestAutomationBuildCancellation(
+            buildId,
+            notifyChanged,
+            out snapshot);
+    }
+
+    internal EditorPlayerProcessSnapshot LaunchAutomationPlayer(
+        string buildId,
+        bool notifyChanged,
+        string? playerProcessId = null)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.LaunchAutomationPlayer(buildId, notifyChanged, playerProcessId);
+    }
+
+    internal EditorPlayerProcessSnapshot CaptureAutomationPlayer(string playerProcessId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPlayer(playerProcessId);
+    }
+
+    internal EditorPlayerProcessSnapshot[] CaptureAutomationPlayers()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPlayers();
+    }
+
+    internal EditorPlayerProcessWaitWorkspace CaptureAutomationPlayerWaitWorkspace(
+        string playerProcessId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationPlayerWaitWorkspace(playerProcessId);
+    }
+
+    internal bool RequestAutomationPlayerTermination(
+        string playerProcessId,
+        bool entireProcessTree,
+        out EditorPlayerProcessSnapshot snapshot)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.RequestAutomationPlayerTermination(
+            playerProcessId,
+            entireProcessTree,
+            out snapshot);
+    }
+
     public bool ShowPanel(string title)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

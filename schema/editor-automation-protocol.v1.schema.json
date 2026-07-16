@@ -3224,6 +3224,184 @@
         "scenes": { "type": "array", "minItems": 1, "maxItems": 4096, "items": { "$ref": "#/$defs/buildScene" } }
       }
     },
+    "buildPreflightResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "ok", "buildPlayerAvailable", "dotnetVersion", "shellVersion", "diagnostic"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "ok": { "type": "boolean" },
+        "buildPlayerAvailable": { "type": "boolean" },
+        "dotnetVersion": { "type": "string", "maxLength": 256 },
+        "shellVersion": { "type": "string", "maxLength": 256 },
+        "diagnostic": { "type": "string", "maxLength": 8192 }
+      }
+    },
+    "buildStartRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "launchOnSuccess"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "launchOnSuccess": { "type": "boolean" }
+      }
+    },
+    "buildRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "buildId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "buildId": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
+      }
+    },
+    "buildPhaseTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "milliseconds"],
+      "properties": {
+        "phase": { "enum": ["Unknown", "Native", "Publish", "Verify", "Package", "Audit", "Done"] },
+        "milliseconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "buildResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ok", "rid", "channel", "releaseChannel", "windowMode", "configuration", "version", "informationalVersion", "sizeBytes", "phaseTimings", "warnings", "exitCode"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "rid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "channel": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "releaseChannel": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "windowMode": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "configuration": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "version": { "type": "string", "maxLength": 128 },
+        "informationalVersion": { "type": "string", "maxLength": 256 },
+        "packageArchivePath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "packageDirectory": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "playerDirectory": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "launcherPath": { "type": "string", "minLength": 1, "maxLength": 32767 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "phaseTimings": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/buildPhaseTiming" } },
+        "warnings": { "type": "array", "maxItems": 1024, "items": { "type": "string", "maxLength": 8192 } },
+        "error": { "type": "string", "maxLength": 32768 },
+        "exitCode": { "type": "integer" }
+      }
+    },
+    "buildSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "buildId", "state", "phase", "percent", "startedAtUtc", "launchOnSuccess", "cancellationRequested"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "buildId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "state": { "enum": ["Running", "Succeeded", "Failed", "Cancelled"] },
+        "phase": { "enum": ["Unknown", "Native", "Publish", "Verify", "Package", "Audit", "Done"] },
+        "percent": { "type": "number", "minimum": 0, "maximum": 1 },
+        "startedAtUtc": { "type": "string", "format": "date-time" },
+        "completedAtUtc": { "type": "string", "format": "date-time" },
+        "launchOnSuccess": { "type": "boolean" },
+        "cancellationRequested": { "type": "boolean" },
+        "playerProcessId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "playerLaunchError": { "type": "string", "minLength": 1, "maxLength": 8192 },
+        "result": { "$ref": "#/$defs/buildResult" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": { "const": "Succeeded" },
+              "launchOnSuccess": { "const": true }
+            },
+            "required": ["state", "launchOnSuccess"]
+          },
+          "then": {
+            "oneOf": [
+              { "required": ["playerProcessId"] },
+              { "required": ["playerLaunchError"] }
+            ]
+          }
+        }
+      ]
+    },
+    "buildListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/buildSnapshot" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
+    "buildLogEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["phase", "level", "percent", "message", "timestampUtc"],
+      "properties": {
+        "phase": { "enum": ["Unknown", "Native", "Publish", "Verify", "Package", "Audit", "Done"] },
+        "level": { "enum": ["Info", "Warning", "Error"] },
+        "percent": { "type": "number", "minimum": 0, "maximum": 1 },
+        "message": { "type": "string", "maxLength": 8192 },
+        "timestampUtc": { "type": "string", "format": "date-time" }
+      }
+    },
+    "playerLaunchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "buildId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "buildId": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
+      }
+    },
+    "playerProcessRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "playerProcessId"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playerProcessId": { "type": "string", "pattern": "^[0-9a-f]{32}$" }
+      }
+    },
+    "playerTerminateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "playerProcessId", "entireProcessTree"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playerProcessId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "entireProcessTree": { "type": "boolean" }
+      }
+    },
+    "playerProcessSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "playerProcessId", "buildId", "processId", "processStartUtc", "startedAtUtc", "state", "terminationRequested"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "playerProcessId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "buildId": { "type": "string", "pattern": "^[0-9a-f]{32}$" },
+        "processId": { "type": "integer", "minimum": 1 },
+        "processStartUtc": { "type": "string", "format": "date-time" },
+        "startedAtUtc": { "type": "string", "format": "date-time" },
+        "state": { "enum": ["Running", "Exited"] },
+        "terminationRequested": { "type": "boolean" },
+        "exitedAtUtc": { "type": "string", "format": "date-time" },
+        "exitCode": { "type": "integer" }
+      }
+    },
+    "playerProcessListResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "items", "page"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "items": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/playerProcessSnapshot" } },
+        "page": { "$ref": "#/$defs/pageInfo" }
+      }
+    },
     "envelope": {
       "type": "object",
       "additionalProperties": false,

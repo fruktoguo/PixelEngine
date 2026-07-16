@@ -1,5 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>PixelEngine.Editor.Automation.Client</PackageId>
+    <Title>PixelEngine Editor Automation .NET Client</Title>
+    <Description>Public async .NET client for discovery, authenticated IPC, typed calls, paging, event resume and artifact verification.</Description>
+    <Authors>PixelEngine</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>pixelengine;editor;automation;client;named-pipe</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

@@ -468,6 +468,51 @@ public sealed class EditorAutomationRuntimeTests
                         descriptor.OperationKind == AutomationOperationKind.Write &&
                         descriptor.TransactionMode == AutomationTransactionMode.Optional &&
                         descriptor.UsesBackgroundPreparation));
+                Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.BuildStartMethod &&
+                    descriptor.Domain == "build" &&
+                    descriptor.RequestSchema == "#/$defs/buildStartRequest" &&
+                    descriptor.ResponseSchema == "#/$defs/buildSnapshot" &&
+                    descriptor.RequiredScopes.SequenceEqual([AutomationScopes.ProcessBuild]) &&
+                    descriptor.SupportedModes.SequenceEqual(["edit"]) &&
+                    descriptor.OperationKind == AutomationOperationKind.Command &&
+                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden &&
+                    descriptor.RequiresExpectedRevision &&
+                    descriptor.RequiresIdempotencyKey &&
+                    descriptor.EventTypes.Contains(
+                        AutomationProtocolConstants.BuildChangedEventType,
+                        StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains(
+                        "panel.build-settings.build-and-run",
+                        StringComparer.Ordinal));
+                Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.BuildWaitMethod &&
+                    descriptor.OperationKind == AutomationOperationKind.Read &&
+                    descriptor.UsesBackgroundPreparation &&
+                    !descriptor.RequiresExpectedRevision &&
+                    descriptor.RequiredScopes.SequenceEqual([AutomationScopes.ProcessBuild]));
+                Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.BuildLogExportMethod &&
+                    descriptor.ResponseSchema == "#/$defs/artifactReference" &&
+                    descriptor.ArtifactBehavior == AutomationArtifactBehavior.Required);
+                Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.PlayerLaunchMethod &&
+                    descriptor.Domain == "player" &&
+                    descriptor.RequiredScopes.SequenceEqual([AutomationScopes.ProcessLaunch]) &&
+                    descriptor.OperationKind == AutomationOperationKind.Command &&
+                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden &&
+                    descriptor.EventTypes.Contains(
+                        AutomationProtocolConstants.PlayerChangedEventType,
+                        StringComparer.Ordinal));
+                Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.PlayerWaitMethod &&
+                    descriptor.OperationKind == AutomationOperationKind.Read &&
+                    descriptor.UsesBackgroundPreparation);
+                Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.PlayerTerminateMethod &&
+                    descriptor.ResponseSchema == "#/$defs/playerProcessSnapshot" &&
+                    descriptor.RequiresExpectedRevision &&
+                    descriptor.RequiresIdempotencyKey);
 
                 Task<AutomationInvocationResult> consoleOptionsGetPending = client.InvokeDetailedAsync(
                     AutomationProtocolConstants.ConsoleOptionsGetMethod).AsTask();

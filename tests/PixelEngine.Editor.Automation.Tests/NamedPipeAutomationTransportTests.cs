@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -27,6 +28,7 @@ public sealed class NamedPipeAutomationTransportTests
         await using EditorAutomationServer server = CreateServer(temporary.Path, handler);
         await server.StartAsync();
         AutomationDiscoveredInstance instance = await DiscoverSingleAsync(temporary.Path);
+        handler.CapabilityDigest = instance.Descriptor.CapabilityDigest;
         await using EditorAutomationClient client = await ConnectAsync(
             instance,
             [AutomationScopes.EditorRead, AutomationScopes.EditorControl]);
@@ -75,6 +77,257 @@ public sealed class NamedPipeAutomationTransportTests
             Assert.DoesNotContain("proof", line, StringComparison.OrdinalIgnoreCase);
             Assert.DoesNotContain(credential, line, StringComparison.Ordinal);
         });
+    }
+
+    /// <summary>验证公开 Client 的 typed、分页、build 与 artifact 完整性辅助层。</summary>
+    [Fact]
+    public async Task ClientHighLevelHelpersUseTypedContractsAndVerifyArtifacts()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using TemporaryDirectory temporary = new();
+        TestHandler handler = new();
+        await using EditorAutomationServer server = CreateServer(temporary.Path, handler);
+        await server.StartAsync();
+        AutomationDiscoveredInstance instance = await DiscoverSingleAsync(temporary.Path);
+        handler.CapabilityDigest = instance.Descriptor.CapabilityDigest;
+        await using EditorAutomationClient client = await ConnectAsync(
+            instance,
+            [AutomationScopes.EditorRead, AutomationScopes.ProcessBuild]);
+
+        AutomationPageRequest echoRequest = new() { PageSize = 7 };
+        AutomationTypedInvocationResult<AutomationPageRequest> typed = await client.InvokeDetailedAsync(
+            TestHandler.EchoMethod,
+            echoRequest,
+            AutomationJsonContext.Default.AutomationPageRequest,
+            AutomationJsonContext.Default.AutomationPageRequest);
+        Assert.Equal(7, typed.Response.PageSize);
+
+        AutomationCapabilityCatalog catalog = await client.GetCapabilitiesAsync(pageSize: 1);
+        Assert.Equal(instance.Descriptor.CapabilityDigest, catalog.CapabilityDigest);
+        Assert.Contains(catalog.Items, item => item.Id == AutomationProtocolConstants.BuildGetMethod);
+        Assert.Equal(catalog.Items.Length, catalog.Items.Select(static item => item.Id).Distinct().Count());
+
+        string buildId = new('a', 32);
+        AutomationTypedInvocationResult<AutomationBuildSnapshot> build = await client.GetBuildAsync(buildId);
+        Assert.Equal(buildId, build.Response.BuildId);
+        Assert.Equal(AutomationBuildState.Running, build.Response.State);
+
+        AutomationRevisionSnapshot revision = new()
+        {
+            SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+            GlobalRevision = 17,
+            Resources =
+            [
+                new AutomationResourceRevision
+                {
+                    SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+                    ResourceId = "editor:build",
+                    Revision = 9,
+                },
+            ],
+        };
+        AutomationRevisionPrecondition expected = AutomationRevisionPreconditions.FromSnapshot(revision);
+        revision.Resources[0] = revision.Resources[0] with { Revision = 99 };
+        Assert.Equal(17, expected.GlobalRevision);
+        Assert.Equal(9, Assert.Single(expected.Resources).Revision);
+
+        string artifactPath = Path.Combine(temporary.Path, "artifact.bin");
+        byte[] artifactBytes = "client-artifact"u8.ToArray();
+        await File.WriteAllBytesAsync(artifactPath, artifactBytes);
+        AutomationArtifactReference artifact = new()
+        {
+            SchemaVersion = AutomationProtocolConstants.WireSchemaVersion,
+            ArtifactId = new string('b', 32),
+            Path = artifactPath,
+            RelativePath = Path.GetFileName(artifactPath),
+            MediaType = "application/octet-stream",
+            ByteLength = artifactBytes.Length,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData(artifactBytes)),
+            CreatedAtUtc = DateTimeOffset.UtcNow,
+            SourceRevision = revision,
+        };
+        handler.Artifact = artifact;
+        AutomationArtifactVerification verified = await client.VerifyArtifactAsync(artifact);
+        Assert.True(verified.Verified, verified.Diagnostic);
+
+        string substitutedPath = Path.Combine(temporary.Path, "substituted.bin");
+        byte[] substitutedBytes = "substituted-artifact"u8.ToArray();
+        await File.WriteAllBytesAsync(substitutedPath, substitutedBytes);
+        AutomationArtifactVerification substituted = await client.VerifyArtifactAsync(artifact with
+        {
+            Path = substitutedPath,
+            RelativePath = Path.GetFileName(substitutedPath),
+            ByteLength = substitutedBytes.Length,
+            Sha256 = Convert.ToHexStringLower(SHA256.HashData(substitutedBytes)),
+        });
+        Assert.False(substituted.Verified);
+        Assert.Equal(
+            "artifact reference 与 Server canonical metadata 不一致。",
+            substituted.Diagnostic);
+
+        string actualRoot = Path.Combine(temporary.Path, "actual", "nested");
+        string linkRoot = Path.Combine(temporary.Path, "linked-root");
+        _ = Directory.CreateDirectory(actualRoot);
+        string linkedArtifactTarget = Path.Combine(actualRoot, "linked.bin");
+        await File.WriteAllBytesAsync(linkedArtifactTarget, artifactBytes);
+        _ = Directory.CreateSymbolicLink(linkRoot, Path.Combine(temporary.Path, "actual"));
+        try
+        {
+            AutomationArtifactReference linked = artifact with
+            {
+                Path = Path.Combine(linkRoot, "nested", "linked.bin"),
+                RelativePath = "linked.bin",
+            };
+            handler.Artifact = linked;
+
+            AutomationConnectionException reparse = await Assert.ThrowsAsync<AutomationConnectionException>(
+                async () => await client.VerifyArtifactAsync(linked));
+
+            Assert.Contains("ancestor", reparse.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            handler.Artifact = artifact;
+            if (Directory.Exists(linkRoot))
+            {
+                Directory.Delete(linkRoot);
+            }
+        }
+
+        await File.AppendAllTextAsync(artifactPath, "tampered");
+        AutomationArtifactVerification tampered = await client.VerifyArtifactAsync(artifact);
+        Assert.False(tampered.Verified);
+        Assert.Equal("artifact 文件长度不匹配。", tampered.Diagnostic);
+    }
+
+    /// <summary>验证独立 CLI OS 进程通过 discovery、HMAC 与 capability catalog 调用真实 Pipe。</summary>
+    [Fact]
+    public async Task CliProcessDiscoversAuthenticatesAndInvokesCapability()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        CliProcessResult version = await RunCliAsync("--version");
+        Assert.Equal(0, version.ExitCode);
+        Assert.Equal("0.1.0", version.StandardOutput);
+        Assert.Equal(string.Empty, version.StandardError);
+
+        using TemporaryDirectory temporary = new();
+        TestHandler handler = new();
+        await using EditorAutomationServer server = CreateServer(temporary.Path, handler);
+        await server.StartAsync();
+        AutomationDiscoveredInstance instance = await DiscoverSingleAsync(temporary.Path);
+        handler.CapabilityDigest = instance.Descriptor.CapabilityDigest;
+
+        CliProcessResult result = await RunCliAsync(
+            "--discovery-root",
+            temporary.Path,
+            "--instance",
+            instance.Descriptor.InstanceId,
+            "--scopes",
+            AutomationScopes.EditorRead,
+            "--output",
+            "json",
+            "call",
+            TestHandler.EchoMethod,
+            "--payload",
+            "{\"source\":\"external-cli\",\"value\":42}");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Equal(string.Empty, result.StandardError);
+        using JsonDocument document = JsonDocument.Parse(result.StandardOutput);
+        JsonElement payload = document.RootElement.GetProperty("payload");
+        Assert.Equal("external-cli", payload.GetProperty("source").GetString());
+        Assert.Equal(42, payload.GetProperty("value").GetInt32());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("revision").ValueKind);
+        Assert.Contains(
+            (await ReadAuditLinesAsync(server.AuditLogPath)).Select(ParseAuditRecord),
+            static record =>
+                record.GetProperty("capability").GetString() == TestHandler.EchoMethod &&
+                record.GetProperty("result").GetString() == "success");
+
+        string failedBuildId = $"f{new string('0', 31)}";
+        CliProcessResult buildGet = await RunCliAsync(
+            "--discovery-root",
+            temporary.Path,
+            "--instance",
+            instance.Descriptor.InstanceId,
+            "--scopes",
+            $"{AutomationScopes.EditorRead},{AutomationScopes.ProcessBuild}",
+            "--output",
+            "json",
+            "build",
+            "get",
+            failedBuildId);
+        Assert.Equal(0, buildGet.ExitCode);
+        Assert.Equal(
+            "Failed",
+            JsonDocument.Parse(buildGet.StandardOutput).RootElement
+                .GetProperty("payload")
+                .GetProperty("state")
+                .GetString());
+
+        string cancelledBuildId = $"c{new string('0', 31)}";
+        CliProcessResult buildWait = await RunCliAsync(
+            "--discovery-root",
+            temporary.Path,
+            "--instance",
+            instance.Descriptor.InstanceId,
+            "--scopes",
+            $"{AutomationScopes.EditorRead},{AutomationScopes.ProcessBuild}",
+            "--output",
+            "json",
+            "build",
+            "wait",
+            cancelledBuildId);
+        Assert.Equal(7, buildWait.ExitCode);
+        Assert.Equal(
+            "Cancelled",
+            JsonDocument.Parse(buildWait.StandardOutput).RootElement
+                .GetProperty("payload")
+                .GetProperty("state")
+                .GetString());
+
+        string failedPlayerId = $"f{new string('1', 31)}";
+        CliProcessResult playerGet = await RunCliAsync(
+            "--discovery-root",
+            temporary.Path,
+            "--instance",
+            instance.Descriptor.InstanceId,
+            "--scopes",
+            $"{AutomationScopes.EditorRead},{AutomationScopes.ProcessLaunch}",
+            "--output",
+            "json",
+            "player",
+            "get",
+            failedPlayerId);
+        Assert.Equal(0, playerGet.ExitCode);
+
+        CliProcessResult playerWait = await RunCliAsync(
+            "--discovery-root",
+            temporary.Path,
+            "--instance",
+            instance.Descriptor.InstanceId,
+            "--scopes",
+            $"{AutomationScopes.EditorRead},{AutomationScopes.ProcessLaunch}",
+            "--output",
+            "json",
+            "player",
+            "wait",
+            failedPlayerId);
+        Assert.Equal(8, playerWait.ExitCode);
+        Assert.Equal(
+            23,
+            JsonDocument.Parse(playerWait.StandardOutput).RootElement
+                .GetProperty("payload")
+                .GetProperty("exitCode")
+                .GetInt32());
     }
 
     /// <summary>验证缺失 scope 返回稳定结构化授权错误。</summary>
@@ -702,6 +955,79 @@ public sealed class NamedPipeAutomationTransportTests
         return [.. lines];
     }
 
+    private static async ValueTask<CliProcessResult> RunCliAsync(params string[] arguments)
+    {
+        string repositoryRoot = FindRepositoryRoot();
+        string outputDirectory = new DirectoryInfo(
+            AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            .Parent?.Name ?? throw new InvalidOperationException("无法确定测试 Configuration。");
+        string cliPath = Path.Combine(
+            repositoryRoot,
+            "tools",
+            "PixelEngine.Editor.Cli",
+            "bin",
+            outputDirectory,
+            "net10.0",
+            "pixelengine-editor.dll");
+        if (!File.Exists(cliPath))
+        {
+            throw new FileNotFoundException("CLI build output 不存在。", cliPath);
+        }
+
+        ProcessStartInfo startInfo = new("dotnet")
+        {
+            WorkingDirectory = repositoryRoot,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+        startInfo.ArgumentList.Add(cliPath);
+        for (int i = 0; i < arguments.Length; i++)
+        {
+            startInfo.ArgumentList.Add(arguments[i]);
+        }
+
+        using Process process = Process.Start(startInfo) ??
+            throw new InvalidOperationException("无法启动 pixelengine-editor CLI。");
+        Task<string> standardOutput = process.StandardOutput.ReadToEndAsync();
+        Task<string> standardError = process.StandardError.ReadToEndAsync();
+        try
+        {
+            await process.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(15));
+        }
+        catch (TimeoutException)
+        {
+            process.Kill(entireProcessTree: true);
+            await process.WaitForExitAsync();
+            throw new InvalidOperationException("pixelengine-editor CLI 在 15 秒内未退出。");
+        }
+
+        return new CliProcessResult(
+            process.ExitCode,
+            (await standardOutput).Trim(),
+            (await standardError).Trim());
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")) &&
+                File.Exists(Path.Combine(directory.FullName, "AGENTS.md")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("无法从测试输出目录定位仓库根。");
+    }
+
+    private sealed record CliProcessResult(int ExitCode, string StandardOutput, string StandardError);
+
     private static AutomationDiscoveredInstance CreateSyntheticInstance(string pipeName, string credentialPath)
     {
         AutomationInstanceDescriptor descriptor = new()
@@ -801,9 +1127,90 @@ public sealed class NamedPipeAutomationTransportTests
                     TransactionMode = AutomationTransactionMode.Forbidden,
                     ArtifactBehavior = AutomationArtifactBehavior.Required,
                 },
+                [AutomationProtocolConstants.BuildGetMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.BuildGetMethod,
+                    Domain = "build",
+                    RequestSchema = "#/$defs/buildRequest",
+                    ResponseSchema = "#/$defs/buildSnapshot",
+                    RequiredScopes = [AutomationScopes.ProcessBuild],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [AutomationProtocolConstants.BuildWaitMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.BuildWaitMethod,
+                    Domain = "build",
+                    RequestSchema = "#/$defs/buildRequest",
+                    ResponseSchema = "#/$defs/buildSnapshot",
+                    RequiredScopes = [AutomationScopes.ProcessBuild],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [AutomationProtocolConstants.PlayerGetMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.PlayerGetMethod,
+                    Domain = "player",
+                    RequestSchema = "#/$defs/playerProcessRequest",
+                    ResponseSchema = "#/$defs/playerProcessSnapshot",
+                    RequiredScopes = [AutomationScopes.ProcessLaunch],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [AutomationProtocolConstants.PlayerWaitMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.PlayerWaitMethod,
+                    Domain = "player",
+                    RequestSchema = "#/$defs/playerProcessRequest",
+                    ResponseSchema = "#/$defs/playerProcessSnapshot",
+                    RequiredScopes = [AutomationScopes.ProcessLaunch],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [AutomationProtocolConstants.ArtifactListMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.ArtifactListMethod,
+                    Domain = "artifact",
+                    RequestSchema = "#/$defs/pageRequest",
+                    ResponseSchema = "#/$defs/artifactListResponse",
+                    RequiredScopes = [AutomationScopes.EditorRead],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [AutomationProtocolConstants.ArtifactVerifyMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.ArtifactVerifyMethod,
+                    Domain = "artifact",
+                    RequestSchema = "#/$defs/artifactRequest",
+                    ResponseSchema = "#/$defs/artifactVerifyResult",
+                    RequiredScopes = [AutomationScopes.EditorRead],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
+                [AutomationProtocolConstants.CapabilityListMethod] = new AutomationMethodDescriptor
+                {
+                    Method = AutomationProtocolConstants.CapabilityListMethod,
+                    Domain = "system",
+                    RequestSchema = "#/$defs/pageRequest",
+                    ResponseSchema = "#/$defs/capabilityListResponse",
+                    RequiredScopes = [AutomationScopes.EditorRead],
+                    OperationKind = AutomationOperationKind.Read,
+                    ExecutionPhase = AutomationExecutionPhase.Background,
+                    TransactionMode = AutomationTransactionMode.Forbidden,
+                },
             });
 
         public bool DeferredFactoryInvoked { get; private set; }
+
+        public string CapabilityDigest { get; set; } = new string('0', 64);
+
+        public AutomationArtifactReference? Artifact { get; set; }
 
         public TaskCompletionSource WaitStarted { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -822,10 +1229,110 @@ public sealed class NamedPipeAutomationTransportTests
             JsonElement? payload,
             CancellationToken cancellationToken)
         {
+            if (string.Equals(method, AutomationProtocolConstants.CapabilityListMethod, StringComparison.Ordinal))
+            {
+                AutomationPageRequest request = payload?.Deserialize(
+                    AutomationJsonContext.Default.AutomationPageRequest)
+                    ?? throw new InvalidOperationException("capability list 缺少 page request。");
+                AutomationCapabilityDescriptor[] source =
+                [
+                    .. _descriptors.Values
+                        .OrderBy(static descriptor => descriptor.Method, StringComparer.Ordinal)
+                        .Select(static descriptor => new AutomationCapabilityDescriptor
+                        {
+                            Id = descriptor.Method,
+                            Domain = string.IsNullOrWhiteSpace(descriptor.Domain) ? "test" : descriptor.Domain,
+                            OperationKind = descriptor.OperationKind,
+                            RequestSchema = string.IsNullOrWhiteSpace(descriptor.RequestSchema)
+                                ? "#/$defs/emptyRequest"
+                                : descriptor.RequestSchema,
+                            ResponseSchema = string.IsNullOrWhiteSpace(descriptor.ResponseSchema)
+                                ? "#/$defs/emptyRequest"
+                                : descriptor.ResponseSchema,
+                            RequiredScopes = descriptor.RequiredScopes,
+                            SupportedModes = descriptor.SupportedModes.Length == 0
+                                ? ["edit", "play", "paused"]
+                                : descriptor.SupportedModes,
+                            ExecutionPhase = descriptor.ExecutionPhase,
+                            TransactionMode = descriptor.TransactionMode,
+                            RequiresExpectedRevision = descriptor.RequiresExpectedRevision,
+                            RequiresIdempotencyKey = descriptor.RequiresIdempotencyKey,
+                            EventTypes = descriptor.EventTypes,
+                            ArtifactBehavior = descriptor.ArtifactBehavior,
+                            UiCommandIds = descriptor.UiCommandIds,
+                        }),
+                ];
+                int offset = request.Cursor is null
+                    ? 0
+                    : int.Parse(request.Cursor, System.Globalization.CultureInfo.InvariantCulture);
+                int count = Math.Min(request.PageSize, source.Length - offset);
+                AutomationCapabilityDescriptor[] page = new AutomationCapabilityDescriptor[count];
+                Array.Copy(source, offset, page, 0, count);
+                int nextOffset = offset + count;
+                return new AutomationHandlerResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(
+                        new AutomationCapabilityListResponse
+                        {
+                            CapabilityDigest = CapabilityDigest,
+                            Items = page,
+                            Page = new AutomationPageInfo
+                            {
+                                Returned = count,
+                                Total = source.Length,
+                                NextCursor = nextOffset < source.Length
+                                    ? nextOffset.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                                    : null,
+                            },
+                        },
+                        AutomationJsonContext.Default.AutomationCapabilityListResponse),
+                };
+            }
+
             if (string.Equals(method, EchoMethod, StringComparison.Ordinal))
             {
                 await Task.Yield();
                 return new AutomationHandlerResult { Payload = payload?.Clone() };
+            }
+
+            if (string.Equals(method, AutomationProtocolConstants.ArtifactListMethod, StringComparison.Ordinal))
+            {
+                AutomationArtifactReference[] artifacts = Artifact is null ? [] : [Artifact];
+                return new AutomationHandlerResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(
+                        new AutomationArtifactListResponse
+                        {
+                            Items = artifacts,
+                            Page = new AutomationPageInfo
+                            {
+                                Returned = artifacts.Length,
+                                Total = artifacts.Length,
+                            },
+                        },
+                        AutomationJsonContext.Default.AutomationArtifactListResponse),
+                };
+            }
+
+            if (string.Equals(method, AutomationProtocolConstants.ArtifactVerifyMethod, StringComparison.Ordinal))
+            {
+                AutomationArtifactRequest request = payload?.Deserialize(
+                    AutomationJsonContext.Default.AutomationArtifactRequest)
+                    ?? throw new InvalidOperationException("artifact.verify 缺少 request。");
+                bool matches = Artifact is { } artifact &&
+                    string.Equals(artifact.ArtifactId, request.ArtifactId, StringComparison.Ordinal) &&
+                    File.Exists(artifact.Path) &&
+                    new FileInfo(artifact.Path).Length == artifact.ByteLength;
+                return new AutomationHandlerResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(
+                        new AutomationArtifactVerifyResult
+                        {
+                            ArtifactId = request.ArtifactId,
+                            Verified = matches,
+                        },
+                        AutomationJsonContext.Default.AutomationArtifactVerifyResult),
+                };
             }
 
             if (string.Equals(method, ControlMethod, StringComparison.Ordinal))
@@ -857,6 +1364,65 @@ public sealed class NamedPipeAutomationTransportTests
                             revision = revision.GlobalRevision,
                         });
                     },
+                };
+            }
+
+            if (string.Equals(method, AutomationProtocolConstants.BuildGetMethod, StringComparison.Ordinal) ||
+                string.Equals(method, AutomationProtocolConstants.BuildWaitMethod, StringComparison.Ordinal))
+            {
+                AutomationBuildRequest request = payload?.Deserialize(
+                    AutomationJsonContext.Default.AutomationBuildRequest)
+                    ?? throw new InvalidOperationException("build.get 缺少 request。");
+                AutomationBuildState state = request.BuildId[0] switch
+                {
+                    'f' => AutomationBuildState.Failed,
+                    'c' => AutomationBuildState.Cancelled,
+                    _ when string.Equals(method, AutomationProtocolConstants.BuildWaitMethod, StringComparison.Ordinal) =>
+                        AutomationBuildState.Succeeded,
+                    _ => AutomationBuildState.Running,
+                };
+                return new AutomationHandlerResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(
+                        new AutomationBuildSnapshot
+                        {
+                            BuildId = request.BuildId,
+                            State = state,
+                            Phase = AutomationBuildPhase.Native,
+                            Percent = state == AutomationBuildState.Running ? 0.25f : 1,
+                            StartedAtUtc = DateTimeOffset.UtcNow,
+                            CompletedAtUtc = state == AutomationBuildState.Running ? null : DateTimeOffset.UtcNow,
+                            LaunchOnSuccess = false,
+                            CancellationRequested = state == AutomationBuildState.Cancelled,
+                        },
+                        AutomationJsonContext.Default.AutomationBuildSnapshot),
+                };
+            }
+
+            if (string.Equals(method, AutomationProtocolConstants.PlayerGetMethod, StringComparison.Ordinal) ||
+                string.Equals(method, AutomationProtocolConstants.PlayerWaitMethod, StringComparison.Ordinal))
+            {
+                AutomationPlayerProcessRequest request = payload?.Deserialize(
+                    AutomationJsonContext.Default.AutomationPlayerProcessRequest)
+                    ?? throw new InvalidOperationException("player request 缺失。");
+                bool failed = request.PlayerProcessId[0] == 'f';
+                DateTimeOffset now = DateTimeOffset.UtcNow;
+                return new AutomationHandlerResult
+                {
+                    Payload = JsonSerializer.SerializeToElement(
+                        new AutomationPlayerProcessSnapshot
+                        {
+                            PlayerProcessId = request.PlayerProcessId,
+                            BuildId = new string('a', 32),
+                            ProcessId = Environment.ProcessId,
+                            ProcessStartUtc = now,
+                            StartedAtUtc = now,
+                            State = AutomationPlayerProcessState.Exited,
+                            TerminationRequested = false,
+                            ExitedAtUtc = now,
+                            ExitCode = failed ? 23 : 0,
+                        },
+                        AutomationJsonContext.Default.AutomationPlayerProcessSnapshot),
                 };
             }
 

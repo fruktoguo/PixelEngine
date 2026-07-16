@@ -40,6 +40,7 @@ internal sealed class EditorShellHostExtension :
     private ProjectSettingsPanel? _projectSettingsPanel;
     private PlayerSettingsPanel? _playerSettingsPanel;
     private BuildSettingsPanel? _buildSettingsPanel;
+    private EditorPlayerProcessManager? _playerProcessManager;
     private SceneViewPanel? _sceneViewPanel;
     private GameViewPanel? _gameViewPanel;
     private GameObjectInspectorPanel? _gameObjectInspectorPanel;
@@ -999,6 +1000,10 @@ internal sealed class EditorShellHostExtension :
         // Scene View 关闭后 EditorApp 不再 Draw 面板；gizmo 事务仍须响应 selection/mode/scene 生命周期。
         _sceneViewPanel?.PrepareFrame(_editor.Selection.GameObjectStableId, mode);
         _consolePanel?.PrepareFrame();
+        if (_buildSettingsPanel?.HasPendingWork == true)
+        {
+            _buildSettingsPanel.PrepareFrame();
+        }
         _editor.SetUiScale(_app.UiScale);
         _editor.SetLayoutPersistence(_app.Preferences.Current.SaveLayoutOnExit);
     }
@@ -1296,6 +1301,100 @@ internal sealed class EditorShellHostExtension :
         return _buildSettingsPanel.TryStartBuild(runAfterBuild, out diagnostic);
     }
 
+    internal EditorBuildPreflightWorkspace CaptureAutomationBuildPreflightWorkspace()
+    {
+        return RequireBuildSettingsPanel().CaptureAutomationBuildPreflightWorkspace();
+    }
+
+    internal bool TryStartAutomationBuild(
+        string buildId,
+        bool launchOnSuccess,
+        out EditorBuildExecutionSnapshot snapshot,
+        out string diagnostic)
+    {
+        return RequireBuildSettingsPanel().TryStartAutomationBuild(
+            buildId,
+            launchOnSuccess,
+            out snapshot,
+            out diagnostic);
+    }
+
+    internal EditorBuildExecutionSnapshot CaptureAutomationBuild(string buildId)
+    {
+        return RequireBuildSettingsPanel().CaptureAutomationBuild(buildId);
+    }
+
+    internal EditorBuildExecutionSnapshot[] CaptureAutomationBuilds()
+    {
+        return RequireBuildSettingsPanel().CaptureAutomationBuilds();
+    }
+
+    internal EditorBuildExecutionLogSnapshot CaptureAutomationBuildLog(string buildId)
+    {
+        return RequireBuildSettingsPanel().CaptureAutomationBuildLog(buildId);
+    }
+
+    internal Task<BuildResult> CaptureAutomationBuildCompletion(string buildId)
+    {
+        return RequireBuildSettingsPanel().CaptureAutomationBuildCompletion(buildId);
+    }
+
+    internal bool RequestAutomationBuildCancellation(
+        string buildId,
+        bool notifyChanged,
+        out EditorBuildExecutionSnapshot snapshot)
+    {
+        return RequireBuildSettingsPanel().RequestAutomationBuildCancellation(
+            buildId,
+            notifyChanged,
+            out snapshot);
+    }
+
+    internal EditorPlayerProcessSnapshot LaunchAutomationPlayer(
+        string buildId,
+        bool notifyChanged,
+        string? playerProcessId = null)
+    {
+        EditorBuildExecutionSnapshot build = RequireBuildSettingsPanel().CaptureAutomationBuild(buildId);
+        BuildResult result = build.State == EditorBuildExecutionState.Succeeded && build.Result is not null
+            ? build.Result
+            : throw new InvalidOperationException($"Build '{buildId}' 尚未成功，不能启动 player。");
+
+        return RequirePlayerProcessManager().Launch(
+            buildId,
+            result,
+            notifyChanged,
+            playerProcessId);
+    }
+
+    internal EditorPlayerProcessSnapshot CaptureAutomationPlayer(string playerProcessId)
+    {
+        return RequirePlayerProcessManager().Capture(playerProcessId);
+    }
+
+    internal EditorPlayerProcessSnapshot[] CaptureAutomationPlayers()
+    {
+        return RequirePlayerProcessManager().CaptureAll();
+    }
+
+    internal EditorPlayerProcessWaitWorkspace CaptureAutomationPlayerWaitWorkspace(
+        string playerProcessId)
+    {
+        return RequirePlayerProcessManager().CaptureWaitWorkspace(playerProcessId);
+    }
+
+    internal bool RequestAutomationPlayerTermination(
+        string playerProcessId,
+        bool entireProcessTree,
+        out EditorPlayerProcessSnapshot snapshot)
+    {
+        return RequirePlayerProcessManager().RequestTermination(
+            playerProcessId,
+            entireProcessTree,
+            notifyChanged: false,
+            out snapshot);
+    }
+
     public ScriptedBuildProbeSnapshot CaptureScriptedBuildProbe()
     {
         return _buildSettingsPanel?.CaptureScriptedBuildProbe() ?? new ScriptedBuildProbeSnapshot();
@@ -1304,6 +1403,18 @@ internal sealed class EditorShellHostExtension :
     public void CancelScriptedBuildProbe()
     {
         _buildSettingsPanel?.CancelScriptedBuildProbe();
+    }
+
+    private BuildSettingsPanel RequireBuildSettingsPanel()
+    {
+        return _buildSettingsPanel ??
+            throw new InvalidOperationException("Build Settings 面板尚未注册。");
+    }
+
+    private EditorPlayerProcessManager RequirePlayerProcessManager()
+    {
+        return _playerProcessManager ??
+            throw new InvalidOperationException("Player process manager 尚未初始化。");
     }
 
     public ScriptedBuildSettingsProbeSnapshot ApplyScriptedBuildSettingsProbe(string outputDirectory)
@@ -1456,6 +1567,8 @@ internal sealed class EditorShellHostExtension :
             _gameObjectInspectorPanel,
             _sceneWebCanvasPreview,
             _sceneViewPanel,
+            _playerProcessManager,
+            _buildSettingsPanel,
             externalAssetDrop);
     }
 
@@ -1722,10 +1835,12 @@ internal sealed class EditorShellHostExtension :
         }
 
         _projectSettingsPanel = new ProjectSettingsPanel(_project, () => _app.UiScale);
+        _playerProcessManager = new EditorPlayerProcessManager();
         _buildSettingsPanel = new BuildSettingsPanel(
             _project,
             console: _app.ConsoleStore,
-            prepareScene: _app.PrepareSceneForBuild);
+            prepareScene: _app.PrepareSceneForBuild,
+            playerProcesses: _playerProcessManager);
         _projectSettingsPanel.SettingsApplied += () => _app.NotifyAutomationSettingsChanged(
             "settings.project.changed",
             ["editor:project", "editor:project-settings"]);
@@ -1735,6 +1850,9 @@ internal sealed class EditorShellHostExtension :
         _buildSettingsPanel.SettingsApplied += () => _app.NotifyAutomationSettingsChanged(
             "settings.build.changed",
             ["editor:project", "editor:build-settings"]);
+        _buildSettingsPanel.BuildChanged += _app.NotifyAutomationBuildChanged;
+        _playerProcessManager.Changed += snapshot =>
+            _app.NotifyAutomationPlayerChanged(snapshot.PlayerProcessId);
         AddHiddenPanel(EditorPanelIds.ProjectSettings, _projectSettingsPanel);
         AddHiddenPanel(EditorPanelIds.PlayerSettings, _playerSettingsPanel);
         AddHiddenPanel(EditorPanelIds.BuildSettings, _buildSettingsPanel);

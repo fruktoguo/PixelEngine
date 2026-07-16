@@ -1,5 +1,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>PixelEngine.Editor.Automation.Protocol</PackageId>
+    <Title>PixelEngine Editor Automation Protocol</Title>
+    <Description>Versioned DTO, framing, authentication contracts and JSON Schema for the PixelEngine Editor local automation API.</Description>
+    <Authors>PixelEngine</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>pixelengine;editor;automation;protocol;named-pipe</PackageTags>
+  </PropertyGroup>
   <ItemGroup>
+    <None Update="README.md" Pack="true" PackagePath="/" />
     <None Include="../../schema/editor-automation-protocol.v1.schema.json"
           Link="schema/editor-automation-protocol.v1.schema.json"
           CopyToOutputDirectory="PreserveNewest"

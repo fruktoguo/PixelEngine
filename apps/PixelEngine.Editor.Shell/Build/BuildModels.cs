@@ -108,6 +108,15 @@ internal sealed record BuildPreflight
     public string Diagnostic { get; init; } = string.Empty;
 }
 
+/// <summary>冻结 build service 后可由 automation 后台 worker 执行的 preflight。</summary>
+internal sealed class EditorBuildPreflightWorkspace(IPlayerBuildService buildService)
+{
+    public Task<BuildPreflight> RunAsync(CancellationToken cancellationToken)
+    {
+        return buildService.PreflightAsync(cancellationToken);
+    }
+}
+
 /// <summary>
 /// BuildProfile 与 EditorProject 之间的适配器。
 /// </summary>
@@ -339,6 +348,53 @@ internal sealed record BuildRunView
 
     public BuildPreflight? Preflight { get; init; }
 }
+
+/// <summary>共享 build 执行状态。</summary>
+internal enum EditorBuildExecutionState
+{
+    Running,
+    Succeeded,
+    Failed,
+    Cancelled,
+}
+
+/// <summary>UI 与 automation 共用的稳定 build 快照。</summary>
+internal sealed record EditorBuildExecutionSnapshot(
+    string BuildId,
+    EditorBuildExecutionState State,
+    BuildPhase Phase,
+    float Percent,
+    DateTimeOffset StartedAtUtc,
+    DateTimeOffset? CompletedAtUtc,
+    bool LaunchOnSuccess,
+    bool CancellationRequested,
+    string? PlayerProcessId,
+    string? PlayerLaunchError,
+    BuildResult? Result);
+
+/// <summary>一个 build job 的有界日志快照。</summary>
+internal sealed record EditorBuildExecutionLogSnapshot(
+    string BuildId,
+    BuildProgressEvent[] Entries);
+
+/// <summary>UI 与 automation 共用的稳定 player process 状态。</summary>
+internal enum EditorPlayerProcessState
+{
+    Running,
+    Exited,
+}
+
+/// <summary>由 Editor 启动的受管 player process 快照。</summary>
+internal sealed record EditorPlayerProcessSnapshot(
+    string PlayerProcessId,
+    string BuildId,
+    int ProcessId,
+    DateTimeOffset ProcessStartUtc,
+    DateTimeOffset StartedAtUtc,
+    EditorPlayerProcessState State,
+    bool TerminationRequested,
+    DateTimeOffset? ExitedAtUtc,
+    int? ExitCode);
 
 /// <summary>
 /// 脚本化验收探针：ScriptedBuildProbeSnapshot。

@@ -90,6 +90,12 @@ internal static class EditorAutomationEventRouting
             case "artifact":
                 eventTypes.Add(AutomationProtocolConstants.ArtifactChangedEventType);
                 break;
+            case "build":
+                eventTypes.Add(AutomationProtocolConstants.BuildChangedEventType);
+                break;
+            case "player":
+                eventTypes.Add(AutomationProtocolConstants.PlayerChangedEventType);
+                break;
             default:
                 break;
         }
@@ -167,6 +173,16 @@ internal static class EditorAutomationEventRouting
                 resource is "editor:preferences")
             {
                 _ = eventTypes.Add(AutomationProtocolConstants.SettingsChangedEventType);
+            }
+
+            if (resource.StartsWith("editor:build", StringComparison.Ordinal))
+            {
+                _ = eventTypes.Add(AutomationProtocolConstants.BuildChangedEventType);
+            }
+
+            if (resource.StartsWith("editor:player", StringComparison.Ordinal))
+            {
+                _ = eventTypes.Add(AutomationProtocolConstants.PlayerChangedEventType);
             }
         }
 

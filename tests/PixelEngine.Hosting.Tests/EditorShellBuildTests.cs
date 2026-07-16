@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Numerics;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Editor.Shell.Settings;
@@ -34,6 +35,13 @@ public sealed class EditorShellBuildTests
             Write-Output 'plain current phase log'
             Write-Output '{"schema":"pixelengine.build/v1","kind":"progress","phase":"audit","percent":90,"level":"warning","message":"audit running","ts":"2026-07-06T00:00:01Z"}'
             [Console]::Error.WriteLine('stderr audit line')
+            $packageArchive = Join-Path $Output 'PixelEngine-Demo-test-win-x64-r2r.zip'
+            $packageDir = Join-Path $Output 'PixelEngine-Demo-test-win-x64-r2r'
+            $playerDir = Join-Path $Output 'player'
+            $launcherExe = Join-Path $playerDir 'PixelEngine Demo.exe'
+            New-Item -ItemType Directory -Force -Path $packageDir,$playerDir | Out-Null
+            Set-Content -LiteralPath $packageArchive -Value 'archive' -Encoding ASCII
+            Set-Content -LiteralPath $launcherExe -Value 'launcher' -Encoding ASCII
             $result = @{
               ok = $true
               rid = $Rid
@@ -42,10 +50,10 @@ public sealed class EditorShellBuildTests
               configuration = $Configuration
               version = $Version
               informationalVersion = 'test-info'
-              packageArchive = 'PixelEngine-Demo-test-win-x64-r2r.zip'
-              packageDir = 'PixelEngine-Demo-test-win-x64-r2r'
-              playerDir = 'player'
-              launcherExe = 'PixelEngine Demo.exe'
+              packageArchive = $packageArchive
+              packageDir = $packageDir
+              playerDir = $playerDir
+              launcherExe = $launcherExe
               sha256 = 'abc'
               sizeBytes = 123
               phaseTimingsMs = @{ native = 1.5; audit = 2.5 }
@@ -67,7 +75,9 @@ public sealed class EditorShellBuildTests
         Assert.Equal(0, result.ExitCode);
         Assert.Equal("win-x64", result.Rid);
         Assert.Equal("Production", result.ReleaseChannel);
-        Assert.Equal("PixelEngine-Demo-test-win-x64-r2r.zip", result.PackageArchive);
+        Assert.Equal(
+            Path.Combine(temp.Path, "PixelEngine-Demo-test-win-x64-r2r.zip"),
+            result.PackageArchive);
         Assert.Contains(progress.Events, e => e.Kind == BuildEventKind.Progress && e.Phase == BuildPhase.Native && Math.Abs(e.Percent - 0.1f) < 0.001f);
         Assert.Contains(progress.Events, e => e.Kind == BuildEventKind.Log && e.Phase == BuildPhase.Native && e.Message == "plain current phase log");
         Assert.Contains(progress.Events, e => e.Kind == BuildEventKind.Progress && e.Phase == BuildPhase.Audit && e.Level == BuildLogLevel.Warning);
@@ -143,6 +153,70 @@ public sealed class EditorShellBuildTests
         Assert.Contains("exit code=6", missing.Error, StringComparison.Ordinal);
         Assert.Contains("stdout tail", missing.Error, StringComparison.Ordinal);
         Assert.Contains("stderr tail", missing.Error, StringComparison.Ordinal);
+
+        using TempDir staleTemp = new();
+        string staleScript = WriteBuildPlayerScript(staleTemp.Path, "exit 0");
+        string staleOutput = Path.Combine(staleTemp.Path, "out");
+        string stalePlayer = Path.Combine(staleOutput, "player");
+        _ = Directory.CreateDirectory(stalePlayer);
+        string staleLauncher = Path.Combine(stalePlayer, "Stale Player.exe");
+        File.WriteAllText(staleLauncher, "stale");
+        File.WriteAllText(
+            Path.Combine(staleOutput, "build-result.json"),
+            JsonSerializer.Serialize(
+                new BuildResult
+                {
+                    Ok = true,
+                    PlayerDir = stalePlayer,
+                    LauncherExe = staleLauncher,
+                    ExitCode = 0,
+                },
+                PixelEngineEditorShellBuildJsonContext.Default.BuildResult));
+        PlayerBuildService staleService = new(new FakeLocator(staleTemp.Path, staleScript));
+
+        BuildResult stale = await staleService.RunAsync(
+            CreateRequest(staleOutput),
+            new RecordingProgress(),
+            CancellationToken.None);
+
+        Assert.False(stale.Ok);
+        Assert.Equal(0, stale.ExitCode);
+        Assert.Contains("未写入 build-result.json", stale.Error, StringComparison.Ordinal);
+        Assert.False(File.Exists(Path.Combine(staleOutput, "build-result.json")));
+    }
+
+    /// <summary>Build 输出叶子不得通过 reparse point 截断 output root 外文件。</summary>
+    [Fact]
+    public async Task PlayerBuildServiceRejectsReparseOutputLeafBeforeStartingProcess()
+    {
+        using TempDir temp = new();
+        string script = WriteBuildPlayerScript(temp.Path, "exit 0");
+        string output = Path.Combine(temp.Path, "out");
+        _ = Directory.CreateDirectory(output);
+        string outside = Path.Combine(temp.Path, "outside.log");
+        File.WriteAllText(outside, "intact");
+        string logLink = Path.Combine(output, "build.log");
+        _ = File.CreateSymbolicLink(logLink, outside);
+        try
+        {
+            PlayerBuildService service = new(new FakeLocator(temp.Path, script));
+
+            InvalidOperationException exception = await Assert.ThrowsAsync<InvalidOperationException>(
+                () => service.RunAsync(
+                    CreateRequest(output),
+                    new RecordingProgress(),
+                    CancellationToken.None));
+
+            Assert.Contains("reparse point", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("intact", File.ReadAllText(outside));
+        }
+        finally
+        {
+            if (File.Exists(logLink))
+            {
+                File.Delete(logLink);
+            }
+        }
     }
 
     /// <summary>
@@ -158,6 +232,13 @@ public sealed class EditorShellBuildTests
             """
             Write-Output '{"schema":"pixelengine.build/v1","kind":"progress","phase":"publish","percent":35,"level":"info","message":"waiting","ts":"2026-07-06T00:00:00Z"}'
             if (Test-Path -LiteralPath (Join-Path $Output 'complete.flag')) {
+              $packageArchive = Join-Path $Output 'pkg.zip'
+              $packageDir = Join-Path $Output 'pkg'
+              $playerDir = Join-Path $Output 'player'
+              $launcherExe = Join-Path $playerDir 'PixelEngine Demo.exe'
+              New-Item -ItemType Directory -Force -Path $packageDir,$playerDir | Out-Null
+              Set-Content -LiteralPath $packageArchive -Value 'archive' -Encoding ASCII
+              Set-Content -LiteralPath $launcherExe -Value 'launcher' -Encoding ASCII
               $result = @{
                 ok = $true
                 rid = $Rid
@@ -165,10 +246,10 @@ public sealed class EditorShellBuildTests
                 configuration = $Configuration
                 version = $Version
                 informationalVersion = ''
-                packageArchive = 'pkg.zip'
-                packageDir = 'pkg'
-                playerDir = 'player'
-                launcherExe = 'PixelEngine Demo.exe'
+                packageArchive = $packageArchive
+                packageDir = $packageDir
+                playerDir = $playerDir
+                launcherExe = $launcherExe
                 sha256 = 'abc'
                 sizeBytes = 1
                 phaseTimingsMs = @{}
@@ -836,6 +917,13 @@ public sealed class EditorShellBuildTests
               includeSceneCount = $IncludeScene.Count
             }
             $received | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $Output 'received-args.json') -Encoding UTF8
+            $packageArchive = Join-Path $Output 'pkg.zip'
+            $packageDir = Join-Path $Output 'pkg'
+            $playerDir = Join-Path $Output 'player'
+            $launcherExe = Join-Path $playerDir 'Player Projection.exe'
+            New-Item -ItemType Directory -Force -Path $packageDir,$playerDir | Out-Null
+            Set-Content -LiteralPath $packageArchive -Value 'archive' -Encoding ASCII
+            Set-Content -LiteralPath $launcherExe -Value 'launcher' -Encoding ASCII
             $result = @{
               ok = $true
               rid = $Rid
@@ -844,10 +932,10 @@ public sealed class EditorShellBuildTests
               configuration = $Configuration
               version = $Version
               informationalVersion = ''
-              packageArchive = 'pkg.zip'
-              packageDir = 'pkg'
-              playerDir = 'player'
-              launcherExe = 'Player Projection.exe'
+              packageArchive = $packageArchive
+              packageDir = $packageDir
+              playerDir = $playerDir
+              launcherExe = $launcherExe
               sha256 = 'abc'
               sizeBytes = 1
               phaseTimingsMs = @{}

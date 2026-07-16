@@ -500,6 +500,42 @@ public static class AutomationProtocolConstants
     /// <summary>设置一个 debug overlay flag。</summary>
     public const string DebugOverlaySetMethod = "debug.overlay.set";
 
+    /// <summary>重新执行 build tool preflight 并返回结构化结果。</summary>
+    public const string BuildPreflightMethod = "build.preflight";
+
+    /// <summary>使用当前 Build Settings 启动异步玩家构建。</summary>
+    public const string BuildStartMethod = "build.start";
+
+    /// <summary>分页读取当前 Editor 实例保留的 build jobs。</summary>
+    public const string BuildListMethod = "build.list";
+
+    /// <summary>读取一个 build job。</summary>
+    public const string BuildGetMethod = "build.get";
+
+    /// <summary>等待一个 build job 到达终态。</summary>
+    public const string BuildWaitMethod = "build.wait";
+
+    /// <summary>请求取消一个仍在运行的 build job。</summary>
+    public const string BuildCancelMethod = "build.cancel";
+
+    /// <summary>把一个 build job 的有界日志导出为 JSON 制品。</summary>
+    public const string BuildLogExportMethod = "build.logs.export";
+
+    /// <summary>从成功 build 的受信 launcher 启动玩家进程。</summary>
+    public const string PlayerLaunchMethod = "player.launch";
+
+    /// <summary>分页读取由当前 Editor 启动并保留的玩家进程。</summary>
+    public const string PlayerListMethod = "player.list";
+
+    /// <summary>读取一个玩家进程。</summary>
+    public const string PlayerGetMethod = "player.get";
+
+    /// <summary>等待一个玩家进程退出。</summary>
+    public const string PlayerWaitMethod = "player.wait";
+
+    /// <summary>终止一个玩家进程及其进程树。</summary>
+    public const string PlayerTerminateMethod = "player.terminate";
+
     /// <summary>开始可逆 transaction。</summary>
     public const string TransactionBeginMethod = "transaction.begin";
 
@@ -589,6 +625,9 @@ public static class AutomationProtocolConstants
 
     /// <summary>build job 或 build output 状态发生变化。</summary>
     public const string BuildChangedEventType = "editor.build.changed";
+
+    /// <summary>由 Editor 启动的 player process 状态发生变化。</summary>
+    public const string PlayerChangedEventType = "editor.player.changed";
 
     /// <summary>session artifact 集合发生变化。</summary>
     public const string ArtifactChangedEventType = "editor.artifact.changed";

@@ -32,3 +32,14 @@ public sealed record AutomationInvocationResult
     /// <summary>执行后或 snapshot 对应的权威 revision。</summary>
     public AutomationRevisionSnapshot? Revision { get; init; }
 }
+
+/// <summary>强类型 response 及其同一安全点 revision。</summary>
+/// <typeparam name="TResponse">公开 Protocol response DTO。</typeparam>
+public sealed record AutomationTypedInvocationResult<TResponse>
+{
+    /// <summary>已通过 source-generated metadata 反序列化的响应。</summary>
+    public required TResponse Response { get; init; }
+
+    /// <summary>执行后或 snapshot 对应的权威 revision。</summary>
+    public AutomationRevisionSnapshot? Revision { get; init; }
+}

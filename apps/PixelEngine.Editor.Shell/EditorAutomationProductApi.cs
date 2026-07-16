@@ -787,6 +787,7 @@ internal sealed partial class EditorAutomationAuthoringApi
                 ["panel.build-settings.save"],
                 CommitPreparedBuildSettings,
                 preparation: PrepareBuildSettings),
+            .. CreateBuildAndPlayerRegistrations(),
             ProductRead(
                 AutomationProtocolConstants.ArtifactListMethod,
                 "artifact",

@@ -220,6 +220,16 @@ internal sealed class EditorShellApp
         _automation?.NotifySettingsChanged(method, resources);
     }
 
+    internal void NotifyAutomationBuildChanged(string? buildId)
+    {
+        _automation?.NotifyBuildChanged(buildId);
+    }
+
+    internal void NotifyAutomationPlayerChanged(string playerProcessId)
+    {
+        _automation?.NotifyPlayerChanged(playerProcessId);
+    }
+
     internal void NotifyAutomationSimulationChanged()
     {
         if (CurrentSession is { } session)

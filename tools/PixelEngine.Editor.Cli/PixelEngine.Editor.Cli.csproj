@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>pixelengine-editor</AssemblyName>
+    <RootNamespace>PixelEngine.Editor.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Client/PixelEngine.Editor.Automation.Client.csproj" />
+    <ProjectReference Include="../../src/PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj" />
+  </ItemGroup>
+</Project>

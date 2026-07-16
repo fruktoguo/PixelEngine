@@ -144,11 +144,16 @@ public sealed class HostingProjectDisciplineTests
     public void UserFacingLaunchersCreateNoConsoleWindows()
     {
         string root = FindRepositoryRoot();
-        string buildSettingsPanel = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Build", "BuildSettingsPanel.cs"));
+        string playerProcessManager = File.ReadAllText(Path.Combine(
+            root,
+            "apps",
+            "PixelEngine.Editor.Shell",
+            "Build",
+            "EditorPlayerProcessManager.cs"));
         string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
 
-        Assert.Contains("UseShellExecute = false", buildSettingsPanel, StringComparison.Ordinal);
-        Assert.Contains("CreateNoWindow = true", buildSettingsPanel, StringComparison.Ordinal);
+        Assert.Contains("UseShellExecute = false", playerProcessManager, StringComparison.Ordinal);
+        Assert.Contains("CreateNoWindow = true", playerProcessManager, StringComparison.Ordinal);
         Assert.Contains("$psi.UseShellExecute = $false", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("$psi.CreateNoWindow = $true", finalOutputScript, StringComparison.Ordinal);
     }
@@ -1651,7 +1656,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("RedirectStandardOutput = true", source, StringComparison.Ordinal);
         Assert.Contains("RedirectStandardError = true", source, StringComparison.Ordinal);
         Assert.Contains("UseShellExecute = false", source, StringComparison.Ordinal);
-        Assert.Contains("ConcurrentQueue<BuildProgressEvent>", source, StringComparison.Ordinal);
+        Assert.Contains("ConcurrentQueue<PendingBuildEvent>", source, StringComparison.Ordinal);
+        Assert.Contains("MaximumPendingBuildEvents = 512", source, StringComparison.Ordinal);
         Assert.Contains("TryParseProgressLine", source, StringComparison.Ordinal);
         Assert.Contains("pixelengine.build/v1", source, StringComparison.Ordinal);
         Assert.Contains("TryGetString(root, \"ts\"", source, StringComparison.Ordinal);
