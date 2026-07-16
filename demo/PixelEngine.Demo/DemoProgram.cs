@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using PixelEngine.Core.Diagnostics;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
@@ -60,6 +61,7 @@ public static class DemoProgram
         Justification = "NativeAOT win-x64 publish is smoke-tested from this entry point; remaining Enum.GetValues(Type) analysis comes from the Silk.NET/System.Text.Json dependency closure rather than Demo startup code.")]
     public static int Execute(string[] args)
     {
+        Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         // 打包发布时把 app/ 原生依赖目录加入 PATH
         ConfigurePackagedNativeSearchPath();
         DemoStartupOptions? options = null;

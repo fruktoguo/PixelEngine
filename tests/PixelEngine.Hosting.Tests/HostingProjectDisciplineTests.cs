@@ -204,6 +204,12 @@ public sealed class HostingProjectDisciplineTests
             "PlayerBuildService.cs"));
         Assert.Equal(2, Regex.Matches(playerBuildService, "StandardOutputEncoding = Encoding.UTF8").Count);
         Assert.Equal(2, Regex.Matches(playerBuildService, "StandardErrorEncoding = Encoding.UTF8").Count);
+
+        string demoProgram = File.ReadAllText(Path.Combine(root, "demo", "PixelEngine.Demo", "DemoProgram.cs"));
+        Assert.Contains(
+            "Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)",
+            demoProgram,
+            StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -754,6 +760,16 @@ public sealed class HostingProjectDisciplineTests
 
             Assert.NotEqual(0, demoBuildEncodingDrift.ExitCode);
             Assert.Contains("中文 message 编码损坏", demoBuildEncodingDrift.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            string demoWindowStdout = Path.Combine(outputRoot, "_验证记录", "logs", "demo-window.stdout.log");
+            File.AppendAllText(demoWindowStdout, "\uFFFD");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult demoWindowEncodingDrift = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, demoWindowEncodingDrift.ExitCode);
+            Assert.Contains("Demo 进程输出编码已损坏", demoWindowEncodingDrift.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -779,7 +795,8 @@ public sealed class HostingProjectDisciplineTests
             WriteTextFile(
                 outputRoot,
                 "_验证记录/logs/demo-window.stdout.log",
-                "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                ValidDemoWindowProbePreamble() +
+                "window_frame_probe frames=80" + Environment.NewLine +
                 ValidPlayerWindowProbeLine() + Environment.NewLine +
                 "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=ManagedFallback, fallback=True, " +
                 "fallback_reason=RmlUi initialization failed; using ManagedFallback, native_profile=<none>");
@@ -815,7 +832,8 @@ public sealed class HostingProjectDisciplineTests
             WriteTextFile(
                 outputRoot,
                 "_验证记录/logs/demo-window.stdout.log",
-                "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                ValidDemoWindowProbePreamble() +
+                "window_frame_probe frames=80" + Environment.NewLine +
                 ValidPlayerWindowProbeLine().Replace("applied=True", "applied=False", StringComparison.Ordinal) + Environment.NewLine +
                 "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
                 "content_path_non_ascii=True, fallback_reason=<none>, native_profile=desktop-gl");
@@ -851,7 +869,8 @@ public sealed class HostingProjectDisciplineTests
             WriteTextFile(
                 outputRoot,
                 "_验证记录/logs/demo-window.stdout.log",
-                "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+                ValidDemoWindowProbePreamble() +
+                "window_frame_probe frames=80" + Environment.NewLine +
                 ValidPlayerWindowProbeLine() + Environment.NewLine +
                 "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
                 "content_path_non_ascii=False, fallback_reason=<none>, native_profile=desktop-gl");
@@ -3256,7 +3275,8 @@ public sealed class HostingProjectDisciplineTests
         WriteTextFile(
             outputRoot,
             "_验证记录/logs/demo-window.stdout.log",
-            "PixelEngine.Demo window_frame_probe frames=80" + Environment.NewLine +
+            ValidDemoWindowProbePreamble() +
+            "window_frame_probe frames=80" + Environment.NewLine +
             ValidPlayerWindowProbeLine() + Environment.NewLine +
             "game_ui_probe attached=True, canvases=3, requested=RmlUi, active=RmlUi, fallback=False, " +
             "content_path_non_ascii=True, fallback_reason=<none>, native_profile=desktop-gl");
@@ -3395,6 +3415,13 @@ public sealed class HostingProjectDisciplineTests
             "dpi=96, window=40:20:1096x759, client=0:0:1080x720, monitor=0:0:2560x1440, work=0:0:2560x1392, " +
             "presentation=1080x720, client_matches_presentation=True, presentation_fits_work=True, " +
             "logical=1080x720, framebuffer=1080x720";
+    }
+
+    private static string ValidDemoWindowProbePreamble()
+    {
+        return "PixelEngine.Demo 0.1.0.0" + Environment.NewLine +
+            "脚本程序集已注册；热重载已由参数关闭。" + Environment.NewLine +
+            "窗口短跑完成：frames=80, requested=80。" + Environment.NewLine;
     }
 
     private static void CopyManagedFixtureAssembly(string outputRoot, string relativePath, string sourcePath)

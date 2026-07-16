@@ -1108,8 +1108,13 @@ if ($null -eq $demoBuildResultEvent -or
 }
 
 $demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
+if ($demoProbeStdout.Contains(([char]0xFFFD).ToString(), [StringComparison]::Ordinal)) {
+  throw 'Demo 窗口 probe stdout 含 Unicode replacement character，Demo 进程输出编码已损坏。'
+}
 Assert-TextContains $demoProbeStdout 'window_frame_probe' 'Demo 窗口 probe stdout'
 Assert-TextContains $demoProbeStdout 'PixelEngine.Demo' 'Demo 窗口 probe stdout'
+Assert-TextContains $demoProbeStdout '脚本程序集已注册；热重载已由参数关闭。' 'Demo 窗口 probe stdout'
+Assert-TextContains $demoProbeStdout '窗口短跑完成：' 'Demo 窗口 probe stdout'
 Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'requested' $expectedDemoWindowMode 'Demo Player window probe stdout'
 Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'available' 'True' 'Demo Player window probe stdout'
 Assert-SummaryValue $demoProbeStdout 'player_window_probe ' 'applied' 'True' 'Demo Player window probe stdout'
