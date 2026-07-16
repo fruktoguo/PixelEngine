@@ -288,6 +288,8 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
             WorkingDirectory = tools.RepositoryRoot,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            StandardOutputEncoding = Encoding.UTF8,
+            StandardErrorEncoding = Encoding.UTF8,
             UseShellExecute = false,
             CreateNoWindow = true,
         };
@@ -769,6 +771,8 @@ internal sealed class PlayerBuildService(BuildToolLocator? locator = null) : IPl
                     WorkingDirectory = workingDirectory,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    StandardOutputEncoding = Encoding.UTF8,
+                    StandardErrorEncoding = Encoding.UTF8,
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 },

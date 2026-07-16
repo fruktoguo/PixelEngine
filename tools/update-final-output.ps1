@@ -31,6 +31,11 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   throw 'tools/update-final-output.ps1 需要 PowerShell 7+。请使用 pwsh -NoProfile -File tools/update-final-output.ps1。'
 }
 
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $outputRootFull = if ([IO.Path]::IsPathRooted($OutputRoot)) {
   [IO.Path]::GetFullPath($OutputRoot)
@@ -129,6 +134,8 @@ function Invoke-ProcessChecked(
   $psi.CreateNoWindow = $true
   $psi.RedirectStandardOutput = $true
   $psi.RedirectStandardError = $true
+  $psi.StandardOutputEncoding = $utf8NoBom
+  $psi.StandardErrorEncoding = $utf8NoBom
   foreach ($argument in $Arguments) {
     $psi.ArgumentList.Add($argument)
   }
@@ -742,6 +749,12 @@ $manifest = [ordered]@{
       stdout = '_验证记录/logs/demo-window.stdout.log'
       stderr = '_验证记录/logs/demo-window.stderr.log'
       capture = '_验证记录/demo-window.bmp'
+    }
+    demoBuild = [ordered]@{
+      completed = $true
+      stdout = '_验证记录/logs/demo-build-player.stdout.log'
+      stderr = '_验证记录/logs/demo-build-player.stderr.log'
+      result = '_验证记录/demo-build-result.json'
     }
     demoBuildResult = '_验证记录/demo-build-result.json'
   }

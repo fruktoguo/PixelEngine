@@ -22,6 +22,11 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   throw 'tools/run-editor-runtime-inspector-probe.ps1 需要 PowerShell 7+。'
 }
 
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $artifactsRoot = [IO.Path]::GetFullPath((Join-Path $repoRoot 'artifacts'))
 $editorExecutableFull = if ([IO.Path]::IsPathRooted($EditorExecutable)) {
@@ -70,6 +75,8 @@ function Invoke-ProbeProcess(
   $startInfo.CreateNoWindow = $true
   $startInfo.RedirectStandardOutput = $true
   $startInfo.RedirectStandardError = $true
+  $startInfo.StandardOutputEncoding = $utf8NoBom
+  $startInfo.StandardErrorEncoding = $utf8NoBom
   foreach ($argument in $Arguments) {
     $startInfo.ArgumentList.Add($argument)
   }

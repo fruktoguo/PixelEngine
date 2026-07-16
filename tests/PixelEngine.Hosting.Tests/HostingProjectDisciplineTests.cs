@@ -161,6 +161,46 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证发行、构建与窗口 probe 的重定向进程显式使用 UTF-8，不能依赖 Windows 当前代码页。
+    /// </summary>
+    [Fact]
+    public void RedirectedBuildAndProbeProcessesUseExplicitUtf8()
+    {
+        string root = FindRepositoryRoot();
+        string[] scripts =
+        [
+            "native-leak-preflight.ps1",
+            "run-editor-automation-e2e.ps1",
+            "run-editor-build-settings-probe.ps1",
+            "run-editor-gameview-presentation-probe.ps1",
+            "run-editor-runtime-inspector-probe.ps1",
+            "run-player-window-mode-probe.ps1",
+            "update-final-output.ps1",
+        ];
+        foreach (string script in scripts)
+        {
+            string source = File.ReadAllText(Path.Combine(root, "tools", script));
+            Assert.Contains("StandardOutputEncoding", source, StringComparison.Ordinal);
+            Assert.Contains("StandardErrorEncoding", source, StringComparison.Ordinal);
+            Assert.Contains("[Console]::OutputEncoding", source, StringComparison.Ordinal);
+            Assert.Contains("$OutputEncoding", source, StringComparison.Ordinal);
+        }
+
+        string buildPlayer = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
+        Assert.Contains("[Console]::OutputEncoding = $utf8NoBom", buildPlayer, StringComparison.Ordinal);
+        Assert.Contains("$OutputEncoding = $utf8NoBom", buildPlayer, StringComparison.Ordinal);
+
+        string playerBuildService = File.ReadAllText(Path.Combine(
+            root,
+            "apps",
+            "PixelEngine.Editor.Shell",
+            "Build",
+            "PlayerBuildService.cs"));
+        Assert.Equal(2, Regex.Matches(playerBuildService, "StandardOutputEncoding = Encoding.UTF8").Count);
+        Assert.Equal(2, Regex.Matches(playerBuildService, "StandardErrorEncoding = Encoding.UTF8").Count);
+    }
+
+    /// <summary>
     /// 验证正式输出 Demo 默认请求 Web-first UI 产品主路径 RmlUi，并把请求后端写入验证记录。
     /// </summary>
     [Fact]
@@ -499,6 +539,31 @@ public sealed class HostingProjectDisciplineTests
 
             Assert.NotEqual(0, e2eTampering.ExitCode);
             Assert.Contains("stdout SHA256 不匹配", e2eTampering.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            reportPath = Path.Combine(
+                outputRoot,
+                "_验证记录",
+                "editor-automation-e2e",
+                "report.json");
+            report = JsonNode.Parse(File.ReadAllText(reportPath))!.AsObject();
+            JsonObject rollbackOperation = report["operations"]!.AsArray()
+                .Select(static node => node!.AsObject())
+                .Single(operation => operation["name"]!.GetValue<string>() == "transaction-execute-rollback");
+            string rollbackStdoutPath = Path.Combine(
+                outputRoot,
+                "_验证记录",
+                "editor-automation-e2e",
+                rollbackOperation["stdout"]!.GetValue<string>());
+            File.WriteAllText(rollbackStdoutPath, "{}");
+            rollbackOperation["stdoutSha256"] = Sha256Text("{}");
+            File.WriteAllText(reportPath, report.ToJsonString());
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult wrongErrorChannel = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, wrongErrorChannel.ExitCode);
+            Assert.Contains("非零退出必须仅通过 stderr 返回结构化错误", wrongErrorChannel.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -670,6 +735,19 @@ public sealed class HostingProjectDisciplineTests
 
             Assert.NotEqual(0, gameViewStackDrift.ExitCode);
             Assert.Contains("first_ui_stack_depth expected=1 actual=2", gameViewStackDrift.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            WriteTextFile(
+                outputRoot,
+                "_验证记录/logs/demo-build-player.stdout.log",
+                /*lang=json,strict*/
+                "{\"schema\":\"pixelengine.build/v1\",\"kind\":\"Result\",\"phase\":\"done\",\"percent\":100,\"level\":\"Info\",\"message\":\"鏋勫缓瀹屾垚銆\",\"ts\":\"1970-01-01T00:00:00Z\"}");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult demoBuildEncodingDrift = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, demoBuildEncodingDrift.ExitCode);
+            Assert.Contains("中文 message 编码损坏", demoBuildEncodingDrift.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -1767,6 +1845,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("powershell.exe", source, StringComparison.Ordinal);
         Assert.Contains("RedirectStandardOutput = true", source, StringComparison.Ordinal);
         Assert.Contains("RedirectStandardError = true", source, StringComparison.Ordinal);
+        Assert.Contains("StandardOutputEncoding = Encoding.UTF8", source, StringComparison.Ordinal);
+        Assert.Contains("StandardErrorEncoding = Encoding.UTF8", source, StringComparison.Ordinal);
         Assert.Contains("UseShellExecute = false", source, StringComparison.Ordinal);
         Assert.Contains("ConcurrentQueue<PendingBuildEvent>", source, StringComparison.Ordinal);
         Assert.Contains("MaximumPendingBuildEvents = 512", source, StringComparison.Ordinal);
@@ -2973,7 +3053,11 @@ public sealed class HostingProjectDisciplineTests
             string prefix = $"{index + 1:D3}-{name}";
             string stdoutRelative = $"{prefix}.stdout.log";
             string stderrRelative = $"{prefix}.stderr.log";
-            const string stdoutContent = "{}";
+            bool rollbackFailure = name == "transaction-execute-rollback";
+            string stdoutContent = rollbackFailure ? string.Empty : "{}";
+            string stderrContent = rollbackFailure
+                ? /*lang=json,strict*/ "{\"error\":{\"code\":\"transaction_failed\"},\"exitCode\":4}"
+                : string.Empty;
             WriteTextFile(
                 outputRoot,
                 $"_验证记录/editor-automation-e2e/{stdoutRelative}",
@@ -2981,20 +3065,20 @@ public sealed class HostingProjectDisciplineTests
             WriteTextFile(
                 outputRoot,
                 $"_验证记录/editor-automation-e2e/{stderrRelative}",
-                string.Empty);
+                stderrContent);
             return new
             {
                 sequence = index + 1,
                 name,
                 processId = 2_000 + index,
-                exitCode = 0,
-                outcome = "passed",
-                allowedExitCodes = new[] { 0 },
+                exitCode = rollbackFailure ? 4 : 0,
+                outcome = rollbackFailure ? "accepted-nonzero" : "passed",
+                allowedExitCodes = new[] { rollbackFailure ? 4 : 0 },
                 durationMilliseconds = 1L,
                 stdout = stdoutRelative,
                 stderr = stderrRelative,
                 stdoutSha256 = Sha256Text(stdoutContent),
-                stderrSha256 = Sha256Text(string.Empty),
+                stderrSha256 = Sha256Text(stderrContent),
             };
         }).ToArray();
         WriteTextFile(
@@ -3161,6 +3245,12 @@ public sealed class HostingProjectDisciplineTests
             "content_path_non_ascii=True, fallback_reason=<none>, native_profile=desktop-gl");
         WriteTextFile(outputRoot, "_验证记录/logs/demo-window.stderr.log", "");
         WriteTextFile(outputRoot, "_验证记录/demo-window.bmp", "demo capture");
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/logs/demo-build-player.stdout.log",
+            /*lang=json,strict*/
+            "{\"schema\":\"pixelengine.build/v1\",\"kind\":\"Result\",\"phase\":\"done\",\"percent\":100,\"level\":\"Info\",\"message\":\"构建完成。\",\"ts\":\"1970-01-01T00:00:00Z\"}");
+        WriteTextFile(outputRoot, "_验证记录/logs/demo-build-player.stderr.log", "");
         WriteTextFile(outputRoot, "README.txt", "PixelEngine final output");
         WriteTextFile(
             outputRoot,
@@ -3267,6 +3357,13 @@ public sealed class HostingProjectDisciplineTests
                         stdout = "_验证记录/logs/demo-window.stdout.log",
                         stderr = "_验证记录/logs/demo-window.stderr.log",
                         capture = "_验证记录/demo-window.bmp",
+                    },
+                    demoBuild = new
+                    {
+                        completed = true,
+                        stdout = "_验证记录/logs/demo-build-player.stdout.log",
+                        stderr = "_验证记录/logs/demo-build-player.stderr.log",
+                        result = "_验证记录/demo-build-result.json",
                     },
                     demoBuildResult = "_验证记录/demo-build-result.json",
                 },

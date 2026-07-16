@@ -34,6 +34,11 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $outputRoot = [IO.Path]::GetFullPath((Join-Path (Get-Location) $Output))
 if ([IO.Path]::IsPathRooted($Output)) {

@@ -15,6 +15,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
 
 function Resolve-RepositoryRoot {
     $directory = Resolve-Path (Join-Path $PSScriptRoot "..")
@@ -583,6 +587,8 @@ function Invoke-WindowProbe {
     $startInfo.WorkingDirectory = $Root
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
+    $startInfo.StandardOutputEncoding = $utf8NoBom
+    $startInfo.StandardErrorEncoding = $utf8NoBom
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
 

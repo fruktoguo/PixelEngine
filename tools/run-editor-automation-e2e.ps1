@@ -46,6 +46,11 @@ if (-not $IsWindows) {
   throw 'Editor automation v1 E2E 当前只支持 Windows Named Pipe。'
 }
 
+$utf8 = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8
+[Console]::OutputEncoding = $utf8
+$OutputEncoding = $utf8
+
 $repoRoot = if ([string]::IsNullOrWhiteSpace($RepositoryRoot)) {
   [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 } else {
@@ -141,7 +146,6 @@ $editorLogRoot = Join-Path $workRootPath 'editor-logs'
 [IO.Directory]::CreateDirectory($projectRoot) | Out-Null
 [IO.Directory]::CreateDirectory($editorLogRoot) | Out-Null
 
-$utf8 = [Text.UTF8Encoding]::new($false)
 $script:sequence = 0
 $script:cliProcessCount = 0
 $script:operations = [Collections.Generic.List[object]]::new()
@@ -223,6 +227,8 @@ function Invoke-CapturedProcess(
   $psi.CreateNoWindow = $true
   $psi.RedirectStandardOutput = $true
   $psi.RedirectStandardError = $true
+  $psi.StandardOutputEncoding = $utf8
+  $psi.StandardErrorEncoding = $utf8
   foreach ($argument in $Arguments) {
     $psi.ArgumentList.Add($argument)
   }
@@ -431,6 +437,8 @@ $editorPsi.UseShellExecute = $false
 $editorPsi.CreateNoWindow = $true
 $editorPsi.RedirectStandardOutput = $true
 $editorPsi.RedirectStandardError = $true
+$editorPsi.StandardOutputEncoding = $utf8
+$editorPsi.StandardErrorEncoding = $utf8
 $editorPsi.Environment['PIXELENGINE_BUILD_PLAYER_PATH'] = Join-Path $repoRoot 'tools/build-player.ps1'
 foreach ($argument in @(
     '--project', $projectRoot,

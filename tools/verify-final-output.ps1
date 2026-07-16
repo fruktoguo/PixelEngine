@@ -677,6 +677,11 @@ if ($validation.demoWindowProbe.requestedMode -ne $expectedDemoWindowMode -or
   throw 'Demo 窗口 probe 的请求模式或实际应用状态不匹配。'
 }
 
+$demoBuildValidation = $validation.demoBuild
+if ($null -eq $demoBuildValidation -or $demoBuildValidation.completed -ne $true) {
+  throw 'Demo build-player 记录不是完成状态。'
+}
+
 $validationPaths = @(
   [string]$validation.editorDefaultWorkbenchProbe.stdout,
   [string]$validation.editorDefaultWorkbenchProbe.stderr,
@@ -690,6 +695,9 @@ $validationPaths = @(
   [string]$validation.demoWindowProbe.stdout,
   [string]$validation.demoWindowProbe.stderr,
   [string]$validation.demoWindowProbe.capture,
+  [string]$demoBuildValidation.stdout,
+  [string]$demoBuildValidation.stderr,
+  [string]$demoBuildValidation.result,
   [string]$validation.demoBuildResult
 )
 
@@ -1001,20 +1009,74 @@ for ($operationIndex = 0; $operationIndex -lt $automationE2EOperations.Count; $o
     ([string]$operation.stdout) `
     "Editor automation E2E operation $operationName stdout"
   $operationStdoutText = Get-Content -Raw -LiteralPath $operationStdoutPath
-  if ([string]::IsNullOrWhiteSpace($operationStdoutText)) {
-    throw "Editor automation E2E operation $operationName stdout 不能为空。"
+  $operationStderrPath = Resolve-ContainedPath `
+    $automationE2EReportRoot `
+    ([string]$operation.stderr) `
+    "Editor automation E2E operation $operationName stderr"
+  $operationStderrText = Get-Content -Raw -LiteralPath $operationStderrPath
+  if ([int]$operation.exitCode -ne 0) {
+    if (-not [string]::IsNullOrWhiteSpace($operationStdoutText) -or
+        [string]::IsNullOrWhiteSpace($operationStderrText)) {
+      throw "Editor automation E2E operation $operationName 非零退出必须仅通过 stderr 返回结构化错误。"
+    }
+    try {
+      $operationError = $operationStderrText | ConvertFrom-Json -Depth 100
+    }
+    catch {
+      throw "Editor automation E2E operation $operationName stderr 不是合法 JSON error。"
+    }
+    if ([int]$operationError.exitCode -ne [int]$operation.exitCode -or
+        [string]::IsNullOrWhiteSpace([string]$operationError.error.code)) {
+      throw "Editor automation E2E operation $operationName stderr error 身份不匹配。"
+    }
+    if ($operationName -eq 'transaction-execute-rollback' -and
+        ($operationError.error.code -ne 'transaction_failed' -or [int]$operation.exitCode -ne 4)) {
+      throw 'Editor automation E2E 故障 transaction 未返回 transaction_failed/exit 4。'
+    }
   }
-  try {
-    [void]($operationStdoutText | ConvertFrom-Json -Depth 100)
-  }
-  catch {
-    throw "Editor automation E2E operation $operationName stdout 不是合法 JSON。"
+  else {
+    if ([string]::IsNullOrWhiteSpace($operationStdoutText)) {
+      throw "Editor automation E2E operation $operationName 成功退出缺少结构化 stdout。"
+    }
+    try {
+      [void]($operationStdoutText | ConvertFrom-Json -Depth 100)
+    }
+    catch {
+      throw "Editor automation E2E operation $operationName stdout 不是合法 JSON。"
+    }
   }
 }
 foreach ($requiredOperationName in $requiredAutomationOperationNames) {
   if (-not $reportedAutomationOperationNames.Contains($requiredOperationName)) {
     throw "Editor automation E2E 缺少必需 operation：$requiredOperationName"
   }
+}
+
+$demoBuildStdout = Get-OutputFileText ([string]$demoBuildValidation.stdout) 'Demo build-player stdout'
+if ($demoBuildStdout.Contains(([char]0xFFFD).ToString(), [StringComparison]::Ordinal)) {
+  throw 'Demo build-player stdout 含 Unicode replacement character，子进程输出编码已损坏。'
+}
+$demoBuildResultEvent = $null
+foreach ($line in ($demoBuildStdout -split "`r?`n")) {
+  if (-not $line.Contains('"schema":"pixelengine.build/v1"', [StringComparison]::Ordinal)) {
+    continue
+  }
+
+  try {
+    $candidate = $line | ConvertFrom-Json -Depth 16
+  }
+  catch {
+    throw 'Demo build-player stdout 含无法解析的 pixelengine.build/v1 NDJSON。'
+  }
+  if ($candidate.kind -eq 'Result') {
+    $demoBuildResultEvent = $candidate
+  }
+}
+if ($null -eq $demoBuildResultEvent -or
+    $demoBuildResultEvent.phase -ne 'done' -or
+    $demoBuildResultEvent.level -ne 'Info' -or
+    $demoBuildResultEvent.message -cne '构建完成。') {
+  throw 'Demo build-player Result 事件缺失或中文 message 编码损坏；expected=构建完成。'
 }
 
 $demoProbeStdout = Get-OutputFileText ([string]$validation.demoWindowProbe.stdout) 'Demo 窗口 probe stdout'
