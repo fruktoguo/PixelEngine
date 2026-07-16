@@ -111,6 +111,65 @@ public sealed class ManagedFallbackBackendTests
         Assert.False(host.NeedsComposite);
     }
 
+    /// <summary>托管回退后端必须把自己拥有的 presentation 输入交给共享 Gui host，而不是静默吞掉。</summary>
+    [Fact]
+    public void ManagedFallbackForwardsOwnedInputToSharedGuiHost()
+    {
+        string path = WriteUi("""
+            <ui title="Input">
+              <button id="start" data-event-click="start_game">Start</button>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        backend.FeedPointerMove(12f, 18f);
+        Assert.Empty(gui.PointerMoves);
+
+        _ = host.PushModal(new UiScreenId(3), UiDocumentSource.Asset(path, 3));
+        backend.FeedPointerMove(12f, 18f);
+        backend.FeedPointerButton(UiPointerButton.Left, isDown: true);
+        backend.FeedPointerMove(500f, 500f);
+        backend.FeedPointerButton(UiPointerButton.Left, isDown: false);
+        backend.FeedScroll(1f, -2f);
+        backend.FeedKey(new UiKey(65), isDown: true, UiKeyModifiers.Control);
+        backend.FeedText("中文 input");
+
+        Assert.Equal([(12f, 18f), (500f, 500f)], gui.PointerMoves);
+        Assert.Equal(
+            [(UiPointerButton.Left, true), (UiPointerButton.Left, false)],
+            gui.PointerButtons);
+        Assert.Equal([(1f, -2f)], gui.Scrolls);
+        Assert.Equal([(new UiKey(65), true, UiKeyModifiers.Control)], gui.Keys);
+        Assert.Equal(["中文 input"], gui.InputTexts);
+    }
+
+    /// <summary>Canvas logical 输入进入按 presentation 绘制的共享 Gui 前必须按同一 scaler 映回。</summary>
+    [Fact]
+    public void ManagedFallbackMapsLogicalPointerBackToPresentationGuiCoordinates()
+    {
+        string path = WriteUi("""
+            <ui title="Scaled input">
+              <button id="start">Start</button>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        using ManagedFallbackBackend backend = new(gui);
+        using GameUiHost host = new(backend);
+        UiDisplayMetrics display = new(640, 480, 1f, 1f, 96f, 1, 1);
+        UiCanvasScalerSettings settings = UiCanvasScalerSettings.Default with { ScaleFactor = 2f };
+        host.Initialize(new UiBackendInitializeInfo(display, settings, UiBackendKind.ManagedFallback));
+        _ = host.PushModal(new UiScreenId(4), UiDocumentSource.Asset(path, 4));
+
+        backend.FeedPointerMove(12f, 18f);
+        backend.FeedScroll(1f, -2f);
+
+        Assert.Equal([(24f, 36f)], gui.PointerMoves);
+        Assert.Equal([(2f, -4f)], gui.Scrolls);
+    }
+
     /// <summary>
     /// 多 Canvas 共用同一 ImGui context 时，本地 screen handle 即使相同也必须生成不同窗口 id。
     /// </summary>
@@ -485,6 +544,16 @@ public sealed class ManagedFallbackBackendTests
 
         public List<string> LoadedImages { get; } = [];
 
+        public List<(float X, float Y)> PointerMoves { get; } = [];
+
+        public List<(UiPointerButton Button, bool IsDown)> PointerButtons { get; } = [];
+
+        public List<(float X, float Y)> Scrolls { get; } = [];
+
+        public List<(UiKey Key, bool IsDown, UiKeyModifiers Modifiers)> Keys { get; } = [];
+
+        public List<string> InputTexts { get; } = [];
+
         public void Initialize()
         {
             Initialized = true;
@@ -505,6 +574,31 @@ public sealed class ManagedFallbackBackendTests
             LoadedImages.Add(fullPath);
             Assert.True(File.Exists(fullPath), fullPath);
             return new ManagedFallbackImage(123, 3, 2);
+        }
+
+        public void FeedPointerMove(float x, float y)
+        {
+            PointerMoves.Add((x, y));
+        }
+
+        public void FeedPointerButton(UiPointerButton button, bool isDown)
+        {
+            PointerButtons.Add((button, isDown));
+        }
+
+        public void FeedScroll(float deltaX, float deltaY)
+        {
+            Scrolls.Add((deltaX, deltaY));
+        }
+
+        public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
+        {
+            Keys.Add((key, isDown, modifiers));
+        }
+
+        public void FeedText(ReadOnlySpan<char> text)
+        {
+            InputTexts.Add(new string(text));
         }
     }
 

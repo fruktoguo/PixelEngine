@@ -123,6 +123,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Editor.Cli", "t
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Editor.Automation.Matrix", "tools\PixelEngine.Editor.Automation.Matrix\PixelEngine.Editor.Automation.Matrix.csproj", "{F57F4F4E-E914-4B8D-9DE7-96B439BC89DC}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PixelEngine.Tools.PhysicalInput.Interop", "tools\PixelEngine.Tools.PhysicalInput\PixelEngine.Tools.PhysicalInput.Interop.csproj", "{F4706618-E3E7-4849-B245-A6F258DC1C55}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -589,6 +591,18 @@ Global
 		{F57F4F4E-E914-4B8D-9DE7-96B439BC89DC}.Release|x64.Build.0 = Release|Any CPU
 		{F57F4F4E-E914-4B8D-9DE7-96B439BC89DC}.Release|x86.ActiveCfg = Release|Any CPU
 		{F57F4F4E-E914-4B8D-9DE7-96B439BC89DC}.Release|x86.Build.0 = Release|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Debug|x64.Build.0 = Debug|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Debug|x86.Build.0 = Debug|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Release|x64.ActiveCfg = Release|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Release|x64.Build.0 = Release|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Release|x86.ActiveCfg = Release|Any CPU
+		{F4706618-E3E7-4849-B245-A6F258DC1C55}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -632,5 +646,6 @@ Global
 		{D317B4FF-5142-4FBF-AC55-04D2EAFFCD36} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{6F703491-E29B-4C34-AC58-A7F3C2D1DE98} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{F57F4F4E-E914-4B8D-9DE7-96B439BC89DC} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{F4706618-E3E7-4849-B245-A6F258DC1C55} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal

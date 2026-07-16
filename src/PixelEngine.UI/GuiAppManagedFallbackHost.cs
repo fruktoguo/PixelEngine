@@ -1,5 +1,6 @@
 using PixelEngine.Gui;
 using PixelEngine.Rendering;
+using Silk.NET.Input;
 using Silk.NET.OpenGL;
 
 namespace PixelEngine.UI;
@@ -13,6 +14,9 @@ public sealed class GuiAppManagedFallbackHost(GuiApp gui, RenderWindow? window) 
     private readonly RenderWindow? _window = window;
     private ImageEntry[] _images = new ImageEntry[8];
     private int _imageCount;
+    private bool _shiftDown;
+    private bool _controlDown;
+    private bool _altDown;
 
     /// <summary>
     /// 创建不带图片上传能力的 GUI host 适配器。
@@ -104,6 +108,69 @@ public sealed class GuiAppManagedFallbackHost(GuiApp gui, RenderWindow? window) 
     }
 
     /// <summary>
+    /// 将 presentation 指针位置写入共享 Gui 输入队列。
+    /// </summary>
+    /// <param name="x">presentation X。</param>
+    /// <param name="y">presentation Y。</param>
+    public void FeedPointerMove(float x, float y)
+    {
+        _gui.Input.MouseMoveFramebuffer(x, y);
+    }
+
+    /// <summary>
+    /// 将规范化指针按钮边沿写入共享 Gui 输入队列。
+    /// </summary>
+    /// <param name="button">指针按钮。</param>
+    /// <param name="isDown">是否按下。</param>
+    public void FeedPointerButton(UiPointerButton button, bool isDown)
+    {
+        MouseButton mapped = button switch
+        {
+            UiPointerButton.Left => MouseButton.Left,
+            UiPointerButton.Right => MouseButton.Right,
+            UiPointerButton.Middle => MouseButton.Middle,
+            _ => throw new ArgumentOutOfRangeException(nameof(button), button, "未知 UI 指针按钮。"),
+        };
+        _gui.Input.MouseButton(mapped, isDown);
+    }
+
+    /// <summary>
+    /// 将 presentation 滚轮增量写入共享 Gui 输入队列。
+    /// </summary>
+    /// <param name="deltaX">水平增量。</param>
+    /// <param name="deltaY">垂直增量。</param>
+    public void FeedScroll(float deltaX, float deltaY)
+    {
+        _gui.Input.MouseWheel(deltaX, deltaY);
+    }
+
+    /// <summary>
+    /// 将规范化按键边沿及修饰键状态写入共享 Gui 输入队列。
+    /// </summary>
+    /// <param name="key">按键。</param>
+    /// <param name="isDown">是否按下。</param>
+    /// <param name="modifiers">修饰键。</param>
+    public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
+    {
+        SynchronizeModifier(Key.ShiftLeft, (modifiers & UiKeyModifiers.Shift) != 0, ref _shiftDown);
+        SynchronizeModifier(Key.ControlLeft, (modifiers & UiKeyModifiers.Control) != 0, ref _controlDown);
+        SynchronizeModifier(Key.AltLeft, (modifiers & UiKeyModifiers.Alt) != 0, ref _altDown);
+        _gui.Input.Key((Key)key.Value, isDown);
+    }
+
+    /// <summary>
+    /// 将已提交文本写入共享 Gui 输入队列。
+    /// </summary>
+    /// <param name="text">已提交文本。</param>
+    public void FeedText(ReadOnlySpan<char> text)
+    {
+        if (!text.IsEmpty)
+        {
+            _gui.Input.Text(new string(text));
+        }
+    }
+
+    /// <summary>
     /// 释放由该适配器上传并缓存的 UI 图片纹理；不会释放共享的 <see cref="GuiApp" />。
     /// </summary>
     public void Dispose()
@@ -131,6 +198,17 @@ public sealed class GuiAppManagedFallbackHost(GuiApp gui, RenderWindow? window) 
         }
 
         Array.Resize(ref _images, capacity);
+    }
+
+    private void SynchronizeModifier(Key key, bool isDown, ref bool previous)
+    {
+        if (isDown == previous)
+        {
+            return;
+        }
+
+        _gui.Input.Key(key, isDown);
+        previous = isDown;
     }
 
     private readonly record struct ImageEntry(string Path, GlTexture Texture, ManagedFallbackImage Image);

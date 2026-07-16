@@ -32,4 +32,29 @@ public interface IManagedFallbackGuiHost
     /// <param name="path">图片绝对路径。</param>
     /// <returns>可绘制的图片资产。</returns>
     ManagedFallbackImage LoadImage(string path);
+
+    /// <summary>将 presentation 指针位置注入共享 Gui host。</summary>
+    /// <param name="x">presentation X。</param>
+    /// <param name="y">presentation Y。</param>
+    void FeedPointerMove(float x, float y);
+
+    /// <summary>将指针按钮边沿注入共享 Gui host。</summary>
+    /// <param name="button">指针按钮。</param>
+    /// <param name="isDown">是否按下。</param>
+    void FeedPointerButton(UiPointerButton button, bool isDown);
+
+    /// <summary>将滚轮增量注入共享 Gui host。</summary>
+    /// <param name="deltaX">水平增量。</param>
+    /// <param name="deltaY">垂直增量。</param>
+    void FeedScroll(float deltaX, float deltaY);
+
+    /// <summary>将规范化按键边沿与修饰键注入共享 Gui host。</summary>
+    /// <param name="key">按键。</param>
+    /// <param name="isDown">是否按下。</param>
+    /// <param name="modifiers">修饰键。</param>
+    void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers);
+
+    /// <summary>将已提交文本注入共享 Gui host。</summary>
+    /// <param name="text">已提交文本。</param>
+    void FeedText(ReadOnlySpan<char> text);
 }

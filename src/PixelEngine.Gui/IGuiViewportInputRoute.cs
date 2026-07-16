@@ -15,6 +15,15 @@ public interface IGuiViewportInputRoute
     bool AllowsKeyboardInput { get; }
 
     /// <summary>
+    /// 映射拒绝后是否把共享 Gui 指针移出 viewport。
+    /// </summary>
+    /// <remarks>
+    /// 默认 true 适用于离开 viewport 或 native UI 独占；共享同一 ImGui context 的托管 UI
+    /// 会自行注入 presentation 指针，必须返回 false，避免先写入无效位置污染输入队列。
+    /// </remarks>
+    bool ClearsPointerWhenRejected => true;
+
+    /// <summary>
     /// 尝试把窗口 framebuffer 指针坐标映射为 runtime GUI framebuffer 坐标。
     /// </summary>
     /// <param name="framebufferX">窗口 framebuffer X，左上角为原点。</param>

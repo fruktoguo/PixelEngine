@@ -646,6 +646,11 @@ internal sealed class EditorShellApp
             WriteScriptedGameViewProbeSummary(scriptedGameView);
         }
 
+        if (_options.PhysicalUiInputProbe)
+        {
+            WritePhysicalUiInputProbeSummary();
+        }
+
         if (_options.ScriptedRuntimeInspectorProbe)
         {
             WriteScriptedRuntimeInspectorProbeSummary(scriptedRuntimeInspector);
@@ -2115,6 +2120,35 @@ internal sealed class EditorShellApp
             $"toolbar_occupied={presentation.ToolbarOccupiedWidth.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)}, " +
             $"toolbar_overflow_visible={presentation.ToolbarOverflowVisible}, " +
             $"diagnostic={SanitizeSummaryValue(state.Diagnostic)}");
+    }
+
+    private void WritePhysicalUiInputProbeSummary()
+    {
+        GameViewUiInputDiagnostics input = CurrentSession?.CapturePhysicalUiInputDiagnostics() ?? default;
+        GameUiCanvasInputDiagnostics canvas = CurrentSession?.CaptureGameUiCanvasInputDiagnostics() ?? default;
+        long drainedEvents = CurrentSession?.CaptureTotalDrainedGameUiEvents() ?? 0;
+        UI.UiInputCapture capture = CurrentSession?.CaptureGameUiInputCapture() ?? UI.UiInputCapture.None;
+        Console.WriteLine(
+            "editor_physical_ui_input_probe " +
+            "schema=pixelengine.editor-physical-ui-input/v1, " +
+            $"attached={input.Attached}, inner_samples={input.InnerPointerSamples}, " +
+            $"mapped_samples={input.MappedPointerSamples}, raw_left_down_samples={input.RawLeftDownSamples}, " +
+            $"raw_press_edges={input.RawLeftPressEdges}, raw_release_edges={input.RawLeftReleaseEdges}, " +
+            $"forwarded_left_down_samples={input.ForwardedLeftDownSamples}, " +
+            $"forwarded_press_edges={input.ForwardedLeftPressEdges}, " +
+            $"forwarded_release_edges={input.ForwardedLeftReleaseEdges}, " +
+            $"last_window={input.LastWindowPoint.X:F3}:{input.LastWindowPoint.Y:F3}, " +
+            $"last_viewport={input.LastViewportPoint.X:F3}:{input.LastViewportPoint.Y:F3}, " +
+            $"panel_visible={input.LastPanelVisible}, mapping_succeeded={input.LastMappingSucceeded}, " +
+            $"canvas_pointer={canvas.PointerX:F3}:{canvas.PointerY:F3}, " +
+            $"canvas_target={canvas.PointerTargetIndex}, canvas_capture={canvas.PointerCaptureIndex}, " +
+            $"button_target={canvas.LastButtonTargetIndex}, button_canvas={canvas.LastButtonTargetCanvas}, " +
+            $"button_backend={canvas.LastButtonTargetBackend}, " +
+            $"button_hit={canvas.LastButtonTargetHit.HitsUi}:{canvas.LastButtonTargetHit.WantsMouse}:{canvas.LastButtonTargetHit.Opaque}, " +
+            $"button_calls={canvas.PointerButtonCalls}, button_forwarded={canvas.ForwardedPointerButtonCalls}, " +
+            $"canvas_press={canvas.LeftPressCalls}, canvas_release={canvas.LeftReleaseCalls}, " +
+            $"capture_mouse={capture.WantCaptureMouse}, capture_keyboard={capture.WantCaptureKeyboard}, " +
+            $"drained_events={drainedEvents}");
     }
 
     private static string FormatGameViewRect(in GameViewRect rect)

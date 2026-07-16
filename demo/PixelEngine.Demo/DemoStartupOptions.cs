@@ -141,6 +141,11 @@ public sealed class DemoStartupOptions
     public string CaptureFramePath { get; init; } = string.Empty;
 
     /// <summary>
+    /// 是否在真实窗口相位累计物理 Game UI 输入、捕获、事件与屏栈诊断。
+    /// </summary>
+    public bool PhysicalUiInputProbe { get; init; }
+
+    /// <summary>
     /// 从命令行解析启动参数。
     /// </summary>
     /// <param name="args">命令行参数。</param>
@@ -174,6 +179,7 @@ public sealed class DemoStartupOptions
         bool sceneExplicitlySet = false;
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
         string captureFramePath = string.Empty;
+        bool physicalUiInputProbe = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -292,6 +298,9 @@ public sealed class DemoStartupOptions
                 case "--capture-frame":
                     captureFramePath = ReadValue(args, ref i, "--capture-frame");
                     break;
+                case "--physical-ui-input-probe":
+                    physicalUiInputProbe = true;
+                    break;
                 default:
                     throw new ArgumentException($"未知 Demo 参数：{args[i]}", nameof(args));
             }
@@ -301,6 +310,7 @@ public sealed class DemoStartupOptions
         ValidateScriptedWindowDemo(headless, windowTicks, scriptedWindowDemo);
         ValidateParticleRenderMode(headless, particleRenderMode);
         ValidateParticleFrameProbe(headless, windowTicks, particleFrameProbe, particleProbeCount, particleProbeRunId);
+        ValidatePhysicalUiInputProbe(headless, windowTicks, physicalUiInputProbe);
         return new DemoStartupOptions
         {
             HotReloadEnabled = hotReload,
@@ -325,6 +335,7 @@ public sealed class DemoStartupOptions
             Scene = scene,
             LogDirectory = logDirectory,
             CaptureFramePath = captureFramePath,
+            PhysicalUiInputProbe = physicalUiInputProbe,
         };
     }
 
@@ -387,6 +398,13 @@ public sealed class DemoStartupOptions
             : true;
         _ = particleFrameProbe && string.IsNullOrWhiteSpace(particleProbeRunId)
             ? throw new ArgumentException("--particle-probe-run-id 必须是非空字符串。", nameof(particleProbeRunId))
+            : true;
+    }
+
+    private static void ValidatePhysicalUiInputProbe(bool headless, int windowTicks, bool enabled)
+    {
+        _ = enabled && (headless || windowTicks <= 0)
+            ? throw new ArgumentException("--physical-ui-input-probe 只能与窗口有限短跑 --window-ticks 一起使用。", nameof(enabled))
             : true;
     }
 

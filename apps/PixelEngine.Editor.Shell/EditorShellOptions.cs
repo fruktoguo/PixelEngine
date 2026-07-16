@@ -45,6 +45,9 @@ internal sealed record EditorShellOptions(
     /// </summary>
     public bool ScriptedRuntimeInspectorProbe { get; init; }
 
+    /// <summary>是否在退出时输出真实窗口 Game View 物理输入映射与事件诊断。</summary>
+    public bool PhysicalUiInputProbe { get; init; }
+
     /// <summary>
     /// 要打开并稳定绘制的设置面板；仅接受 project 或 player。
     /// </summary>
@@ -89,6 +92,7 @@ internal sealed record EditorShellOptions(
         bool scriptedPreferencesProbe = false;
         bool scriptedGameViewProbe = false;
         bool scriptedRuntimeInspectorProbe = false;
+        bool physicalUiInputProbe = false;
         string? scriptedSettingsPanelProbe = null;
         int? scriptedAuthoringInspectorProbeStableId = null;
         bool ephemeralUserState = false;
@@ -153,6 +157,9 @@ internal sealed record EditorShellOptions(
                     break;
                 case "--scripted-runtime-inspector-probe":
                     scriptedRuntimeInspectorProbe = true;
+                    break;
+                case "--physical-ui-input-probe":
+                    physicalUiInputProbe = true;
                     break;
                 case "--scripted-settings-panel-probe":
                     scriptedSettingsPanelProbe = RequireValue(args, ref i, arg).Trim().ToLowerInvariant();
@@ -220,6 +227,7 @@ internal sealed record EditorShellOptions(
             scriptedPreferencesProbe ||
             scriptedGameViewProbe ||
             scriptedRuntimeInspectorProbe ||
+            physicalUiInputProbe ||
             scriptedSettingsPanelProbe is not null ||
             scriptedAuthoringInspectorProbeStableId.HasValue;
         return new EditorShellOptions(projectPath, scenePath, windowTicks, scriptedProbe, scriptedBuildProbe, scriptedBuildRunProbe, scriptedBuildCancelProbe, scriptedBuildSettingsProbe, scriptedMenuLayoutProbe, scriptedHierarchyProbe, scriptedDefaultWorkbenchProbe, scriptedPreferencesProbe, buildOutputPath, captureFramePath, logDirectory)
@@ -229,6 +237,7 @@ internal sealed record EditorShellOptions(
             ReopenLastProject = reopenLastProject,
             ScriptedGameViewProbe = scriptedGameViewProbe,
             ScriptedRuntimeInspectorProbe = scriptedRuntimeInspectorProbe,
+            PhysicalUiInputProbe = physicalUiInputProbe,
             ScriptedSettingsPanelProbe = scriptedSettingsPanelProbe,
             ScriptedAuthoringInspectorProbeStableId = scriptedAuthoringInspectorProbeStableId,
             AutomationEnabled = automationEnabled,

@@ -66,6 +66,14 @@ public sealed class GameUiCanvasRegistryTests
         Assert.Equal(0, lower.ScrollCount);
         Assert.Equal(1, upper.ScrollCount);
         Assert.Equal(new RuntimeUi.UiHitResult(true, true, true, false), fixture.Registry.HitTest(400f, 200f));
+        GameUiCanvasInputDiagnostics diagnostics = fixture.Registry.CaptureInputDiagnostics();
+        Assert.Equal(2, diagnostics.PointerButtonCalls);
+        Assert.Equal(2, diagnostics.ForwardedPointerButtonCalls);
+        Assert.Equal(1, diagnostics.LeftPressCalls);
+        Assert.Equal(1, diagnostics.LeftReleaseCalls);
+        Assert.Equal(0, diagnostics.PressedPointerButtons);
+        Assert.Equal(RuntimeUi.UiBackendKind.RmlUi, diagnostics.LastButtonTargetBackend);
+        Assert.False(diagnostics.LastButtonTargetHit.WantsMouse);
     }
 
     /// <summary>桥接事件携带来源 Canvas 与全局 Screen，而不是碰撞的后端局部句柄。</summary>
@@ -208,6 +216,64 @@ public sealed class GameUiCanvasRegistryTests
         Assert.Equal(0, allocated);
     }
 
+    /// <summary>runtime Gui 使用完整 presentation 坐标，Game UI 命中与拖拽捕获期间独占指针。</summary>
+    [Fact]
+    public void GuiInputRouteUsesPresentationCoordinatesAndYieldsToGameUiPointerOwnership()
+    {
+        using RegistryFixture fixture = new();
+        fixture.Configure(OneCanvasDocument());
+        RecordingBackend backend = fixture.GetBackend(10);
+        FixedPresentationInputMapper mapper = new(2f, 3f);
+        FixedUiInputSource source = new(new RuntimeUi.UiPointerState(20f, 30f, 0f, 0f, false, false, false));
+        RuntimeUi.UiInputRouter uiInput = new(fixture.Registry, source);
+        GameUiAwareGuiInputRoute route = new(mapper, fixture.Registry, uiInput);
+
+        Assert.True(route.TryMapPointer(10f, 10f, out float presentationX, out float presentationY));
+        Assert.Equal((20f, 30f), (presentationX, presentationY));
+
+        backend.HitResult = new RuntimeUi.UiHitResult(true, true, true, false);
+        Assert.False(route.TryMapPointer(10f, 10f, out _, out _));
+        Assert.True(route.ClearsPointerWhenRejected);
+
+        backend.BackendKind = RuntimeUi.UiBackendKind.ManagedFallback;
+        Assert.False(route.TryMapPointer(10f, 10f, out _, out _));
+        Assert.False(route.ClearsPointerWhenRejected);
+
+        fixture.Registry.FeedPointerMove(20f, 30f);
+        fixture.Registry.FeedPointerButton(RuntimeUi.UiPointerButton.Left, isDown: true);
+        backend.HitResult = RuntimeUi.UiHitResult.None;
+        Assert.False(route.TryMapPointer(100f, 100f, out _, out _));
+
+        fixture.Registry.FeedPointerButton(RuntimeUi.UiPointerButton.Left, isDown: false);
+        Assert.True(route.TryMapPointer(100f, 100f, out presentationX, out presentationY));
+        Assert.Equal((200f, 300f), (presentationX, presentationY));
+    }
+
+    /// <summary>Game UI 键盘捕获期间 runtime Gui 不得收到同一按键，释放后恢复宿主焦点门。</summary>
+    [Fact]
+    public void GuiInputRouteYieldsKeyboardWhileGameUiCapturesIt()
+    {
+        using RegistryFixture fixture = new();
+        fixture.Configure(OneCanvasDocument());
+        RecordingBackend backend = fixture.GetBackend(10);
+        backend.HitResult = new RuntimeUi.UiHitResult(true, true, true, true);
+        FixedPresentationInputMapper mapper = new(1f, 1f);
+        FixedUiInputSource source = new(new RuntimeUi.UiPointerState(10f, 10f, 0f, 0f, false, false, false));
+        RuntimeUi.UiInputRouter uiInput = new(fixture.Registry, source);
+        GameUiAwareGuiInputRoute route = new(mapper, fixture.Registry, uiInput);
+
+        _ = uiInput.RefreshCapture();
+        Assert.False(route.AllowsKeyboardInput);
+
+        backend.HitResult = RuntimeUi.UiHitResult.None;
+        source.Pointer = source.Pointer with { LeftDown = true };
+        _ = uiInput.RefreshCapture();
+        Assert.True(route.AllowsKeyboardInput);
+
+        mapper.AllowsKeyboardInput = false;
+        Assert.False(route.AllowsKeyboardInput);
+    }
+
     private static EngineSceneDocument OneCanvasDocument()
     {
         return new EngineSceneDocument
@@ -320,6 +386,48 @@ public sealed class GameUiCanvasRegistryTests
         }
     }
 
+    private sealed class FixedPresentationInputMapper(float scaleX, float scaleY) : IGameUiPresentationInputMapper
+    {
+        public bool AllowsKeyboardInput { get; set; } = true;
+
+        public bool AllowsGameUiKeyboardInput => AllowsKeyboardInput;
+
+        public bool TryMapFramebufferPointerToGameUi(
+            float framebufferX,
+            float framebufferY,
+            out float presentationX,
+            out float presentationY)
+        {
+            presentationX = framebufferX * scaleX;
+            presentationY = framebufferY * scaleY;
+            return true;
+        }
+    }
+
+    private sealed class FixedUiInputSource(RuntimeUi.UiPointerState pointer) : RuntimeUi.IUiInputSource
+    {
+        public RuntimeUi.UiPointerState Pointer { get; set; } = pointer;
+
+        public bool TryGetPointer(out RuntimeUi.UiPointerState state)
+        {
+            state = Pointer;
+            return true;
+        }
+
+        public int CaptureDownKeys(Span<RuntimeUi.UiKey> destination, out RuntimeUi.UiKeyModifiers modifiers)
+        {
+            _ = destination;
+            modifiers = RuntimeUi.UiKeyModifiers.None;
+            return 0;
+        }
+
+        public int CaptureText(Span<char> destination)
+        {
+            _ = destination;
+            return 0;
+        }
+    }
+
     private sealed class RecordingBackend(int stableId) : RuntimeUi.IGameUiBackend
     {
         private readonly Dictionary<(int Document, int Path), RuntimeUi.UiValue> _values = [];
@@ -339,7 +447,9 @@ public sealed class GameUiCanvasRegistryTests
 
         internal RuntimeUi.UiDocumentHandle LastDocument { get; private set; }
 
-        public RuntimeUi.UiBackendKind Kind => RuntimeUi.UiBackendKind.RmlUi;
+        internal RuntimeUi.UiBackendKind BackendKind { get; set; } = RuntimeUi.UiBackendKind.RmlUi;
+
+        public RuntimeUi.UiBackendKind Kind => BackendKind;
 
         public bool IsDirty => false;
 

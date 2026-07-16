@@ -770,6 +770,19 @@ public sealed class HostingProjectDisciplineTests
 
             Assert.NotEqual(0, demoWindowEncodingDrift.ExitCode);
             Assert.Contains("Demo 进程输出编码已损坏", demoWindowEncodingDrift.CombinedOutput, StringComparison.Ordinal);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            string physicalInputReportPath = Path.Combine(outputRoot, "_验证记录", "ui004-physical-input", "report.json");
+            JsonObject physicalInputReport = JsonNode.Parse(File.ReadAllText(physicalInputReportPath))!.AsObject();
+            JsonObject physicalStartScenario = physicalInputReport["scenarios"]!.AsArray()[0]!.AsObject();
+            physicalStartScenario["input"]!.AsObject()["raw_press_edges"] = "0";
+            File.WriteAllText(physicalInputReportPath, physicalInputReport.ToJsonString());
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult physicalInputDrift = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, physicalInputDrift.ExitCode);
+            Assert.Contains("未形成唯一按下/释放/动作事件", physicalInputDrift.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -778,6 +791,35 @@ public sealed class HostingProjectDisciplineTests
                 Directory.Delete(outputRoot, recursive: true);
             }
         }
+    }
+
+    /// <summary>
+    /// 验证正式输出在替换目录前必须使用本次打包 content 跑完 Player 与 Editor Game View 物理点击。
+    /// </summary>
+    [Fact]
+    public void FinalOutputRequiresPackagedPhysicalRuntimeUiInputProbe()
+    {
+        string root = FindRepositoryRoot();
+        string updateScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+        string verifier = File.ReadAllText(Path.Combine(root, "tools", "verify-final-output.ps1"));
+        string physicalProbe = File.ReadAllText(Path.Combine(root, "tools", "run-ui004-physical-input-probe.ps1"));
+        string physicalHelper = File.ReadAllText(
+            Path.Combine(root, "tools", "PixelEngine.Tools.PhysicalInput", "Program.cs"));
+
+        Assert.Contains("run-ui004-physical-input-probe.ps1", updateScript, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Tools.PhysicalInput.Interop.csproj", updateScript, StringComparison.Ordinal);
+        Assert.Contains("-Name 'physical-input-helper-publish'", updateScript, StringComparison.Ordinal);
+        Assert.Contains("$demoPackagedContentRoot = Join-Path $demoPlayerDir 'content'", updateScript, StringComparison.Ordinal);
+        Assert.Contains("-ContentRoot', $demoPackagedContentRoot", updateScript, StringComparison.Ordinal);
+        Assert.Contains("-InputHelperPath', $physicalInputHelperExe", updateScript, StringComparison.Ordinal);
+        Assert.Contains("-Name 'ui004-physical-input-probe'", updateScript, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.ui004-physical-input/v1", updateScript, StringComparison.Ordinal);
+        Assert.Contains("pixelengine.ui004-physical-input/v1", verifier, StringComparison.Ordinal);
+        Assert.Contains("win32-sendinput", verifier, StringComparison.Ordinal);
+        Assert.Contains("captureSha256", verifier, StringComparison.Ordinal);
+        Assert.DoesNotContain("DllImport", physicalProbe, StringComparison.Ordinal);
+        Assert.Contains("LibraryImport(\"user32.dll\"", physicalHelper, StringComparison.Ordinal);
+        Assert.Contains("SetProcessDpiAwarenessContext", physicalHelper, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -3272,6 +3314,134 @@ public sealed class HostingProjectDisciplineTests
             "_验证记录/logs/editor-gameview-presentation.stdout.log",
             "pixelengine.editor-gameview-presentation-probe/v1 allPassed=True");
         WriteTextFile(outputRoot, "_验证记录/logs/editor-gameview-presentation.stderr.log", "");
+        const string packagedStartup = /*lang=json,strict*/ "{\"runtimeUiBackend\":\"RmlUi\"}";
+        const string packagedMainMenu = "<rml><button>开始游戏</button><button>设置</button></rml>";
+        const string packagedSettings = "<rml title=\"设置\"></rml>";
+        const string packagedFont = "fixture noto sans sc font";
+        WriteTextFile(outputRoot, "游戏Demo/content/startup.json", packagedStartup);
+        WriteTextFile(outputRoot, "游戏Demo/content/ui/screens/main-menu.xhtml", packagedMainMenu);
+        WriteTextFile(outputRoot, "游戏Demo/content/ui/screens/settings.xhtml", packagedSettings);
+        WriteTextFile(outputRoot, "游戏Demo/content/ui/fonts/NotoSansSC-VF.ttf", packagedFont);
+        string physicalCapture = new('P', 2_048);
+        string physicalCaptureSha256 = Sha256Text(physicalCapture);
+        object[] physicalInputScenarios =
+        [
+            new
+            {
+                name = "player-rmlui-start",
+                backend = "RmlUi",
+                clientWidth = 1080,
+                clientHeight = 720,
+                clientX = 740,
+                clientY = 353,
+                capture = "player-rmlui-start/after-click.bmp",
+                captureSha256 = physicalCaptureSha256,
+                input = new
+                {
+                    raw_press_edges = "1",
+                    raw_release_edges = "1",
+                    button_calls = "2",
+                    button_forwarded = "2",
+                    drained_events = "1",
+                    main_screen = "0",
+                    hud_screen = "2",
+                    modal_screen = "0",
+                },
+            },
+            new
+            {
+                name = "player-managed-fallback-settings",
+                backend = "ManagedFallback",
+                clientWidth = 1080,
+                clientHeight = 720,
+                clientX = 638,
+                clientY = 401,
+                capture = "player-managed-fallback-settings/after-click.bmp",
+                captureSha256 = physicalCaptureSha256,
+                input = new
+                {
+                    raw_press_edges = "1",
+                    raw_release_edges = "1",
+                    button_calls = "2",
+                    button_forwarded = "2",
+                    drained_events = "1",
+                    main_screen = "1",
+                    hud_screen = "0",
+                    modal_screen = "2",
+                },
+            },
+            new
+            {
+                name = "editor-rmlui-settings",
+                backend = "RmlUi",
+                clientWidth = 1280,
+                clientHeight = 720,
+                clientX = 687,
+                clientY = 456,
+                capture = "editor-rmlui-settings/after-settings.bmp",
+                captureSha256 = physicalCaptureSha256,
+                input = new
+                {
+                    raw_press_edges = "1",
+                    raw_release_edges = "1",
+                    forwarded_press_edges = "1",
+                    forwarded_release_edges = "1",
+                    button_backend = "RmlUi",
+                    button_calls = "2",
+                    drained_events = "1",
+                },
+            },
+        ];
+        string[] physicalCaptureRelatives =
+        [
+            "player-rmlui-start/after-click.bmp",
+            "player-managed-fallback-settings/after-click.bmp",
+            "editor-rmlui-settings/after-settings.bmp",
+        ];
+        foreach (string captureRelative in physicalCaptureRelatives)
+        {
+            WriteTextFile(outputRoot, $"_验证记录/ui004-physical-input/{captureRelative}", physicalCapture);
+        }
+        string[] physicalScenarioNames =
+        [
+            "player-rmlui-start",
+            "player-managed-fallback-settings",
+            "editor-rmlui-settings",
+        ];
+        foreach (string scenarioName in physicalScenarioNames)
+        {
+            WriteTextFile(outputRoot, $"_验证记录/ui004-physical-input/{scenarioName}/stdout.log", "physical input passed");
+            WriteTextFile(outputRoot, $"_验证记录/ui004-physical-input/{scenarioName}/stderr.log", "");
+        }
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/ui004-physical-input/report.json",
+            JsonSerializer.Serialize(new
+            {
+                schema = "pixelengine.ui004-physical-input/v1",
+                passed = true,
+                gitCommit,
+                binaries = new
+                {
+                    editorSha256 = Sha256Hex(Path.Combine(outputRoot, "编辑器", "PixelEngine.Editor.Shell.exe")),
+                    demoSha256 = Sha256Hex(Path.Combine(outputRoot, "游戏Demo", "PixelEngine Demo.exe")),
+                    cliSha256 = Sha256Hex(Path.Combine(outputRoot, "自动化", "CLI", "pixelengine-editor.exe")),
+                    inputHelperSha256 = Sha256Text("physical input helper"),
+                },
+                packagedContent = new
+                {
+                    startupSha256 = Sha256Text(packagedStartup),
+                    mainMenuSha256 = Sha256Text(packagedMainMenu),
+                    settingsSha256 = Sha256Text(packagedSettings),
+                    fontSha256 = Sha256Text(packagedFont),
+                },
+                scenarios = physicalInputScenarios,
+            }));
+        WriteTextFile(
+            outputRoot,
+            "_验证记录/logs/ui004-physical-input.stdout.log",
+            "ui004_physical_input_probe passed=True, scenarios=3");
+        WriteTextFile(outputRoot, "_验证记录/logs/ui004-physical-input.stderr.log", "");
         WriteTextFile(
             outputRoot,
             "_验证记录/logs/demo-window.stdout.log",
@@ -3384,6 +3554,16 @@ public sealed class HostingProjectDisciplineTests
                         stdout = "_验证记录/logs/editor-automation-e2e.stdout.log",
                         stderr = "_验证记录/logs/editor-automation-e2e.stderr.log",
                         report = "_验证记录/editor-automation-e2e/report.json",
+                    },
+                    ui004PhysicalInputProbe = new
+                    {
+                        completed = true,
+                        allPassed = true,
+                        scenarioCount = 3,
+                        inputSource = "win32-sendinput",
+                        stdout = "_验证记录/logs/ui004-physical-input.stdout.log",
+                        stderr = "_验证记录/logs/ui004-physical-input.stderr.log",
+                        report = "_验证记录/ui004-physical-input/report.json",
                     },
                     demoWindowProbe = new
                     {

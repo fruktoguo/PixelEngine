@@ -206,6 +206,13 @@ public static class DemoProgram
         DemoReactionTemperatureProbe? reactionProbe = null;
         DemoAudioProbe? audioProbe = null;
         DemoParticleLightProbe? particleLightProbe = null;
+        DemoPhysicalUiInputProbe? physicalUiInputProbe = null;
+        if (options.PhysicalUiInputProbe)
+        {
+            physicalUiInputProbe = new DemoPhysicalUiInputProbe(probe, window);
+            physicalUiInputProbe.RegisterPhases(engine.Phases);
+        }
+
         if (options.ScriptedWindowDemo)
         {
             scriptedInput = new DemoWindowScriptedInput(probe, options.ScriptedWindowRoute);
@@ -288,6 +295,11 @@ public static class DemoProgram
                 engine.Context.Counters.VSyncEnabled));
             WritePlayerWindowProbeSummary(window);
             WriteGameUiProbeSummary(engine, probe);
+            if (physicalUiInputProbe is not null)
+            {
+                Console.WriteLine(physicalUiInputProbe.BuildSummary());
+            }
+
             if (scriptedInput is not null)
             {
                 WriteScriptedWindowSummary(engine, probe, scriptedInput, scriptedProbe, reactionProbe, audioProbe, particleLightProbe);

@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using PixelEngine.Gui;
 using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Simulation;
@@ -31,6 +32,9 @@ public sealed class EngineProbeApi
     private ScriptLightingSynchronizer? LightingSync { get; set; }
     private GameUiCanvasRegistry? GameUiRegistry { get; set; }
     private GameUiBackendSelection? GameUiSelection { get; set; }
+    private RuntimeUi.UiInputRouter? GameUiInputRouter { get; set; }
+    private GameUiPhaseDriver? GameUiDriver { get; set; }
+    private GuiApp? Gui { get; set; }
 
     internal EngineProbeApi(
         CellGrid grid,
@@ -140,6 +144,32 @@ public sealed class EngineProbeApi
                 UsedFallback: selection.Value.UsedFallback,
                 FallbackReason: selection.Value.FallbackReason,
                 ActiveNativeProfile: selection.Value.ActiveNativeProfile);
+    }
+
+    /// <summary>
+    /// 显式启用 shared/runtime Gui 按钮只读诊断；普通运行默认关闭。
+    /// </summary>
+    public void EnablePhysicalUiInputDiagnostics()
+    {
+        (Gui ?? throw MissingBinding("GuiApp")).SetButtonInputDiagnosticsEnabled(enabled: true);
+    }
+
+    /// <summary>
+    /// 捕获物理 UI 输入的稳定只读快照，不向 Demo 暴露 Context、registry、router 或 Gui 实例。
+    /// </summary>
+    /// <returns>Canvas 目标、输入 capture、Gui 按钮和累计事件诊断。</returns>
+    public PhysicalUiInputProbeSnapshot CapturePhysicalUiInput()
+    {
+        GameUiCanvasRegistry registry = GameUiRegistry ?? throw MissingBinding("GameUiCanvasRegistry");
+        RuntimeUi.UiInputRouter inputRouter = GameUiInputRouter ?? throw MissingBinding("UiInputRouter");
+        GameUiPhaseDriver driver = GameUiDriver ?? throw MissingBinding("GameUiPhaseDriver");
+        GuiApp gui = Gui ?? throw MissingBinding("GuiApp");
+        return new PhysicalUiInputProbeSnapshot(
+            registry.CaptureInputDiagnostics(),
+            inputRouter.Capture,
+            gui.Input.Capture,
+            gui.CaptureButtonInputDiagnostics(),
+            driver.TotalDrainedEventCount);
     }
 
     /// <summary>
@@ -358,10 +388,19 @@ public sealed class EngineProbeApi
 
     internal void AttachGameUi(
         GameUiCanvasRegistry registry,
-        in GameUiBackendSelection selection)
+        in GameUiBackendSelection selection,
+        RuntimeUi.UiInputRouter inputRouter,
+        GameUiPhaseDriver driver)
     {
         GameUiRegistry = registry ?? throw new ArgumentNullException(nameof(registry));
         GameUiSelection = selection;
+        GameUiInputRouter = inputRouter ?? throw new ArgumentNullException(nameof(inputRouter));
+        GameUiDriver = driver ?? throw new ArgumentNullException(nameof(driver));
+    }
+
+    internal void AttachGui(GuiApp gui)
+    {
+        Gui = gui ?? throw new ArgumentNullException(nameof(gui));
     }
 
     private IScriptContext RequireScriptContext()
@@ -429,3 +468,18 @@ public readonly record struct GameUiProbeSnapshot(
     bool UsedFallback,
     string? FallbackReason,
     string? ActiveNativeProfile);
+
+/// <summary>
+/// 物理 UI 输入 probe 的稳定只读快照，不暴露 Hosting 服务实例。
+/// </summary>
+/// <param name="Canvas">多 Canvas 指针目标与按钮转发诊断。</param>
+/// <param name="Capture">Game UI 当前输入 capture。</param>
+/// <param name="GuiCapture">shared/runtime Gui 当前输入 capture。</param>
+/// <param name="GuiButtons">shared/runtime Gui 按钮诊断。</param>
+/// <param name="TotalDrainedEventCount">Game UI 累计 drain 事件数。</param>
+public readonly record struct PhysicalUiInputProbeSnapshot(
+    GameUiCanvasInputDiagnostics Canvas,
+    RuntimeUi.UiInputCapture Capture,
+    GuiInputSnapshot GuiCapture,
+    GuiButtonInputDiagnostics GuiButtons,
+    long TotalDrainedEventCount);

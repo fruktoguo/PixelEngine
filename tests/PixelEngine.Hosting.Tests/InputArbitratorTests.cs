@@ -31,10 +31,10 @@ public sealed class InputArbitratorTests
     }
 
     /// <summary>
-    /// 游戏 GUI/ManagedFallback 捕获在 HTML UI 之前截断世界输入。
+    /// shared/runtime Gui 与 Game UI 捕获按任意应用顺序都只能收缩世界输入许可。
     /// </summary>
     [Fact]
-    public void GuiCaptureComposesBeforeHtmlUiCapture()
+    public void GuiAndGameUiCaptureComposeMonotonically()
     {
         InputArbitrationState state = InputArbitrator.ApplyGui(
             InputArbitrationState.Allowed,

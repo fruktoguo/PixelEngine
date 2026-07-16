@@ -1,3 +1,4 @@
+using PixelEngine.Hosting;
 using PixelEngine.UI;
 using System.Numerics;
 
@@ -14,7 +15,8 @@ internal sealed class GameViewUiInputSource(
     Func<bool> pointerHoveredProvider,
     Func<Vector2>? panelOriginFramebufferProvider = null,
     Func<Vector2>? framebufferScaleProvider = null,
-    Func<bool>? keyboardFocusedProvider = null) : IUiInputSource
+    Func<bool>? keyboardFocusedProvider = null,
+    Func<bool>? panelVisibleProvider = null) : IUiInputSource, IGameUiPresentationInputMapper
 {
     private readonly IUiInputSource _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly Func<EditorMode> _modeProvider = modeProvider ?? throw new ArgumentNullException(nameof(modeProvider));
@@ -27,21 +29,60 @@ internal sealed class GameViewUiInputSource(
         framebufferScaleProvider ?? (() => Vector2.One);
     private readonly Func<bool> _keyboardFocusedProvider =
         keyboardFocusedProvider ?? pointerHoveredProvider;
+    private readonly Func<bool> _panelVisibleProvider =
+        panelVisibleProvider ?? pointerHoveredProvider;
+    private readonly bool _mapsCurrentFramebufferPointer =
+        panelOriginFramebufferProvider is not null && framebufferScaleProvider is not null;
+    private bool _previousRawLeftDown;
+    private bool _previousForwardedLeftDown;
+    private long _innerPointerSamples;
+    private long _mappedPointerSamples;
+    private long _rawLeftDownSamples;
+    private long _rawLeftPressEdges;
+    private long _rawLeftReleaseEdges;
+    private long _forwardedLeftDownSamples;
+    private long _forwardedLeftPressEdges;
+    private long _forwardedLeftReleaseEdges;
+    private Vector2 _lastWindowPoint;
+    private Vector2 _lastViewportPoint;
+    private bool _lastPanelVisible;
+    private bool _lastMappingSucceeded;
 
     public UiTextCompositionCapabilities TextCompositionCapabilities => _inner.TextCompositionCapabilities;
+
+    /// <inheritdoc />
+    public bool AllowsGameUiKeyboardInput => CanForwardKeyboardInput();
 
     public bool TryGetPointer(out UiPointerState state)
     {
         state = default;
-        if (!TryMapFocusedViewportPoint(out Vector2 viewportPoint))
+        _lastPanelVisible = _panelVisibleProvider();
+        if (!IsRuntimeInputMode(_modeProvider()) || !_lastPanelVisible)
         {
+            ObserveForwardedLeft(isDown: false);
             return false;
         }
 
         if (!_inner.TryGetPointer(out UiPointerState windowState))
         {
+            ObserveForwardedLeft(isDown: false);
             return false;
         }
+
+        _innerPointerSamples++;
+        _lastWindowPoint = new Vector2(windowState.X, windowState.Y);
+        ObserveRawLeft(windowState.LeftDown);
+        if (!TryMapViewportPoint(in windowState, out Vector2 viewportPoint))
+        {
+            _lastMappingSucceeded = false;
+            ObserveForwardedLeft(isDown: false);
+            return false;
+        }
+
+        _lastMappingSucceeded = true;
+        _mappedPointerSamples++;
+        _lastViewportPoint = viewportPoint;
+        ObserveForwardedLeft(windowState.LeftDown);
 
         state = new UiPointerState(
             viewportPoint.X,
@@ -52,6 +93,54 @@ internal sealed class GameViewUiInputSource(
             windowState.RightDown,
             windowState.MiddleDown);
         return true;
+    }
+
+    /// <inheritdoc />
+    public bool TryMapFramebufferPointerToGameUi(
+        float framebufferX,
+        float framebufferY,
+        out float presentationX,
+        out float presentationY)
+    {
+        presentationX = 0f;
+        presentationY = 0f;
+        if (!IsRuntimeInputMode(_modeProvider()) || !_panelVisibleProvider())
+        {
+            return false;
+        }
+
+        GameViewViewportSnapshot viewport = _viewportProvider();
+        if (!viewport.TryMapFramebufferToViewport(
+                new Vector2(framebufferX, framebufferY),
+                _panelOriginFramebufferProvider(),
+                _framebufferScaleProvider(),
+                out Vector2 point))
+        {
+            return false;
+        }
+
+        presentationX = point.X;
+        presentationY = point.Y;
+        return true;
+    }
+
+    /// <summary>捕获当前进程内只读物理输入诊断；不注入、消费或改写输入。</summary>
+    internal GameViewUiInputDiagnostics CaptureDiagnostics()
+    {
+        return new GameViewUiInputDiagnostics(
+            Attached: true,
+            _innerPointerSamples,
+            _mappedPointerSamples,
+            _rawLeftDownSamples,
+            _rawLeftPressEdges,
+            _rawLeftReleaseEdges,
+            _forwardedLeftDownSamples,
+            _forwardedLeftPressEdges,
+            _forwardedLeftReleaseEdges,
+            _lastWindowPoint,
+            _lastViewportPoint,
+            _lastPanelVisible,
+            _lastMappingSucceeded);
     }
 
     public int CaptureDownKeys(Span<UiKey> destination, out UiKeyModifiers modifiers)
@@ -122,12 +211,65 @@ internal sealed class GameViewUiInputSource(
         return IsRuntimeInputMode(_modeProvider()) && _keyboardFocusedProvider();
     }
 
-    private bool TryMapFocusedViewportPoint(out Vector2 viewportPoint)
+    private bool TryMapViewportPoint(in UiPointerState windowState, out Vector2 viewportPoint)
     {
+        GameViewViewportSnapshot viewport = _viewportProvider();
+        if (_mapsCurrentFramebufferPointer)
+        {
+            return viewport.TryMapFramebufferToViewport(
+                new Vector2(windowState.X, windowState.Y),
+                _panelOriginFramebufferProvider(),
+                _framebufferScaleProvider(),
+                out viewportPoint);
+        }
+
         viewportPoint = default;
-        return IsRuntimeInputMode(_modeProvider()) &&
-            _pointerHoveredProvider() &&
-            _viewportProvider().TryMapPanelToViewport(_panelPointProvider(), out viewportPoint);
+        return _pointerHoveredProvider() &&
+            viewport.TryMapPanelToViewport(_panelPointProvider(), out viewportPoint);
+    }
+
+    private void ObserveRawLeft(bool isDown)
+    {
+        if (isDown)
+        {
+            _rawLeftDownSamples++;
+        }
+
+        if (isDown != _previousRawLeftDown)
+        {
+            if (isDown)
+            {
+                _rawLeftPressEdges++;
+            }
+            else
+            {
+                _rawLeftReleaseEdges++;
+            }
+
+            _previousRawLeftDown = isDown;
+        }
+    }
+
+    private void ObserveForwardedLeft(bool isDown)
+    {
+        if (isDown)
+        {
+            _forwardedLeftDownSamples++;
+        }
+
+        if (isDown != _previousForwardedLeftDown)
+        {
+            if (isDown)
+            {
+                _forwardedLeftPressEdges++;
+            }
+            else
+            {
+                _forwardedLeftReleaseEdges++;
+            }
+
+            _previousForwardedLeftDown = isDown;
+        }
     }
 
     private static bool IsRuntimeInputMode(EditorMode mode)
@@ -135,3 +277,19 @@ internal sealed class GameViewUiInputSource(
         return mode is EditorMode.Play or EditorMode.Paused;
     }
 }
+
+/// <summary>Game View 当前 framebuffer 指针到 presentation UI 的只读诊断快照。</summary>
+internal readonly record struct GameViewUiInputDiagnostics(
+    bool Attached,
+    long InnerPointerSamples,
+    long MappedPointerSamples,
+    long RawLeftDownSamples,
+    long RawLeftPressEdges,
+    long RawLeftReleaseEdges,
+    long ForwardedLeftDownSamples,
+    long ForwardedLeftPressEdges,
+    long ForwardedLeftReleaseEdges,
+    Vector2 LastWindowPoint,
+    Vector2 LastViewportPoint,
+    bool LastPanelVisible,
+    bool LastMappingSucceeded);

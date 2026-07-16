@@ -79,9 +79,16 @@ public sealed class Engine : IDisposable
                 Context.TryGetService(out ScriptCameraSynchronizer cameraSynchronizer) ? cameraSynchronizer : null,
                 Context.TryGetService(out ScriptLightingSynchronizer lightingSynchronizer) ? lightingSynchronizer : null);
             if (Context.TryGetService(out GameUiCanvasRegistry gameUiRegistry) &&
-                Context.TryGetService(out GameUiBackendSelection gameUiSelection))
+                Context.TryGetService(out GameUiBackendSelection gameUiSelection) &&
+                Context.TryGetService(out UiInputRouter gameUiInputRouter) &&
+                Context.TryGetService(out GameUiPhaseDriver gameUiDriver))
             {
-                probe.AttachGameUi(gameUiRegistry, in gameUiSelection);
+                probe.AttachGameUi(gameUiRegistry, in gameUiSelection, gameUiInputRouter, gameUiDriver);
+            }
+
+            if (Context.TryGetService(out GuiApp gui))
+            {
+                probe.AttachGui(gui);
             }
 
             return probe;
@@ -730,8 +737,14 @@ public sealed class Engine : IDisposable
         if (needsGuiBridge && !hasGuiBridge)
         {
             GuiApp gui = ResolveGuiApp(window);
-            IGuiViewportInputRoute? viewportInputRoute =
-                Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)
+            IGuiViewportInputRoute? viewportInputRoute = gameUi is not null &&
+                Context.TryGetService(out IGameUiPresentationInputMapper gameUiInputMapper) &&
+                Context.TryGetService(out UiInputRouter gameUiInputRouter)
+                ? new GameUiAwareGuiInputRoute(
+                    gameUiInputMapper,
+                    gameUi,
+                    gameUiInputRouter)
+                : Context.TryGetService(out IGameplayViewportInputMapper gameplayViewportMapper)
                     ? new GameplayViewportGuiInputRoute(gameplayViewportMapper)
                     : null;
             input = new GuiWindowInputConnector(window, gui.Input, viewportInputRoute);
@@ -808,6 +821,11 @@ public sealed class Engine : IDisposable
     {
         if (Context.TryGetService(out GuiApp existing))
         {
+            if (Context.TryGetService(out EngineProbeApi existingProbe))
+            {
+                existingProbe.AttachGui(existing);
+            }
+
             return existing;
         }
 
@@ -820,6 +838,11 @@ public sealed class Engine : IDisposable
             });
 
         Context.RegisterService(created);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachGui(created);
+        }
+
         _ownedRuntimeResources.Add(created);
         return created;
     }
@@ -914,11 +937,6 @@ public sealed class Engine : IDisposable
             selectionNativeProfile);
         Context.RegisterService(backendSelection);
         Context.RegisterService(registry);
-        if (Context.TryGetService(out EngineProbeApi probe))
-        {
-            probe.AttachGameUi(registry, in backendSelection);
-        }
-
         SynchronizeLegacyGameUiHostService(registry);
 
         IUiInputSource inputSource = new RenderWindowUiInputSource(window);
@@ -933,6 +951,12 @@ public sealed class Engine : IDisposable
 
         UiInputRouter inputRouter = new(registry, inputSource);
         inputRouter.TextCompositionCapabilities.Validate();
+        if (inputSource is IGameUiPresentationInputMapper gameUiInputMapper &&
+            !Context.TryGetService(out IGameUiPresentationInputMapper _))
+        {
+            Context.RegisterService<IGameUiPresentationInputMapper>(gameUiInputMapper);
+        }
+
         Context.RegisterService(inputRouter.TextCompositionCapabilities);
         Context.RegisterService(inputRouter);
         GameUiServiceBridge service = new(registry);
@@ -956,6 +980,11 @@ public sealed class Engine : IDisposable
             runtimePolicy: Context.TryGetService(out IGameUiCompositionPolicy runtimePolicy)
                 ? runtimePolicy
                 : null);
+        if (Context.TryGetService(out EngineProbeApi probe))
+        {
+            probe.AttachGameUi(registry, in backendSelection, inputRouter, driver);
+        }
+
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(registry);
@@ -1069,31 +1098,22 @@ public sealed class Engine : IDisposable
         return ex is DllNotFoundException or EntryPointNotFoundException or BadImageFormatException or InvalidOperationException;
     }
 
-    // 输入仲裁：Editor 捕获 → ImGui → GameUi，最终转换为脚本输入路由。
+    // 输入仲裁：Editor 门控 → GameUi 当前帧 pump → shared/runtime Gui 捕获 → 世界脚本。
+    // ManagedFallback 本身绘制在 shared Gui 中，若先应用 Gui capture 会形成“捕获后禁止自身 pump”的死锁。
     private ScriptInputRoute ResolveGuiInputRoute()
     {
         InputArbitrationState input = ApplyEditorInputCapture(InputArbitrationState.Allowed);
-        if (!Context.TryGetService(out GuiApp gui))
-        {
-            if (Context.TryGetService(out UiInputRouter uiOnlyRouter))
-            {
-                UiInputCapture uiOnlyCapture = uiOnlyRouter.Pump(
-                    allowPointer: input.AllowWorldMouse,
-                    allowKeyboard: input.AllowWorldKeyboard);
-                input = InputArbitrator.ApplyGameUi(input, uiOnlyCapture);
-            }
-
-            return input.ToScriptInputRoute();
-        }
-
-        GuiInputSnapshot capture = gui.Input.Capture;
-        input = InputArbitrator.ApplyGui(input, capture);
         if (Context.TryGetService(out UiInputRouter router))
         {
             UiInputCapture uiCapture = router.Pump(
                 allowPointer: input.AllowWorldMouse,
                 allowKeyboard: input.AllowWorldKeyboard);
             input = InputArbitrator.ApplyGameUi(input, uiCapture);
+        }
+
+        if (Context.TryGetService(out GuiApp gui))
+        {
+            input = InputArbitrator.ApplyGui(input, gui.Input.Capture);
         }
 
         return input.ToScriptInputRoute();

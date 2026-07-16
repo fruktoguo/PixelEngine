@@ -211,8 +211,12 @@ public sealed class GuiWindowInputConnector : IDisposable
             return true;
         }
 
-        // 显式把 ImGui 指针移出 viewport，避免离开 Game View 后仍 hover/点击上一帧控件。
-        _input.MouseMoveFramebuffer(MouseUnavailable, MouseUnavailable);
+        // 离开 viewport/native UI 独占时清空 hover；共享 ImGui 的托管 Game UI 会在同帧自行注入真实位置。
+        if (_viewportRoute?.ClearsPointerWhenRejected ?? true)
+        {
+            _input.MouseMoveFramebuffer(MouseUnavailable, MouseUnavailable);
+        }
+
         return false;
     }
 

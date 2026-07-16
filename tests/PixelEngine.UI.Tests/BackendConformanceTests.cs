@@ -569,6 +569,36 @@ public sealed class BackendConformanceTests : IDisposable
             _ = path;
             return new ManagedFallbackImage(1, 1, 1);
         }
+
+        public void FeedPointerMove(float x, float y)
+        {
+            _ = x;
+            _ = y;
+        }
+
+        public void FeedPointerButton(UiPointerButton button, bool isDown)
+        {
+            _ = button;
+            _ = isDown;
+        }
+
+        public void FeedScroll(float deltaX, float deltaY)
+        {
+            _ = deltaX;
+            _ = deltaY;
+        }
+
+        public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
+        {
+            _ = key;
+            _ = isDown;
+            _ = modifiers;
+        }
+
+        public void FeedText(ReadOnlySpan<char> text)
+        {
+            _ = text;
+        }
     }
 
     private sealed class FakeGuiDrawContext : IGuiDrawContext

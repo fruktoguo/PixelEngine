@@ -29,6 +29,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     private int _eventRead;
     private int _eventCount;
     private float _deltaSeconds = 1f / 60f;
+    private int _pressedPointerButtons;
     private bool _initialized;
     private bool _disposed;
 
@@ -219,48 +220,85 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     }
 
     /// <summary>
-    /// 接收指针移动；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// 接收指针移动；命中本后端或拖拽捕获期间转发到共享 Gui host。
     /// </summary>
     /// <param name="x">UI 坐标 x。</param>
     /// <param name="y">UI 坐标 y。</param>
     public void FeedPointerMove(float x, float y)
     {
+        ThrowIfDisposed();
+        if (!float.IsFinite(x) || !float.IsFinite(y))
+        {
+            return;
+        }
+
+        UiHitResult hit = HitTest(x, y);
+        if (hit.WantsMouse || hit.Opaque || _pressedPointerButtons != 0)
+        {
+            // GameUiHost 已把 presentation 指针映射为 Canvas logical；共享 ImGui 按 Scale 后的
+            // presentation 像素绘制，因此在进入 Gui host 前必须使用同一因子映回，避免重复缩放。
+            _gui.FeedPointerMove(Scale(x), Scale(y));
+        }
     }
 
     /// <summary>
-    /// 接收指针按钮；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// 接收已由 Canvas registry 选中的指针按钮边沿。
     /// </summary>
     /// <param name="button">指针按钮。</param>
     /// <param name="isDown">是否按下。</param>
     public void FeedPointerButton(UiPointerButton button, bool isDown)
     {
+        ThrowIfDisposed();
+        int mask = 1 << (int)button;
+        if (isDown)
+        {
+            _pressedPointerButtons |= mask;
+        }
+
+        _gui.FeedPointerButton(button, isDown);
+        if (!isDown)
+        {
+            _pressedPointerButtons &= ~mask;
+        }
     }
 
     /// <summary>
-    /// 接收滚轮输入；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// 接收已由 Canvas registry 选中的滚轮输入。
     /// </summary>
     /// <param name="deltaX">水平滚动量。</param>
     /// <param name="deltaY">垂直滚动量。</param>
     public void FeedScroll(float deltaX, float deltaY)
     {
+        ThrowIfDisposed();
+        if (float.IsFinite(deltaX) && float.IsFinite(deltaY))
+        {
+            _gui.FeedScroll(Scale(deltaX), Scale(deltaY));
+        }
     }
 
     /// <summary>
-    /// 接收键盘按键；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// 接收已由 Canvas registry 选中的键盘输入。
     /// </summary>
     /// <param name="key">按键。</param>
     /// <param name="isDown">是否按下。</param>
     /// <param name="modifiers">修饰键。</param>
     public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
     {
+        ThrowIfDisposed();
+        _gui.FeedKey(key, isDown, modifiers);
     }
 
     /// <summary>
-    /// 接收已提交文本；当前托管回退后端通过 Gui host 处理具体控件交互。
+    /// 接收已由 Canvas registry 选中的提交文本。
     /// </summary>
     /// <param name="text">本帧文本。</param>
     public void FeedText(ReadOnlySpan<char> text)
     {
+        ThrowIfDisposed();
+        if (!text.IsEmpty)
+        {
+            _gui.FeedText(text);
+        }
     }
 
     /// <summary>

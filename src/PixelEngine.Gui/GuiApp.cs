@@ -41,6 +41,19 @@ public sealed class GuiApp : IDisposable
     /// </summary>
     public GuiInputBridge Input { get; }
 
+    /// <summary>捕获 shared/runtime Gui 累计按钮输入诊断。</summary>
+    public GuiButtonInputDiagnostics CaptureButtonInputDiagnostics()
+    {
+        return _scriptGuiContext.CaptureButtonInputDiagnostics();
+    }
+
+    /// <summary>显式门控按钮输入诊断；正常运行默认关闭。</summary>
+    /// <param name="enabled">是否启用累计诊断。</param>
+    public void SetButtonInputDiagnosticsEnabled(bool enabled)
+    {
+        _scriptGuiContext.SetButtonInputDiagnosticsEnabled(enabled);
+    }
+
     /// <summary>
     /// GUI 是否已初始化且启用。
     /// </summary>

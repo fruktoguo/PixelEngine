@@ -671,6 +671,15 @@ if ($null -eq $automationE2EValidation -or
   throw 'Editor automation E2E 记录不是无跳过的外部 CLI 全链路通过状态。'
 }
 
+$ui004PhysicalInputValidation = $validation.ui004PhysicalInputProbe
+if ($null -eq $ui004PhysicalInputValidation -or
+    $ui004PhysicalInputValidation.completed -ne $true -or
+    $ui004PhysicalInputValidation.allPassed -ne $true -or
+    [int]$ui004PhysicalInputValidation.scenarioCount -ne 3 -or
+    $ui004PhysicalInputValidation.inputSource -ne 'win32-sendinput') {
+  throw 'UI-004 物理输入 probe 记录不是 Win32 SendInput 三场景通过状态。'
+}
+
 if ($validation.demoWindowProbe.completed -ne $true) {
   throw 'Demo 窗口 probe 记录不是完成状态。'
 }
@@ -697,6 +706,9 @@ $validationPaths = @(
   [string]$automationE2EValidation.stdout,
   [string]$automationE2EValidation.stderr,
   [string]$automationE2EValidation.report,
+  [string]$ui004PhysicalInputValidation.stdout,
+  [string]$ui004PhysicalInputValidation.stderr,
+  [string]$ui004PhysicalInputValidation.report,
   [string]$validation.demoWindowProbe.stdout,
   [string]$validation.demoWindowProbe.stderr,
   [string]$validation.demoWindowProbe.capture,
@@ -725,6 +737,159 @@ if ($editorGameViewReport.schema -ne 'pixelengine.editor-gameview-presentation-p
     $editorGameViewReport.allPassed -ne $true -or
     $editorGameViewReport.gitCommit -ne $manifest.gitCommit) {
   throw '编辑器 Game View presentation probe 报告 schema、allPassed 或 gitCommit 不匹配。'
+}
+
+$ui004PhysicalInputWrapperStdout = Get-OutputFileText `
+  ([string]$ui004PhysicalInputValidation.stdout) `
+  'UI-004 物理输入 probe stdout'
+if ($ui004PhysicalInputWrapperStdout.Contains(([char]0xFFFD).ToString(), [StringComparison]::Ordinal)) {
+  throw 'UI-004 物理输入 probe stdout 含 Unicode replacement character。'
+}
+Assert-TextContains `
+  $ui004PhysicalInputWrapperStdout `
+  'ui004_physical_input_probe passed=True, scenarios=3' `
+  'UI-004 物理输入 probe stdout'
+
+$ui004PhysicalInputReportPath = Resolve-OutputPath `
+  ([string]$ui004PhysicalInputValidation.report) `
+  'UI-004 物理输入 probe report'
+$ui004PhysicalInputReport = Get-Content -Raw -LiteralPath $ui004PhysicalInputReportPath | ConvertFrom-Json
+if ($ui004PhysicalInputReport.schema -ne 'pixelengine.ui004-physical-input/v1' -or
+    $ui004PhysicalInputReport.passed -ne $true -or
+    $ui004PhysicalInputReport.gitCommit -ne $manifest.gitCommit -or
+    @($ui004PhysicalInputReport.scenarios).Count -ne 3) {
+  throw 'UI-004 物理输入 probe 报告 schema、结果、gitCommit 或场景数不匹配。'
+}
+
+$physicalBinaryHashes = $ui004PhysicalInputReport.binaries
+foreach ($hashEntry in @(
+    [string]$physicalBinaryHashes.editorSha256,
+    [string]$physicalBinaryHashes.demoSha256,
+    [string]$physicalBinaryHashes.cliSha256,
+    [string]$physicalBinaryHashes.inputHelperSha256)) {
+  Assert-LowerSha256 $hashEntry 'UI-004 物理输入 probe binary SHA256'
+}
+if ([string]$physicalBinaryHashes.editorSha256 -ne (Get-FileHash -LiteralPath $editorExe -Algorithm SHA256).Hash.ToLowerInvariant() -or
+    [string]$physicalBinaryHashes.demoSha256 -ne (Get-FileHash -LiteralPath $demoExe -Algorithm SHA256).Hash.ToLowerInvariant() -or
+    [string]$physicalBinaryHashes.cliSha256 -ne (Get-FileHash -LiteralPath $automationCli -Algorithm SHA256).Hash.ToLowerInvariant()) {
+  throw 'UI-004 物理输入 probe 使用的 Editor、Player 或 CLI 不是本次正式输出二进制。'
+}
+
+$packagedContentRoot = Join-Path (Split-Path -Parent $demoExe) 'content'
+$packagedContentEvidence = $ui004PhysicalInputReport.packagedContent
+$requiredPackagedContent = [ordered]@{
+  startupSha256 = 'startup.json'
+  mainMenuSha256 = 'ui/screens/main-menu.xhtml'
+  settingsSha256 = 'ui/screens/settings.xhtml'
+  fontSha256 = 'ui/fonts/NotoSansSC-VF.ttf'
+}
+foreach ($entry in $requiredPackagedContent.GetEnumerator()) {
+  $expectedHash = [string]$packagedContentEvidence.($entry.Key)
+  Assert-LowerSha256 $expectedHash "UI-004 packaged content $($entry.Key)"
+  $contentPath = Resolve-ContainedPath $packagedContentRoot ([string]$entry.Value) "UI-004 packaged content $($entry.Value)"
+  Assert-FileExists $contentPath "UI-004 packaged content $($entry.Value)"
+  $actualHash = (Get-FileHash -LiteralPath $contentPath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($actualHash -ne $expectedHash) {
+    throw "UI-004 物理输入 probe 使用的 packaged content 与正式输出不一致：$($entry.Value)"
+  }
+}
+
+$packagedStartup = Get-Content -Raw -LiteralPath (Join-Path $packagedContentRoot 'startup.json') | ConvertFrom-Json
+if ($packagedStartup.runtimeUiBackend -ne 'RmlUi') {
+  throw '正式输出 packaged startup 必须默认使用 RmlUi，不能因配置缺失退回错版 UI。'
+}
+$packagedMainMenu = Get-Content -Raw -LiteralPath (Join-Path $packagedContentRoot 'ui/screens/main-menu.xhtml')
+$packagedSettings = Get-Content -Raw -LiteralPath (Join-Path $packagedContentRoot 'ui/screens/settings.xhtml')
+Assert-TextContains $packagedMainMenu '开始游戏' '正式输出中文主菜单'
+Assert-TextContains $packagedMainMenu '>设置</button>' '正式输出中文主菜单'
+Assert-TextContains $packagedSettings 'title="设置"' '正式输出中文设置页'
+
+$ui004PhysicalInputReportRoot = Split-Path -Parent $ui004PhysicalInputReportPath
+$ui004PhysicalEvidenceRelativePaths = [Collections.Generic.List[string]]::new()
+$ui004PhysicalScenarioByName = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::Ordinal)
+foreach ($scenario in @($ui004PhysicalInputReport.scenarios)) {
+  $scenarioName = [string]$scenario.name
+  if ($scenarioName -notin @('player-rmlui-start', 'player-managed-fallback-settings', 'editor-rmlui-settings') -or
+      -not $ui004PhysicalScenarioByName.TryAdd($scenarioName, $scenario)) {
+    throw "UI-004 物理输入 probe 场景未知或重复：$scenarioName"
+  }
+
+  $clientWidth = [int]$scenario.clientWidth
+  $clientHeight = [int]$scenario.clientHeight
+  $clientX = [int]$scenario.clientX
+  $clientY = [int]$scenario.clientY
+  if ($clientWidth -le 0 -or $clientHeight -le 0 -or
+      $clientX -lt 0 -or $clientX -ge $clientWidth -or
+      $clientY -lt 0 -or $clientY -ge $clientHeight) {
+    throw "UI-004 物理输入 probe 点击坐标越界：$scenarioName"
+  }
+
+  Assert-LowerSha256 ([string]$scenario.captureSha256) "UI-004 $scenarioName captureSha256"
+  $capturePath = Resolve-ContainedPath `
+    $ui004PhysicalInputReportRoot `
+    ([string]$scenario.capture) `
+    "UI-004 $scenarioName capture"
+  Assert-FileExists $capturePath "UI-004 $scenarioName capture"
+  if ((Get-Item -LiteralPath $capturePath).Length -le 1024) {
+    throw "UI-004 物理输入 probe 截图为空：$scenarioName"
+  }
+  $captureHash = (Get-FileHash -LiteralPath $capturePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($captureHash -ne [string]$scenario.captureSha256) {
+    throw "UI-004 物理输入 probe 截图 SHA256 不匹配：$scenarioName"
+  }
+
+  $input = $scenario.input
+  if ([string]$input.raw_press_edges -ne '1' -or
+      [string]$input.raw_release_edges -ne '1' -or
+      [string]$input.button_calls -ne '2' -or
+      [string]$input.drained_events -ne '1') {
+    throw "UI-004 物理输入 probe 未形成唯一按下/释放/动作事件：$scenarioName"
+  }
+
+  $scenarioStdout = Resolve-ContainedPath $ui004PhysicalInputReportRoot "$scenarioName/stdout.log" "UI-004 $scenarioName stdout"
+  $scenarioStderr = Resolve-ContainedPath $ui004PhysicalInputReportRoot "$scenarioName/stderr.log" "UI-004 $scenarioName stderr"
+  Assert-FileExists $scenarioStdout "UI-004 $scenarioName stdout"
+  Assert-FileExists $scenarioStderr "UI-004 $scenarioName stderr"
+  foreach ($textPath in @($scenarioStdout, $scenarioStderr)) {
+    $scenarioLogText = Get-Content -Raw -LiteralPath $textPath
+    if ($null -eq $scenarioLogText) {
+      $scenarioLogText = [string]::Empty
+    }
+    if ($scenarioLogText.Contains(([char]0xFFFD).ToString(), [StringComparison]::Ordinal)) {
+      throw "UI-004 物理输入 probe 日志含 Unicode replacement character：$scenarioName"
+    }
+  }
+
+  foreach ($evidencePath in @($capturePath, $scenarioStdout, $scenarioStderr)) {
+    $ui004PhysicalEvidenceRelativePaths.Add(
+      [IO.Path]::GetRelativePath($outputRootFull, $evidencePath).Replace('\', '/'))
+  }
+}
+
+$rmlUiStart = $ui004PhysicalScenarioByName['player-rmlui-start']
+if ($rmlUiStart.backend -ne 'RmlUi' -or
+    [string]$rmlUiStart.input.button_forwarded -ne '2' -or
+    [string]$rmlUiStart.input.main_screen -ne '0' -or
+    [int]$rmlUiStart.input.hud_screen -le 0 -or
+    [string]$rmlUiStart.input.modal_screen -ne '0') {
+  throw 'UI-004 RmlUi Player 的开始游戏物理点击未形成 main->HUD 状态。'
+}
+
+$fallbackSettings = $ui004PhysicalScenarioByName['player-managed-fallback-settings']
+if ($fallbackSettings.backend -ne 'ManagedFallback' -or
+    [string]$fallbackSettings.input.button_forwarded -ne '2' -or
+    [string]$fallbackSettings.input.main_screen -ne '1' -or
+    [string]$fallbackSettings.input.hud_screen -ne '0' -or
+    [int]$fallbackSettings.input.modal_screen -le 0) {
+  throw 'UI-004 ManagedFallback Player 的设置物理点击未打开 modal。'
+}
+
+$editorSettings = $ui004PhysicalScenarioByName['editor-rmlui-settings']
+if ($editorSettings.backend -ne 'RmlUi' -or
+    [string]$editorSettings.input.forwarded_press_edges -ne '1' -or
+    [string]$editorSettings.input.forwarded_release_edges -ne '1' -or
+    [string]$editorSettings.input.button_backend -ne 'RmlUi') {
+  throw 'UI-004 Editor Game View 的 RmlUi 设置物理点击未通过当前帧映射。'
 }
 
 $requiredGameViewScenarios = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -1191,6 +1356,12 @@ Assert-ChecksumContains $relativePaths $automationDocumentationRelative 'automat
 Assert-ChecksumContains $relativePaths ([string]$automationE2EValidation.stdout) 'automation E2E stdout'
 Assert-ChecksumContains $relativePaths ([string]$automationE2EValidation.stderr) 'automation E2E stderr'
 Assert-ChecksumContains $relativePaths ([string]$automationE2EValidation.report) 'automation E2E report'
+Assert-ChecksumContains $relativePaths ([string]$ui004PhysicalInputValidation.stdout) 'UI-004 物理输入 stdout'
+Assert-ChecksumContains $relativePaths ([string]$ui004PhysicalInputValidation.stderr) 'UI-004 物理输入 stderr'
+Assert-ChecksumContains $relativePaths ([string]$ui004PhysicalInputValidation.report) 'UI-004 物理输入 report'
+foreach ($ui004EvidenceRelative in $ui004PhysicalEvidenceRelativePaths) {
+  Assert-ChecksumContains $relativePaths $ui004EvidenceRelative 'UI-004 物理输入场景证据'
+}
 Assert-ChecksumContains `
   $relativePaths `
   ([IO.Path]::GetRelativePath($outputRootFull, $automationEditorStdout).Replace('\', '/')) `

@@ -4,10 +4,11 @@ using PixelEngine.UI;
 namespace PixelEngine.Hosting;
 
 /// <summary>
-/// Hosting 侧输入仲裁器，按 Editor ImGui、游戏 GUI/HTML UI、世界脚本的优先级合并输入捕获结果。
+/// Hosting 侧输入仲裁器，合并 Editor、Game UI、shared/runtime Gui 与世界脚本的输入捕获结果。
 /// </summary>
 /// <remarks>
-/// 仲裁链（高优先级先消费）：Editor 捕获 → ImGui → GameUi → 脚本/世界。
+/// 仲裁链：Editor 先门控；GameUi 必须先完成当前帧 pump，随后合并 shared/runtime Gui 捕获，最后进入脚本/世界。
+/// 该顺序避免 ManagedFallback 因其所在 ImGui context 的上一帧 capture 而禁止自身 pump。
 /// 每层通过 <see cref="InputArbitrationState.Apply"/> 与运算收缩 AllowWorld* 许可，
 /// 最终由 <see cref="InputArbitrationState.ToScriptInputRoute"/> 交给相位 0 输入采样。
 /// </remarks>

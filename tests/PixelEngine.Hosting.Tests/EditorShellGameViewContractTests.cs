@@ -397,6 +397,68 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证生产路径按本帧 framebuffer 指针映射 Game UI；即使上一帧 panel hover/point 尚未更新，
+    /// 同一物理点击的按下与释放边沿也不能丢失。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceUsesCurrentFramebufferPointerWithoutPriorHoverSnapshot()
+    {
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 320,
+            textureHeight: 180,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(160f, 160f));
+        FixedUiInputSource input = new(new UiPointerState(
+            280f,
+            330f,
+            0f,
+            0f,
+            LeftDown: true,
+            RightDown: false,
+            MiddleDown: false));
+        RecordingBackend backend = new((x, y) => x == 160f && y == 90f
+            ? new UiHitResult(HitsUi: true, Opaque: false, WantsMouse: true, WantsKeyboard: false)
+            : UiHitResult.None);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 180, 1f), UiBackendKind.ManagedFallback));
+        GameViewUiInputSource source = new(
+            input,
+            () => Editor.EditorMode.Play,
+            () => snapshot,
+            () => Vector2.Zero,
+            () => false,
+            () => new Vector2(100f, 200f),
+            () => new Vector2(2f, 2f),
+            keyboardFocusedProvider: () => false,
+            panelVisibleProvider: () => true);
+        UiInputRouter router = new(host, source);
+
+        _ = router.Pump();
+        input.Pointer = input.Pointer with { LeftDown = false };
+        _ = router.Pump();
+
+        Assert.Equal(160f, backend.LastPointerMoveX, precision: 3);
+        Assert.Equal(90f, backend.LastPointerMoveY, precision: 3);
+        Assert.Equal(
+            [(UiPointerButton.Left, true), (UiPointerButton.Left, false)],
+            backend.PointerButtons);
+        GameViewUiInputDiagnostics diagnostics = source.CaptureDiagnostics();
+        Assert.True(diagnostics.Attached);
+        Assert.Equal(4, diagnostics.InnerPointerSamples);
+        Assert.Equal(4, diagnostics.MappedPointerSamples);
+        Assert.Equal(2, diagnostics.RawLeftDownSamples);
+        Assert.Equal(1, diagnostics.RawLeftPressEdges);
+        Assert.Equal(1, diagnostics.RawLeftReleaseEdges);
+        Assert.Equal(2, diagnostics.ForwardedLeftDownSamples);
+        Assert.Equal(1, diagnostics.ForwardedLeftPressEdges);
+        Assert.Equal(1, diagnostics.ForwardedLeftReleaseEdges);
+        Assert.Equal(new Vector2(280f, 330f), diagnostics.LastWindowPoint);
+        Assert.Equal(new Vector2(160f, 90f), diagnostics.LastViewportPoint);
+        Assert.True(diagnostics.LastPanelVisible);
+        Assert.True(diagnostics.LastMappingSucceeded);
+    }
+
+    /// <summary>
     /// 验证 Game UI 键盘输入只依赖 Game View 键盘焦点，不错误依赖 mouse hover。
     /// </summary>
     [Fact]
@@ -771,7 +833,8 @@ public sealed class EditorShellGameViewContractTests
             imageMinPanel: new Vector2(10f, 20f),
             availablePanelSize: new Vector2(160f, 160f));
         // 指针必须落在图像内以透传；modal 屏保证 WantCaptureKeyboard。
-        FixedUiInputSource inner = new(new UiPointerState(0f, 0f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false))
+        // panel-local (90,65) 经 panel origin framebuffer=(100,40)、DPI=2 映射为当前 framebuffer (280,170)。
+        FixedUiInputSource inner = new(new UiPointerState(280f, 170f, 0f, 0f, LeftDown: false, RightDown: false, MiddleDown: false))
         {
             CompositionText = "候補",
             Composition = new UiTextComposition(isActive: true, cursorIndex: 1),
@@ -916,10 +979,42 @@ public sealed class EditorShellGameViewContractTests
             _ = path;
             return new ManagedFallbackImage(1, 1, 1);
         }
+
+        public void FeedPointerMove(float x, float y)
+        {
+            _ = x;
+            _ = y;
+        }
+
+        public void FeedPointerButton(UiPointerButton button, bool isDown)
+        {
+            _ = button;
+            _ = isDown;
+        }
+
+        public void FeedScroll(float deltaX, float deltaY)
+        {
+            _ = deltaX;
+            _ = deltaY;
+        }
+
+        public void FeedKey(UiKey key, bool isDown, UiKeyModifiers modifiers)
+        {
+            _ = key;
+            _ = isDown;
+            _ = modifiers;
+        }
+
+        public void FeedText(ReadOnlySpan<char> text)
+        {
+            _ = text;
+        }
     }
 
     private sealed class FixedUiInputSource(UiPointerState pointer) : IUiInputSource
     {
+        public UiPointerState Pointer { get; set; } = pointer;
+
         public UiKey[] DownKeys { get; init; } = [];
 
         public UiKeyModifiers Modifiers { get; init; }
@@ -942,7 +1037,7 @@ public sealed class EditorShellGameViewContractTests
 
         public bool TryGetPointer(out UiPointerState state)
         {
-            state = pointer;
+            state = Pointer;
             return true;
         }
 
@@ -998,6 +1093,8 @@ public sealed class EditorShellGameViewContractTests
 
         public float LastHitTestY { get; private set; } = float.NaN;
 
+        public List<(UiPointerButton Button, bool IsDown)> PointerButtons { get; } = [];
+
         public void Dispose()
         {
         }
@@ -1041,8 +1138,7 @@ public sealed class EditorShellGameViewContractTests
 
         public void FeedPointerButton(UiPointerButton button, bool isDown)
         {
-            _ = button;
-            _ = isDown;
+            PointerButtons.Add((button, isDown));
         }
 
         public void FeedScroll(float deltaX, float deltaY)

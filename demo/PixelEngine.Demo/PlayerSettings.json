@@ -1,0 +1,17 @@
+{
+  "formatVersion": 2,
+  "windowTitle": "PixelEngine Demo",
+  "windowWidth": 1280,
+  "windowHeight": 720,
+  "windowMode": "Windowed",
+  "vSync": true,
+  "iconPath": null,
+  "version": "0.1.0",
+  "startupScene": "scenes/lava-mine.scene",
+  "inputDefaults": {
+    "enableKeyboardMouse": true,
+    "enableGamepad": true
+  },
+  "runtimeUiBackend": "RmlUi",
+  "releaseChannel": "Development"
+}

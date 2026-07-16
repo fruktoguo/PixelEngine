@@ -51,6 +51,7 @@ internal sealed class EditorShellHostExtension :
     private FileMaterialReactionContentService? _materialReactionContentService;
     private WorldInspectorPanel? _worldInspectorPanel;
     private PerformanceHudPanel? _performanceHudPanel;
+    private GameViewUiInputSource? _gameViewUiInputSource;
     private EditorWorldSaveLoadService? _saveLoadService;
     private RuntimeSceneHierarchyDataSource? _runtimeHierarchy;
     private ISimulationInspectApi? _simulationInspectApi;
@@ -1657,7 +1658,7 @@ internal sealed class EditorShellHostExtension :
     {
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(fallback);
-        return new GameViewUiInputSource(
+        _gameViewUiInputSource = new GameViewUiInputSource(
             fallback,
             CapturePlayMode,
             () => _gameViewPanel?.LastViewportSnapshot ?? GameViewViewportSnapshot.Empty,
@@ -1665,7 +1666,14 @@ internal sealed class EditorShellHostExtension :
             () => _gameViewPanel is { Visible: true, PointerHovered: true },
             () => _gameViewPanel?.LastPanelOriginFramebuffer ?? default,
             () => _gameViewPanel?.LastFramebufferScale ?? System.Numerics.Vector2.One,
-            () => _gameViewPanel is { Visible: true, KeyboardFocused: true });
+            () => _gameViewPanel is { Visible: true, KeyboardFocused: true },
+            () => _gameViewPanel is { Visible: true });
+        return _gameViewUiInputSource;
+    }
+
+    internal GameViewUiInputDiagnostics CapturePhysicalUiInputDiagnostics()
+    {
+        return _gameViewUiInputSource?.CaptureDiagnostics() ?? default;
     }
 
     public bool TryGetPresentTarget(out UiPresentTarget target)

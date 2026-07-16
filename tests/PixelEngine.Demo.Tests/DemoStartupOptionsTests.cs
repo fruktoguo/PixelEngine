@@ -16,6 +16,26 @@ namespace PixelEngine.Demo.Tests;
 public sealed class DemoStartupOptionsTests
 {
     /// <summary>
+    /// 验证 Editor/Build 使用的 Player Settings 与独立 Demo startup 保持同一场景、窗口和 RmlUi 后端。
+    /// </summary>
+    [Fact]
+    public void PlayerSettingsAndStandaloneStartupUseTheSameRuntimeDefaults()
+    {
+        string projectRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo");
+        PlayerSettingsDto player = EngineProjectSettingsStore.LoadPlayerSettings(projectRoot);
+        EngineProjectStartupSettings startup = EngineProjectSettingsStore.LoadStartupSettings(
+            Path.Combine(projectRoot, "content"));
+
+        Assert.Equal(startup.StartScene, player.StartupScene);
+        Assert.Equal(startup.WindowWidth, player.WindowWidth);
+        Assert.Equal(startup.WindowHeight, player.WindowHeight);
+        Assert.Equal(startup.WindowMode, player.WindowMode);
+        Assert.Equal(startup.VSync, player.VSync);
+        Assert.Equal(startup.RuntimeUiBackend, player.RuntimeUiBackend);
+        Assert.Equal(UiBackendKind.RmlUi, player.RuntimeUiBackend);
+    }
+
+    /// <summary>
     /// 验证默认启动进入窗口模式，并默认进入玩家包声明的真实可玩关卡。
     /// </summary>
     [Fact]
@@ -622,6 +642,22 @@ public sealed class DemoStartupOptionsTests
         Assert.False(options.HotReloadEnabled);
         Assert.Equal(60, options.WindowTicks);
         Assert.Equal("artifacts/demo.bmp", options.CaptureFramePath);
+    }
+
+    /// <summary>
+    /// 验证物理 UI 输入观察器只能绑定有限窗口短跑，且不会在普通产品启动中隐式开启。
+    /// </summary>
+    [Fact]
+    public void PhysicalUiInputProbeRequiresFiniteWindowTicks()
+    {
+        DemoStartupOptions options = DemoStartupOptions.Parse(["--window-ticks", "1200", "--physical-ui-input-probe"]);
+
+        Assert.True(options.PhysicalUiInputProbe);
+        Assert.Equal(1200, options.WindowTicks);
+        Assert.False(DemoStartupOptions.Parse([]).PhysicalUiInputProbe);
+        _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--physical-ui-input-probe"]));
+        _ = Assert.Throws<ArgumentException>(() =>
+            DemoStartupOptions.Parse(["--headless", "--physical-ui-input-probe"]));
     }
 
     /// <summary>

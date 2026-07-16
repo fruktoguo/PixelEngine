@@ -13,6 +13,17 @@ public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
     private const int InitialUtf8Capacity = 4096;
     private const int CanvasStyleVariableCount = 22;
     private byte[] _utf8Buffer = GC.AllocateUninitializedArray<byte>(InitialUtf8Capacity);
+    private long _buttonCalls;
+    private long _hoveredButtonCalls;
+    private long _pressedButtonCalls;
+    private long _downButtonCalls;
+    private long _releasedButtonCalls;
+    private long _clickedButtonCalls;
+    private string? _lastHoveredButtonLabel;
+    private Vector2 _lastHoveredButtonRectMin;
+    private Vector2 _lastHoveredButtonRectMax;
+    private Vector2 _lastButtonMousePosition;
+    private bool _buttonInputDiagnosticsEnabled;
 
     /// <summary>
     /// 创建脚本 GUI 上下文。
@@ -210,7 +221,10 @@ public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
     /// <inheritdoc />
     public bool Button(string label)
     {
-        return ImGui.Button(label ?? string.Empty);
+        string normalized = label ?? string.Empty;
+        bool clicked = ImGui.Button(normalized);
+        RecordButtonInput(normalized, clicked);
+        return clicked;
     }
 
     /// <inheritdoc />
@@ -219,7 +233,70 @@ public sealed class ScriptGuiContext : IGuiContext, IGuiDrawContext
         Vector2 size = new(
             float.IsFinite(width) && width > 0f ? width : 0f,
             float.IsFinite(height) && height > 0f ? height : 0f);
-        return ImGui.Button(label ?? string.Empty, size);
+        string normalized = label ?? string.Empty;
+        bool clicked = ImGui.Button(normalized, size);
+        RecordButtonInput(normalized, clicked);
+        return clicked;
+    }
+
+    /// <summary>捕获累计按钮输入诊断。</summary>
+    public GuiButtonInputDiagnostics CaptureButtonInputDiagnostics()
+    {
+        return new GuiButtonInputDiagnostics(
+            _buttonCalls,
+            _hoveredButtonCalls,
+            _pressedButtonCalls,
+            _downButtonCalls,
+            _releasedButtonCalls,
+            _clickedButtonCalls,
+            _lastHoveredButtonLabel,
+            _lastHoveredButtonRectMin,
+            _lastHoveredButtonRectMax,
+            _lastButtonMousePosition);
+    }
+
+    /// <summary>启用或关闭按钮输入诊断；默认关闭，避免正常 UI 帧执行额外 ImGui 查询。</summary>
+    internal void SetButtonInputDiagnosticsEnabled(bool enabled)
+    {
+        _buttonInputDiagnosticsEnabled = enabled;
+    }
+
+    private void RecordButtonInput(string label, bool clicked)
+    {
+        if (!_buttonInputDiagnosticsEnabled)
+        {
+            return;
+        }
+
+        _buttonCalls++;
+        _lastButtonMousePosition = ImGui.GetMousePos();
+        bool hovered = ImGui.IsItemHovered();
+        if (hovered)
+        {
+            _hoveredButtonCalls++;
+            _lastHoveredButtonLabel = label;
+            _lastHoveredButtonRectMin = ImGui.GetItemRectMin();
+            _lastHoveredButtonRectMax = ImGui.GetItemRectMax();
+            if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                _pressedButtonCalls++;
+            }
+
+            if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                _downButtonCalls++;
+            }
+
+            if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+            {
+                _releasedButtonCalls++;
+            }
+        }
+
+        if (clicked)
+        {
+            _clickedButtonCalls++;
+        }
     }
 
     /// <inheritdoc />

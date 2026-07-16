@@ -6,7 +6,7 @@ using SilkMouseButton = Silk.NET.Input.MouseButton;
 
 namespace PixelEngine.Hosting;
 
-internal sealed class RenderWindowUiInputSource : IUiInputSource
+internal sealed class RenderWindowUiInputSource : IUiInputSource, IGameUiPresentationInputMapper
 {
     private const int TextBufferCapacity = 256;
 
@@ -148,6 +148,28 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource
     /// </summary>
     public UiTextCompositionCapabilities TextCompositionCapabilities =>
         _imeComposition.Capabilities;
+
+    /// <summary>未嵌入外部 viewport 的窗口允许 runtime UI 接收键盘。</summary>
+    public bool AllowsGameUiKeyboardInput => true;
+
+    /// <summary>
+    /// 将未嵌入外部 viewport 的窗口 framebuffer 指针直接映射到 Game UI presentation。
+    /// </summary>
+    /// <param name="framebufferX">窗口 framebuffer X。</param>
+    /// <param name="framebufferY">窗口 framebuffer Y。</param>
+    /// <param name="presentationX">成功时的 presentation X。</param>
+    /// <param name="presentationY">成功时的 presentation Y。</param>
+    /// <returns>坐标均为有限值时返回 <see langword="true"/>。</returns>
+    public bool TryMapFramebufferPointerToGameUi(
+        float framebufferX,
+        float framebufferY,
+        out float presentationX,
+        out float presentationY)
+    {
+        presentationX = framebufferX;
+        presentationY = framebufferY;
+        return float.IsFinite(presentationX) && float.IsFinite(presentationY);
+    }
 
     /// <summary>
     /// 读取当前平台 IME composition 预编辑文本；已提交文本仍走 <see cref="CaptureText" />。

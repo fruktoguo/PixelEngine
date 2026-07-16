@@ -34,6 +34,14 @@ public sealed class GameUiCanvasRegistry :
     private int _pressedPointerButtons;
     private float _pointerX;
     private float _pointerY;
+    private long _pointerButtonCalls;
+    private long _forwardedPointerButtonCalls;
+    private long _leftPressCalls;
+    private long _leftReleaseCalls;
+    private int _lastButtonTargetIndex = -1;
+    private int _lastButtonTargetCanvas;
+    private RuntimeUi.UiBackendKind _lastButtonTargetBackend;
+    private RuntimeUi.UiHitResult _lastButtonTargetHit;
     private bool _disposed;
 
     /// <summary>
@@ -502,15 +510,40 @@ public sealed class GameUiCanvasRegistry :
     public void FeedPointerButton(RuntimeUi.UiPointerButton button, bool isDown)
     {
         ThrowIfDisposed();
+        _pointerButtonCalls++;
+        if (button == RuntimeUi.UiPointerButton.Left)
+        {
+            if (isDown)
+            {
+                _leftPressCalls++;
+            }
+            else
+            {
+                _leftReleaseCalls++;
+            }
+        }
+
         int mask = 1 << (int)button;
         int targetIndex = _pointerCaptureIndex >= 0
             ? _pointerCaptureIndex
             : _pointerTargetIndex >= 0
                 ? _pointerTargetIndex
                 : FindTopPointerTarget(_pointerX, _pointerY);
+        _lastButtonTargetIndex = targetIndex;
         if (targetIndex >= 0)
         {
-            GetRequiredSlot(targetIndex).Host.FeedPointerButton(button, isDown);
+            CanvasSlot target = GetRequiredSlot(targetIndex);
+            _lastButtonTargetCanvas = target.Handle.Value;
+            _lastButtonTargetBackend = target.Host.BackendKind;
+            _lastButtonTargetHit = target.Host.HitTest(_pointerX, _pointerY);
+            target.Host.FeedPointerButton(button, isDown);
+            _forwardedPointerButtonCalls++;
+        }
+        else
+        {
+            _lastButtonTargetCanvas = 0;
+            _lastButtonTargetBackend = default;
+            _lastButtonTargetHit = RuntimeUi.UiHitResult.None;
         }
 
         if (isDown)
@@ -528,6 +561,27 @@ public sealed class GameUiCanvasRegistry :
                 _pointerTargetIndex = FindTopPointerTarget(_pointerX, _pointerY);
             }
         }
+    }
+
+    /// <summary>捕获多 Canvas 指针目标与按钮转发的只读诊断。</summary>
+    /// <returns>当前累计输入诊断快照。</returns>
+    public GameUiCanvasInputDiagnostics CaptureInputDiagnostics()
+    {
+        ThrowIfDisposed();
+        return new GameUiCanvasInputDiagnostics(
+            _pointerX,
+            _pointerY,
+            _pointerTargetIndex,
+            _pointerCaptureIndex,
+            _lastButtonTargetIndex,
+            _lastButtonTargetCanvas,
+            _lastButtonTargetBackend,
+            _lastButtonTargetHit,
+            _pointerButtonCalls,
+            _forwardedPointerButtonCalls,
+            _leftPressCalls,
+            _leftReleaseCalls,
+            _pressedPointerButtons);
     }
 
     /// <summary>把滚轮增量路由到捕获目标或最上层命中 Canvas。</summary>
@@ -643,6 +697,37 @@ public sealed class GameUiCanvasRegistry :
         return hitsUi
             ? new RuntimeUi.UiHitResult(hitsUi, opaque, wantsMouse, wantsKeyboard)
             : RuntimeUi.UiHitResult.None;
+    }
+
+    /// <summary>解析当前 presentation 指针的真实 Game UI 后端所有者。</summary>
+    internal bool TryResolvePointerInputOwner(
+        float x,
+        float y,
+        out RuntimeUi.UiBackendKind backendKind)
+    {
+        ThrowIfDisposed();
+        int targetIndex = _pointerCaptureIndex >= 0
+            ? _pointerCaptureIndex
+            : FindTopPointerTarget(x, y);
+        if (targetIndex < 0)
+        {
+            backendKind = default;
+            return false;
+        }
+
+        CanvasSlot target = GetRequiredSlot(targetIndex);
+        if (_pointerCaptureIndex < 0)
+        {
+            RuntimeUi.UiHitResult hit = target.Host.HitTest(x, y);
+            if (!hit.WantsMouse && !hit.Opaque)
+            {
+                backendKind = default;
+                return false;
+            }
+        }
+
+        backendKind = target.Host.BackendKind;
+        return true;
     }
 
     /// <summary>释放当前与 staging Canvas host。</summary>
@@ -1056,3 +1141,32 @@ public sealed class GameUiCanvasRegistry :
         RuntimeUi.UiScreenHandle LocalScreen,
         ScriptUi.UiScreenHandle GlobalScreen);
 }
+
+/// <summary>多 Canvas 指针捕获与按钮目标的只读诊断快照。</summary>
+/// <param name="PointerX">最近一次 presentation 指针 X。</param>
+/// <param name="PointerY">最近一次 presentation 指针 Y。</param>
+/// <param name="PointerTargetIndex">当前 hover 目标索引；无目标时为 -1。</param>
+/// <param name="PointerCaptureIndex">当前拖拽捕获目标索引；无捕获时为 -1。</param>
+/// <param name="LastButtonTargetIndex">最近一次按钮边沿的目标索引。</param>
+/// <param name="LastButtonTargetCanvas">最近一次按钮边沿的稳定 Canvas handle。</param>
+/// <param name="LastButtonTargetBackend">最近一次按钮边沿的后端类型。</param>
+/// <param name="LastButtonTargetHit">最近一次按钮边沿位置的命中快照。</param>
+/// <param name="PointerButtonCalls">累计按钮边沿调用数。</param>
+/// <param name="ForwardedPointerButtonCalls">累计实际转发到 Canvas 的按钮边沿数。</param>
+/// <param name="LeftPressCalls">累计左键按下边沿数。</param>
+/// <param name="LeftReleaseCalls">累计左键释放边沿数。</param>
+/// <param name="PressedPointerButtons">当前按下按钮 bit mask。</param>
+public readonly record struct GameUiCanvasInputDiagnostics(
+    float PointerX,
+    float PointerY,
+    int PointerTargetIndex,
+    int PointerCaptureIndex,
+    int LastButtonTargetIndex,
+    int LastButtonTargetCanvas,
+    RuntimeUi.UiBackendKind LastButtonTargetBackend,
+    RuntimeUi.UiHitResult LastButtonTargetHit,
+    long PointerButtonCalls,
+    long ForwardedPointerButtonCalls,
+    long LeftPressCalls,
+    long LeftReleaseCalls,
+    int PressedPointerButtons);

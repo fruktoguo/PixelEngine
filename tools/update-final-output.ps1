@@ -19,6 +19,9 @@ param(
   [ValidateRange(300, 3600)]
   [int]$AutomationE2ETimeoutSeconds = 1800,
 
+  [ValidateRange(120, 900)]
+  [int]$UiPhysicalInputProbeTimeoutSeconds = 420,
+
   [ValidateSet('ManagedFallback', 'RmlUi', 'Ultralight')]
   [string]$DemoRuntimeUiBackend = 'RmlUi',
 
@@ -80,6 +83,7 @@ $timestamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stagingRoot = Join-Path $repoRoot "artifacts/final-output-staging/$timestamp"
 $editorPublish = Join-Path $stagingRoot 'editor-publish'
 $automationCliPublish = Join-Path $stagingRoot 'automation-cli-publish'
+$physicalInputHelperPublish = Join-Path $stagingRoot 'physical-input-helper-publish'
 $automationSdkPackages = Join-Path $stagingRoot 'automation-sdk-packages'
 $editorBuildOutput = Join-Path $stagingRoot 'editor-probe-build'
 # 故意在中文路径中构建并运行 Player，覆盖 Windows native fopen/UTF-8 路径边界；
@@ -87,6 +91,7 @@ $editorBuildOutput = Join-Path $stagingRoot 'editor-probe-build'
 $demoBuildOutput = Join-Path $stagingRoot '游戏Demo构建'
 $validationRoot = Join-Path $stagingRoot 'validation'
 $automationE2EValidationRoot = Join-Path $validationRoot 'editor-automation-e2e'
+$ui004PhysicalInputValidationRoot = Join-Path $validationRoot 'ui004-physical-input'
 $automationE2EWorkRoot = Join-Path ([IO.Path]::GetTempPath()) `
   ("pixelengine-final-output-automation-e2e-" + [Guid]::NewGuid().ToString('N'))
 $automationE2EBuildRoot = Join-Path $stagingRoot 'automation-e2e-build'
@@ -96,6 +101,7 @@ $logRoot = Join-Path $validationRoot 'logs'
 New-Item -ItemType Directory -Force -Path `
   $editorPublish, `
   $automationCliPublish, `
+  $physicalInputHelperPublish, `
   $automationSdkPackages, `
   $editorBuildOutput, `
   $demoBuildOutput, `
@@ -345,6 +351,7 @@ $gitCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 $nativeBuildScript = Join-Path $repoRoot 'tools/build-native.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
 $automationCliProject = Join-Path $repoRoot 'tools/PixelEngine.Editor.Cli/PixelEngine.Editor.Cli.csproj'
+$physicalInputHelperProject = Join-Path $repoRoot 'tools/PixelEngine.Tools.PhysicalInput/PixelEngine.Tools.PhysicalInput.Interop.csproj'
 $automationProtocolProject = Join-Path $repoRoot 'src/PixelEngine.Editor.Automation.Protocol/PixelEngine.Editor.Automation.Protocol.csproj'
 $automationClientProject = Join-Path $repoRoot 'src/PixelEngine.Editor.Automation.Client/PixelEngine.Editor.Automation.Client.csproj'
 $automationE2EScript = Join-Path $repoRoot 'tools/run-editor-automation-e2e.ps1'
@@ -354,10 +361,12 @@ $automationCapabilityMatrix = Join-Path $repoRoot 'schema/editor-automation-capa
 $automationDocumentation = Join-Path $repoRoot 'docs/editor-automation-api.md'
 $automationSkillSource = Join-Path $repoRoot 'skills/pixelengine-editor'
 $editorGameViewProbeScript = Join-Path $repoRoot 'tools/run-editor-gameview-presentation-probe.ps1'
+$ui004PhysicalInputProbeScript = Join-Path $repoRoot 'tools/run-ui004-physical-input-probe.ps1'
 $demoProjectRoot = Join-Path $repoRoot 'demo/PixelEngine.Demo'
 $demoBuildScript = Join-Path $repoRoot 'tools/build-player.ps1'
 $editorExe = Join-Path $editorPublish 'PixelEngine.Editor.Shell.exe'
 $automationCliExe = Join-Path $automationCliPublish 'pixelengine-editor.exe'
+$physicalInputHelperExe = Join-Path $physicalInputHelperPublish 'pixelengine-physical-input.exe'
 $scriptReferenceAssemblyNames = @(
   'PixelEngine.Audio',
   'PixelEngine.Content',
@@ -411,6 +420,24 @@ $automationCliPublishResult = Invoke-ProcessChecked `
 
 if (-not (Test-Path -LiteralPath $automationCliExe -PathType Leaf)) {
   throw "自动化 CLI 发布后缺少入口：$automationCliExe"
+}
+
+$physicalInputHelperPublishResult = Invoke-ProcessChecked `
+  -Name 'physical-input-helper-publish' `
+  -FilePath $dotnet `
+  -Arguments @(
+    'publish', $physicalInputHelperProject,
+    '-c', $Configuration,
+    '-r', $Rid,
+    '--self-contained', 'false',
+    '-o', $physicalInputHelperPublish
+  ) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'physical-input-helper-publish.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'physical-input-helper-publish.stderr.log')
+
+if (-not (Test-Path -LiteralPath $physicalInputHelperExe -PathType Leaf)) {
+  throw "物理输入 helper 发布后缺少入口：$physicalInputHelperExe"
 }
 
 $automationProtocolPackResult = Invoke-ProcessChecked `
@@ -617,6 +644,47 @@ if (-not $demoProbeOk) {
   throw "Demo 窗口验证未通过，实际 UI 后端或 Canvas runtime 与发布请求不一致。日志：$($demoProbeResult.StdoutPath)"
 }
 
+# 真实输入必须直接打到本次 publish/build 的 Editor、CLI 和 Player，并使用打包后的 content。
+# 这条门禁同时覆盖 native RmlUi、ManagedFallback 与 Editor Game View 三条坐标/捕获链。
+$demoPackagedContentRoot = Join-Path $demoPlayerDir 'content'
+if (-not (Test-Path -LiteralPath $demoPackagedContentRoot -PathType Container)) {
+  throw "Demo 打包目录缺少 content：$demoPackagedContentRoot"
+}
+
+$ui004PhysicalInputProbeResult = Invoke-ProcessChecked `
+  -Name 'ui004-physical-input-probe' `
+  -FilePath $pwsh `
+  -Arguments @(
+    '-NoProfile',
+    '-File', $ui004PhysicalInputProbeScript,
+    '-EditorPath', $editorExe,
+    '-DemoPath', $demoExe,
+    '-CliPath', $automationCliExe,
+    '-InputHelperPath', $physicalInputHelperExe,
+    '-ProjectRoot', $demoProjectRoot,
+    '-ContentRoot', $demoPackagedContentRoot,
+    '-OutputRoot', $ui004PhysicalInputValidationRoot,
+    '-PlayerWindowTicks', '1200',
+    '-ProcessTimeoutSeconds', '120'
+  ) `
+  -WorkingDirectory $repoRoot `
+  -StdoutPath (Join-Path $logRoot 'ui004-physical-input.stdout.log') `
+  -StderrPath (Join-Path $logRoot 'ui004-physical-input.stderr.log') `
+  -TimeoutSeconds $UiPhysicalInputProbeTimeoutSeconds
+
+$ui004PhysicalInputReportPath = Join-Path $ui004PhysicalInputValidationRoot 'report.json'
+if (-not (Test-Path -LiteralPath $ui004PhysicalInputReportPath -PathType Leaf)) {
+  throw "UI-004 物理输入 probe 缺少报告：$ui004PhysicalInputReportPath"
+}
+
+$ui004PhysicalInputReport = Get-Content -Raw -LiteralPath $ui004PhysicalInputReportPath | ConvertFrom-Json
+if ($ui004PhysicalInputReport.schema -ne 'pixelengine.ui004-physical-input/v1' -or
+    $ui004PhysicalInputReport.passed -ne $true -or
+    $ui004PhysicalInputReport.gitCommit -ne $gitCommit -or
+    @($ui004PhysicalInputReport.scenarios).Count -ne 3) {
+  throw "UI-004 物理输入 probe 报告身份或结果不匹配：$ui004PhysicalInputReportPath"
+}
+
 $finalEditorDir = Join-Path $nextRoot '编辑器'
 $finalDemoDir = Join-Path $nextRoot '游戏Demo'
 $finalAutomationDir = Join-Path $nextRoot '自动化'
@@ -740,6 +808,15 @@ $manifest = [ordered]@{
       stderr = '_验证记录/logs/editor-automation-e2e.stderr.log'
       report = '_验证记录/editor-automation-e2e/report.json'
     }
+    ui004PhysicalInputProbe = [ordered]@{
+      completed = $true
+      allPassed = $true
+      scenarioCount = 3
+      inputSource = 'win32-sendinput'
+      stdout = '_验证记录/logs/ui004-physical-input.stdout.log'
+      stderr = '_验证记录/logs/ui004-physical-input.stderr.log'
+      report = '_验证记录/ui004-physical-input/report.json'
+    }
     demoWindowProbe = [ordered]@{
       completed = $true
       unicodePath = $true
@@ -779,6 +856,7 @@ PixelEngine 正式输出
 - 验证记录：_验证记录\manifest.json
 - Game View 六场景报告：_验证记录\editor-gameview-presentation\report.json
 - 外部 CLI 全流程报告：_验证记录\editor-automation-e2e\report.json
+- Player / Editor Game View 物理点击报告：_验证记录\ui004-physical-input\report.json
 - 完整性校验：SHA256SUMS
 "@ | Set-Content -LiteralPath (Join-Path $nextRoot 'README.txt') -Encoding UTF8
 

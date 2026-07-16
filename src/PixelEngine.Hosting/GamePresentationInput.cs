@@ -72,7 +72,7 @@ internal sealed class GamePresentationViewportInputMapper(
 internal sealed class GamePresentationUiInputSource(
     IUiInputSource inner,
     RenderWindow window,
-    GamePresentationCoordinator presentation) : IUiInputSource
+    GamePresentationCoordinator presentation) : IUiInputSource, IGameUiPresentationInputMapper
 {
     private readonly IUiInputSource _inner = inner ?? throw new ArgumentNullException(nameof(inner));
     private readonly RenderWindow _window = window ?? throw new ArgumentNullException(nameof(window));
@@ -81,6 +81,9 @@ internal sealed class GamePresentationUiInputSource(
 
     /// <summary>底层平台输入源支持的文本组合能力。</summary>
     public UiTextCompositionCapabilities TextCompositionCapabilities => _inner.TextCompositionCapabilities;
+
+    /// <summary>独立 Player 的完整 presentation 始终拥有窗口键盘输入资格。</summary>
+    public bool AllowsGameUiKeyboardInput => true;
 
     /// <summary>读取指针并从 OS framebuffer 映射到完整 presentation；外层黑边不产生 UI 指针。</summary>
     /// <param name="state">成功时的 presentation 指针状态。</param>
@@ -93,27 +96,57 @@ internal sealed class GamePresentationUiInputSource(
             return false;
         }
 
-        GamePresentationDescriptor descriptor = _presentation.Current;
-        if (!GamePresentationInputTransform.TryMapFramebufferToPresentation(
-                in descriptor,
-                _window.Width,
-                _window.Height,
+        if (!TryMapFramebufferPointerToGameUi(
                 framebufferState.X,
                 framebufferState.Y,
-                out Vector2 point))
+                out float presentationX,
+                out float presentationY))
         {
             return false;
         }
 
         state = new UiPointerState(
-            point.X,
-            point.Y,
+            presentationX,
+            presentationY,
             framebufferState.WheelDeltaX,
             framebufferState.WheelDeltaY,
             framebufferState.LeftDown,
             framebufferState.RightDown,
             framebufferState.MiddleDown);
         return true;
+    }
+
+    /// <summary>
+    /// 将独立 Player 窗口 framebuffer 指针映射到完整 Game UI presentation。
+    /// </summary>
+    /// <param name="framebufferX">窗口 framebuffer X。</param>
+    /// <param name="framebufferY">窗口 framebuffer Y。</param>
+    /// <param name="presentationX">成功时的 presentation X。</param>
+    /// <param name="presentationY">成功时的 presentation Y。</param>
+    /// <returns>指针位于当前 presentation 时返回 <see langword="true"/>。</returns>
+    public bool TryMapFramebufferPointerToGameUi(
+        float framebufferX,
+        float framebufferY,
+        out float presentationX,
+        out float presentationY)
+    {
+        GamePresentationDescriptor descriptor = _presentation.Current;
+        if (GamePresentationInputTransform.TryMapFramebufferToPresentation(
+                in descriptor,
+                _window.Width,
+                _window.Height,
+                framebufferX,
+                framebufferY,
+                out Vector2 point))
+        {
+            presentationX = point.X;
+            presentationY = point.Y;
+            return true;
+        }
+
+        presentationX = 0f;
+        presentationY = 0f;
+        return false;
     }
 
     /// <summary>转发当前按键快照。</summary>

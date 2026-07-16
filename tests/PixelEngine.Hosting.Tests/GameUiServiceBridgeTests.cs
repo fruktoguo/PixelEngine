@@ -708,6 +708,36 @@ public sealed class GameUiServiceBridgeTests
             LoadedImages.Add(fullPath);
             return new RuntimeUi.ManagedFallbackImage(1, 1, 1);
         }
+
+        public void FeedPointerMove(float x, float y)
+        {
+            _ = x;
+            _ = y;
+        }
+
+        public void FeedPointerButton(RuntimeUi.UiPointerButton button, bool isDown)
+        {
+            _ = button;
+            _ = isDown;
+        }
+
+        public void FeedScroll(float deltaX, float deltaY)
+        {
+            _ = deltaX;
+            _ = deltaY;
+        }
+
+        public void FeedKey(RuntimeUi.UiKey key, bool isDown, RuntimeUi.UiKeyModifiers modifiers)
+        {
+            _ = key;
+            _ = isDown;
+            _ = modifiers;
+        }
+
+        public void FeedText(ReadOnlySpan<char> text)
+        {
+            _ = text;
+        }
     }
 
     private sealed class RecordingGuiDrawContext : IGuiDrawContext

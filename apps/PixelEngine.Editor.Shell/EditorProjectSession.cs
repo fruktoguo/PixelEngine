@@ -329,6 +329,36 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.CaptureScriptedGameViewPresentation();
     }
 
+    internal GameViewUiInputDiagnostics CapturePhysicalUiInputDiagnostics()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CapturePhysicalUiInputDiagnostics();
+    }
+
+    internal long CaptureTotalDrainedGameUiEvents()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Engine.Context.TryGetService(out GameUiPhaseDriver driver)
+            ? driver.TotalDrainedEventCount
+            : 0;
+    }
+
+    internal GameUiCanvasInputDiagnostics CaptureGameUiCanvasInputDiagnostics()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Engine.Context.TryGetService(out GameUiCanvasRegistry registry)
+            ? registry.CaptureInputDiagnostics()
+            : default;
+    }
+
+    internal UI.UiInputCapture CaptureGameUiInputCapture()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return Engine.Context.TryGetService(out UI.UiInputRouter router)
+            ? router.Capture
+            : UI.UiInputCapture.None;
+    }
+
     internal EditorGameViewAutomationState CaptureAutomationGameViewState()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

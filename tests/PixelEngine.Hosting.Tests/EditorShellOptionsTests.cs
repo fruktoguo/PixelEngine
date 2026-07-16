@@ -77,6 +77,7 @@ public sealed class EditorShellOptionsTests
     [InlineData("--scripted-preferences-probe")]
     [InlineData("--scripted-gameview-probe")]
     [InlineData("--scripted-runtime-inspector-probe")]
+    [InlineData("--physical-ui-input-probe")]
     public void EveryScriptedProbeDefaultsToEphemeralUserState(string probeFlag)
     {
         EditorShellOptions options = EditorShellOptions.Parse([probeFlag]);
