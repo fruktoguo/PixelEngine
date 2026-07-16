@@ -10,6 +10,11 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
   throw 'tools/verify-final-output.ps1 需要 PowerShell 7+。请使用 pwsh -NoProfile -File tools/verify-final-output.ps1。'
 }
 
+$utf8NoBom = [Text.UTF8Encoding]::new($false)
+[Console]::InputEncoding = $utf8NoBom
+[Console]::OutputEncoding = $utf8NoBom
+$OutputEncoding = $utf8NoBom
+
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $outputRootFull = if ([IO.Path]::IsPathRooted($OutputRoot)) {
   [IO.Path]::GetFullPath($OutputRoot)
@@ -1014,7 +1019,31 @@ for ($operationIndex = 0; $operationIndex -lt $automationE2EOperations.Count; $o
     ([string]$operation.stderr) `
     "Editor automation E2E operation $operationName stderr"
   $operationStderrText = Get-Content -Raw -LiteralPath $operationStderrPath
-  if ([int]$operation.exitCode -ne 0) {
+  $emptyDiscovery =
+    [int]$operation.exitCode -eq 3 -and
+    ($operationName -eq 'discover' -or $operationName -eq 'discover-after-exit')
+  if ($emptyDiscovery) {
+    if ([string]::IsNullOrWhiteSpace($operationStdoutText) -or
+        -not [string]::IsNullOrWhiteSpace($operationStderrText)) {
+      throw "Editor automation E2E operation $operationName 空发现必须仅通过 stdout 返回结构化快照。"
+    }
+    try {
+      $emptyDiscoverySnapshot = $operationStdoutText | ConvertFrom-Json -Depth 16
+    }
+    catch {
+      throw "Editor automation E2E operation $operationName 空发现 stdout 不是合法 JSON。"
+    }
+    if ($null -eq $emptyDiscoverySnapshot.PSObject.Properties['instances'] -or
+        $null -eq $emptyDiscoverySnapshot.PSObject.Properties['diagnostics'] -or
+        @($emptyDiscoverySnapshot.instances).Count -ne 0 -or
+        @($emptyDiscoverySnapshot.diagnostics).Count -ne 0) {
+      throw "Editor automation E2E operation $operationName exit 3 必须证明实例与诊断均为空。"
+    }
+  }
+  elseif ([int]$operation.exitCode -ne 0) {
+    if ($operationName -ne 'transaction-execute-rollback' -or [int]$operation.exitCode -ne 4) {
+      throw "Editor automation E2E operation $operationName 含未声明的非零退出码 $($operation.exitCode)。"
+    }
     if (-not [string]::IsNullOrWhiteSpace($operationStdoutText) -or
         [string]::IsNullOrWhiteSpace($operationStderrText)) {
       throw "Editor automation E2E operation $operationName 非零退出必须仅通过 stderr 返回结构化错误。"
@@ -1029,8 +1058,7 @@ for ($operationIndex = 0; $operationIndex -lt $automationE2EOperations.Count; $o
         [string]::IsNullOrWhiteSpace([string]$operationError.error.code)) {
       throw "Editor automation E2E operation $operationName stderr error 身份不匹配。"
     }
-    if ($operationName -eq 'transaction-execute-rollback' -and
-        ($operationError.error.code -ne 'transaction_failed' -or [int]$operation.exitCode -ne 4)) {
+    if ($operationError.error.code -ne 'transaction_failed') {
       throw 'Editor automation E2E 故障 transaction 未返回 transaction_failed/exit 4。'
     }
   }

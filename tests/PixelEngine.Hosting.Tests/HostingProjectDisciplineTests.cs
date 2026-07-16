@@ -189,6 +189,12 @@ public sealed class HostingProjectDisciplineTests
         string buildPlayer = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
         Assert.Contains("[Console]::OutputEncoding = $utf8NoBom", buildPlayer, StringComparison.Ordinal);
         Assert.Contains("$OutputEncoding = $utf8NoBom", buildPlayer, StringComparison.Ordinal);
+        foreach (string childScript in new[] { "build-native.ps1", "verify-final-output.ps1" })
+        {
+            string source = File.ReadAllText(Path.Combine(root, "tools", childScript));
+            Assert.Contains("[Console]::OutputEncoding = $utf8NoBom", source, StringComparison.Ordinal);
+            Assert.Contains("$OutputEncoding = $utf8NoBom", source, StringComparison.Ordinal);
+        }
 
         string playerBuildService = File.ReadAllText(Path.Combine(
             root,
@@ -3010,22 +3016,39 @@ public sealed class HostingProjectDisciplineTests
 
         string[] automationOperationNames =
         [
+            "discover",
+            "discover",
+            "ping",
+            "describe",
             "capability-matrix",
+            "workspace-get",
+            "scene-get",
             "transaction-execute-rollback",
             "hierarchy-after-rollback",
             "transaction-execute",
+            "hierarchy-after-commit",
             "history-undo",
+            "hierarchy-after-undo",
             "history-redo",
+            "hierarchy-after-redo",
+            "scene-save-before-play",
             "scene-capture",
             "play-enter-first",
+            "runtime-first-1",
+            "console-counts",
+            "console-entries",
+            "profiler-get",
+            "game-capture",
             "play-pause",
             "play-step",
             "play-stop-first",
-            "game-capture",
             "play-enter-second",
+            "runtime-second-1",
             "play-stop-second",
+            "marker-inspector-get",
             "marker-transform-set",
             "scene-save-after-play",
+            "build-settings-get",
             "build-settings-set",
             "build-preflight",
             "build-start-wait",
@@ -3035,18 +3058,6 @@ public sealed class HostingProjectDisciplineTests
             "player-terminate",
             "workspace-exit",
             "discover-after-exit",
-            "discover",
-            "ping",
-            "describe",
-            "workspace-get",
-            "scene-get",
-            "hierarchy-after-commit",
-            "hierarchy-after-undo",
-            "hierarchy-after-redo",
-            "scene-save-before-play",
-            "console-counts",
-            "console-entries",
-            "profiler-get",
         ];
         var automationOperations = automationOperationNames.Select((name, index) =>
         {
@@ -3054,7 +3065,13 @@ public sealed class HostingProjectDisciplineTests
             string stdoutRelative = $"{prefix}.stdout.log";
             string stderrRelative = $"{prefix}.stderr.log";
             bool rollbackFailure = name == "transaction-execute-rollback";
-            string stdoutContent = rollbackFailure ? string.Empty : "{}";
+            bool emptyDiscovery = index == 0 || name == "discover-after-exit";
+            int exitCode = rollbackFailure ? 4 : emptyDiscovery ? 3 : 0;
+            string stdoutContent = rollbackFailure
+                ? string.Empty
+                : emptyDiscovery
+                    ? /*lang=json,strict*/ "{\"instances\":[],\"diagnostics\":[]}"
+                    : "{}";
             string stderrContent = rollbackFailure
                 ? /*lang=json,strict*/ "{\"error\":{\"code\":\"transaction_failed\"},\"exitCode\":4}"
                 : string.Empty;
@@ -3071,9 +3088,9 @@ public sealed class HostingProjectDisciplineTests
                 sequence = index + 1,
                 name,
                 processId = 2_000 + index,
-                exitCode = rollbackFailure ? 4 : 0,
-                outcome = rollbackFailure ? "accepted-nonzero" : "passed",
-                allowedExitCodes = new[] { rollbackFailure ? 4 : 0 },
+                exitCode,
+                outcome = exitCode == 0 ? "passed" : "accepted-nonzero",
+                allowedExitCodes = new[] { exitCode },
                 durationMilliseconds = 1L,
                 stdout = stdoutRelative,
                 stderr = stderrRelative,
