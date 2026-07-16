@@ -603,6 +603,22 @@ public sealed class HostingProjectDisciplineTests
             Assert.True(
                 missingSymbolPolicy.CombinedOutput.Contains("editorSymbolsIncluded 必须存在且为 bool", StringComparison.Ordinal),
                 missingSymbolPolicy.CombinedOutput);
+
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            CopyManagedFixtureAssembly(
+                outputRoot,
+                "编辑器/PixelEngine.Unreviewed.dll",
+                typeof(JsonSerializer).Assembly.Location);
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult unreviewedPixelEngineAssembly =
+                RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, unreviewedPixelEngineAssembly.ExitCode);
+            Assert.Contains(
+                "未登记的 PixelEngine 脚本引用程序集",
+                unreviewedPixelEngineAssembly.CombinedOutput,
+                StringComparison.Ordinal);
         }
         finally
         {
@@ -833,7 +849,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("[Reflection.AssemblyName]::GetAssemblyName", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("Copy-Item -LiteralPath $xmlSource", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("脚本引用程序集目录绝不允许包含 PDB", finalOutputScript, StringComparison.Ordinal);
-        Assert.DoesNotContain("'PixelEngine.Editor'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("$assemblyName.StartsWith('PixelEngine.Editor.'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("$assemblyName.StartsWith('PixelEngine.Editor.'", verifier, StringComparison.Ordinal);
         Assert.Contains("Assert-ChecksumContains $relativePaths \"$scriptReferenceAssembliesRelative/$assemblyName.xml\"", verifier, StringComparison.Ordinal);
         Assert.Contains("脚本引用程序集目录包含未规定文件", verifier, StringComparison.Ordinal);
         Assert.Contains("ScriptReferenceAssemblies", finalOutputDoc, StringComparison.Ordinal);
@@ -2797,6 +2814,14 @@ public sealed class HostingProjectDisciplineTests
             outputRoot,
             "编辑器/System.Collections.Immutable.dll",
             typeof(System.Collections.Immutable.ImmutableArray<>).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "编辑器/PixelEngine.Editor.Automation.Protocol.dll",
+            typeof(JsonSerializer).Assembly.Location);
+        CopyManagedFixtureAssembly(
+            outputRoot,
+            "编辑器/PixelEngine.Editor.Automation.Server.dll",
+            typeof(JsonSerializer).Assembly.Location);
 
         WriteTextFile(outputRoot, "自动化/CLI/pixelengine-editor.exe", "automation cli");
         CopyManagedFixtureAssembly(

@@ -164,8 +164,8 @@ function Get-ManagedEditorDependencyFileNames(
   foreach ($file in $editorDlls) {
     $assemblyName = [IO.Path]::GetFileNameWithoutExtension($file.Name)
     if ($primaryAssemblySet.Contains($assemblyName) -or
-        $file.Name.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
-        $file.Name.Equals('PixelEngine.Editor.Shell.dll', [StringComparison]::OrdinalIgnoreCase)) {
+        $assemblyName.Equals('PixelEngine.Editor', [StringComparison]::OrdinalIgnoreCase) -or
+        $assemblyName.StartsWith('PixelEngine.Editor.', [StringComparison]::OrdinalIgnoreCase)) {
       continue
     }
 
