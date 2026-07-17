@@ -7335,6 +7335,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Unsafe.Add(ref SelectMaterialBase(slot), local)", window, StringComparison.Ordinal);
         Assert.Contains("Unsafe.Add(ref SelectFlagsBase(slot), local)", window, StringComparison.Ordinal);
         Assert.Contains("Unsafe.Add(ref SelectLifetimeBase(slot), local)", window, StringComparison.Ordinal);
+        Assert.Contains("TryMoveCellFromCenterKnownCenterTarget", window, StringComparison.Ordinal);
+        Assert.Contains("MoveCellFromCenterKnownEligibleCenterTarget", window, StringComparison.Ordinal);
 
         Assert.Contains("NeighborWindow window = new(chunk.Coord, in neighborhood);", updater, StringComparison.Ordinal);
         Assert.Contains("ref ushort materialBase = ref chunk.GetMaterialBase();", updater, StringComparison.Ordinal);
@@ -7346,6 +7348,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);", updater, StringComparison.Ordinal);
         Assert.Contains("ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);", updater, StringComparison.Ordinal);
         Assert.Contains("ushort activeMaterial = material;", updater, StringComparison.Ordinal);
+        Assert.Contains("TryMoveToCenterKnownTarget", updater, StringComparison.Ordinal);
+        Assert.Contains("sourceLocalIndex + EngineConstants.ChunkSize + firstDx", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("ushort activeMaterial = window.GetMaterial(activeX, activeY);", updater, StringComparison.Ordinal);
         Assert.Contains("localOffset++", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("chunk.MaterialBuffer[", updater, StringComparison.Ordinal);

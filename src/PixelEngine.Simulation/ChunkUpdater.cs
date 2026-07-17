@@ -167,8 +167,51 @@ internal static class ChunkUpdater
         out int targetY)
     {
         int firstDx = preferNegative ? -1 : 1;
-        return TryMoveDown(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, sourceDensity, parityBit, out targetX, out targetY) ||
-            TryMoveTo(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, wx + firstDx, wy + 1, sourceDensity, parityBit, out targetX, out targetY) ||
+        if (TryMoveDown(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, sourceDensity, parityBit, out targetX, out targetY))
+        {
+            return true;
+        }
+
+        int sourceLocalX = sourceLocalIndex & (EngineConstants.ChunkSize - 1);
+        int sourceLocalY = sourceLocalIndex >> EngineConstants.ChunkSizeLog2;
+        if (sourceLocalX > 0 &&
+            sourceLocalX < EngineConstants.ChunkSize - 1 &&
+            sourceLocalY < EngineConstants.ChunkSize - 1)
+        {
+            int firstTargetLocal = sourceLocalIndex + EngineConstants.ChunkSize + firstDx;
+            return TryMoveToCenterKnownTarget(
+                    ref window,
+                    materials,
+                    rigidDamageSink,
+                    diagnostics,
+                    wx,
+                    wy,
+                    sourceLocalIndex,
+                    wx + firstDx,
+                    wy + 1,
+                    firstTargetLocal,
+                    sourceDensity,
+                    parityBit,
+                    out targetX,
+                    out targetY) ||
+                TryMoveToCenterKnownTarget(
+                    ref window,
+                    materials,
+                    rigidDamageSink,
+                    diagnostics,
+                    wx,
+                    wy,
+                    sourceLocalIndex,
+                    wx - firstDx,
+                    wy + 1,
+                    sourceLocalIndex + EngineConstants.ChunkSize - firstDx,
+                    sourceDensity,
+                    parityBit,
+                    out targetX,
+                    out targetY);
+        }
+
+        return TryMoveTo(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, wx + firstDx, wy + 1, sourceDensity, parityBit, out targetX, out targetY) ||
             TryMoveTo(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, wx - firstDx, wy + 1, sourceDensity, parityBit, out targetX, out targetY);
     }
 
@@ -416,11 +459,10 @@ internal static class ChunkUpdater
         {
             targetSlot = 4;
             int targetLocal = CellAddressing.LocalIndexFromLocal(targetLocalX, targetLocalY);
-            didMove = window.TryMoveCellFromCenterKnownTarget(
+            didMove = window.TryMoveCellFromCenterKnownCenterTarget(
                 sourceLocalIndex,
                 targetX,
                 targetY,
-                targetSlot,
                 targetLocal,
                 materials,
                 sourceDensity,
@@ -451,6 +493,47 @@ internal static class ChunkUpdater
                 out movedY);
     }
 
+    private static bool TryMoveToCenterKnownTarget(
+        ref NeighborWindow window,
+        MaterialPropsTable materials,
+        IRigidDamageSink rigidDamageSink,
+        SimulationDiagnostics diagnostics,
+        int sourceX,
+        int sourceY,
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        int targetLocal,
+        byte sourceDensity,
+        byte parityBit,
+        out int movedX,
+        out int movedY)
+    {
+        movedX = sourceX;
+        movedY = sourceY;
+        Debug.Assert(
+            Math.Abs(targetX - sourceX) <= EngineConstants.MoveCap &&
+            Math.Abs(targetY - sourceY) <= EngineConstants.MoveCap,
+            "movement 目标必须位于 32px halo 内。");
+        return window.TryMoveCellFromCenterKnownCenterTarget(
+                sourceLocalIndex,
+                targetX,
+                targetY,
+                targetLocal,
+                materials,
+                sourceDensity,
+                parityBit,
+                rigidDamageSink) &&
+            CompleteMove(
+                ref window,
+                diagnostics,
+                targetX,
+                targetY,
+                targetSlot: 4,
+                out movedX,
+                out movedY);
+    }
+
     private static bool MoveToKnownEligibleTarget(
         ref NeighborWindow window,
         IRigidDamageSink rigidDamageSink,
@@ -470,14 +553,27 @@ internal static class ChunkUpdater
             Math.Abs(targetX - sourceX) <= EngineConstants.MoveCap &&
             Math.Abs(targetY - sourceY) <= EngineConstants.MoveCap,
             "movement 目标必须位于 32px halo 内。");
-        window.MoveCellFromCenterKnownEligibleTarget(
-            sourceLocalIndex,
-            targetX,
-            targetY,
-            targetSlot,
-            targetLocal,
-            parityBit,
-            rigidDamageSink);
+        if (targetSlot == 4)
+        {
+            window.MoveCellFromCenterKnownEligibleCenterTarget(
+                sourceLocalIndex,
+                targetX,
+                targetY,
+                targetLocal,
+                parityBit,
+                rigidDamageSink);
+        }
+        else
+        {
+            window.MoveCellFromCenterKnownEligibleTarget(
+                sourceLocalIndex,
+                targetX,
+                targetY,
+                targetSlot,
+                targetLocal,
+                parityBit,
+                rigidDamageSink);
+        }
         return CompleteMove(
             ref window,
             diagnostics,

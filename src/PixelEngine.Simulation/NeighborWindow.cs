@@ -564,6 +564,42 @@ public ref struct NeighborWindow
     }
 
     /// <summary>
+    /// 对已知位于中心 chunk 的 target 完成 movement，直接复用 slot 4 SoA 基址。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool TryMoveCellFromCenterKnownCenterTarget(
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        int targetLocal,
+        MaterialPropsTable materials,
+        byte sourceDensity,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink)
+    {
+        ref ushort targetMaterial = ref Unsafe.Add(ref _matBase4, targetLocal);
+        ref byte targetFlags = ref Unsafe.Add(ref _flagsBase4, targetLocal);
+        if (targetMaterial != 0 &&
+            (CellFlags.MatchesFrame(targetFlags, parityBit) ||
+            materials.DensityOf(targetMaterial) >= sourceDensity))
+        {
+            return false;
+        }
+
+        MoveCellFromCenterKnownEligibleTarget(
+            sourceLocalIndex,
+            targetX,
+            targetY,
+            parityBit,
+            rigidDamageSink,
+            ref targetMaterial,
+            ref targetFlags,
+            ref Unsafe.Add(ref _lifeBase4, targetLocal),
+            ref Unsafe.Add(ref _damageBase4, targetLocal));
+        return true;
+    }
+
+    /// <summary>
     /// 对已由垂直扫描证明可置换的目标执行中心 cell movement，避免重复读取目标属性。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -588,6 +624,32 @@ public ref struct NeighborWindow
             ref targetFlags,
             ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal),
             ref Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal));
+    }
+
+    /// <summary>
+    /// 对已证明可置换且位于中心 chunk 的 target 执行 movement，直接复用 slot 4 SoA 基址。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void MoveCellFromCenterKnownEligibleCenterTarget(
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        int targetLocal,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink)
+    {
+        ref ushort targetMaterial = ref Unsafe.Add(ref _matBase4, targetLocal);
+        ref byte targetFlags = ref Unsafe.Add(ref _flagsBase4, targetLocal);
+        MoveCellFromCenterKnownEligibleTarget(
+            sourceLocalIndex,
+            targetX,
+            targetY,
+            parityBit,
+            rigidDamageSink,
+            ref targetMaterial,
+            ref targetFlags,
+            ref Unsafe.Add(ref _lifeBase4, targetLocal),
+            ref Unsafe.Add(ref _damageBase4, targetLocal));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
