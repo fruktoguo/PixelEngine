@@ -768,6 +768,19 @@
       "notes": "Invalid Canvas and CanvasScaler drafts remain recoverable across Inspector, projection, Play, Save and scene/project open. Build and Build And Run flush, validate and save the current dirty scene before starting build-player, and a real R2R package passes audit. The narrow Build Settings panel uses a readable label/value table and now resolves its footer into inline, primary-plus-overflow or all-overflow density; a3d36cd2 records 222px available versus 284px inline and opens the upward-anchored popup in a complete framebuffer. The prior detached clean output at 289b0b06 passed 392 checksums and root replay, but is intentionally marked stale after a3d36cd2 until the next staged refresh. Physical input, different-DPI/cross-screen and reviewer remain, so UI-004 stays active."
     },
     {
+      "entryId": "ui-004-physical-input-final-output-20260717",
+      "taskIds": ["UI-004"],
+      "evidenceState": "local_and_clean_release_complete_external_200pct_physical_cross_monitor_review_blocked",
+      "commit": "a3716e86e9013e0721ec3dbbc57b5c57bb22bee7",
+      "runSessionId": "local-20260717-ui004-clean-a3716e86",
+      "runIdentityStatus": "captured_commit_bound_clean_physical_input_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64; real Win32 dpi=144 (150%); Parsec/Meta/Oray virtual display adapters installed, therefore the enumerated second desktop is not accepted as a trusted physical monitor",
+      "command": "dotnet build PixelEngine.sln -c Release -p:TreatWarningsAsErrors=true; full Automation/UI/Rendering/Editor/Demo/Hosting Release tests; 10-round automation stress; tools/run-ui-physical-input-probe.ps1 for RmlUi Player Start, ManagedFallback Player Settings and RmlUi Editor Game View Settings; tools/update-final-output.ps1 from detached clean worktree a3716e86; tools/verify-final-output.ps1 before and after atomic promotion; scan 211 packaged text files for U+FFFD",
+      "reportPath": "docs/evidence-2026-07-17-ui-004-physical-input-final-output.md",
+      "sha256": "ea964f9ee1c019f9ebbb3bf33bb6c972d18f51f36844bca7eb041d26514a13a2",
+      "notes": "A fixed-capacity event-edge queue preserves complete pointer down/up pairs between frames and the physical helper now releases the mouse on every failure path. Three real Win32 SendInput scenarios pass at 150% DPI with exactly one press, release and semantic action; pending/coalesced remain zero. Detached-clean final output passes 541 checksums, 172 capabilities, 329 UI commands and a 42-process external CLI workflow, while 211 packaged text records contain no replacement character. UI-004 remains blocked only on real 200% DPI hardware, a provably physical cross-monitor path and independent reviewer acceptance; virtual displays are explicitly rejected as substitutes."
+    },
+    {
       "entryId": "ci-002-local-remediation-20260711",
       "taskIds": ["CI-002", "TEST-003"],
       "evidenceState": "complete_remote_windows_build_test_disassembly_benchmark_guard",

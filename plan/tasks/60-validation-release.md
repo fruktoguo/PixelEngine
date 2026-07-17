@@ -31,7 +31,7 @@
   - 设计来源：`plan/14-testing-benchmarking.md` §3.11、§4.7；`plan/20-interactive-html-ui.md` §3–§4；`.github/workflows/ci.yml`。
   - 证据：历史实现报告 `docs/evidence-2026-07-10-test-001-native-smoke.md`；普通测试把无环境用例明确记为 NotExecuted；当前 `run-native-smoke.ps1` v2 对四项目、TRX/逐条结果、Desktop GL 与真实 ANGLE identity 全部 fail-closed，普通 hosted CI 与 `.github/workflows/native-gpu-smoke.yml` 专用图形 job 已拆分。冻结候选 SHA 的真实远端 GPU run 不沿用本条历史结论，单独由 `TEST-003` 阻塞管理。
 
-- [ ] `TEST-002` 建立 coverage 收集、报告和最低阈值，区分行为测试与源码纪律测试。
+- [~] `TEST-002` 建立 coverage 收集、报告和最低阈值，区分行为测试与源码纪律测试。
   - 优先级：P2。
   - 依赖：`CI-002`。
   - 验收：覆盖率按 src 程序集发布；阈值可审查；不以 166 个源码字符串断言掩盖运行时路径缺口。
