@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
-  "generatedAt": "2026-07-17",
-  "generatedFromCommit": "23b03b54a76e3da869ae7aada252ab72e288be82",
+  "generatedAt": "2026-07-18",
+  "generatedFromCommit": "d3dcfc0a04db120ec6883866ad9e1db3b2eed28c",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -50,7 +50,20 @@
       "command": "dotnet build bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -c Release --no-restore -m:1; pwsh tools/run-benchmark.ps1 -Project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -Artifacts artifacts/perf-003-full-active-2m-8workers-committed -BenchmarkDotNetArgs @('--filter=*CellThroughputBenchmark.StepJobSystem*FullActive2M*','--launchCount=1','--warmupCount=3','--iterationCount=5'); dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release --no-restore -m:1",
       "reportPath": "docs/evidence-2026-07-10-perf-003-ca-throughput.md",
       "sha256": "4526bbc74deab4863c7b4de6be66398543fd62e56a11a638c9fdc8d639436dc2",
-      "notes": "本机 2,166,784-cell FullActive2M 平均 16.575ms、约 1.046M cells/8ms、Allocated -；已完成 movement source/target 寻址复用和 Full dirty 短路，但仍低于 2M/8ms，不能据此关闭 PERF-003 或伪造目标硬件/跨 RID 证据。"
+      "notes": "本机 2,166,784-cell FullActive2M 平均 12.965ms、约 1.337M cells/8ms、Allocated -；已完成 movement source/target 寻址复用和 Full dirty 短路，但仍低于 2M/8ms，不能据此关闭 PERF-003 或伪造目标硬件/跨 RID 证据。"
+    },
+    {
+      "entryId": "perf-003-ca-throughput-20260718",
+      "taskIds": ["PERF-003"],
+      "evidenceState": "local_formal_benchmark_target_gap",
+      "commit": "fd0e3466267bbed78fa6fc0dd5a3bae11717c484",
+      "runSessionId": "local-20260718-perf003-baba-steady",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "在 c2c2adb3 detached baseline 与 fd0e3466 optimized 上交错执行 & .\\tools\\run-benchmark.ps1 -Project bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj -BenchmarkDotNetArgs @('--filter','*CellThroughputBenchmark.StepJobSystem*FullActive2M*','--launchCount','2','--warmupCount','15','--iterationCount','30')；dotnet build PixelEngine.sln -c Release；pwsh tools/run-tests.ps1 -Configuration Release -NoRestore；pwsh tools/validate-task-catalog.ps1；pwsh tools/validate-evidence-index.ps1；git diff --check",
+      "reportPath": "docs/evidence-2026-07-18-perf-003-ca-throughput.md",
+      "sha256": "8c6838d2824c42a1ce14bfbaf59b27859c5c6f243407fabdcf2ec9d5cd595069",
+      "notes": "固定 B-A-B-A 稳态对照每轮 2 launches × 15 warmups × 30 measured iterations：baseline 12.303/14.029ms，optimized 11.664/10.603ms，四轮均 Allocated -。保守按 11.664ms 仅约 1.486M cells/8ms，仍低于 2M 下限；本条证明本机通用热路径进展，不关闭 PERF-003 或替代六 RID 代表硬件证据。"
     },
     {
       "entryId": "perf-004-zero-allocation-20260710",
