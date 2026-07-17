@@ -1,0 +1,118 @@
+{
+  "schema": "pixelengine.coverage-policy/v1",
+  "baselineCommit": "a3716e86e9013e0721ec3dbbc57b5c57bb22bee7",
+  "testClassification": {
+    "behaviorFilter": "FullyQualifiedName!~DisciplineTests",
+    "sourceDisciplineClassSuffix": "DisciplineTests",
+    "minimumBehaviorPassed": 2036,
+    "maximumBehaviorNotExecuted": 47,
+    "minimumSourceDisciplinePassed": 241,
+    "maximumSourceDisciplineNotExecuted": 0,
+    "expectedTestProjectCount": 14,
+    "expectedUniqueCoverageReportCount": 14
+  },
+  "assemblies": [
+    {
+      "name": "PixelEngine.Audio",
+      "sourceDirectory": "PixelEngine.Audio",
+      "baseline": { "linesCovered": 1182, "linesValid": 1335, "branchesCovered": 378, "branchesValid": 517 },
+      "minimum": { "linePercent": 88, "branchPercent": 73, "linesValid": 1335, "branchesValid": 517 }
+    },
+    {
+      "name": "PixelEngine.Content",
+      "sourceDirectory": "PixelEngine.Content",
+      "baseline": { "linesCovered": 338, "linesValid": 365, "branchesCovered": 104, "branchesValid": 138 },
+      "minimum": { "linePercent": 92, "branchPercent": 75, "linesValid": 365, "branchesValid": 138 }
+    },
+    {
+      "name": "PixelEngine.Core",
+      "sourceDirectory": "PixelEngine.Core",
+      "baseline": { "linesCovered": 835, "linesValid": 1111, "branchesCovered": 193, "branchesValid": 344 },
+      "minimum": { "linePercent": 75, "branchPercent": 56, "linesValid": 1111, "branchesValid": 344 }
+    },
+    {
+      "name": "PixelEngine.Editor",
+      "sourceDirectory": "PixelEngine.Editor",
+      "baseline": { "linesCovered": 3539, "linesValid": 6430, "branchesCovered": 1318, "branchesValid": 3212 },
+      "minimum": { "linePercent": 55, "branchPercent": 41, "linesValid": 6430, "branchesValid": 3212 }
+    },
+    {
+      "name": "PixelEngine.Editor.Automation.Client",
+      "sourceDirectory": "PixelEngine.Editor.Automation.Client",
+      "baseline": { "linesCovered": 1208, "linesValid": 1486, "branchesCovered": 522, "branchesValid": 849 },
+      "minimum": { "linePercent": 81, "branchPercent": 61, "linesValid": 1486, "branchesValid": 849 }
+    },
+    {
+      "name": "PixelEngine.Editor.Automation.Protocol",
+      "sourceDirectory": "PixelEngine.Editor.Automation.Protocol",
+      "baseline": { "linesCovered": 997, "linesValid": 1635, "branchesCovered": 92, "branchesValid": 140 },
+      "minimum": { "linePercent": 60, "branchPercent": 65, "linesValid": 1635, "branchesValid": 140 }
+    },
+    {
+      "name": "PixelEngine.Editor.Automation.Server",
+      "sourceDirectory": "PixelEngine.Editor.Automation.Server",
+      "baseline": { "linesCovered": 4291, "linesValid": 5219, "branchesCovered": 1339, "branchesValid": 2166 },
+      "minimum": { "linePercent": 82, "branchPercent": 61, "linesValid": 5219, "branchesValid": 2166 }
+    },
+    {
+      "name": "PixelEngine.Gui",
+      "sourceDirectory": "PixelEngine.Gui",
+      "baseline": { "linesCovered": 807, "linesValid": 2035, "branchesCovered": 239, "branchesValid": 867 },
+      "minimum": { "linePercent": 39, "branchPercent": 27, "linesValid": 2035, "branchesValid": 867 }
+    },
+    {
+      "name": "PixelEngine.Hosting",
+      "sourceDirectory": "PixelEngine.Hosting",
+      "baseline": { "linesCovered": 4801, "linesValid": 6522, "branchesCovered": 1602, "branchesValid": 2706 },
+      "minimum": { "linePercent": 73, "branchPercent": 59, "linesValid": 6522, "branchesValid": 2706 }
+    },
+    {
+      "name": "PixelEngine.Interop",
+      "sourceDirectory": "PixelEngine.Interop",
+      "baseline": { "linesCovered": 101, "linesValid": 145, "branchesCovered": 28, "branchesValid": 64 },
+      "minimum": { "linePercent": 69, "branchPercent": 43, "linesValid": 145, "branchesValid": 64 }
+    },
+    {
+      "name": "PixelEngine.Physics",
+      "sourceDirectory": "PixelEngine.Physics",
+      "baseline": { "linesCovered": 2203, "linesValid": 2387, "branchesCovered": 865, "branchesValid": 1097 },
+      "minimum": { "linePercent": 92, "branchPercent": 78, "linesValid": 2387, "branchesValid": 1097 }
+    },
+    {
+      "name": "PixelEngine.Rendering",
+      "sourceDirectory": "PixelEngine.Rendering",
+      "baseline": { "linesCovered": 2414, "linesValid": 6103, "branchesCovered": 875, "branchesValid": 2096 },
+      "minimum": { "linePercent": 39, "branchPercent": 41, "linesValid": 6103, "branchesValid": 2096 }
+    },
+    {
+      "name": "PixelEngine.Scripting",
+      "sourceDirectory": "PixelEngine.Scripting",
+      "baseline": { "linesCovered": 2552, "linesValid": 2829, "branchesCovered": 890, "branchesValid": 1221 },
+      "minimum": { "linePercent": 90, "branchPercent": 72, "linesValid": 2829, "branchesValid": 1221 }
+    },
+    {
+      "name": "PixelEngine.Serialization",
+      "sourceDirectory": "PixelEngine.Serialization",
+      "baseline": { "linesCovered": 801, "linesValid": 882, "branchesCovered": 224, "branchesValid": 304 },
+      "minimum": { "linePercent": 90, "branchPercent": 73, "linesValid": 882, "branchesValid": 304 }
+    },
+    {
+      "name": "PixelEngine.Simulation",
+      "sourceDirectory": "PixelEngine.Simulation",
+      "baseline": { "linesCovered": 3497, "linesValid": 3756, "branchesCovered": 1170, "branchesValid": 1435 },
+      "minimum": { "linePercent": 93, "branchPercent": 81, "linesValid": 3756, "branchesValid": 1435 }
+    },
+    {
+      "name": "PixelEngine.UI",
+      "sourceDirectory": "PixelEngine.UI",
+      "baseline": { "linesCovered": 2226, "linesValid": 3315, "branchesCovered": 976, "branchesValid": 1760 },
+      "minimum": { "linePercent": 67, "branchPercent": 55, "linesValid": 3315, "branchesValid": 1760 }
+    },
+    {
+      "name": "PixelEngine.World",
+      "sourceDirectory": "PixelEngine.World",
+      "baseline": { "linesCovered": 1241, "linesValid": 1346, "branchesCovered": 423, "branchesValid": 562 },
+      "minimum": { "linePercent": 92, "branchPercent": 75, "linesValid": 1346, "branchesValid": 562 }
+    }
+  ]
+}

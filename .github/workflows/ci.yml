@@ -83,6 +83,20 @@ jobs:
           New-Item -ItemType Directory -Force -Path $resultsDirectory | Out-Null
           dotnet test PixelEngine.sln -c Release --no-build --logger "trx" --results-directory $resultsDirectory
 
+      - name: Collect behavior coverage
+        id: behavior_coverage
+        if: matrix.rid == 'win-x64'
+        shell: pwsh
+        run: |
+          $resultsDirectory = 'artifacts/test-results/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}'
+          ./tools/run-coverage.ps1 `
+            -Configuration Release `
+            -OutputRoot 'artifacts/coverage/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}' `
+            -FullTestResultsDirectory $resultsDirectory `
+            -RunId 'github-${{ github.run_id }}-${{ github.run_attempt }}' `
+            -SkipBuild `
+            -NoRestore
+
       - name: Write build-test evidence
         if: always()
         shell: pwsh
@@ -108,6 +122,14 @@ jobs:
           path: |
             artifacts/ci-matrix-evidence/build-test-${{ matrix.rid }}.md
             artifacts/test-results/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}/**/*.trx
+
+      - name: Upload behavior coverage evidence
+        if: always() && matrix.rid == 'win-x64'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-evidence-coverage-${{ matrix.rid }}
+          if-no-files-found: error
+          path: artifacts/coverage/${{ matrix.rid }}-${{ github.run_id }}-${{ github.run_attempt }}
 
   benchmark-guard:
     name: benchmark-guard (win-x64)

@@ -42,6 +42,7 @@ TestResults/
 coverage*.json
 coverage*.xml
 *.coverage
+!tools/coverage-policy.json
 BenchmarkDotNet.Artifacts/
 
 # ---- Native build outputs (Box2D dual-build per RID) ----

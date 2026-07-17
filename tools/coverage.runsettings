@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>json,cobertura</Format>
+          <Include>[PixelEngine.*]*</Include>
+          <Exclude>[*.Tests]*</Exclude>
+          <ExcludeByFile>**/bin/**,**/obj/**</ExcludeByFile>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+          <DeterministicReport>true</DeterministicReport>
+          <UseSourceLink>false</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

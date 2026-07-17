@@ -24,6 +24,17 @@ dotnet run --project apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.cspr
 
 Editor 会记住最近一次成功打开的工程；普通无参数启动会自动恢复它。`--no-reopen-last-project` 用于强制显示 Project Picker。
 
+## 测试与覆盖率
+
+本机完整测试和 coverage 使用仓库入口，都会先串行化 testhost，避免并发写同一 `obj`：
+
+```powershell
+pwsh -NoProfile -File tools/run-tests.ps1
+pwsh -NoProfile -File tools/run-coverage.ps1
+```
+
+Coverage 将行为测试与 `*DisciplineTests` 源码纪律测试分开，按每个 `src/PixelEngine.*` 程序集检查 line/branch 阈值。人类可读报告位于 `artifacts/coverage/report/coverage-summary.md`，机器可读报告为同目录 `coverage-summary.json`；权威阈值在 `tools/coverage-policy.json`。
+
 ## 从哪里开始
 
 - [安装、构建与 Editor 导览](docs/getting-started.md)

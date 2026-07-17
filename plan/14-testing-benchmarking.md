@@ -180,6 +180,14 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 
 **headless 布局**：对 `ManagedFallbackBackend` 基线与 RmlUi 子集契约跑布局引擎，断言盒模型 / 流式排布 / 尺寸解析确定且可复现。**data-model 绑定**：C#↔UI 桥双向绑定——数据变更驱动 UI、UI 事件（`UiEvent`）回灌脚本经相位安全队列，断言绑定值与事件路由正确；RmlUi native bridge 还必须用纯托管 ABI 契约锁定 `UiValueKind.StringHandle` 的 kind/integer 句柄 payload 往返，且不能把该契约冒充真实字符串池解析或文本渲染完成。**输入三级仲裁与透明区语义**：断言编辑器 > HTML UI > 游戏 的输入捕获优先级，命中可交互 / 不透明元素时 capture，透明或非交互区域 pass-through 给游戏；Play 让位、编辑器共存不打架。**后端生命周期安全**：断言卸载文档后屏栈、model/action 与 hit-test 边界安全，RmlUi modal 文档卸载后不得继续 capture 输入，viewport DPI 必须为 finite-positive。**脏矩形区域计算 / 合并**：纯几何断言脏矩形收集与合并（相邻 / 重叠区域合并、最小包围），供相位 10 仅脏 / 动画时上传——headless 只测区域计算正确性。**UI 逻辑相位零分配基准**：`bench/PixelEngine.Benchmarks` 增 UI `Update(dt)`（相位 0/1）稳态零分配基准（`[MemoryDiagnoser]`），断言 sim 降 30Hz 时 UI 按渲染 cadence 推进不产生每帧托管分配（相位 10 光栅化 / 合成尖刺只掉渲染帧不违 #6，属 plan/16 覆盖）。**RmlUi ANGLE/GLES profile gate discipline**：自动化必须覆盖 `RenderBackend.GlEs30Angle`、GLES context、ANGLE renderer/vendor/version 不可误用 desktop GL3 renderer，fallback reason 和 Console 诊断必须可见，native source 仍为 GL3-only 时 plan 状态不误勾 M15。**Ultralight inactive profile discipline**：自动化必须覆盖 optional profile 默认 inactive、显式请求但 gate 不满足时 fallback/诊断、release audit 不把 Ultralight native 伪装为已闭合、plan 状态不误勾 M15。RmlUi/Ultralight native 专属上传、真实平台 composition 与高保真浏览器语义仍按 plan/20/M15 标 blocked/pending，不得用 headless 或 smoke 冒充完成。
 
+### 3.17 行为 coverage 与源码纪律测试分层（TEST-002）
+
+Coverage 只回答“生产程序集的可执行路径是否被行为测试走到”，不以测试总数替代。完整 solution 测试仍先执行一次并持久化 TRX；按类型名后缀 `*DisciplineTests` 将源码/工程/工具纪律测试独立统计。随后用 `FullyQualifiedName!~DisciplineTests` 重跑行为层并开启 Coverlet，纪律测试不得进入 coverage 分子，但它们在完整 TRX 中仍必须全部通过且不得 skipped。历史验收所指 166 个源码字符串断言因此不会掩盖运行时路径缺口；当前可执行数量由 `tools/coverage-policy.json` 的下限和报告实时计数约束，不在设计文档复制易漂移数字。
+
+原始格式同时保留 JSON 与 Cobertura。`tools/merge-coverage.ps1` 以 module + source file + line，以及 class + method + IL offset/end offset + path + ordinal 的 branch identity 合并 14 个 testhost；同一附件被 VSTest 复制到 deployment 目录时按 SHA256 去重，不按 package 百分比相加。`bin/obj` 与 source-generated 文件由 runsettings 排除，聚合器再次拒绝其成为手写源码分母。所有 `src/PixelEngine.*` 项目必须与 policy 精确一一对应；缺程序集、缺 TRX、计数不一致、纪律用例混入行为重跑、分母缩小或任一 line/branch 阈值回退均 fail-closed。
+
+Policy 为 `pixelengine.coverage-policy/v1`，逐程序集记录 commit-bound baseline 的 covered/valid line/branch 和可审查最低百分比；最低 valid line/branch 同时锁住 instrumentation 分母，合法删码或 PDB 策略变化必须显式更新 policy。`tools/run-coverage.ps1` 是本机唯一入口，产出 `pixelengine.coverage-report/v1` JSON 与 Markdown；CI 仅在标准 `win-x64` build-test 上复用刚完成的完整 TRX、重跑行为 coverage 并上传原始报告和 summary。Native GL/ANGLE 条件用例继续由 TEST-001/TEST-003 管理，不把普通 coverage job 的环境性 NotExecuted 冒充 GPU 执行。
+
 ---
 
 ## 4. 实现清单
@@ -294,11 +302,19 @@ CA 实时 sim 默认非确定（架构 §6.1，多线程原地单缓冲随调度
 - [x] `UiDirtyRectMergeTests`：脏矩形收集 / 合并（相邻 / 重叠合并、最小包围）纯几何正确性，**不测 GL 上传**。证据：新增 `UiDirtyRectCollector` / `UiDirtyRect` 与 `UiDirtyRectMergeTests`，覆盖重叠、边相邻、分离、空矩形与 Clear。
 - [x] `UiLogicPhaseAllocationBenchmark`（bench）：UI `Update(dt)` 相位 0/1 稳态零分配（`[MemoryDiagnoser]`），sim 降 30Hz 时按渲染 cadence 推进不每帧分配。证据：`GameUiAllocationBenchmarks` 覆盖 static UI phase、clean composite/draw skip 与 idle input pump；本轮 `dotnet run --project bench\PixelEngine.Benchmarks\PixelEngine.Benchmarks.csproj -c Release -- --filter "*GameUiAllocationBenchmarks*" --job Short --warmupCount 1 --iterationCount 1` 跑 4 项，MemoryDiagnoser `Allocated` 均为空（0 托管分配）。RmlUi/Ultralight native 专属上传仍按 plan/20 保持后续切片/阻塞。
 
+### 4.13 behavior coverage 门禁（TEST-002）
+
+- `tools/coverage-policy.json` 精确登记 17 个 `src` 程序集的 commit-bound line/branch baseline、最低百分比、最小可观测分母、行为/纪律测试数量与 NotExecuted 上限。
+- `tools/coverage.runsettings` 产出 JSON + Cobertura，只 instrument `PixelEngine.*` 生产程序集并排除 tests、`bin/obj` 和 generated source；`tools/merge-coverage.ps1` 以结构化 JSON/XML 解析、精确 branch identity、SHA256 去重和原子 summary 写入执行 fail-closed 聚合。
+- `tools/run-coverage.ps1` 先取得完整 TRX，再仅重跑行为层 coverage；支持 CI 复用已存在完整 TRX。`.github/workflows/ci.yml` 的 `win-x64` build-test 已接入门禁并上传 `ci-evidence-coverage-win-x64`。
+- `CoverageAggregationTests` 覆盖跨报告 line/branch 并集、阈值回退、generated-only 与纪律测试泄漏负向路径；`CoveragePolicyDisciplineTests` 锁定 17 个程序集、runsettings、runner 与 CI 接线。
+
 ---
 
 ## 5. 验收标准
 
 - [x] 测试工程集合与基准工程建立、被 `PixelEngine.sln` 包含、CPM 锁版本、`dotnet test`、`tools/run-tests.ps1`、`tools/run-benchmark.ps1` 与 `dotnet run --project bench/... -- --list flat` 均可执行（plan/00 §4/§6）。含忽略 worktree 的仓库内推荐基准入口为 `tools/run-benchmark.ps1`，直接 `dotnet run --project bench/...` 仍保留用于无嵌套 worktree 的普通环境；本轮新增本机测试入口 `tools/run-tests.ps1`，先 `dotnet build PixelEngine.sln -c Release --disable-build-servers -m:1` 一次，再按测试工程顺序 `dotnet test --no-build --disable-build-servers -m:1`，用于避免多个 testhost 并发写同一 `obj` 目录导致 CS2012 文件锁误判，契约由 `PerformanceHardeningToolingDisciplineTests.LocalTestRunnerBuildsOnceThenRunsProjectsSequentiallyNoBuild` 锁定。该入口只是本机/agent 稳定验证工具，不替代 §4.7 的 6-RID CI 矩阵证据。
+- `tools/run-coverage.ps1` 能发布全部 17 个 `src` 程序集的独立 line/branch coverage；完整 TRX 与行为 instrumentation 分层，`*DisciplineTests` 全绿但不贡献生产 coverage；policy 精确锁定程序集集合、阈值和最小分母，CI win-x64 上传原始 JSON/Cobertura/TRX 与机器可读 summary（§3.17/§4.13）。
 - [x] `MassConservationTests` 全绿：含跨 chunk 边界与四角用例，单 / 多线程均守恒，能复现并拦截人为注入的「边界吞 / 复制像素」回归（架构 §16.2、R2）。
 - [x] `ReactionConservationTests` 全绿：双输出 / 定向反应在所有边界配置下产物计数严格守恒，能拦截人为注入的「边界翻倍 / 丢失」回归（架构 §7.4、不变式 #4、R2）。
 - [x] `DeterministicRegressionTests` 全绿且 golden 稳定：确定性模式下重复运行 bit 一致，golden 更新有可审查 diff（架构 §6.2）。
