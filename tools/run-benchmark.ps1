@@ -2,7 +2,9 @@ param(
     [string]$Project = "bench/PixelEngine.Benchmarks/PixelEngine.Benchmarks.csproj",
     [string]$Artifacts = "artifacts/benchmark-run",
     [switch]$KeepWorkspace,
-    [string[]]$BenchmarkDotNetArgs = @()
+    [string[]]$BenchmarkDotNetArgs = @(),
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$RemainingBenchmarkDotNetArgs = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,6 +55,20 @@ function Test-IsPathInside {
     return $childFull.StartsWith($parentFull, [StringComparison]::OrdinalIgnoreCase)
 }
 
+function Expand-BenchmarkDotNetArguments {
+    param([string[]]$Arguments)
+
+    foreach ($argument in $Arguments) {
+        $separator = $argument.IndexOf('=', [StringComparison]::Ordinal)
+        if ($argument.StartsWith('--', [StringComparison]::Ordinal) -and $separator -gt 2) {
+            $argument.Substring(0, $separator)
+            $argument.Substring($separator + 1)
+        } else {
+            $argument
+        }
+    }
+}
+
 function Copy-RepositoryForBenchmark {
     param(
         [string]$SourceRoot,
@@ -100,6 +116,10 @@ function Copy-RepositoryForBenchmark {
         }
     }
 }
+
+$BenchmarkDotNetArgs = @(
+    Expand-BenchmarkDotNetArguments -Arguments @($BenchmarkDotNetArgs + $RemainingBenchmarkDotNetArgs)
+)
 
 if ($BenchmarkDotNetArgs -contains "--artifacts") {
     throw "请通过 -Artifacts 指定输出目录，不要在 BenchmarkDotNetArgs 中直接传 --artifacts。"
@@ -150,14 +170,24 @@ try {
         throw "BenchmarkDotNet run failed with exit code $exitCode."
     }
 
+    if (-not (Test-Path -LiteralPath $artifactsPath -PathType Container)) {
+        throw "BenchmarkDotNet artifacts were not produced. See requested path: $artifactsPath"
+    }
+
+    $reportFiles = @(Get-ChildItem -LiteralPath $artifactsPath -Recurse -File -Include "*report*.md", "*report*.csv", "*report*.html" -ErrorAction SilentlyContinue)
+    if ($reportFiles.Count -eq 0) {
+        throw "BenchmarkDotNet produced no report files. See artifacts: $artifactsPath"
+    }
+
     $diagnosticFiles = @(Get-ChildItem -LiteralPath $artifactsPath -Recurse -File -Include "*.log", "*report*.md", "*report*.html", "*report*.csv" -ErrorAction SilentlyContinue)
     $diagnostics = ($diagnosticFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join [Environment]::NewLine
-    if ($diagnostics.Contains("Generate Exception") -or
+    if ($diagnostics.Contains("ERROR(S):") -or
+        $diagnostics.Contains("Generate Exception") -or
         $diagnostics.Contains("There are not any results runs") -or
         $diagnostics.Contains("No Workload Results were obtained") -or
         $diagnostics.Contains("Benchmarks with issues") -or
         $diagnostics.Contains("DllNotFoundException") -or
-        $diagnostics -match "executed benchmarks:\s*0\b") {
+        $diagnostics -notmatch "executed benchmarks:\s*[1-9][0-9]*\b") {
         throw "BenchmarkDotNet run produced no executable benchmark results. See artifacts: $artifactsPath"
     }
 }
