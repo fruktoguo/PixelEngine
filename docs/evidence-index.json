@@ -66,6 +66,19 @@
       "notes": "固定 B-A-B-A 稳态对照每轮 2 launches × 15 warmups × 30 measured iterations：baseline 12.303/14.029ms，optimized 11.664/10.603ms，四轮均 Allocated -。保守按 11.664ms 仅约 1.486M cells/8ms，仍低于 2M 下限；本条证明本机通用热路径进展，不关闭 PERF-003 或替代六 RID 代表硬件证据。"
     },
     {
+      "entryId": "perf-003-independent-full-active-20260718",
+      "taskIds": ["PERF-003"],
+      "evidenceState": "local_formal_benchmark_target_gap",
+      "commit": "e020f47681fb66a272aa80caf70d100b0c717ba9",
+      "runSessionId": "local-20260718-perf003-independent-fullactive",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "在 5a98c988 detached baseline 与 e020f476 optimized 干净提交上相邻执行 & .\\tools\\run-benchmark.ps1 -BenchmarkDotNetArgs @('--filter','*FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames*','--launchCount','2','--warmupCount','10','--iterationCount','20')；dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release -p:TreatWarningsAsErrors=true；dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --no-build --filter FullyQualifiedName~PerformanceHardeningToolingDisciplineTests；dotnet build PixelEngine.sln -c Release -p:TreatWarningsAsErrors=true",
+      "reportPath": "docs/evidence-2026-07-18-perf-003-independent-full-active.md",
+      "sha256": "7be5e291826b60d802b63c47ca155063982c13a8d94be7e67852c8e4cb929814",
+      "notes": "16 个互不共享的 2,166,784-cell full-dirty 初态消除连续帧 dirty 收缩与不足 100ms workload；干净基线 5a98c988 为 12.152ms，中心 target/local 直达优化 e020f476 为 11.634ms，两轮均 Allocated -。优化后仅约 1.490M cells/8ms，仍低于 2M 下限，不关闭 PERF-003 或替代六 RID 代表硬件证据。"
+    },
+    {
       "entryId": "perf-004-zero-allocation-20260710",
       "taskIds": ["PERF-004"],
       "evidenceState": "complete_local_zero_allocation",
