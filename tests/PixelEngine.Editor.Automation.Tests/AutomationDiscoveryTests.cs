@@ -70,6 +70,18 @@ public sealed class AutomationDiscoveryTests
         Assert.DoesNotContain(credentialText.Trim(), descriptorJson, StringComparison.Ordinal);
     }
 
+    /// <summary>验证现存路径不允许写 owner 时仍可在校验 owner 后只收紧 DACL。</summary>
+    [Fact]
+    public void SecureStorageDoesNotRequireWriteOwnerForCurrentUserOwnedPaths()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        VerifyDaclOnlySecureStorageUpdate();
+    }
+
     /// <summary>验证越界 credential 被拒绝，prune 不删除越界 token。</summary>
     [Fact]
     public async Task DiscoveryRejectsCredentialEscapeAndPruneDoesNotDeleteEscapedToken()
@@ -315,6 +327,56 @@ public sealed class AutomationDiscoveryTests
     }
 
     [SupportedOSPlatform("windows")]
+    private static void VerifyDaclOnlySecureStorageUpdate()
+    {
+        using TemporaryDirectory temporary = new();
+        string directoryPath = Path.Combine(temporary.Path, "restricted-owner-directory");
+        DirectoryInfo directory = Directory.CreateDirectory(directoryPath);
+        string filePath = Path.Combine(directoryPath, "restricted-owner-file.txt");
+        File.WriteAllText(filePath, "credential");
+        FileInfo file = new(filePath);
+
+        using WindowsIdentity identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
+        SecurityIdentifier owner = identity.User
+            ?? throw new InvalidOperationException("无法读取测试用户 SID。");
+        ApplyWriteOwnerDeny(directory, owner);
+        ApplyWriteOwnerDeny(file, owner);
+
+        AutomationSecureStorage.EnsurePrivateDirectory(directoryPath);
+        AutomationSecureStorage.EnsurePrivateFile(filePath);
+
+        VerifyCurrentUserOnlyDirectoryAcl(directoryPath);
+        VerifyCurrentUserOnlyFileAcl(filePath);
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void ApplyWriteOwnerDeny(FileSystemInfo entry, SecurityIdentifier owner)
+    {
+        FileSystemSecurity security = entry switch
+        {
+            DirectoryInfo directory => directory.GetAccessControl(),
+            FileInfo file => file.GetAccessControl(),
+            _ => throw new ArgumentOutOfRangeException(nameof(entry)),
+        };
+        security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
+        security.AddAccessRule(new FileSystemAccessRule(
+            owner,
+            FileSystemRights.TakeOwnership,
+            AccessControlType.Deny));
+        switch (entry)
+        {
+            case DirectoryInfo directory:
+                directory.SetAccessControl((DirectorySecurity)security);
+                break;
+            case FileInfo file:
+                file.SetAccessControl((FileSecurity)security);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(entry));
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
     private static void VerifyCurrentUserOnlyFileAcl(string path)
     {
         FileSecurity security = new FileInfo(path).GetAccessControl();
@@ -334,6 +396,7 @@ public sealed class AutomationDiscoveryTests
         using WindowsIdentity identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
         SecurityIdentifier owner = identity.User
             ?? throw new InvalidOperationException("无法读取测试用户 SID。");
+        Assert.Equal(owner, security.GetOwner(typeof(SecurityIdentifier)));
         Assert.True(security.AreAccessRulesProtected);
         FileSystemAccessRule[] rules =
         [

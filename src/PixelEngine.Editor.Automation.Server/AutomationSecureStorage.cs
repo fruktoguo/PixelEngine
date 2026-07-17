@@ -49,8 +49,8 @@ internal static class AutomationSecureStorage
     private static void ApplyWindowsDirectoryAcl(DirectoryInfo directory)
     {
         SecurityIdentifier owner = GetCurrentOwner();
+        VerifyOwner(directory.GetAccessControl(AccessControlSections.Owner), owner, directory.FullName);
         DirectorySecurity security = new();
-        security.SetOwner(owner);
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.AddAccessRule(new FileSystemAccessRule(
             owner,
@@ -59,20 +59,30 @@ internal static class AutomationSecureStorage
             PropagationFlags.None,
             AccessControlType.Allow));
         directory.SetAccessControl(security);
+        VerifyCurrentUserOnlyAcl(
+            directory.GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access),
+            owner,
+            directory.FullName,
+            requireChildInheritance: true);
     }
 
     [SupportedOSPlatform("windows")]
     private static void ApplyWindowsFileAcl(FileInfo file)
     {
         SecurityIdentifier owner = GetCurrentOwner();
+        VerifyOwner(file.GetAccessControl(AccessControlSections.Owner), owner, file.FullName);
         FileSecurity security = new();
-        security.SetOwner(owner);
         security.SetAccessRuleProtection(isProtected: true, preserveInheritance: false);
         security.AddAccessRule(new FileSystemAccessRule(
             owner,
             FileSystemRights.FullControl,
             AccessControlType.Allow));
         file.SetAccessControl(security);
+        VerifyCurrentUserOnlyAcl(
+            file.GetAccessControl(AccessControlSections.Owner | AccessControlSections.Access),
+            owner,
+            file.FullName,
+            requireChildInheritance: false);
     }
 
     [SupportedOSPlatform("windows")]
@@ -80,6 +90,53 @@ internal static class AutomationSecureStorage
     {
         using WindowsIdentity identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
         return identity.User ?? throw new InvalidOperationException("无法读取当前 Windows 用户 SID。");
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void VerifyOwner(
+        FileSystemSecurity security,
+        SecurityIdentifier expectedOwner,
+        string path)
+    {
+        IdentityReference? actualOwner = security.GetOwner(typeof(SecurityIdentifier));
+        if (actualOwner is not SecurityIdentifier actualOwnerSid || !actualOwnerSid.Equals(expectedOwner))
+        {
+            throw new UnauthorizedAccessException(
+                $"Automation secure storage 拒绝非当前用户拥有的路径：{path}");
+        }
+    }
+
+    [SupportedOSPlatform("windows")]
+    private static void VerifyCurrentUserOnlyAcl(
+        FileSystemSecurity security,
+        SecurityIdentifier owner,
+        string path,
+        bool requireChildInheritance)
+    {
+        VerifyOwner(security, owner, path);
+        FileSystemAccessRule[] rules =
+        [
+            .. security.GetAccessRules(
+                    includeExplicit: true,
+                    includeInherited: true,
+                    typeof(SecurityIdentifier))
+                .Cast<FileSystemAccessRule>(),
+        ];
+        InheritanceFlags expectedInheritance = requireChildInheritance
+            ? InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit
+            : InheritanceFlags.None;
+        bool validRule = rules.Length == 1 &&
+            rules[0].IdentityReference.Equals(owner) &&
+            rules[0].AccessControlType == AccessControlType.Allow &&
+            !rules[0].IsInherited &&
+            rules[0].FileSystemRights.HasFlag(FileSystemRights.FullControl) &&
+            rules[0].InheritanceFlags == expectedInheritance &&
+            rules[0].PropagationFlags == PropagationFlags.None;
+        if (!security.AreAccessRulesProtected || !validRule)
+        {
+            throw new UnauthorizedAccessException(
+                $"Automation secure storage 无法验证 current-user-only ACL：{path}");
+        }
     }
 
     private static void RejectReparsePoint(string path, FileAttributes attributes)
