@@ -29,7 +29,7 @@
 | `gc-mode-20260702` | `BASE-016`, `PERF-001`, `PERF-011` | `historical_short_benchmark` | `b7d01c85` | 未记录 | [GC mode](benchmark-reports/2026-07-02-gc-mode.md) | `1988ed77…38856` |
 | `latency-branch-calibration-20260702` | `BASE-016`, `PERF-001`, `PERF-009` | `preflight_or_short_calibration` | `eb8895f8` | 未记录 | [latency/branch](benchmark-reports/2026-07-02-latency-branch-calibration.md) | `250cfff4…b8f6f8` |
 | `ci-matrix-preflight-20260702` | `CI-003` | `preflight_contract_only` | `85b770a3` | 未记录 | [CI matrix](benchmark-reports/2026-07-02-ci-matrix-evidence.md) | `3c206f61…8a465` |
-| `performance-target-preflight-20260702` | `PERF-008`–`PERF-012` | `preflight_contract_only` | `655d4204` | 未记录 | [target performance](benchmark-reports/2026-07-02-performance-target-evidence.md) | `193737fc…f07544` |
+| `performance-target-preflight-20260702` | `PERF-008`–`PERF-012` | `preflight_contract_only` | `655d4204` | 未记录 | [target performance](benchmark-reports/2026-07-02-performance-target-evidence.md) | `5f30ad2c…23c237f` |
 | `win-x64-publish-20260702` | `BASE-017`, `REL-001`, `REL-005` | `local_validation_only` | `fbcafc7c` | 未记录 | [win-x64 publish](release-reports/2026-07-02-win-x64-publish.md) | `014bbfc5…80843` |
 | `demo-window-longrun-20260702` | `BASE-010`, `BASE-015`, `EVID-002`, `PERF-008` | `process_smoke_only` | `2b5e6d5d` | 未记录 | [demo longrun](runtime-reports/2026-07-02-demo-window-longrun.md) | `995b1c29…f270d2` |
 | `demo-window-smoke-20260702` | `BASE-010`, `BASE-013`, `BASE-015` | `local_window_smoke` | `7313d82b` | 未记录 | [demo smoke](runtime-reports/2026-07-02-demo-window-smoke.md) | `ffc03334…ec444` |

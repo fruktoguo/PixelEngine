@@ -361,7 +361,7 @@
       "hardware": "目标硬件未附着；文档只定义 manifest/schema 和 scope 合同",
       "command": "pwsh tools/performance-target-evidence-preflight.ps1 -AllowBlocked; pwsh tools/performance-target-evidence-preflight.ps1 -EvidenceManifestPath artifacts/performance-target-evidence/evidence.json -AllowBlocked",
       "reportPath": "docs/benchmark-reports/2026-07-02-performance-target-evidence.md",
-      "sha256": "193737fc826b73f61cbff132d19c6bc702b4e1fa779ab2d28b709bcd29f07544",
+      "sha256": "5f30ad2c2e21dc9e257a09a25be05240b0c2cbe171d66bbe5930a4ae923c237f",
       "notes": "该报告是证据合同和示例字段，不是目标硬件实测；不得解除对应 PERF 任务。"
     },
     {

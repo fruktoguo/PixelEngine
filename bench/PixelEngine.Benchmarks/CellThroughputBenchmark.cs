@@ -19,7 +19,7 @@ public class CellThroughputBenchmark : IDisposable
     private const int FullActive2MChunksPerAxis = 23;
 
     private Chunk[] _chunks = [];
-    private TestChunkSource? _source;
+    private BenchmarkChunkSource? _source;
     private SimulationKernel? _kernel;
     private JobSystem? _jobs;
 
@@ -47,7 +47,7 @@ public class CellThroughputBenchmark : IDisposable
             }
         }
 
-        _source = new TestChunkSource(_chunks);
+        _source = new BenchmarkChunkSource(_chunks);
         MaterialPropsTable materials = CreateMaterials();
         _kernel = new SimulationKernel(_source, materials, worldSeed: 0xBEEFUL);
         _jobs = new JobSystem(workerCount: Math.Min(8, Math.Max(1, Environment.ProcessorCount)));
@@ -213,40 +213,4 @@ public class CellThroughputBenchmark : IDisposable
         TypicalDirtyRect,
     }
 
-    private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource
-    {
-        private readonly Dictionary<ChunkCoord, Chunk> _byCoord = chunks.ToDictionary(static chunk => chunk.Coord);
-
-        public ReadOnlySpan<Chunk> ResidentChunks => chunks;
-
-        public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
-        {
-            return _byCoord.TryGetValue(coord, out chunk!);
-        }
-
-        public Chunk GetRequired(ChunkCoord coord)
-        {
-            return _byCoord[coord];
-        }
-
-        public bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
-        {
-            if (!TryGetChunk(new ChunkCoord(center.X - 1, center.Y - 1), out Chunk slot0) ||
-                !TryGetChunk(new ChunkCoord(center.X, center.Y - 1), out Chunk slot1) ||
-                !TryGetChunk(new ChunkCoord(center.X + 1, center.Y - 1), out Chunk slot2) ||
-                !TryGetChunk(new ChunkCoord(center.X - 1, center.Y), out Chunk slot3) ||
-                !TryGetChunk(center, out Chunk slot4) ||
-                !TryGetChunk(new ChunkCoord(center.X + 1, center.Y), out Chunk slot5) ||
-                !TryGetChunk(new ChunkCoord(center.X - 1, center.Y + 1), out Chunk slot6) ||
-                !TryGetChunk(new ChunkCoord(center.X, center.Y + 1), out Chunk slot7) ||
-                !TryGetChunk(new ChunkCoord(center.X + 1, center.Y + 1), out Chunk slot8))
-            {
-                neighborhood = default;
-                return false;
-            }
-
-            neighborhood = new ChunkNeighborhood(slot0, slot1, slot2, slot3, slot4, slot5, slot6, slot7, slot8);
-            return true;
-        }
-    }
 }

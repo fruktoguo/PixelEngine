@@ -443,12 +443,12 @@ function Assert-CellsFrameEvidence {
         throw "$scope 必须包含 BenchmarkDotNet v 报告头，不能只附机器可读字段摘要。"
     }
 
-    if ($content -notmatch 'CellThroughputBenchmark\.StepJobSystem') {
-        throw "$scope 必须包含 CellThroughputBenchmark.StepJobSystem 目标基准名称。"
+    if ($content -notmatch 'FullActiveCellThroughputBenchmark\.StepJobSystemFullActive2MIndependentFrames') {
+        throw "$scope 必须包含 FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames 独立初态目标基准名称。"
     }
 
-    if ($content -notmatch 'FullActiveLiquid') {
-        throw "$scope 必须包含 FullActiveLiquid cells/frame 场景。"
+    if ($content -notmatch 'FullActive2M') {
+        throw "$scope 必须包含 FullActive2M cells/frame 场景。"
     }
 
     Assert-EvidenceRunIdentity -Fields $fields -Scope $scope -BenchmarkRunId $BenchmarkRunId -GitCommit $GitCommit

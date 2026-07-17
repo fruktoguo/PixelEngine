@@ -481,6 +481,27 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 2.17M full-active 目标基准用独立同初态 kernel 拉长测量窗口，不把连续帧 dirty 收缩冒充 full scan。
+    /// </summary>
+    [Fact]
+    public void FullActiveCaTargetBenchmarkUsesIndependentFullDirtyFrames()
+    {
+        string benchmark = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "FullActiveCellThroughputBenchmark.cs");
+        string source = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "BenchmarkChunkSource.cs");
+
+        Assert.Contains("private const int FramesPerInvoke = 16;", benchmark, StringComparison.Ordinal);
+        Assert.Contains("private readonly FullActiveFrame[] _frames", benchmark, StringComparison.Ordinal);
+        Assert.Contains("[Benchmark(OperationsPerInvoke = FramesPerInvoke)]", benchmark, StringComparison.Ordinal);
+        Assert.Contains("StepJobSystemFullActive2MIndependentFrames", benchmark, StringComparison.Ordinal);
+        Assert.Contains("_frames[i].Reset();", benchmark, StringComparison.Ordinal);
+        Assert.Contains("CoveredCells != ActiveCellsPerFrame", benchmark, StringComparison.Ordinal);
+        Assert.Contains("chunk.SetCurrentDirty(DirtyRect.Full);", benchmark, StringComparison.Ordinal);
+        Assert.Contains("kernel.StepCa(jobs);", benchmark, StringComparison.Ordinal);
+        Assert.Contains("internal sealed class BenchmarkChunkSource", source, StringComparison.Ordinal);
+        Assert.Contains("ResolveNeighborhood", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证目标硬件性能证据预检要求 AVX-512、6 RID cells/frame、帧预算与硬件计数器 scope/hash，不把本机短样本当作通过。
     /// </summary>
     [Fact]
@@ -520,6 +541,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Branch Mispredictions", script, StringComparison.Ordinal);
         Assert.Contains("cells_frame/$rid", script, StringComparison.Ordinal);
         Assert.Contains("benchmarkDotNet=true", script, StringComparison.Ordinal);
+        Assert.Contains("FullActiveCellThroughputBenchmark\\.StepJobSystemFullActive2MIndependentFrames", script, StringComparison.Ordinal);
+        Assert.Contains("FullActive2M cells/frame", script, StringComparison.Ordinal);
         string[] requiredMachineFields =
         [
             "targetCpuName",
@@ -580,8 +603,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("frame_budget_target_hardware", report, StringComparison.Ordinal);
         Assert.Contains("cells_frame/osx-arm64", report, StringComparison.Ordinal);
         Assert.Contains("BenchmarkDotNet v", report, StringComparison.Ordinal);
-        Assert.Contains("CellThroughputBenchmark.StepJobSystem", report, StringComparison.Ordinal);
-        Assert.Contains("FullActiveLiquid", report, StringComparison.Ordinal);
+        Assert.Contains("FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames", report, StringComparison.Ordinal);
+        Assert.Contains("FullActive2M", report, StringComparison.Ordinal);
         Assert.Contains("未知 scope", report, StringComparison.Ordinal);
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", readme, StringComparison.Ordinal);
@@ -604,8 +627,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("measuredIterations>=3", readme, StringComparison.Ordinal);
         Assert.Contains("iterationCount>=measuredIterations", readme, StringComparison.Ordinal);
         Assert.Contains("BenchmarkDotNet v", readme, StringComparison.Ordinal);
-        Assert.Contains("CellThroughputBenchmark.StepJobSystem", readme, StringComparison.Ordinal);
-        Assert.Contains("FullActiveLiquid", readme, StringComparison.Ordinal);
+        Assert.Contains("FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames", readme, StringComparison.Ordinal);
+        Assert.Contains("FullActive2M", readme, StringComparison.Ordinal);
 
         Assert.Contains("tools/performance-target-evidence-preflight.ps1", plan, StringComparison.Ordinal);
         Assert.Contains("blocked_missing_target_performance_manifest", plan, StringComparison.Ordinal);
@@ -4018,6 +4041,59 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证旧 262K FullActiveLiquid 报告即使机器字段达标，也不能冒充 2M full-dirty 目标基准。
+    /// </summary>
+    [Fact]
+    public void PerformanceTargetEvidencePreflightRejectsLegacyFullActiveLiquidReport()
+    {
+        string root = FindRepositoryRoot();
+        string temp = Path.Combine(Path.GetTempPath(), "pixelengine-performance-target-legacy-ca-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            string manifest = CreatePerformanceTargetEvidenceManifest(temp);
+            SetFlatEvidenceFileContent(
+                manifest,
+                "cells_frame/win-x64",
+                """
+                // BenchmarkDotNet v0.15.8
+                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
+                // Scenario: FullActiveLiquid
+                benchmarkRunId: run-20260704-performance-001
+                gitCommit: abcdef123456
+                rid: win-x64
+                benchmarkDotNet: true
+                representativeHardware: true
+                activeCellsPerFrame: 2500000
+                caFrameMs: 7.2
+                measuredIterations: 5
+                iterationCount: 5
+                """);
+
+            string artifacts = Path.Combine(temp, "legacy-ca-out");
+            ScriptResult result = RunPowerShellScript(
+                root,
+                Path.Combine(root, "tools", "performance-target-evidence-preflight.ps1"),
+                "-EvidenceManifestPath",
+                manifest,
+                "-Artifacts",
+                artifacts);
+
+            Assert.Equal(5, result.ExitCode);
+            string report = File.ReadAllText(Path.Combine(artifacts, "performance-target-evidence-preflight.md"));
+            Assert.Contains("FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames", report, StringComparison.Ordinal);
+            Assert.DoesNotContain("status: target_performance_evidence_attached_pending_review", report, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 AVX-512 evidence 必须声明无净降频损失，不能只附一个空报告。
     /// </summary>
     [Fact]
@@ -4314,8 +4390,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "cells_frame/linux-x64",
                 """
                 // BenchmarkDotNet v0.15.8
-                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
-                // Scenario: FullActiveLiquid
+                // Benchmark: PixelEngine.Benchmarks.FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames
+                // Scenario: FullActive2M
                 rid: linux-x64
                 benchmarkDotNet: true
                 representativeHardware: true
@@ -4369,8 +4445,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "cells_frame/win-arm64",
                 """
                 // BenchmarkDotNet v0.15.8
-                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
-                // Scenario: FullActiveLiquid
+                // Benchmark: PixelEngine.Benchmarks.FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames
+                // Scenario: FullActive2M
                 rid: win-arm64
                 benchmarkDotNet: true
                 representativeHardware: false
@@ -4424,8 +4500,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 "cells_frame/osx-arm64",
                 """
                 // BenchmarkDotNet v0.15.8
-                // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
-                // Scenario: FullActiveLiquid
+                // Benchmark: PixelEngine.Benchmarks.FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames
+                // Scenario: FullActive2M
                 rid: osx-arm64
                 benchmarkDotNet: true
                 representativeHardware: true
@@ -8405,8 +8481,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                     """,
                 _ when scope.StartsWith("cells_frame/", StringComparison.Ordinal) => $"""
                     // BenchmarkDotNet v0.15.8
-                    // Benchmark: PixelEngine.Benchmarks.CellThroughputBenchmark.StepJobSystem
-                    // Scenario: FullActiveLiquid
+                    // Benchmark: PixelEngine.Benchmarks.FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames
+                    // Scenario: FullActive2M
                     benchmarkRunId: run-20260704-performance-001
                     gitCommit: abcdef123456
                     rid: {scope["cells_frame/".Length..]}
