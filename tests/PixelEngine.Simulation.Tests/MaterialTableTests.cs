@@ -64,6 +64,12 @@ public sealed class MaterialTableTests
         Assert.Equal(5, props.FlowRateOf(1));
         Assert.Equal(11, props.ReactionStartOf(1));
         Assert.Equal(2, props.ReactionCountOf(1));
+        uint updateProperties = table.Hot.CellUpdatePropertiesOfUnchecked(1);
+        Assert.Equal(CellType.Liquid, MaterialHotTable.CellUpdateType(updateProperties));
+        Assert.Equal(100, MaterialHotTable.CellUpdateDensity(updateProperties));
+        Assert.Equal(5, MaterialHotTable.CellUpdateDispersion(updateProperties));
+        Assert.True(MaterialHotTable.CellUpdateHasReaction(updateProperties));
+        Assert.False(MaterialHotTable.CellUpdateHasCustomUpdate(updateProperties));
         Assert.Equal(120, props.DefaultLifetimeOf(1));
         Assert.Equal(6, props.HardnessOf(1));
         Assert.Equal(14, props.MaxIntegrityOf(1));
@@ -142,6 +148,39 @@ public sealed class MaterialTableTests
         Assert.Equal(definitions.Length, result.PreservedCount);
         Assert.True((table.Get(1).PropertyFlags & MaterialProperty.HasCustomUpdate) != 0);
         Assert.True((table.Hot.PropertyFlags[1] & MaterialProperty.HasCustomUpdate) != 0);
+    }
+
+    /// <summary>CA cell-update 派生 lane 必须随稳定热重载及 custom-update 绑定一起替换。</summary>
+    [Fact]
+    public void CellUpdatePropertiesFollowStableReloadAndCustomUpdateBinding()
+    {
+        MaterialTable table = new(CreateDefinitions());
+        MaterialPropsTable props = new(table.Hot);
+
+        table.RegisterCustomUpdate("water", NoOpCustomUpdate);
+        props.Reload(table.Hot);
+        uint registered = props.Hot.CellUpdatePropertiesOfUnchecked(1);
+        Assert.True(MaterialHotTable.CellUpdateHasReaction(registered));
+        Assert.True(MaterialHotTable.CellUpdateHasCustomUpdate(registered));
+
+        MaterialDef[] reloaded = CreateDefinitions();
+        reloaded[1] = reloaded[1] with
+        {
+            Type = CellType.Gas,
+            Density = 37,
+            Dispersion = 9,
+            ReactionCount = 0,
+        };
+
+        _ = table.ReloadStable(reloaded, fallbackId: 0);
+        props.Reload(table.Hot);
+
+        uint updated = props.Hot.CellUpdatePropertiesOfUnchecked(1);
+        Assert.Equal(CellType.Gas, MaterialHotTable.CellUpdateType(updated));
+        Assert.Equal(37, MaterialHotTable.CellUpdateDensity(updated));
+        Assert.Equal(9, MaterialHotTable.CellUpdateDispersion(updated));
+        Assert.False(MaterialHotTable.CellUpdateHasReaction(updated));
+        Assert.True(MaterialHotTable.CellUpdateHasCustomUpdate(updated));
     }
 
     /// <summary>

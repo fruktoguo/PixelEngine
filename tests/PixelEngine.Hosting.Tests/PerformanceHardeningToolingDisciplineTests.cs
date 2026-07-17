@@ -7348,6 +7348,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);", updater, StringComparison.Ordinal);
         Assert.Contains("ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);", updater, StringComparison.Ordinal);
         Assert.Contains("ushort activeMaterial = material;", updater, StringComparison.Ordinal);
+        Assert.Contains("materials.Hot.CellUpdatePropertiesOfUnchecked(material)", updater, StringComparison.Ordinal);
+        Assert.Contains("MaterialHotTable.CellUpdateHasReaction(updateProperties)", updater, StringComparison.Ordinal);
+        Assert.Contains("MaterialHotTable.CellUpdateHasCustomUpdate(updateProperties)", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("materials.ReactionCountOf(material)", updater, StringComparison.Ordinal);
+        Assert.DoesNotContain("materials.PropertyFlagsOf(material)", updater, StringComparison.Ordinal);
         Assert.Contains("TryMoveToCenterKnownTarget", updater, StringComparison.Ordinal);
         Assert.Contains("sourceLocalIndex + EngineConstants.ChunkSize + firstDx", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("ushort activeMaterial = window.GetMaterial(activeX, activeY);", updater, StringComparison.Ordinal);

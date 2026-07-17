@@ -94,14 +94,17 @@ internal static class ChunkUpdater
                     bool preferNegative = ((parityBit ^ (byte)(ly & 1)) & CellFlags.Parity) == 0;
                     int activeX = wx;
                     int activeY = wy;
-                    CellType materialType = materials.TypeOf(material);
+                    uint updateProperties = materials.Hot.CellUpdatePropertiesOfUnchecked(material);
+                    CellType materialType = MaterialHotTable.CellUpdateType(updateProperties);
+                    byte sourceDensity = MaterialHotTable.CellUpdateDensity(updateProperties);
+                    byte dispersion = MaterialHotTable.CellUpdateDispersion(updateProperties);
                     bool moved = materialType switch
                     {
                         CellType.Empty => false,
                         CellType.Solid => false,
-                        CellType.Powder => TryMovePowder(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, materials.DensityOf(material), parityBit, preferNegative, out activeX, out activeY),
-                        CellType.Liquid => TryMoveLiquid(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, materials.DensityOf(material), materials.DispersionOf(material), parityBit, preferNegative, out activeX, out activeY),
-                        CellType.Gas => TryMoveGas(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, materials.DensityOf(material), materials.DispersionOf(material), parityBit, ref rng, out activeX, out activeY),
+                        CellType.Powder => TryMovePowder(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, parityBit, preferNegative, out activeX, out activeY),
+                        CellType.Liquid => TryMoveLiquid(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, dispersion, parityBit, preferNegative, out activeX, out activeY),
+                        CellType.Gas => TryMoveGas(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, dispersion, parityBit, ref rng, out activeX, out activeY),
                         CellType.Fire => false,
                         _ => throw new InvalidOperationException($"未知 CellType：{materialType}。"),
                     };
@@ -126,8 +129,11 @@ internal static class ChunkUpdater
 
                     ushort activeMaterial = material;
                     // 位移后的活跃坐标上尝试 von Neumann 反应，再跑材质自定义更新。
-                    bool reacted = TryReactVonNeumann(ref window, materials, reactionExecutor, rigidDamageSink, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
-                    bool customUpdated = !reacted && TryRunCustomUpdate(ref window, chunks, materials, customUpdateExecutor, activeX, activeY, activeMaterial, parityBit);
+                    bool reacted = MaterialHotTable.CellUpdateHasReaction(updateProperties) &&
+                        TryReactVonNeumann(ref window, reactionExecutor, rigidDamageSink, diagnostics, activeX, activeY, activeMaterial, parityBit, ref rng);
+                    bool customUpdated = !reacted &&
+                        MaterialHotTable.CellUpdateHasCustomUpdate(updateProperties) &&
+                        customUpdateExecutor.TryUpdate(ref window, chunks, activeX, activeY, activeMaterial, parityBit);
                     if (!moved && !reacted && !customUpdated && materialType == CellType.Fire)
                     {
                         window.SetFlags(wx, wy, CellFlags.SetParity(window.GetFlags(wx, wy), parityBit));
@@ -628,7 +634,6 @@ internal static class ChunkUpdater
 
     private static bool TryReactVonNeumann(
         ref NeighborWindow window,
-        MaterialPropsTable materials,
         IReactionExecutor reactionExecutor,
         IRigidDamageSink rigidDamageSink,
         SimulationDiagnostics diagnostics,
@@ -638,27 +643,10 @@ internal static class ChunkUpdater
         byte parityBit,
         ref Pcg32 rng)
     {
-        return material != 0 &&
-            materials.ReactionCountOf(material) != 0 &&
-            (TryReactNeighbor(ref window, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx, wy - 1, parityBit, ref rng) ||
+        return TryReactNeighbor(ref window, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx, wy - 1, parityBit, ref rng) ||
             TryReactNeighbor(ref window, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx - 1, wy, parityBit, ref rng) ||
             TryReactNeighbor(ref window, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx + 1, wy, parityBit, ref rng) ||
-            TryReactNeighbor(ref window, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx, wy + 1, parityBit, ref rng));
-    }
-
-    private static bool TryRunCustomUpdate(
-        ref NeighborWindow window,
-        IChunkSource chunks,
-        MaterialPropsTable materials,
-        IMaterialCustomUpdateExecutor customUpdateExecutor,
-        int wx,
-        int wy,
-        ushort material,
-        byte parityBit)
-    {
-        return material != 0 &&
-            (materials.PropertyFlagsOf(material) & MaterialProperty.HasCustomUpdate) != 0 &&
-            customUpdateExecutor.TryUpdate(ref window, chunks, wx, wy, material, parityBit);
+            TryReactNeighbor(ref window, reactionExecutor, rigidDamageSink, diagnostics, wx, wy, material, wx, wy + 1, parityBit, ref rng);
     }
 
     private static bool TryReactNeighbor(

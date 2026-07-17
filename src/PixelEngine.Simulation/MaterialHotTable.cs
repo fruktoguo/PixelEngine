@@ -4,7 +4,8 @@ using System.Runtime.InteropServices;
 namespace PixelEngine.Simulation;
 
 /// <summary>
-/// 材质热路径 SoA 表。内层循环只读这些并列数组，避免把 name、音效等冷字段拉入 cache line。
+/// 材质热路径 SoA 表。独立列保持权威；CA cell update 同时消费的字段另派生为每材质 packed lane，
+/// 避免逐 cell 重复离散 gather，且不会向 cell 数据布局增加字段（docs §12.7）。
 /// </summary>
 public sealed class MaterialHotTable
 {
@@ -39,6 +40,12 @@ public sealed class MaterialHotTable
     private readonly MaterialProperty[] _propertyFlags;
     private readonly int[] _reactionStart;
     private readonly byte[] _reactionCount;
+    private readonly uint[] _cellUpdateProperties;
+
+    private const int DensityShift = 8;
+    private const int DispersionShift = 16;
+    private const uint HasReactionMask = 1u << 24;
+    private const uint HasCustomUpdateMask = 1u << 25;
 
     private MaterialHotTable(
         CellType[] type,
@@ -104,6 +111,7 @@ public sealed class MaterialHotTable
         _propertyFlags = propertyFlags;
         _reactionStart = reactionStart;
         _reactionCount = reactionCount;
+        _cellUpdateProperties = BuildCellUpdateProperties(type, density, dispersion, reactionCount, propertyFlags);
     }
 
     /// <summary>
@@ -409,6 +417,60 @@ public sealed class MaterialHotTable
     }
 
     /// <summary>
+    /// 一次读取 CA cell update 同时消费的 type、density、dispersion 与行为 gate。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal uint CellUpdatePropertiesOfUnchecked(ushort materialId)
+    {
+        return Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_cellUpdateProperties), materialId);
+    }
+
+    /// <summary>
+    /// 从 CA cell update 派生 lane 解码材质类型。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static CellType CellUpdateType(uint properties)
+    {
+        return (CellType)(byte)properties;
+    }
+
+    /// <summary>
+    /// 从 CA cell update 派生 lane 解码密度。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static byte CellUpdateDensity(uint properties)
+    {
+        return (byte)(properties >> DensityShift);
+    }
+
+    /// <summary>
+    /// 从 CA cell update 派生 lane 解码扩散距离。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static byte CellUpdateDispersion(uint properties)
+    {
+        return (byte)(properties >> DispersionShift);
+    }
+
+    /// <summary>
+    /// 返回 CA cell update 派生 lane 是否声明反应。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool CellUpdateHasReaction(uint properties)
+    {
+        return (properties & HasReactionMask) != 0;
+    }
+
+    /// <summary>
+    /// 返回 CA cell update 派生 lane 是否声明 custom update。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool CellUpdateHasCustomUpdate(uint properties)
+    {
+        return (properties & HasCustomUpdateMask) != 0;
+    }
+
+    /// <summary>
     /// 从完整材质定义构建热路径 SoA 表。
     /// </summary>
     public static MaterialHotTable FromDefinitions(ReadOnlySpan<MaterialDef> definitions)
@@ -590,6 +652,26 @@ public sealed class MaterialHotTable
     {
         int[] result = new int[count];
         Array.Fill(result, value);
+        return result;
+    }
+
+    private static uint[] BuildCellUpdateProperties(
+        CellType[] type,
+        byte[] density,
+        byte[] dispersion,
+        byte[] reactionCount,
+        MaterialProperty[] propertyFlags)
+    {
+        uint[] result = new uint[type.Length];
+        for (int i = 0; i < result.Length; i++)
+        {
+            result[i] = (uint)type[i] |
+                ((uint)density[i] << DensityShift) |
+                ((uint)dispersion[i] << DispersionShift) |
+                (reactionCount[i] == 0 ? 0u : HasReactionMask) |
+                ((propertyFlags[i] & MaterialProperty.HasCustomUpdate) == 0 ? 0u : HasCustomUpdateMask);
+        }
+
         return result;
     }
 
