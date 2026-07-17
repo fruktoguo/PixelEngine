@@ -51,6 +51,34 @@ public sealed class SimulationReactionLifetimeTests
     }
 
     /// <summary>
+    /// 验证 movement 已写入 cell 后，即使后续 reaction 抛出异常，逐行归并的 working dirty 仍会提交。
+    /// </summary>
+    [Fact]
+    public void StepCaCommitsMovementDirtyBeforePropagatingReactionFailure()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        center.SetCurrentDirty(DirtyRect.Full);
+        Set(center, 10, 10, Sand);
+        Set(center, 10, 12, Solid);
+        Set(center, 11, 11, Solid);
+        MaterialPropsTable materials = new(
+            [CellType.Empty, CellType.Solid, CellType.Fire, CellType.Fire, CellType.Powder],
+            [0, 255, 1, 1, 120],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1],
+            [0, 0, 0, 0, 0]);
+        SimulationKernel kernel = new(source, materials, reactionExecutor: new ThrowingReactionExecutor());
+
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => kernel.StepCa());
+
+        Assert.Equal("reaction failure", exception.Message);
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(Sand, Get(center, 10, 11));
+        Assert.Equal(new DirtyRect(8, 8, 12, 13), center.WorkingDirty);
+    }
+
+    /// <summary>
     /// 验证 lifetime 每个被处理 tick 递减一次，未归零时不调用 sink。
     /// </summary>
     [Fact]
@@ -178,6 +206,14 @@ public sealed class SimulationReactionLifetimeTests
             Count++;
             Last = (wx1, wy1, materialA, wx2, wy2, materialB, parityBit);
             return returnValue;
+        }
+    }
+
+    private sealed class ThrowingReactionExecutor : IReactionExecutor
+    {
+        public bool TryReact(ref NeighborWindow window, int wx1, int wy1, ushort materialA, int wx2, int wy2, ushort materialB, byte parityBit, byte randomByte)
+        {
+            throw new InvalidOperationException("reaction failure");
         }
     }
 

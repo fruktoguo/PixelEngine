@@ -403,12 +403,10 @@ public ref struct NeighborWindow
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool TryReadCenterNonEmptyMoveTarget(
-        int targetLocalX,
-        int targetLocalY,
+        int targetLocal,
         out ushort targetMaterial,
         out byte targetFlags)
     {
-        int targetLocal = CellAddressing.LocalIndexFromLocal(targetLocalX, targetLocalY);
         targetMaterial = Unsafe.Add(ref _matBase4, targetLocal);
         if (targetMaterial == 0)
         {
@@ -542,7 +540,6 @@ public ref struct NeighborWindow
         byte parityBit,
         IRigidDamageSink rigidDamageSink)
     {
-
         ref ushort targetMaterial = ref Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
         ref byte targetFlags = ref Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
         // 目标非空时须未更新且密度更低才可置换；否则 movement 失败。
@@ -553,6 +550,58 @@ public ref struct NeighborWindow
             return false;
         }
 
+        MoveCellFromCenterKnownEligibleTarget(
+            sourceLocalIndex,
+            targetX,
+            targetY,
+            parityBit,
+            rigidDamageSink,
+            ref targetMaterial,
+            ref targetFlags,
+            ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal),
+            ref Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal));
+        return true;
+    }
+
+    /// <summary>
+    /// 对已由垂直扫描证明可置换的目标执行中心 cell movement，避免重复读取目标属性。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void MoveCellFromCenterKnownEligibleTarget(
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        int targetSlot,
+        int targetLocal,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink)
+    {
+        ref ushort targetMaterial = ref Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
+        ref byte targetFlags = ref Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        MoveCellFromCenterKnownEligibleTarget(
+            sourceLocalIndex,
+            targetX,
+            targetY,
+            parityBit,
+            rigidDamageSink,
+            ref targetMaterial,
+            ref targetFlags,
+            ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal),
+            ref Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal));
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void MoveCellFromCenterKnownEligibleTarget(
+        int sourceLocalIndex,
+        int targetX,
+        int targetY,
+        byte parityBit,
+        IRigidDamageSink rigidDamageSink,
+        ref ushort targetMaterial,
+        ref byte targetFlags,
+        ref byte targetLifetime,
+        ref byte targetDamage)
+    {
         if (CellFlags.Has(targetFlags, CellFlags.RigidOwned))
         {
             rigidDamageSink.OnOwnedCellDamaged(targetX, targetY, targetMaterial);
@@ -569,12 +618,10 @@ public ref struct NeighborWindow
         targetFlags = CellFlags.SetParity(targetFlags, parityBit);
 
         ref byte sourceLifetime = ref Unsafe.Add(ref _lifeBase4, sourceLocalIndex);
-        ref byte targetLifetime = ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal);
         (sourceLifetime, targetLifetime) = (targetLifetime, sourceLifetime);
 
         Unsafe.Add(ref _damageBase4, sourceLocalIndex) = 0;
-        Unsafe.Add(ref SelectDamageBase(targetSlot), targetLocal) = 0;
-        return true;
+        targetDamage = 0;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

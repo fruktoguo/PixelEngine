@@ -17,4 +17,12 @@ if (string.Equals(
         HardwareCounter.BranchMispredictions);
 }
 
+if (string.Equals(
+    Environment.GetEnvironmentVariable("PIXELENGINE_BENCH_EVENTPIPE"),
+    "1",
+    StringComparison.Ordinal))
+{
+    config = config.AddDiagnoser(new EventPipeProfiler());
+}
+
 BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);

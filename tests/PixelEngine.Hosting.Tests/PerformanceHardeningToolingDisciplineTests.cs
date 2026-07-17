@@ -30,6 +30,19 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 EventPipe profiler 只在显式诊断运行中启用，默认吞吐基准不承担 trace 开销。
+    /// </summary>
+    [Fact]
+    public void BenchmarkProgramGatesEventPipeProfilerBehindExplicitEnvironmentSwitch()
+    {
+        string program = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "Program.cs");
+
+        Assert.Contains("PIXELENGINE_BENCH_EVENTPIPE", program, StringComparison.Ordinal);
+        Assert.Contains("new EventPipeProfiler()", program, StringComparison.Ordinal);
+        Assert.Contains("StringComparison.Ordinal", program, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 CI 运行反汇编守门与 BenchmarkDotNet 性能回归门禁。
     /// </summary>
     [Fact]
