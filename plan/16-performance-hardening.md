@@ -107,6 +107,8 @@
 2026-07-18 追加热路径与工具链证据：中心 movement dirty 改为逐扫描行归并并在异常路径提交，中心 target local 由 source local + delta 直达，垂直扫描对已验证目标执行单次 swap；跨 chunk KeepAlive、parity、质量守恒和 MoveCap 语义不变。`run-benchmark.ps1` 现统一展开 `--name=value`、捕获 `pwsh -File` 剩余参数，并要求 artifacts、report 与正数 `executed benchmarks` 完整存在。固定 B-A-B-A 稳态报告的最保守对照仍改善 5.19%，但较慢 optimized 轮只有约 1.486M cells/8ms，因此该实现进展不代表 cells/frame 验收完成。
 
 2026-07-18 独立初态复测：目标 benchmark 改为一次计时推进 16 个互不共享的 2,166,784-cell full-dirty kernel，每个 kernel 只推进一帧，消除连续帧 dirty 收缩与不足 100ms workload。`e020f476` 进一步让中心 target 直接访问 slot 4 SoA，并让内部下对角复用 source local；干净基线 `5a98c988` 12.152ms → 优化 11.634ms，均为 0 B，但优化后仍仅约 1.490M cells/8ms。详见 `docs/evidence-2026-07-18-perf-003-independent-full-active.md`，PERF-003 状态不变。
+
+2026-07-18 packed material lane 复测：`5355a5b9` 将 CA update 同时消费的 type/density/dispersion/reaction/custom gate 合并为每材质 32-bit 派生 lane，保留原 SoA 权威列且不增加 per-cell 字段；EventPipe 中旧 `ReactionCountOf` / `PropertyFlagsOf` 热栈 frame 已消失。提交态 B4 为 10.809ms / 0 B、约 1.604M cells/8ms，但两 launch 10.07/11.63ms 构成 `mValue=3.67` 双峰，不能挑快簇或用未提交 D2 关闭任务。详见 `docs/evidence-2026-07-18-perf-003-packed-material-lane.md`，PERF-003 继续阻塞。
 - [!] 最终 cells/frame 命令：在每个代表 RID 上运行 Release BenchmarkDotNet，保留完整报告和 SHA256，再交给 `performance-target-evidence-preflight`。
 - [!] 最终 hardware counter 命令：在 Windows elevated ETW 或等价目标 runner 上采集 `Cache Misses` 与 `Branch Mispredictions`，不能用列缺失报告替代。
 - [!] 最终 frame budget 命令：用真实窗口或 headless 诊断长跑至少 60 秒，导出每 phase p99、样本数、场景名和固定 tick 无追帧字段。

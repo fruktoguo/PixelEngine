@@ -79,6 +79,19 @@
       "notes": "16 个互不共享的 2,166,784-cell full-dirty 初态消除连续帧 dirty 收缩与不足 100ms workload；干净基线 5a98c988 为 12.152ms，中心 target/local 直达优化 e020f476 为 11.634ms，两轮均 Allocated -。优化后仅约 1.490M cells/8ms，仍低于 2M 下限，不关闭 PERF-003 或替代六 RID 代表硬件证据。"
     },
     {
+      "entryId": "perf-003-packed-material-lane-20260718",
+      "taskIds": ["PERF-003"],
+      "evidenceState": "local_formal_benchmark_target_gap_bimodal",
+      "commit": "5355a5b924ed4f30b4144bea9714d6000959e181",
+      "runSessionId": "local-20260718-perf003-packed-material-lane",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "在 65d90eb7 detached baseline 与 5355a5b9 clean optimized 上执行 & .\\tools\\run-benchmark.ps1 -BenchmarkDotNetArgs @('--filter','*FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames*','--launchCount','2','--warmupCount','10','--iterationCount','20')；PIXELENGINE_BENCH_EVENTPIPE=1 下执行 1 launch × 3 warmups × 3 iterations 机制诊断；dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release -p:TreatWarningsAsErrors=true；dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --no-build --filter FullyQualifiedName~PerformanceHardeningToolingDisciplineTests；dotnet build PixelEngine.sln -c Release -p:TreatWarningsAsErrors=true",
+      "reportPath": "docs/evidence-2026-07-18-perf-003-packed-material-lane.md",
+      "sha256": "cb38b6cbce2424fc061bd2d6253f386dc97e68881596839c7de67b0d45ae9e3f",
+      "notes": "packed lane 移除 ChunkUpdater 中逐 cell ReactionCountOf/PropertyFlagsOf gate 读取；提交态 B4 为 10.809ms / 0 B、约 1.604M cells/8ms，但两 launch 10.07/11.63ms 形成 mValue=3.67 双峰，99.9% CI 与 11.344ms 基线小幅重叠。未提交 D2 的 10.274ms 只作候选诊断，不进入完成判据；PERF-003 仍低于 2M/8ms 且缺六 RID 代表硬件证据。"
+    },
+    {
       "entryId": "perf-004-zero-allocation-20260710",
       "taskIds": ["PERF-004"],
       "evidenceState": "complete_local_zero_allocation",
