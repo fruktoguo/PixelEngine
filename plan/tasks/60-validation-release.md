@@ -18,9 +18,10 @@
   - 本地修复证据：`docs/evidence-2026-07-11-ci-002-local-remediation.md`；实现提交 `97d7c0b9` 已在 detached clean worktree 中按同一 SHA 完成 Windows native/solution build、13-TRX 聚合、disassembly guard 与正式 benchmark regression，全部通过。
   - 远端证据：GitHub Actions run `29166221230`、attempt `1`、SHA `1148ca8732d4c7645ef4cfed1bb30352d8449d70`；`build-test (win-x64)`、`benchmark-guard (win-x64)`、`verify-publish (win-x64)` 与 `build-test (win-arm64, build-only)` 全部成功。win-x64 artifact 持久化 13/13 TRX，1776 total / 1739 executed / 1739 passed / 0 failed / 37 个 native GPU scope NotExecuted，最低 1492 门槛满足；benchmark artifact 同 run/SHA 记录 disassembly 与正式 regression success。该 workflow 的 Linux/macOS 长期矩阵失败仍由 `CI-003` 跟踪，不反向否定本任务明确限定的 Windows 首绿。
 
-- [!] `CI-003` 取得长期 6-RID build/test 与 4-RID verify-publish 矩阵证据。阻塞：`CI-002` 未完成，且需要对应 hosted runner/native 构建可用。
+- [!] `CI-003` 取得长期 6-RID build/test 与 4-RID verify-publish 矩阵证据。阻塞：`CI-002` 已完成，但当前本地主线尚未获准 push，因而没有当前 commit 的远端矩阵；对应 hosted runner/native toolchain 也必须实际可用。解除条件：明确授权并 push 当前提交，取得同一完整 SHA 的 6-RID build/test、4-RID verify-publish、benchmark guard 与 `ci-evidence` 全绿结果。
   - 优先级：P1。
   - 验收：矩阵与 `SCOPE-001` 一致；win-arm64 build-only 不伪装测试；manifest/hash/runner identity 通过 preflight 和人工复核。
+  - 2026-07-17 本地修复节点：最新远端 run `29308458346`（SHA `3a980bf4`）的全部 build/test、verify-publish 与 benchmark job 均在 recursive Checkout 失败，根因是 RmlUi gitlink `1b69207f` 只存在于本机、配置 fork 无法获取。当前节点把 gitlink 固定到 fork 已公开分支 tip `22b93ae9`，并将 8 行 framebuffer 集成改动迁入 `native/ui_native/rmlui-patches.json` 管理的 SHA256 base+patch overlay；CMake 对 commit、基础文件、patch、路径与 `git apply --check` 全部 fail-closed，win-x64 clean native build 已真实链接 overlay。该本地结果不冒充尚未触发的远端矩阵。
 
 ## 测试质量
 
@@ -66,7 +67,7 @@
 
 ## 玩家包与 Release
 
-- [!] `REL-001` 从当前候选 HEAD 重建 Editor 和 win-x64 R2R/AOT 玩家包，替换当前绑定旧 `85e1914d` 的最终输出。阻塞：`ARCH-001`–`ARCH-005`、`PERF-002`、`PERF-004`–`PERF-007` 与 `DOC-002` 已完成；阶段 A/B 仍缺 `CI-002` 的当前 HEAD 远端全绿，以及 `PERF-003` / `PERF-011` 的外部硬件、权限或指标决策证据。三项闭合后才能冻结候选 HEAD；不等待 M15 人工体验任务。
+- [!] `REL-001` 从冻结候选 HEAD 重建 Editor 和 win-x64 R2R/AOT 玩家包，替换当前绑定 `a3716e86` 的最终输出。阻塞：`ARCH-001`–`ARCH-005`、`PERF-002`、`PERF-004`–`PERF-007` 与 `DOC-002` 已完成；当前候选仍缺同一 SHA 的远端标准 CI 结果，以及 `PERF-003` / `PERF-011` 的外部硬件、权限或指标决策证据。三项闭合后才能冻结候选 HEAD；不等待 M15 人工体验任务。
   - 优先级：P1。
   - 验收：build-result、launcher、content、NOTICE、SHA256、player-only audit、窗口 smoke 全部通过；manifest 绑定当前 HEAD。
 

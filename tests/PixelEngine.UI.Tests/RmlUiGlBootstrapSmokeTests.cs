@@ -386,6 +386,84 @@ public sealed class RmlUiGlBootstrapSmokeTests
     }
 
     /// <summary>
+    /// 验证 RmlUi 最终合成写入调用方当前绑定的非零 framebuffer，而不是固定写入 default framebuffer。
+    /// </summary>
+    [NativeSmokeFact]
+    [Trait("Category", "NativeSmoke")]
+    public void RmlUiCompositeWritesCallerOwnedFramebufferWhenGlSmokeIsEnabled()
+    {
+        using RenderWindow window = RenderWindow.Create(new RenderWindowOptions
+        {
+            Title = "PixelEngine RmlUi caller framebuffer smoke",
+            Width = 64,
+            Height = 64,
+            BackendPreference = RenderBackendPreference.DesktopGl33,
+            EnableDebugContext = true,
+        });
+        using RmlUiBackend backend = new(window);
+        backend.Initialize(new UiBackendInitializeInfo(
+            new UiViewport(0, 0, window.Width, window.Height, 1f),
+            UiBackendKind.RmlUi));
+
+        string documentPath = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-caller-fbo-{Guid.NewGuid():N}.rml");
+        try
+        {
+            File.WriteAllText(
+                documentPath,
+                """
+                <rml>
+                  <head>
+                    <style>
+                      body { margin: 0px; background-color: transparent; pointer-events: none; }
+                      #panel { position: absolute; left: 0px; top: 0px; width: 32px; height: 64px; background-color: #ff2020; }
+                    </style>
+                  </head>
+                  <body><div id="panel"></div></body>
+                </rml>
+                """);
+            UiDocumentHandle document = backend.LoadDocument(UiDocumentSource.Asset(documentPath, 1));
+            backend.SetScreenStack([new UiScreenStackEntry(new UiScreenHandle(1), new UiScreenId(1), document, Modal: false)]);
+            backend.Update(1f / 60f);
+
+            GL gl = window.Gl;
+            using ColorRenderTarget target = new(gl, window.Width, window.Height);
+            target.BindFramebuffer();
+            gl.Viewport(0, 0, (uint)window.Width, (uint)window.Height);
+            gl.ClearColor(0f, 0f, 1f, 1f);
+            gl.Clear(ClearBufferMask.ColorBufferBit);
+            gl.GetInteger(GLEnum.DrawFramebufferBinding, out int beforeDrawFramebuffer);
+            gl.GetInteger(GLEnum.ReadFramebufferBinding, out int beforeReadFramebuffer);
+            Assert.Equal((int)target.FramebufferHandle, beforeDrawFramebuffer);
+            Assert.Equal((int)target.FramebufferHandle, beforeReadFramebuffer);
+            Assert.NotEqual(0u, target.FramebufferHandle);
+
+            UiPresentContext context = default;
+            backend.Composite(in context);
+            gl.Finish();
+            gl.GetInteger(GLEnum.DrawFramebufferBinding, out int afterDrawFramebuffer);
+            gl.GetInteger(GLEnum.ReadFramebufferBinding, out int afterReadFramebuffer);
+            Assert.Equal(beforeDrawFramebuffer, afterDrawFramebuffer);
+            Assert.Equal(beforeReadFramebuffer, afterReadFramebuffer);
+
+            byte[] panelPixel = new byte[4];
+            byte[] backgroundPixel = new byte[4];
+            gl.ReadPixels(8, 32, 1, 1, GLEnum.Rgba, GLEnum.UnsignedByte, out panelPixel[0]);
+            gl.ReadPixels(48, 32, 1, 1, GLEnum.Rgba, GLEnum.UnsignedByte, out backgroundPixel[0]);
+
+            Assert.True(
+                panelPixel[0] > 160 && panelPixel[0] > panelPixel[2] * 2,
+                $"调用方 framebuffer 的面板像素未呈红色: rgba=({panelPixel[0]},{panelPixel[1]},{panelPixel[2]},{panelPixel[3]})");
+            Assert.True(
+                backgroundPixel[2] > 200 && backgroundPixel[0] < 32,
+                $"调用方 framebuffer 的透明背景未保留: rgba=({backgroundPixel[0]},{backgroundPixel[1]},{backgroundPixel[2]},{backgroundPixel[3]})");
+        }
+        finally
+        {
+            File.Delete(documentPath);
+        }
+    }
+
+    /// <summary>
     /// 验证Rml Ui Backend Can Load And Render Document On Angle When Smoke Is Enabled。
     /// </summary>
     [NativeSmokeFact("PIXELENGINE_RENDERING_ANGLE_SMOKE")]

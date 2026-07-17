@@ -104,7 +104,7 @@
 |---|---|---|---|---|
 | GPU 计算(增项) | **ComputeSharp** | `ComputeSharp`(DX12,Windows-only) | 默认走 Silk.NET GL compute(跨平台);仅 Windows 高性能路径门控启用 | 架构 §9.5 列为可选;plan/09 G1–G4 门控 |
 | Ogg Vorbis 解码 | **NVorbis** | `NVorbis`(纯托管) | 默认仅内建 WAV/PCM;需 Ogg 时启用 | 纯托管,符合不变式 #10(不新增 native);plan/10 |
-| 交互界面/游戏 UI(HTML) 默认产品后端 | **RmlUi(HTML/CSS 子集,无 JS)** | `native/rmlui/`(vendored C++ 源+静态链 FreeType)+ `PixelEngine.UI` 内 `[LibraryImport]` 薄绑定 | `PixelEngine.UI` 默认 Web-first 透明 HTML UI 路径;dynamic-only 落 `runtimes/<rid>/native`,**不进 Box2D dual-build** | RML/RCSS 子集渲染、MIT;适合 HUD/menu/settings 等可控 HTML/CSS 子集,透明 alpha 与 same-GL 合成由 plan/20 约束;不得把它描述成完整 HTML5/CSS3/JS 浏览器 |
+| 交互界面/游戏 UI(HTML) 默认产品后端 | **RmlUi(HTML/CSS 子集,无 JS)** | `native/rmlui/` 可达 base commit + `native/ui_native/rmlui-patches.json` 受控集成补丁(均校验 SHA256、临时 overlay 编译、静态链 FreeType)+ `PixelEngine.UI` 内 `[LibraryImport]` 薄绑定 | `PixelEngine.UI` 默认 Web-first 透明 HTML UI 路径;dynamic-only 落 `runtimes/<rid>/native`,**不进 Box2D dual-build** | RML/RCSS 子集渲染、MIT;适合 HUD/menu/settings 等可控 HTML/CSS 子集,透明 alpha 与 same-GL 合成由 plan/20 约束;不得把它描述成完整 HTML5/CSS3/JS 浏览器；gitlink 不得指向远端不可获取对象 |
 | 交互界面/游戏 UI(HTML) 可选高保真后端 | **Ultralight** | `native/ultralight/`(WebKit-fork 原生 DLL)+ `PixelEngine.UI` 薄绑定 | 可选、门控启用;dynamic-only 落 `runtimes/<rid>/native`,不进 Box2D dual-build | 标准 HTML5/CSS3/JS 高保真路径,服务 AI 生成标准 Web UI 与复杂页面;许可、体积、AOT 绑定、发行证据与平台 native gate 归 plan/20/M15 闭合 |
 | 交互界面/游戏 UI 纯托管基线 | **ManagedFallbackBackend** | `PixelEngine.UI`(纯托管) | 恒在、CI/headless/诊断/unsupported-RID 回退 | 纯托管盒模型/文本布局子集,零 native 依赖,天然符合不变式 #10;必须永远可用,但不是玩家侧产品主路径 |
 

@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "baseCommit": "22b93ae968dab2713a57780408513d8859bb9503",
+  "baseFiles": [
+    {
+      "path": "Backends/RmlUi_Renderer_GL3.cpp",
+      "sha256": "e8fcad58a07c7dba67ad589e51fcdb136493a4225232c1d0a4723026286efa86"
+    },
+    {
+      "path": "Backends/RmlUi_Renderer_GL3.h",
+      "sha256": "7ee9a8bf2158c584541be4cab2afa66a0abc7ee923ec95422dee9808f6db7dd5"
+    }
+  ],
+  "patches": [
+    {
+      "path": "patches/rmlui-preserve-presentation-framebuffer.patch",
+      "sha256": "9e0e6be09da3b6a558129239f0a4df40f94a4ed23b5d974d7b3f1077ee940b87"
+    }
+  ],
+  "resultFiles": [
+    {
+      "path": "Backends/RmlUi_Renderer_GL3.cpp",
+      "sha256": "53394bc5d367cc0388213f165bf6b4abc626a784fea47151d5adf3c06f941e70"
+    },
+    {
+      "path": "Backends/RmlUi_Renderer_GL3.h",
+      "sha256": "493abed3cf0e53091ded3dcf3da38f4421eac4511924d0065a0394b83a5e2aba"
+    }
+  ]
+}

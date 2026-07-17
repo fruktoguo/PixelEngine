@@ -2410,6 +2410,63 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 RmlUi 集成补丁以可审计 base+patch 清单构建，任何 source/hash 漂移都会在 CMake 配置阶段失败。
+    /// </summary>
+    [Fact]
+    public void RmlUiIntegrationPatchManifestPinsBaseAndFailClosedOverlay()
+    {
+        string root = FindRepositoryRoot();
+        string uiNativeRoot = Path.Combine(root, "native", "ui_native");
+        string rmlUiRoot = Path.Combine(root, "native", "rmlui");
+        string manifestPath = Path.Combine(uiNativeRoot, "rmlui-patches.json");
+        string cmake = File.ReadAllText(Path.Combine(uiNativeRoot, "CMakeLists.txt"));
+
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(manifestPath));
+        JsonElement manifest = document.RootElement;
+        Assert.Equal(1, manifest.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal("22b93ae968dab2713a57780408513d8859bb9503", manifest.GetProperty("baseCommit").GetString());
+
+        foreach (JsonElement baseFile in manifest.GetProperty("baseFiles").EnumerateArray())
+        {
+            string relativePath = Assert.IsType<string>(baseFile.GetProperty("path").GetString());
+            string expectedSha256 = Assert.IsType<string>(baseFile.GetProperty("sha256").GetString());
+            string actualSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(Path.Combine(rmlUiRoot, relativePath))))
+                .ToLowerInvariant();
+            Assert.Equal(expectedSha256, actualSha256);
+        }
+
+        foreach (JsonElement patchEntry in manifest.GetProperty("patches").EnumerateArray())
+        {
+            string relativePath = Assert.IsType<string>(patchEntry.GetProperty("path").GetString());
+            string expectedSha256 = Assert.IsType<string>(patchEntry.GetProperty("sha256").GetString());
+            string patchPath = Path.Combine(uiNativeRoot, relativePath);
+            string actualSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(patchPath))).ToLowerInvariant();
+            Assert.Equal(expectedSha256, actualSha256);
+
+            string patch = File.ReadAllText(patchPath);
+            Assert.Contains("GL_DRAW_FRAMEBUFFER_BINDING", patch, StringComparison.Ordinal);
+            Assert.Contains("glstate_backup.draw_framebuffer", patch, StringComparison.Ordinal);
+            Assert.Contains("GL_READ_FRAMEBUFFER_BINDING", patch, StringComparison.Ordinal);
+        }
+
+        Assert.Equal(2, manifest.GetProperty("resultFiles").GetArrayLength());
+
+        string baseRenderer = File.ReadAllText(Path.Combine(rmlUiRoot, "Backends", "RmlUi_Renderer_GL3.cpp"));
+        Assert.DoesNotContain("glstate_backup.draw_framebuffer", baseRenderer, StringComparison.Ordinal);
+        Assert.Contains("file(SHA256", cmake, StringComparison.Ordinal);
+        Assert.Contains("file(COPY_FILE", cmake, StringComparison.Ordinal);
+        Assert.DoesNotContain("configure_file(", cmake, StringComparison.Ordinal);
+        Assert.Contains("GIT_CEILING_DIRECTORIES", cmake, StringComparison.Ordinal);
+        Assert.Contains("apply --no-index --check --whitespace=error-all", cmake, StringComparison.Ordinal);
+        Assert.Contains("RmlUi patched result SHA256 mismatch", cmake, StringComparison.Ordinal);
+        Assert.Contains("PIXELENGINE_RMLUI_BACKEND_OVERLAY_DIR", cmake, StringComparison.Ordinal);
+        Assert.Contains(
+            "${PIXELENGINE_RMLUI_BACKEND_OVERLAY_DIR}/Backends/RmlUi_Renderer_GL3.cpp",
+            cmake,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证 Hosting 用同一个 UI 字符串池连接多 Canvas 注册表、脚本服务和 RmlUi 后端，避免 StringHandle 只能裸整数往返。
     /// </summary>
     [Fact]

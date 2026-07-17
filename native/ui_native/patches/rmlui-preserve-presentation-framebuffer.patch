@@ -1,0 +1,46 @@
+diff --git a/Backends/RmlUi_Renderer_GL3.cpp b/Backends/RmlUi_Renderer_GL3.cpp
+index 53dcf48e..1c85783c 100644
+--- a/Backends/RmlUi_Renderer_GL3.cpp
++++ b/Backends/RmlUi_Renderer_GL3.cpp
+@@ -871,6 +871,8 @@ void RenderInterface_GL3::BeginFrame()
+ 
+ 	glGetIntegerv(GL_VIEWPORT, glstate_backup.viewport);
+ 	glGetIntegerv(GL_SCISSOR_BOX, glstate_backup.scissor);
++	glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, &glstate_backup.draw_framebuffer);
++	glGetIntegerv(GL_READ_FRAMEBUFFER_BINDING, &glstate_backup.read_framebuffer);
+ 
+ 	glGetIntegerv(GL_ACTIVE_TEXTURE, &glstate_backup.active_texture);
+ 
+@@ -953,8 +955,8 @@ void RenderInterface_GL3::EndFrame()
+ 
+ 	glBlitFramebuffer(0, 0, fb_active.width, fb_active.height, 0, 0, fb_postprocess.width, fb_postprocess.height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+ 
+-	// Draw to backbuffer
+-	glBindFramebuffer(GL_FRAMEBUFFER, 0);
++	// Draw to the caller-owned presentation framebuffer. PixelEngine may expose a DXGI-interoperable FBO instead of name 0.
++	glBindFramebuffer(GL_FRAMEBUFFER, glstate_backup.draw_framebuffer);
+ 	glViewport(viewport_offset_x, viewport_offset_y, viewport_width, viewport_height);
+ 
+ 	// Assuming we have an opaque background, we can just write to it with the premultiplied alpha blend mode and we'll get the correct result.
+@@ -1015,6 +1017,8 @@ void RenderInterface_GL3::EndFrame()
+ 	glStencilMaskSeparate(GL_BACK, glstate_backup.stencil_back.writemask);
+ 	glStencilOpSeparate(GL_BACK, glstate_backup.stencil_back.fail, glstate_backup.stencil_back.pass_depth_fail,
+ 		glstate_backup.stencil_back.pass_depth_pass);
++	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, glstate_backup.draw_framebuffer);
++	glBindFramebuffer(GL_READ_FRAMEBUFFER, glstate_backup.read_framebuffer);
+ 
+ 	Gfx::CheckGLError("EndFrame");
+ }
+diff --git a/Backends/RmlUi_Renderer_GL3.h b/Backends/RmlUi_Renderer_GL3.h
+index 2c9d9871..fc52589f 100644
+--- a/Backends/RmlUi_Renderer_GL3.h
++++ b/Backends/RmlUi_Renderer_GL3.h
+@@ -172,6 +172,8 @@ private:
+ 
+ 		int viewport[4];
+ 		int scissor[4];
++		int draw_framebuffer;
++		int read_framebuffer;
+ 
+ 		int active_texture;
+ 

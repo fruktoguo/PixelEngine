@@ -31,6 +31,10 @@ dotnet build PixelEngine.sln -c Release
 git submodule update --init --recursive
 ```
 
+RmlUi 固定在项目 fork 上可直接获取的 base commit；PixelEngine 自有的 framebuffer 集成修复由
+`native/ui_native/rmlui-patches.json` 记录 base 文件与 patch SHA256，并由 CMake 在临时 overlay 中
+校验后应用。不要把 `native/rmlui` 改指向只存在于本机的提交；新增集成改动应更新该清单与受控 patch。
+
 ## 3. 启动 Editor
 
 首次启动或希望明确进入 Project Picker：
@@ -99,4 +103,3 @@ pwsh -NoProfile -File tools/build-player.ps1 `
 R2R 玩家包可在启动时编译随包的 `content/scripts`。NativeAOT 不支持动态代码，外部工程脚本需要独立静态编译链后才能使用；当前不要把 AOT 当作首个自定义工程的默认渠道。
 
 下一步：[完成首个工程](tutorial-first-project.md)。
-
