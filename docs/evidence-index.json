@@ -805,6 +805,19 @@
       "reportPath": "docs/evidence-2026-07-17-auto-001-editor-automation-api.md",
       "sha256": "4bc786c2e4b4fa85b60cb206858bbd5025ca687c65a64f845eb4c53ab59dfc00",
       "notes": "All eight AUTO-001 nodes are complete. The clean Windows Named Pipe release contains Protocol/Schema/Server/.NET Client/CLI/docs/Skill, a 172-capability and 329-UI-command bidirectional matrix, and a 42-process author-play-debug-rerun-modify-build-launch-terminate workflow with 10/10 scopes passed and zero skipped. Independent verification covers 518 checksums; all 171 packaged text records are free of replacement/mojibake output. Runtime physical UI clicking remains tracked by separate UI/editor tasks."
+    },
+    {
+      "entryId": "test-002-behavior-coverage-20260717",
+      "taskIds": ["TEST-002"],
+      "evidenceState": "complete_local_behavior_coverage_gate",
+      "commit": "e95a49c6caa3708620f3ac3eaeeaf40c2d0f6136",
+      "runSessionId": "local-20260717-test002-final-e95a49c6",
+      "runIdentityStatus": "captured_commit_bound_local_run",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8-Core Processor; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; Microsoft.NETCore.App 10.0.8; win-x64",
+      "command": "pwsh -NoProfile -File tools/run-coverage.ps1 -Configuration Release -OutputRoot artifacts/test002-coverage-final-e95a49c6 -SkipBuild -NoRestore -RunId local-20260717-test002-final-e95a49c6; dotnet build PixelEngine.sln Release warnings-as-errors; actionlint v1.7.12; focused CoverageAggregationTests and CoveragePolicyDisciplineTests",
+      "reportPath": "docs/evidence-2026-07-17-test-002-behavior-coverage.md",
+      "sha256": "64ae656befe77520533e562d9b3162db0d1a5dadfa148a3f11c51fb1c80a00dc",
+      "notes": "The full TRX layer records 2036 behavior passed, 47 explicit environment NotExecuted, 241 source-discipline passed and zero failures. Only behavior tests are instrumented; 14 unique Coverlet JSON/Cobertura reports merge by exact line and branch identity into 17 per-src-assembly gates. The policy separately locks percentages and observable denominators, generated sources cannot become coverage, and low Gui/Rendering baselines remain visible instead of being hidden in a solution average. The workflow is actionlint-valid and uploads win-x64 coverage evidence; no new remote CI run or native GPU execution is claimed."
     }
   ]
 }

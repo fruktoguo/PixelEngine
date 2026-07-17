@@ -31,10 +31,11 @@
   - 设计来源：`plan/14-testing-benchmarking.md` §3.11、§4.7；`plan/20-interactive-html-ui.md` §3–§4；`.github/workflows/ci.yml`。
   - 证据：历史实现报告 `docs/evidence-2026-07-10-test-001-native-smoke.md`；普通测试把无环境用例明确记为 NotExecuted；当前 `run-native-smoke.ps1` v2 对四项目、TRX/逐条结果、Desktop GL 与真实 ANGLE identity 全部 fail-closed，普通 hosted CI 与 `.github/workflows/native-gpu-smoke.yml` 专用图形 job 已拆分。冻结候选 SHA 的真实远端 GPU run 不沿用本条历史结论，单独由 `TEST-003` 阻塞管理。
 
-- [~] `TEST-002` 建立 coverage 收集、报告和最低阈值，区分行为测试与源码纪律测试。
+- [x] `TEST-002` 建立 coverage 收集、报告和最低阈值，区分行为测试与源码纪律测试。
   - 优先级：P2。
   - 依赖：`CI-002`。
   - 验收：覆盖率按 src 程序集发布；阈值可审查；不以 166 个源码字符串断言掩盖运行时路径缺口。
+  - 证据：实现 commit `e95a49c6`；稳定报告 `docs/evidence-2026-07-17-test-002-behavior-coverage.md`。正式 run `local-20260717-test002-final-e95a49c6` 在同一 commit 上得到 2036 behavior passed / 47 个显式环境 NotExecuted / 0 failed、241 source-discipline passed / 0 NotExecuted / 0 failed，14 份唯一 Coverlet JSON/Cobertura 精确聚合为 17/17 个 `src` 程序集 line/branch 门禁通过；Solution Release build 0 warning / 0 error，actionlint v1.7.12 与 6 条聚合/CI 负向合同测试通过。
 
 - [!] `TEST-003` 取得冻结候选 SHA 的专用 Windows native GPU smoke 远端全绿证据。阻塞：当前 public personal 仓库没有注册任何具备交互桌面、Desktop GL 3.3+ 与 ANGLE/GLES3 的隔离 runner；standard `windows-latest` 无 WGL，不能冒充 GPU runner。解除条件：注册带 `pixelengine-wgl-angle` / `pixelengine-native-smoke` labels 的可信 Windows x64 runner，合入专用 workflow 后仅对同仓库可信完整 SHA 手工 dispatch，并取得所有发现用例 passed、failed/skipped/not-executed 均为 0 的 artifact。
   - 优先级：P1。
