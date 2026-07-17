@@ -444,18 +444,49 @@ public sealed class EditorShellGameViewContractTests
             backend.PointerButtons);
         GameViewUiInputDiagnostics diagnostics = source.CaptureDiagnostics();
         Assert.True(diagnostics.Attached);
-        Assert.Equal(4, diagnostics.InnerPointerSamples);
-        Assert.Equal(4, diagnostics.MappedPointerSamples);
-        Assert.Equal(2, diagnostics.RawLeftDownSamples);
+        Assert.Equal(2, diagnostics.InnerPointerSamples);
+        Assert.Equal(2, diagnostics.MappedPointerSamples);
+        Assert.Equal(1, diagnostics.RawLeftDownSamples);
         Assert.Equal(1, diagnostics.RawLeftPressEdges);
         Assert.Equal(1, diagnostics.RawLeftReleaseEdges);
-        Assert.Equal(2, diagnostics.ForwardedLeftDownSamples);
+        Assert.Equal(1, diagnostics.ForwardedLeftDownSamples);
         Assert.Equal(1, diagnostics.ForwardedLeftPressEdges);
         Assert.Equal(1, diagnostics.ForwardedLeftReleaseEdges);
         Assert.Equal(new Vector2(280f, 330f), diagnostics.LastWindowPoint);
         Assert.Equal(new Vector2(160f, 90f), diagnostics.LastViewportPoint);
         Assert.True(diagnostics.LastPanelVisible);
         Assert.True(diagnostics.LastMappingSucceeded);
+    }
+
+    /// <summary>
+    /// 验证 Edit 模式仍推进底层物理快照，但不会把旧按钮边沿计入或转发给 Game View。
+    /// </summary>
+    [Fact]
+    public void GameViewUiInputSourceDrainsPlatformPointerOutsideRuntimeMode()
+    {
+        FixedUiInputSource input = new(new UiPointerState(
+            20f,
+            30f,
+            0f,
+            0f,
+            LeftDown: true,
+            RightDown: false,
+            MiddleDown: false));
+        GameViewUiInputSource source = new(
+            input,
+            () => Editor.EditorMode.Edit,
+            () => GameViewViewportSnapshot.Empty,
+            () => Vector2.Zero,
+            () => false,
+            panelVisibleProvider: () => false);
+
+        Assert.False(source.TryGetPointer(out _));
+
+        Assert.Equal(1, input.TryGetPointerCalls);
+        GameViewUiInputDiagnostics diagnostics = source.CaptureDiagnostics();
+        Assert.Equal(0, diagnostics.InnerPointerSamples);
+        Assert.Equal(0, diagnostics.RawLeftPressEdges);
+        Assert.Equal(0, diagnostics.ForwardedLeftPressEdges);
     }
 
     /// <summary>
@@ -1027,6 +1058,8 @@ public sealed class EditorShellGameViewContractTests
 
         public int CaptureDownKeysCalls { get; private set; }
 
+        public int TryGetPointerCalls { get; private set; }
+
         public int CaptureTextCalls { get; private set; }
 
         public int CaptureTextCompositionCalls { get; private set; }
@@ -1037,6 +1070,7 @@ public sealed class EditorShellGameViewContractTests
 
         public bool TryGetPointer(out UiPointerState state)
         {
+            TryGetPointerCalls++;
             state = Pointer;
             return true;
         }

@@ -198,6 +198,12 @@ public static class DemoProgram
 
         // 窗口运行时：标题诊断、帧截图、粒子渲染模式与脚本化探针
         RenderWindow window = engine.AttachWindowRuntime();
+        if (options.PhysicalUiInputProbe)
+        {
+            // 物理探针加载期间不应覆盖共享桌面并截获用户输入；ready 后由 SendInput helper 显示并点击。
+            window.SetVisible(visible: false);
+        }
+
         RegisterWindowTitleDiagnostics(probe, window, engine.Phases);
         FrameCaptureState? frameCapture = RegisterFrameCapture(probe, window, options);
         ParticleRenderProbeResult? particleRenderProbe = ApplyParticleRenderMode(probe, options);
@@ -209,7 +215,10 @@ public static class DemoProgram
         DemoPhysicalUiInputProbe? physicalUiInputProbe = null;
         if (options.PhysicalUiInputProbe)
         {
-            physicalUiInputProbe = new DemoPhysicalUiInputProbe(probe, window);
+            physicalUiInputProbe = new DemoPhysicalUiInputProbe(
+                probe,
+                window,
+                options.PhysicalUiInputReadyFile);
             physicalUiInputProbe.RegisterPhases(engine.Phases);
         }
 
@@ -258,7 +267,8 @@ public static class DemoProgram
             for (; executed < options.WindowTicks &&
                 engine.State != EngineRunState.Shutdown &&
                 !engine.IsShutdownRequested &&
-                !window.IsClosing; executed++)
+                !window.IsClosing &&
+                physicalUiInputProbe?.ShouldComplete != true; executed++)
             {
                 long tickStart = Stopwatch.GetTimestamp();
                 double now = stopwatch.Elapsed.TotalSeconds;

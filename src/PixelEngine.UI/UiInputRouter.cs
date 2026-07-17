@@ -52,13 +52,13 @@ public sealed class UiInputRouter
     /// <returns>当前 UI 输入捕获快照。</returns>
     public UiInputCapture RefreshCapture()
     {
-        if (!_source.TryGetPointer(out UiPointerState pointer))
-        {
-            _hasKeyboardFocus = false;
-            Capture = UiInputCapture.None;
-            return Capture;
-        }
+        return _source.TryGetPointer(out UiPointerState pointer)
+            ? RefreshCapture(in pointer)
+            : ClearCapture();
+    }
 
+    private UiInputCapture RefreshCapture(in UiPointerState pointer)
+    {
         UiHitResult hit = _host.HitTest(pointer.X, pointer.Y);
         UpdateKeyboardFocus(hit, pointer);
         Capture = new UiInputCapture(hit.HitsUi, hit.Opaque, hit.WantsMouse, hit.WantsKeyboard || _hasKeyboardFocus);
@@ -82,8 +82,9 @@ public sealed class UiInputRouter
     /// <returns>当前 UI 输入捕获快照。</returns>
     public UiInputCapture Pump(bool allowPointer, bool allowKeyboard)
     {
+        bool hasPointer = _source.TryGetPointer(out UiPointerState pointer);
         // 阶段 1：指针与滚轮——边沿检测按钮变化，避免每帧重复注入相同按下态。
-        if (allowPointer && _source.TryGetPointer(out UiPointerState pointer))
+        if (allowPointer && hasPointer)
         {
             _host.FeedPointerMove(pointer.X, pointer.Y);
             if (pointer.WheelDeltaX != 0f || pointer.WheelDeltaY != 0f)
@@ -102,16 +103,11 @@ public sealed class UiInputRouter
             FeedButton(UiPointerButton.Middle, isDown: false, ref _middleDown);
         }
 
-        // 阶段 2：命中测试刷新 capture，供上游游戏输入门仲裁。
-        if (allowPointer)
-        {
-            _ = RefreshCapture();
-        }
-        else
-        {
-            _hasKeyboardFocus = false;
-            Capture = UiInputCapture.None;
-        }
+        // 阶段 2：复用同一指针快照刷新 capture。窗口输入源可能正在跨帧重放快速 down/up，
+        // 同帧二次读取会提前消费下一条边沿，导致 release 永远没有进入 UI 后端。
+        _ = allowPointer && hasPointer
+            ? RefreshCapture(in pointer)
+            : ClearCapture();
 
         // 阶段 3：键盘/文本——committed 与 composition 分通道注入；IME 几何回写给平台定位候选窗。
         if (allowKeyboard && Capture.WantCaptureKeyboard)
@@ -153,6 +149,13 @@ public sealed class UiInputRouter
             }
         }
 
+        return Capture;
+    }
+
+    private UiInputCapture ClearCapture()
+    {
+        _hasKeyboardFocus = false;
+        Capture = UiInputCapture.None;
         return Capture;
     }
 

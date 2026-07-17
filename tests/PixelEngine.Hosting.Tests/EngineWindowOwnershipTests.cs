@@ -149,13 +149,15 @@ public sealed class EngineWindowOwnershipTests
     {
         string source = ReadRepositoryFile("src", "PixelEngine.Hosting", "Engine.cs");
 
-        Assert.Contains("IUiInputSource inputSource = new RenderWindowUiInputSource(window);", source, StringComparison.Ordinal);
+        Assert.Contains("RenderWindowUiInputSource platformInputSource = new(window);", source, StringComparison.Ordinal);
+        Assert.Contains("IUiInputSource inputSource = platformInputSource;", source, StringComparison.Ordinal);
         Assert.Contains("IGameUiInputSourceFactory", source, StringComparison.Ordinal);
         Assert.Contains("inputSourceFactory.CreateGameUiInputSource(window, inputSource)", source, StringComparison.Ordinal);
         Assert.Contains("UiInputRouter inputRouter = new(registry, inputSource);", source, StringComparison.Ordinal);
         Assert.Contains("inputRouter.TextCompositionCapabilities.Validate();", source, StringComparison.Ordinal);
         Assert.Contains("Context.RegisterService(inputRouter.TextCompositionCapabilities);", source, StringComparison.Ordinal);
         Assert.Contains("Context.RegisterService(inputRouter);", source, StringComparison.Ordinal);
+        Assert.Contains("_ownedRuntimeResources.Add(platformInputSource);", source, StringComparison.Ordinal);
     }
 
     /// <summary>

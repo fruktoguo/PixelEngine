@@ -147,6 +147,38 @@ function Wait-ForWindow([Diagnostics.Process]$Process, [int]$TimeoutSeconds = 20
   throw "等待窗口超时：pid=$($Process.Id)"
 }
 
+function Wait-ForPhysicalUiReady(
+  [string]$ReadyFile,
+  [Diagnostics.Process]$Process,
+  [int]$TimeoutSeconds = 20
+) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  while ([DateTimeOffset]::UtcNow -lt $deadline) {
+    $Process.Refresh()
+    if ($Process.HasExited) {
+      throw "进程在发布 physical UI ready 前退出：pid=$($Process.Id), exit=$($Process.ExitCode)"
+    }
+
+    if (Test-Path -LiteralPath $ReadyFile -PathType Leaf) {
+      try {
+        $content = [IO.File]::ReadAllText($ReadyFile, $utf8NoBom)
+        if ($content -match '^pixelengine\.physical-ui-ready/v1;hwnd=(?<hwnd>[1-9][0-9]*)$') {
+          return [IntPtr][long]::Parse(
+            $Matches['hwnd'],
+            [Globalization.NumberStyles]::None,
+            [Globalization.CultureInfo]::InvariantCulture)
+        }
+      } catch [IO.IOException] {
+        # 生产进程可能刚创建文件但尚未关闭句柄；继续等完整握手内容。
+      }
+    }
+
+    Start-Sleep -Milliseconds 50
+  }
+
+  throw "等待 physical UI ready 超时：$ReadyFile"
+}
+
 function Complete-CapturedProcess([object]$Run, [int]$TimeoutSeconds) {
   $process = [Diagnostics.Process]$Run.Process
   if (-not $process.WaitForExit($TimeoutSeconds * 1000)) {
@@ -202,19 +234,28 @@ function Invoke-PlayerScenario(
   $scenarioRoot = Join-Path $outputRootFull $Name
   New-Item -ItemType Directory -Path $scenarioRoot -Force | Out-Null
   $capturePath = Join-Path $scenarioRoot 'after-click.bmp'
+  $readyFile = Join-Path $scenarioRoot ("ready-" + [Guid]::NewGuid().ToString('N') + '.flag')
   $run = Start-CapturedProcess `
     $demoPathFull `
-    @('--content', $ContentRoot, '--window-ticks', [string]$PlayerWindowTicks, '--no-hot-reload', '--physical-ui-input-probe', '--capture-frame', $capturePath) `
+    @(
+      '--content', $ContentRoot,
+      '--window-ticks', [string]$PlayerWindowTicks,
+      '--no-hot-reload',
+      '--physical-ui-input-probe',
+      '--physical-ui-input-ready-file', $readyFile,
+      '--capture-frame', $capturePath
+    ) `
     (Split-Path -Parent $demoPathFull) `
     (Join-Path $scenarioRoot 'stdout.log') `
     (Join-Path $scenarioRoot 'stderr.log')
 
   try {
-    $handle = Wait-ForWindow $run.Process
-    Start-Sleep -Seconds 3
+    $handle = Wait-ForPhysicalUiReady $readyFile $run.Process
     $click = Invoke-PhysicalClick $handle $NormalizedX $NormalizedY
+    Write-JsonFile (Join-Path $scenarioRoot 'click.json') $click
     Assert-True $click.Foreground "$Name 未取得前台窗口。"
-    Assert-True ($click.SentInputs -eq 4) "$Name 未提交完整激活/目标点击。"
+    Assert-True ($click.TargetInputs -eq 2) "$Name 未提交完整目标点击。"
+    Assert-True ($click.SentInputs -in @(2, 4)) "$Name 的物理输入数量异常。"
     $stdout = Complete-CapturedProcess $run $ProcessTimeoutSeconds
   }
   catch {
@@ -229,6 +270,8 @@ function Invoke-PlayerScenario(
   Assert-MapValue $backend 'active' $ExpectedBackend $Name
   Assert-MapValue $input 'raw_press_edges' '1' $Name
   Assert-MapValue $input 'raw_release_edges' '1' $Name
+  Assert-MapValue $input 'pointer_pending' '0' $Name
+  Assert-MapValue $input 'pointer_coalesced' '0' $Name
   Assert-MapValue $input 'button_calls' '2' $Name
   Assert-MapValue $input 'button_forwarded' '2' $Name
   Assert-MapValue $input 'drained_events' '1' $Name
@@ -255,6 +298,7 @@ function Invoke-PlayerScenario(
     clientHeight = $click.ClientHeight
     clientX = $click.ClientX
     clientY = $click.ClientY
+    clickEvidence = "$Name/click.json"
     capture = "$Name/after-click.bmp"
     captureSha256 = (Get-FileHash -LiteralPath $capture.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     input = $input
@@ -273,6 +317,78 @@ function Invoke-EditorCli([string]$DiscoveryRoot, [string[]]$Arguments) {
     throw "pixelengine-editor 失败，exit=$exitCode：$text"
   }
   return $text | ConvertFrom-Json
+}
+
+function Get-EditorControllerFields([string]$DiscoveryRoot, [string]$PayloadFile) {
+  $runtime = Invoke-EditorCli $DiscoveryRoot @('call', 'runtime.entities.list', '--payload-file', $PayloadFile)
+  foreach ($entity in $runtime.payload.items) {
+    foreach ($component in $entity.components) {
+      if ([string]::Equals(
+          [string]$component.typeName,
+          'PixelEngine.Demo.GameUiDemoController',
+          [StringComparison]::Ordinal)) {
+        $fields = @{}
+        foreach ($field in $component.fields) {
+          $fields[[string]$field.name] = [string]$field.value
+        }
+        return $fields
+      }
+    }
+  }
+
+  return $null
+}
+
+function Wait-ForEditorUiReady(
+  [string]$DiscoveryRoot,
+  [string]$PayloadFile,
+  [int]$TimeoutSeconds = 20
+) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  $lastFailure = ''
+  while ([DateTimeOffset]::UtcNow -lt $deadline) {
+    try {
+      $fields = Get-EditorControllerFields $DiscoveryRoot $PayloadFile
+      if ($null -ne $fields -and
+          $fields.ContainsKey('MainScreen') -and
+          $fields['MainScreen'].Contains('Value = 1', [StringComparison]::Ordinal)) {
+        return $fields
+      }
+    } catch {
+      $lastFailure = $_.Exception.Message
+    }
+
+    Start-Sleep -Milliseconds 100
+  }
+
+  throw "Editor Game UI ready 超时：$lastFailure"
+}
+
+function Wait-ForEditorCapturedFrames(
+  [string]$DiscoveryRoot,
+  [int]$TimeoutSeconds = 20
+) {
+  $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
+  $verifiedCaptures = 0
+  $lastFailure = ''
+  while ([DateTimeOffset]::UtcNow -lt $deadline) {
+    try {
+      $capture = Invoke-EditorCli $DiscoveryRoot @('call', 'game.capture', '--verify-artifact')
+      if ([bool]$capture.verification.verified -and
+          [long]$capture.artifact.byteLength -gt 1024) {
+        $verifiedCaptures++
+        if ($verifiedCaptures -eq 2) {
+          return $capture
+        }
+      }
+    } catch {
+      $lastFailure = $_.Exception.Message
+    }
+
+    Start-Sleep -Milliseconds 100
+  }
+
+  throw "Editor 未完成两次可验证 Game framebuffer 捕获：count=$verifiedCaptures, failure=$lastFailure"
 }
 
 function Invoke-EditorWrite(
@@ -387,26 +503,20 @@ function Invoke-EditorScenario {
     $play = Invoke-EditorWrite $discoveryRoot 'play.enter' "ui004-$runId-play" $playPayload
     Assert-True ([bool]$play.payload.succeeded) 'Editor 未进入 Play。'
 
-    Start-Sleep -Seconds 3
-    $click = Invoke-PhysicalClick $handle (687.0 / 1280.0) (456.0 / 720.0)
-    Assert-True $click.Foreground 'Editor 未取得前台窗口。'
-    Assert-True ($click.SentInputs -eq 4) 'Editor 未提交完整激活/目标点击。'
-    Start-Sleep -Seconds 1
-
     $pagePayload = Join-Path $scenarioRoot 'runtime-list.json'
     Write-JsonFile $pagePayload ([ordered]@{ schemaVersion = 1; sort = @(); pageSize = 200 })
-    $runtime = Invoke-EditorCli $discoveryRoot @('call', 'runtime.entities.list', '--payload-file', $pagePayload)
-    $controller = $null
-    foreach ($entity in $runtime.payload.items) {
-      foreach ($component in $entity.components) {
-        if ([string]::Equals([string]$component.typeName, 'PixelEngine.Demo.GameUiDemoController', [StringComparison]::Ordinal)) {
-          $controller = $component
-        }
-      }
-    }
-    Assert-True ($null -ne $controller) 'Editor runtime 缺少 GameUiDemoController。'
-    $fields = @{}
-    foreach ($field in $controller.fields) { $fields[[string]$field.name] = [string]$field.value }
+    [void](Wait-ForEditorUiReady $discoveryRoot $pagePayload)
+    [void](Wait-ForEditorCapturedFrames $discoveryRoot)
+    $handle = Wait-ForWindow $run.Process
+    $click = Invoke-PhysicalClick $handle (687.0 / 1280.0) (456.0 / 720.0)
+    Write-JsonFile (Join-Path $scenarioRoot 'click.json') $click
+    Assert-True $click.Foreground 'Editor 未取得前台窗口。'
+    Assert-True ($click.TargetInputs -eq 2) 'Editor 未提交完整目标点击。'
+    Assert-True ($click.SentInputs -in @(2, 4)) 'Editor 的物理输入数量异常。'
+    Start-Sleep -Seconds 1
+
+    $fields = Get-EditorControllerFields $discoveryRoot $pagePayload
+    Assert-True ($null -ne $fields) 'Editor runtime 缺少 GameUiDemoController。'
     Assert-True $fields['ModalScreen'].Contains('Value = 2', [StringComparison]::Ordinal) `
       "Editor 物理点击未打开设置 modal：$($fields['ModalScreen'])"
     Assert-True $fields['LastAction'].Contains('534032007', [StringComparison]::Ordinal) `
@@ -446,6 +556,7 @@ function Invoke-EditorScenario {
     clientHeight = $click.ClientHeight
     clientX = $click.ClientX
     clientY = $click.ClientY
+    clickEvidence = "$name/click.json"
     capture = "$name/after-settings.bmp"
     captureSha256 = (Get-FileHash -LiteralPath $captureDestination -Algorithm SHA256).Hash.ToLowerInvariant()
     input = $input

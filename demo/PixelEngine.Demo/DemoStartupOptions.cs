@@ -146,6 +146,11 @@ public sealed class DemoStartupOptions
     public bool PhysicalUiInputProbe { get; init; }
 
     /// <summary>
+    /// 物理 UI 输入探针确认产品 UI 已挂载后原子创建的 ready 文件；空字符串表示不发布握手。
+    /// </summary>
+    public string PhysicalUiInputReadyFile { get; init; } = string.Empty;
+
+    /// <summary>
     /// 从命令行解析启动参数。
     /// </summary>
     /// <param name="args">命令行参数。</param>
@@ -180,6 +185,7 @@ public sealed class DemoStartupOptions
         string logDirectory = Path.Combine(AppContext.BaseDirectory, "logs");
         string captureFramePath = string.Empty;
         bool physicalUiInputProbe = false;
+        string physicalUiInputReadyFile = string.Empty;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -301,6 +307,10 @@ public sealed class DemoStartupOptions
                 case "--physical-ui-input-probe":
                     physicalUiInputProbe = true;
                     break;
+                case "--physical-ui-input-ready-file":
+                    physicalUiInputReadyFile = Path.GetFullPath(
+                        ReadValue(args, ref i, "--physical-ui-input-ready-file"));
+                    break;
                 default:
                     throw new ArgumentException($"未知 Demo 参数：{args[i]}", nameof(args));
             }
@@ -310,7 +320,11 @@ public sealed class DemoStartupOptions
         ValidateScriptedWindowDemo(headless, windowTicks, scriptedWindowDemo);
         ValidateParticleRenderMode(headless, particleRenderMode);
         ValidateParticleFrameProbe(headless, windowTicks, particleFrameProbe, particleProbeCount, particleProbeRunId);
-        ValidatePhysicalUiInputProbe(headless, windowTicks, physicalUiInputProbe);
+        ValidatePhysicalUiInputProbe(
+            headless,
+            windowTicks,
+            physicalUiInputProbe,
+            physicalUiInputReadyFile);
         return new DemoStartupOptions
         {
             HotReloadEnabled = hotReload,
@@ -336,6 +350,7 @@ public sealed class DemoStartupOptions
             LogDirectory = logDirectory,
             CaptureFramePath = captureFramePath,
             PhysicalUiInputProbe = physicalUiInputProbe,
+            PhysicalUiInputReadyFile = physicalUiInputReadyFile,
         };
     }
 
@@ -401,10 +416,19 @@ public sealed class DemoStartupOptions
             : true;
     }
 
-    private static void ValidatePhysicalUiInputProbe(bool headless, int windowTicks, bool enabled)
+    private static void ValidatePhysicalUiInputProbe(
+        bool headless,
+        int windowTicks,
+        bool enabled,
+        string readyFile)
     {
         _ = enabled && (headless || windowTicks <= 0)
             ? throw new ArgumentException("--physical-ui-input-probe 只能与窗口有限短跑 --window-ticks 一起使用。", nameof(enabled))
+            : true;
+        _ = !string.IsNullOrEmpty(readyFile) && !enabled
+            ? throw new ArgumentException(
+                "--physical-ui-input-ready-file 只能与 --physical-ui-input-probe 一起使用。",
+                nameof(readyFile))
             : true;
     }
 

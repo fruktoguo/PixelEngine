@@ -650,14 +650,23 @@ public sealed class DemoStartupOptionsTests
     [Fact]
     public void PhysicalUiInputProbeRequiresFiniteWindowTicks()
     {
-        DemoStartupOptions options = DemoStartupOptions.Parse(["--window-ticks", "1200", "--physical-ui-input-probe"]);
+        string readyFile = Path.GetFullPath("artifacts/physical-ui-ready.flag");
+        DemoStartupOptions options = DemoStartupOptions.Parse(
+            [
+                "--window-ticks", "1200",
+                "--physical-ui-input-probe",
+                "--physical-ui-input-ready-file", readyFile,
+            ]);
 
         Assert.True(options.PhysicalUiInputProbe);
         Assert.Equal(1200, options.WindowTicks);
+        Assert.Equal(readyFile, options.PhysicalUiInputReadyFile);
         Assert.False(DemoStartupOptions.Parse([]).PhysicalUiInputProbe);
         _ = Assert.Throws<ArgumentException>(() => DemoStartupOptions.Parse(["--physical-ui-input-probe"]));
         _ = Assert.Throws<ArgumentException>(() =>
             DemoStartupOptions.Parse(["--headless", "--physical-ui-input-probe"]));
+        _ = Assert.Throws<ArgumentException>(() =>
+            DemoStartupOptions.Parse(["--physical-ui-input-ready-file", readyFile]));
     }
 
     /// <summary>

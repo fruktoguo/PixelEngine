@@ -939,7 +939,8 @@ public sealed class Engine : IDisposable
         Context.RegisterService(registry);
         SynchronizeLegacyGameUiHostService(registry);
 
-        IUiInputSource inputSource = new RenderWindowUiInputSource(window);
+        RenderWindowUiInputSource platformInputSource = new(window);
+        IUiInputSource inputSource = platformInputSource;
         if (Context.TryGetService(out IGameUiInputSourceFactory inputSourceFactory))
         {
             inputSource = inputSourceFactory.CreateGameUiInputSource(window, inputSource);
@@ -982,12 +983,13 @@ public sealed class Engine : IDisposable
                 : null);
         if (Context.TryGetService(out EngineProbeApi probe))
         {
-            probe.AttachGameUi(registry, in backendSelection, inputRouter, driver);
+            probe.AttachGameUi(registry, in backendSelection, inputRouter, driver, platformInputSource);
         }
 
         Context.RegisterService(driver.GetType(), driver);
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(registry);
+        _ownedRuntimeResources.Add(platformInputSource);
         return registry;
     }
 

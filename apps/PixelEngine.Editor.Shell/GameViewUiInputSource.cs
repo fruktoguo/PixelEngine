@@ -57,13 +57,15 @@ internal sealed class GameViewUiInputSource(
     {
         state = default;
         _lastPanelVisible = _panelVisibleProvider();
-        if (!IsRuntimeInputMode(_modeProvider()) || !_lastPanelVisible)
+        if (!_inner.TryGetPointer(out UiPointerState windowState))
         {
             ObserveForwardedLeft(isDown: false);
             return false;
         }
 
-        if (!_inner.TryGetPointer(out UiPointerState windowState))
+        // 即使当前不是 Play/Paused 或 Game View 不可见，也必须推进底层物理边沿队列，
+        // 防止 Edit 模式的旧点击在之后进入 Play 时被延迟重放。
+        if (!IsRuntimeInputMode(_modeProvider()) || !_lastPanelVisible)
         {
             ObserveForwardedLeft(isDown: false);
             return false;

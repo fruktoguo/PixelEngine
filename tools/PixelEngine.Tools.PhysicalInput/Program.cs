@@ -49,15 +49,28 @@ internal static partial class Program
     {
         _ = ShowWindow(windowHandle, ShowRestore);
         _ = SetForegroundWindow(windowHandle);
+        Thread.Sleep(100);
         if (GetWindowRect(windowHandle, out NativeRect window) == 0)
         {
             throw CreateWin32Exception("无法读取目标窗口矩形。");
         }
 
-        uint sent = ClickScreen((window.Left + window.Right) / 2, window.Top + 10);
-        Thread.Sleep(500);
-        _ = SetForegroundWindow(windowHandle);
         bool foreground = GetForegroundWindow() == windowHandle;
+        uint activationInputs = 0;
+        if (!foreground)
+        {
+            activationInputs = ClickScreen((window.Left + window.Right) / 2, window.Top + 10);
+            Thread.Sleep(100);
+            _ = SetForegroundWindow(windowHandle);
+            Thread.Sleep(100);
+            foreground = GetForegroundWindow() == windowHandle;
+        }
+
+        if (!foreground)
+        {
+            throw new InvalidOperationException("目标窗口无法取得前台焦点。");
+        }
+
         if (GetClientRect(windowHandle, out NativeRect client) == 0)
         {
             throw CreateWin32Exception("无法读取目标窗口客户区。");
@@ -82,7 +95,7 @@ internal static partial class Program
             throw CreateWin32Exception("无法把客户区点击位置映射到屏幕。");
         }
 
-        sent += ClickScreen(point.X, point.Y);
+        uint targetInputs = ClickScreen(point.X, point.Y);
         return new ClickResult(
             width,
             height,
@@ -90,7 +103,9 @@ internal static partial class Program
             clientY,
             point.X,
             point.Y,
-            sent,
+            activationInputs + targetInputs,
+            targetInputs,
+            activationInputs != 0,
             foreground);
     }
 
@@ -101,12 +116,31 @@ internal static partial class Program
             throw CreateWin32Exception("无法移动系统指针。");
         }
 
-        Thread.Sleep(120);
+        Thread.Sleep(50);
         NativeInput down = CreateMouseInput(MouseEventLeftDown);
         NativeInput up = CreateMouseInput(MouseEventLeftUp);
         uint sent = SendInput(1, in down, Marshal.SizeOf<NativeInput>());
-        Thread.Sleep(220);
-        sent += SendInput(1, in up, Marshal.SizeOf<NativeInput>());
+        if (sent != 1)
+        {
+            throw CreateWin32Exception("SendInput 未提交鼠标按下。");
+        }
+
+        uint released;
+        try
+        {
+            Thread.Sleep(80);
+            if (SetCursorPos(x, y) == 0)
+            {
+                throw CreateWin32Exception("无法在释放前恢复目标指针位置。");
+            }
+        }
+        finally
+        {
+            // down 成功后任何异常路径都必须至少尝试 mouse-up，不能把共享桌面留在卡键状态。
+            released = SendInput(1, in up, Marshal.SizeOf<NativeInput>());
+        }
+
+        sent += released;
         return sent == 2
             ? sent
             : throw CreateWin32Exception("SendInput 未完整提交按下/释放。");
@@ -258,7 +292,9 @@ internal static partial class Program
 /// <param name="ClientY">点击客户区 Y。</param>
 /// <param name="ScreenX">点击物理屏幕 X。</param>
 /// <param name="ScreenY">点击物理屏幕 Y。</param>
-/// <param name="SentInputs">提交的鼠标按下/释放 INPUT 数量。</param>
+/// <param name="SentInputs">激活 fallback 与目标点击合计提交的 INPUT 数量。</param>
+/// <param name="TargetInputs">目标客户区点击提交的 INPUT 数量，成功时必须为 2。</param>
+/// <param name="ActivationClickUsed">是否因 SetForegroundWindow 失败而使用了标题栏激活点击。</param>
 /// <param name="Foreground">目标点击前是否已成为前台窗口。</param>
 internal sealed record ClickResult(
     int ClientWidth,
@@ -268,6 +304,8 @@ internal sealed record ClickResult(
     int ScreenX,
     int ScreenY,
     uint SentInputs,
+    uint TargetInputs,
+    bool ActivationClickUsed,
     bool Foreground);
 
 [JsonSerializable(typeof(ClickResult))]

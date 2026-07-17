@@ -6,15 +6,16 @@
       #menu_scrim { position: absolute; left: 0px; top: 0px; width: 1400px; height: 900px; background-color: rgba(2, 5, 9, 166); }
       #main_panel { position: absolute; left: 620px; top: 92px; width: 360px; height: 418px; padding: 24px; background-color: rgba(7, 11, 17, 244); border-width: 1px; border-color: #526276; }
       #panel_accent { position: absolute; left: 0px; top: 0px; width: 5px; height: 466px; background-color: #d39a36; }
-      #menu_kicker { color: #d8a64f; font-size: 12px; }
-      #main_title { color: #f5f7fa; font-size: 30px; margin: 2px 0px; }
-      #main_hint { color: #c9d3df; font-size: 15px; }
+      #menu_kicker, #main_title, #main_hint { position: absolute; left: 24px; margin: 0px; }
+      #menu_kicker { top: 20px; color: #d8a64f; font-size: 12px; }
+      #main_title { top: 42px; color: #f5f7fa; font-size: 30px; }
+      #main_hint { top: 84px; color: #c9d3df; font-size: 15px; }
       #briefing { position: absolute; left: 24px; top: 122px; width: 328px; height: 104px; padding: 12px; background-color: rgba(17, 25, 36, 236); border-width: 1px; border-color: #35465a; }
-      #briefing_title { position: absolute; left: 12px; top: 8px; color: #f1c264; font-size: 13px; }
-      #main_route, #main_goal, #main_hazard { position: absolute; left: 12px; color: #aeb9c7; font-size: 12px; }
-      #main_route { top: 32px; }
-      #main_goal { top: 52px; }
-      #main_hazard { top: 72px; }
+      #briefing_title { position: absolute; left: 36px; top: 130px; color: #f1c264; font-size: 13px; }
+      #main_route, #main_goal, #main_hazard { position: absolute; left: 36px; color: #aeb9c7; font-size: 12px; }
+      #main_route { top: 154px; }
+      #main_goal { top: 174px; }
+      #main_hazard { top: 194px; }
       button { height: 34px; color: #e8edf2; text-align: center; background-color: #20364d; border-width: 1px; border-color: #49637d; }
       button:hover { color: #ffffff; background-color: #315675; border-color: #79a0c5; }
       #start_game { position: absolute; left: 24px; top: 270px; width: 328px; height: 46px; color: #15100a; background-color: #d69a32; border-color: #f0c467; }
@@ -32,12 +33,11 @@
       <p id="menu_kicker">PIXELENGINE · FALLING SAND EXPEDITION</p>
       <p id="main_title">PixelEngine 熔岩矿洞</p>
       <p id="main_hint">横向逃生：左起点到右出口。</p>
-      <div id="briefing">
-        <p id="briefing_title">本次任务</p>
-        <p id="main_route">跳过熔岩坑，拆除路障。</p>
-        <p id="main_goal">出口进度就是到右侧出口的距离。</p>
-        <p id="main_hazard">熔岩只在坑内，接触会受伤。</p>
-      </div>
+      <div id="briefing"></div>
+      <p id="briefing_title">本次任务</p>
+      <p id="main_route">跳过熔岩坑，拆除路障。</p>
+      <p id="main_goal">出口进度就是到右侧出口的距离。</p>
+      <p id="main_hazard">熔岩只在坑内，接触会受伤。</p>
       <button id="start_game" data-event-click="start_game">开始游戏</button>
       <button id="open_settings" data-event-click="open_settings">设置</button>
       <button id="open_inventory" data-event-click="open_inventory">背包</button>

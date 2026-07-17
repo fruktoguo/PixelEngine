@@ -41,6 +41,7 @@ public sealed class UiInputRouterTests
         Assert.Equal("a", backend.Text);
         Assert.Equal(12f, backend.HitX);
         Assert.Equal(34f, backend.HitY);
+        Assert.Equal(1, input.PointerReads);
     }
 
     /// <summary>
@@ -582,6 +583,8 @@ public sealed class UiInputRouterTests
 
         public UiPointerState Pointer { get; set; }
 
+        public int PointerReads { get; private set; }
+
         public UiKey[] DownKeys { get; set; } = [];
 
         public UiKeyModifiers Modifiers { get; set; }
@@ -603,6 +606,7 @@ public sealed class UiInputRouterTests
 
         public bool TryGetPointer(out UiPointerState state)
         {
+            PointerReads++;
             state = Pointer;
             return HasPointer;
         }

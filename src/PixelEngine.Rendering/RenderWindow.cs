@@ -372,6 +372,17 @@ public sealed class RenderWindow : IDisposable
     }
 
     /// <summary>
+    /// 显示或隐藏平台顶层窗口；隐藏不会销毁 GL context 或窗口句柄。
+    /// </summary>
+    /// <param name="visible">true 显示窗口，false 隐藏窗口。</param>
+    public void SetVisible(bool visible)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _window.IsVisible = visible;
+        _window.DoEvents();
+    }
+
+    /// <summary>
     /// 请求关闭窗口。
     /// </summary>
     public void Close()

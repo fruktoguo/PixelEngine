@@ -1,3 +1,5 @@
+using System.Numerics;
+using PixelEngine.Gui;
 using PixelEngine.Rendering;
 using PixelEngine.UI;
 using Silk.NET.Input;
@@ -6,17 +8,26 @@ using SilkMouseButton = Silk.NET.Input.MouseButton;
 
 namespace PixelEngine.Hosting;
 
-internal sealed class RenderWindowUiInputSource : IUiInputSource, IGameUiPresentationInputMapper
+internal sealed class RenderWindowUiInputSource : IUiInputSource, IGameUiPresentationInputMapper, IDisposable
 {
     private const int TextBufferCapacity = 256;
+    private const int PointerTransitionCapacity = 256;
 
     private readonly RenderWindow _window;
     private readonly WindowsImeCompositionReader _imeComposition;
     private readonly char[] _textBuffer = new char[TextBufferCapacity];
+    private readonly UiPointerTransitionQueue _pointerTransitions = new(PointerTransitionCapacity);
+    private readonly IMouse? _primaryMouse;
+    private OrderedPointerPosition _pointerPosition;
     private int _textRead;
     private int _textCount;
     private float _lastWheelX;
     private float _lastWheelY;
+    private float _lastPointerX;
+    private float _lastPointerY;
+    private long _pointerSamples;
+    private long _leftDownSamples;
+    private bool _disposed;
 
     internal RenderWindowUiInputSource(RenderWindow window)
     {
@@ -27,6 +38,17 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource, IGameUiPresent
         {
             _window.Input.Keyboards[i].KeyChar += OnKeyChar;
         }
+
+        if (_window.Input.Mice.Count > 0)
+        {
+            _primaryMouse = _window.Input.Mice[0];
+            _pointerTransitions.Synchronize(CaptureButtonMask(_primaryMouse));
+            _primaryMouse.MouseMove += OnMouseMove;
+            _primaryMouse.MouseDown += OnMouseDown;
+            _primaryMouse.MouseUp += OnMouseUp;
+        }
+
+        _window.FocusChanged += OnFocusChanged;
     }
 
     /// <summary>
@@ -36,32 +58,103 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource, IGameUiPresent
     /// <returns>存在鼠标设备则返回 true。</returns>
     public bool TryGetPointer(out UiPointerState state)
     {
-        if (_window.Input.Mice.Count == 0)
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_primaryMouse is null)
         {
             state = default;
             return false;
         }
 
-        IMouse mouse = _window.Input.Mice[0];
         float wheelX = 0f;
         float wheelY = 0f;
-        if (mouse.ScrollWheels.Count > 0)
+        if (_primaryMouse.ScrollWheels.Count > 0)
         {
-            wheelX = mouse.ScrollWheels[0].X;
-            wheelY = mouse.ScrollWheels[0].Y;
+            wheelX = _primaryMouse.ScrollWheels[0].X;
+            wheelY = _primaryMouse.ScrollWheels[0].Y;
         }
 
-        state = new UiPointerState(
-            mouse.Position.X * _window.FramebufferScaleX,
-            mouse.Position.Y * _window.FramebufferScaleY,
-            wheelX - _lastWheelX,
-            wheelY - _lastWheelY,
-            mouse.IsButtonPressed(SilkMouseButton.Left),
-            mouse.IsButtonPressed(SilkMouseButton.Right),
-            mouse.IsButtonPressed(SilkMouseButton.Middle));
+        float wheelDeltaX = wheelX - _lastWheelX;
+        float wheelDeltaY = wheelY - _lastWheelY;
         _lastWheelX = wheelX;
         _lastWheelY = wheelY;
+        if (_pointerTransitions.TryDequeue(out UiPointerState transition))
+        {
+            state = transition with
+            {
+                WheelDeltaX = wheelDeltaX,
+                WheelDeltaY = wheelDeltaY,
+            };
+        }
+        else
+        {
+            bool leftDown = _primaryMouse.IsButtonPressed(SilkMouseButton.Left);
+            bool rightDown = _primaryMouse.IsButtonPressed(SilkMouseButton.Right);
+            bool middleDown = _primaryMouse.IsButtonPressed(SilkMouseButton.Middle);
+            _pointerTransitions.Synchronize(
+                UiPointerTransitionQueue.CreateButtonMask(leftDown, rightDown, middleDown));
+            state = new UiPointerState(
+                _primaryMouse.Position.X * _window.FramebufferScaleX,
+                _primaryMouse.Position.Y * _window.FramebufferScaleY,
+                wheelDeltaX,
+                wheelDeltaY,
+                leftDown,
+                rightDown,
+                middleDown);
+        }
+
+        _lastPointerX = state.X;
+        _lastPointerY = state.Y;
+        _pointerSamples++;
+        if (state.LeftDown)
+        {
+            _leftDownSamples++;
+        }
+
         return true;
+    }
+
+    /// <summary>
+    /// 解除窗口键盘、鼠标与焦点事件订阅；可重复调用。
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _window.FocusChanged -= OnFocusChanged;
+        for (int i = 0; i < _window.Input.Keyboards.Count; i++)
+        {
+            _window.Input.Keyboards[i].KeyChar -= OnKeyChar;
+        }
+
+        if (_primaryMouse is not null)
+        {
+            _primaryMouse.MouseMove -= OnMouseMove;
+            _primaryMouse.MouseDown -= OnMouseDown;
+            _primaryMouse.MouseUp -= OnMouseUp;
+        }
+
+        _disposed = true;
+    }
+
+    internal PhysicalPointerInputDiagnostics CapturePointerDiagnostics()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return new PhysicalPointerInputDiagnostics(
+            _pointerSamples,
+            _leftDownSamples,
+            _pointerTransitions.LeftPressEdges,
+            _pointerTransitions.LeftReleaseEdges,
+            _pointerTransitions.PendingCount,
+            _pointerTransitions.CoalescedTransitionCount,
+            _lastPointerX,
+            _lastPointerY,
+            _pointerTransitions.LastPressX,
+            _pointerTransitions.LastPressY,
+            _pointerTransitions.LastReleaseX,
+            _pointerTransitions.LastReleaseY);
     }
 
     /// <summary>
@@ -233,6 +326,82 @@ internal sealed class RenderWindowUiInputSource : IUiInputSource, IGameUiPresent
         int write = (_textRead + _textCount) % _textBuffer.Length;
         _textBuffer[write] = character;
         _textCount++;
+    }
+
+    private void OnFocusChanged(bool focused)
+    {
+        if (!focused && _primaryMouse is not null)
+        {
+            Vector2 position = _pointerPosition.ResolveButtonPosition(_primaryMouse.Position);
+            _pointerTransitions.ReleaseAll(
+                position.X * _window.FramebufferScaleX,
+                position.Y * _window.FramebufferScaleY);
+            _pointerPosition.Reset();
+        }
+    }
+
+    private void OnMouseMove(IMouse mouse, Vector2 position)
+    {
+        _ = mouse;
+        _ = _pointerPosition.RecordMove(position);
+    }
+
+    private void OnMouseDown(IMouse mouse, SilkMouseButton button)
+    {
+        if (TryMapPointerButton(button, out UiPointerButton mapped))
+        {
+            Vector2 position = _pointerPosition.ResolveButtonPosition(mouse.Position);
+            _pointerTransitions.Record(
+                mapped,
+                isDown: true,
+                position.X * _window.FramebufferScaleX,
+                position.Y * _window.FramebufferScaleY);
+        }
+    }
+
+    private void OnMouseUp(IMouse mouse, SilkMouseButton button)
+    {
+        if (TryMapPointerButton(button, out UiPointerButton mapped))
+        {
+            Vector2 position = _pointerPosition.ResolveButtonPosition(mouse.Position);
+            _pointerTransitions.Record(
+                mapped,
+                isDown: false,
+                position.X * _window.FramebufferScaleX,
+                position.Y * _window.FramebufferScaleY);
+        }
+    }
+
+    private static int CaptureButtonMask(IMouse mouse)
+    {
+        return UiPointerTransitionQueue.CreateButtonMask(
+            mouse.IsButtonPressed(SilkMouseButton.Left),
+            mouse.IsButtonPressed(SilkMouseButton.Right),
+            mouse.IsButtonPressed(SilkMouseButton.Middle));
+    }
+
+    private static bool TryMapPointerButton(SilkMouseButton source, out UiPointerButton target)
+    {
+        if (source == SilkMouseButton.Left)
+        {
+            target = UiPointerButton.Left;
+            return true;
+        }
+
+        if (source == SilkMouseButton.Right)
+        {
+            target = UiPointerButton.Right;
+            return true;
+        }
+
+        if (source == SilkMouseButton.Middle)
+        {
+            target = UiPointerButton.Middle;
+            return true;
+        }
+
+        target = default;
+        return false;
     }
 
     private static UiKeyModifiers CaptureModifiers(IKeyboard keyboard)

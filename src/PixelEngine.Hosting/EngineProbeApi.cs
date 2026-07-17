@@ -34,6 +34,7 @@ public sealed class EngineProbeApi
     private GameUiBackendSelection? GameUiSelection { get; set; }
     private RuntimeUi.UiInputRouter? GameUiInputRouter { get; set; }
     private GameUiPhaseDriver? GameUiDriver { get; set; }
+    private RenderWindowUiInputSource? PhysicalPointerInput { get; set; }
     private GuiApp? Gui { get; set; }
 
     internal EngineProbeApi(
@@ -163,8 +164,10 @@ public sealed class EngineProbeApi
         GameUiCanvasRegistry registry = GameUiRegistry ?? throw MissingBinding("GameUiCanvasRegistry");
         RuntimeUi.UiInputRouter inputRouter = GameUiInputRouter ?? throw MissingBinding("UiInputRouter");
         GameUiPhaseDriver driver = GameUiDriver ?? throw MissingBinding("GameUiPhaseDriver");
+        RenderWindowUiInputSource pointerInput = PhysicalPointerInput ?? throw MissingBinding("RenderWindowUiInputSource");
         GuiApp gui = Gui ?? throw MissingBinding("GuiApp");
         return new PhysicalUiInputProbeSnapshot(
+            pointerInput.CapturePointerDiagnostics(),
             registry.CaptureInputDiagnostics(),
             inputRouter.Capture,
             gui.Input.Capture,
@@ -390,12 +393,17 @@ public sealed class EngineProbeApi
         GameUiCanvasRegistry registry,
         in GameUiBackendSelection selection,
         RuntimeUi.UiInputRouter inputRouter,
-        GameUiPhaseDriver driver)
+        GameUiPhaseDriver driver,
+        RenderWindowUiInputSource? physicalPointerInput = null)
     {
         GameUiRegistry = registry ?? throw new ArgumentNullException(nameof(registry));
         GameUiSelection = selection;
         GameUiInputRouter = inputRouter ?? throw new ArgumentNullException(nameof(inputRouter));
         GameUiDriver = driver ?? throw new ArgumentNullException(nameof(driver));
+        if (physicalPointerInput is not null)
+        {
+            PhysicalPointerInput = physicalPointerInput;
+        }
     }
 
     internal void AttachGui(GuiApp gui)
@@ -470,14 +478,45 @@ public readonly record struct GameUiProbeSnapshot(
     string? ActiveNativeProfile);
 
 /// <summary>
+/// 物理窗口指针事件源的只读诊断快照。
+/// </summary>
+/// <param name="PointerSamples">UI 相位累计读取的指针快照数。</param>
+/// <param name="LeftDownSamples">累计重放或采样到左键按下的快照数。</param>
+/// <param name="LeftPressEdges">窗口事件泵累计观察到的左键按下边沿数。</param>
+/// <param name="LeftReleaseEdges">窗口事件泵累计观察到的左键释放边沿数。</param>
+/// <param name="PendingTransitions">等待 UI 相位消费的按钮边沿数。</param>
+/// <param name="CoalescedTransitions">固定队列满时合并到最终权威状态的边沿数；正常交互应为 0。</param>
+/// <param name="LastPointerX">最近一次 UI 相位指针 framebuffer X。</param>
+/// <param name="LastPointerY">最近一次 UI 相位指针 framebuffer Y。</param>
+/// <param name="LastPressX">最近一次物理左键按下 framebuffer X。</param>
+/// <param name="LastPressY">最近一次物理左键按下 framebuffer Y。</param>
+/// <param name="LastReleaseX">最近一次物理左键释放 framebuffer X。</param>
+/// <param name="LastReleaseY">最近一次物理左键释放 framebuffer Y。</param>
+public readonly record struct PhysicalPointerInputDiagnostics(
+    long PointerSamples,
+    long LeftDownSamples,
+    long LeftPressEdges,
+    long LeftReleaseEdges,
+    int PendingTransitions,
+    long CoalescedTransitions,
+    float LastPointerX,
+    float LastPointerY,
+    float LastPressX,
+    float LastPressY,
+    float LastReleaseX,
+    float LastReleaseY);
+
+/// <summary>
 /// 物理 UI 输入 probe 的稳定只读快照，不暴露 Hosting 服务实例。
 /// </summary>
+/// <param name="Pointer">物理窗口事件与帧间按钮边沿队列诊断。</param>
 /// <param name="Canvas">多 Canvas 指针目标与按钮转发诊断。</param>
 /// <param name="Capture">Game UI 当前输入 capture。</param>
 /// <param name="GuiCapture">shared/runtime Gui 当前输入 capture。</param>
 /// <param name="GuiButtons">shared/runtime Gui 按钮诊断。</param>
 /// <param name="TotalDrainedEventCount">Game UI 累计 drain 事件数。</param>
 public readonly record struct PhysicalUiInputProbeSnapshot(
+    PhysicalPointerInputDiagnostics Pointer,
     GameUiCanvasInputDiagnostics Canvas,
     RuntimeUi.UiInputCapture Capture,
     GuiInputSnapshot GuiCapture,

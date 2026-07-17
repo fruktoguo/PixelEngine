@@ -1,7 +1,6 @@
 using PixelEngine.Gui;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
-using Silk.NET.Input;
 
 namespace PixelEngine.Demo;
 
@@ -10,17 +9,29 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class DemoPhysicalUiInputProbe : IEnginePhaseDriver
 {
+    private const long StabilizationFramesAfterAction = 30;
     private readonly EngineProbeApi _probe;
     private readonly RenderWindow _window;
     private readonly long _initialDrainedEvents;
-    private bool _previousLeftDown;
+    private readonly PhysicalPointerInputDiagnostics _initialPointer;
+    private readonly string _readyFilePath;
+    private bool _readyFilePublished;
+    private long _actionObservedFrame = -1;
 
-    public DemoPhysicalUiInputProbe(EngineProbeApi probe, RenderWindow window)
+    public DemoPhysicalUiInputProbe(
+        EngineProbeApi probe,
+        RenderWindow window,
+        string readyFilePath = "")
     {
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
         _window = window ?? throw new ArgumentNullException(nameof(window));
+        _readyFilePath = string.IsNullOrWhiteSpace(readyFilePath)
+            ? string.Empty
+            : Path.GetFullPath(readyFilePath);
         _probe.EnablePhysicalUiInputDiagnostics();
-        _initialDrainedEvents = _probe.CapturePhysicalUiInput().TotalDrainedEventCount;
+        PhysicalUiInputProbeSnapshot initial = _probe.CapturePhysicalUiInput();
+        _initialDrainedEvents = initial.TotalDrainedEventCount;
+        _initialPointer = initial.Pointer;
     }
 
     public long FramesObserved { get; private set; }
@@ -37,9 +48,28 @@ internal sealed class DemoPhysicalUiInputProbe : IEnginePhaseDriver
 
     public long GameUiMouseCaptureFrames { get; private set; }
 
+    public bool ShouldComplete =>
+        ShouldStopAfterAction(FramesObserved, _actionObservedFrame);
+
     public float LastFramebufferX { get; private set; }
 
     public float LastFramebufferY { get; private set; }
+
+    public float FirstPressFramebufferX { get; private set; }
+
+    public float FirstPressFramebufferY { get; private set; }
+
+    public float LastPressFramebufferX { get; private set; }
+
+    public float LastPressFramebufferY { get; private set; }
+
+    public float FirstReleaseFramebufferX { get; private set; }
+
+    public float FirstReleaseFramebufferY { get; private set; }
+
+    public float LastReleaseFramebufferX { get; private set; }
+
+    public float LastReleaseFramebufferY { get; private set; }
 
     public void RegisterPhases(EnginePhasePipeline phases)
     {
@@ -68,6 +98,13 @@ internal sealed class DemoPhysicalUiInputProbe : IEnginePhaseDriver
             $"frames={FramesObserved}, raw_pointer_frames={RawPointerFrames}, " +
             $"raw_left_down_frames={RawLeftDownFrames}, raw_press_edges={RawLeftPressEdges}, " +
             $"raw_release_edges={RawLeftReleaseEdges}, " +
+            $"pointer_pending={input.Pointer.PendingTransitions}, " +
+            $"pointer_coalesced={input.Pointer.CoalescedTransitions - _initialPointer.CoalescedTransitions}, " +
+            $"first_press={FirstPressFramebufferX:0.###}:{FirstPressFramebufferY:0.###}, " +
+            $"last_press={LastPressFramebufferX:0.###}:{LastPressFramebufferY:0.###}, " +
+            $"first_release={FirstReleaseFramebufferX:0.###}:{FirstReleaseFramebufferY:0.###}, " +
+            $"last_release={LastReleaseFramebufferX:0.###}:{LastReleaseFramebufferY:0.###}, " +
+            $"action_observed_frame={_actionObservedFrame}, " +
             $"runtime_gui_mouse_capture_frames={RuntimeGuiMouseCaptureFrames}, " +
             $"game_ui_mouse_capture_frames={GameUiMouseCaptureFrames}, " +
             $"last_pointer={LastFramebufferX:0.###}:{LastFramebufferY:0.###}, " +
@@ -96,34 +133,41 @@ internal sealed class DemoPhysicalUiInputProbe : IEnginePhaseDriver
     {
         _ = context;
         FramesObserved++;
-        if (_window.Input.Mice.Count > 0)
+        PhysicalUiInputProbeSnapshot input = _probe.CapturePhysicalUiInput();
+        PhysicalPointerInputDiagnostics pointer = input.Pointer;
+        RawPointerFrames = Math.Max(0, pointer.PointerSamples - _initialPointer.PointerSamples);
+        RawLeftDownFrames = Math.Max(0, pointer.LeftDownSamples - _initialPointer.LeftDownSamples);
+        RawLeftPressEdges = Math.Max(0, pointer.LeftPressEdges - _initialPointer.LeftPressEdges);
+        RawLeftReleaseEdges = Math.Max(0, pointer.LeftReleaseEdges - _initialPointer.LeftReleaseEdges);
+        LastFramebufferX = pointer.LastPointerX;
+        LastFramebufferY = pointer.LastPointerY;
+        if (RawLeftPressEdges > 0)
         {
-            IMouse mouse = _window.Input.Mice[0];
-            RawPointerFrames++;
-            LastFramebufferX = mouse.Position.X * _window.FramebufferScaleX;
-            LastFramebufferY = mouse.Position.Y * _window.FramebufferScaleY;
-            bool leftDown = mouse.IsButtonPressed(MouseButton.Left);
-            if (leftDown)
-            {
-                RawLeftDownFrames++;
-            }
-
-            if (leftDown != _previousLeftDown)
-            {
-                if (leftDown)
-                {
-                    RawLeftPressEdges++;
-                }
-                else
-                {
-                    RawLeftReleaseEdges++;
-                }
-
-                _previousLeftDown = leftDown;
-            }
+            FirstPressFramebufferX = pointer.LastPressX;
+            FirstPressFramebufferY = pointer.LastPressY;
+            LastPressFramebufferX = pointer.LastPressX;
+            LastPressFramebufferY = pointer.LastPressY;
         }
 
-        PhysicalUiInputProbeSnapshot input = _probe.CapturePhysicalUiInput();
+        if (RawLeftReleaseEdges > 0)
+        {
+            FirstReleaseFramebufferX = pointer.LastReleaseX;
+            FirstReleaseFramebufferY = pointer.LastReleaseY;
+            LastReleaseFramebufferX = pointer.LastReleaseX;
+            LastReleaseFramebufferY = pointer.LastReleaseY;
+        }
+
+        bool controllerAvailable = TryGetController(out GameUiDemoController? controller) &&
+            controller is not null;
+        if (!_readyFilePublished &&
+            controllerAvailable &&
+            !controller!.Faulted &&
+            controller.MainScreen.Value != 0 &&
+            _probe.CaptureGameUi().IsAttached)
+        {
+            PublishReadyFile();
+        }
+
         if (input.GuiCapture.WantCaptureMouse)
         {
             RuntimeGuiMouseCaptureFrames++;
@@ -133,6 +177,53 @@ internal sealed class DemoPhysicalUiInputProbe : IEnginePhaseDriver
         {
             GameUiMouseCaptureFrames++;
         }
+
+        if (_actionObservedFrame < 0 &&
+            RawLeftReleaseEdges > 0 &&
+            input.TotalDrainedEventCount > _initialDrainedEvents &&
+            controllerAvailable &&
+            controller!.LastAction.Value != 0)
+        {
+            _actionObservedFrame = FramesObserved;
+        }
+    }
+
+    internal static bool ShouldStopAfterAction(long framesObserved, long actionObservedFrame)
+    {
+        return actionObservedFrame >= 0 &&
+            framesObserved >= actionObservedFrame &&
+            framesObserved - actionObservedFrame >= StabilizationFramesAfterAction;
+    }
+
+    private bool TryGetController(out GameUiDemoController? controller)
+    {
+        controller = null;
+        return _probe.TryGetScriptScene(out PixelEngine.Scripting.Scene? scene) &&
+            scene is not null &&
+            scene.TryGetFirstComponent(out controller);
+    }
+
+    private void PublishReadyFile()
+    {
+        if (!string.IsNullOrEmpty(_readyFilePath))
+        {
+            if (!_window.TryGetWin32WindowHandle(out IntPtr windowHandle) || windowHandle == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("物理 UI ready 握手无法取得 Player HWND。");
+            }
+
+            using FileStream readyFile = new(
+                _readyFilePath,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None);
+            string payload = FormattableString.Invariant(
+                $"pixelengine.physical-ui-ready/v1;hwnd={windowHandle.ToInt64()}");
+            readyFile.Write(System.Text.Encoding.UTF8.GetBytes(payload));
+            readyFile.Flush(flushToDisk: true);
+        }
+
+        _readyFilePublished = true;
     }
 
     private static string Normalize(string value)

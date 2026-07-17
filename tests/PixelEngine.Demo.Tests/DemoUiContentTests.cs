@@ -323,6 +323,33 @@ public sealed class DemoUiContentTests
         Assert.Contains("settings.audio", modelPaths);
         Assert.DoesNotContain("音效", settingsText);
         Assert.DoesNotContain("占位", settingsText);
+
+        XElement settingsRoot = document.Root ?? throw new InvalidDataException("settings.xhtml 缺少根元素。");
+        XDocument mainDocument = XDocument.Load(
+            manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath);
+        XElement mainRoot = mainDocument.Root ?? throw new InvalidDataException("main-menu.xhtml 缺少根元素。");
+        float settingsRight = ReadInlinePixelStyle(settingsRoot, "left") +
+            ReadInlinePixelStyle(settingsRoot, "width");
+        float mainLeft = ReadInlinePixelStyle(mainRoot, "left");
+        Assert.Equal(32f, mainLeft - settingsRight);
+
+        string styleSheet = string.Concat(document.Descendants("style").Select(static style => style.Value));
+        string mainStyleSheet = string.Concat(mainDocument.Descendants("style").Select(static style => style.Value));
+        Assert.Contains("#settings_title { position: absolute", styleSheet, StringComparison.Ordinal);
+        Assert.Contains("#settings_audio_hint { top: 62px; }", styleSheet, StringComparison.Ordinal);
+        Assert.Contains("#settings_vsync { top: 132px; }", styleSheet, StringComparison.Ordinal);
+        Assert.Contains("#settings_audio { top: 178px; }", styleSheet, StringComparison.Ordinal);
+        Assert.Contains(
+            "#menu_kicker, #main_title, #main_hint { position: absolute",
+            mainStyleSheet,
+            StringComparison.Ordinal);
+        Assert.Contains("#menu_kicker { top: 20px;", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_title { top: 42px;", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_hint { top: 84px;", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#briefing_title { position: absolute; left: 36px; top: 130px;", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_route { top: 154px; }", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_goal { top: 174px; }", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_hazard { top: 194px; }", mainStyleSheet, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -390,8 +417,8 @@ public sealed class DemoUiContentTests
     {
         // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
-        UiManifestScreen mainMenu = manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen);
-        string xhtml = File.ReadAllText(mainMenu.FullPath);
+        UiManifestScreen dialog = manifest.GetRequiredScreen(GameUiDemoController.DialogScreen);
+        string xhtml = File.ReadAllText(dialog.FullPath);
         // Assert：验证预期结果
         Assert.Contains("p { margin: 4px 0px; }", xhtml, StringComparison.Ordinal);
 
@@ -400,11 +427,11 @@ public sealed class DemoUiContentTests
         using GameUiHost host = new(backend);
         host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 720, 480, 1f), UiBackendKind.ManagedFallback));
 
-        _ = host.ShowScreen(mainMenu.ScreenId, manifest.ResolveDocumentSource(GameUiDemoController.MainMenuScreen));
+        _ = host.ShowScreen(dialog.ScreenId, manifest.ResolveDocumentSource(GameUiDemoController.DialogScreen));
         host.Composite(default);
 
-        Assert.Contains("PixelEngine 熔岩矿洞", gui.Context.Texts);
-        Assert.Contains("开始游戏", gui.Context.Buttons);
+        Assert.Contains("矿工通讯", gui.Context.Texts);
+        Assert.Contains("继续", gui.Context.Buttons);
         Assert.Contains(4f, gui.Context.VerticalSpacings);
     }
 
@@ -2068,6 +2095,36 @@ public sealed class DemoUiContentTests
             ? element.Value
             : string.Empty;
         return attributes + value;
+    }
+
+    private static float ReadInlinePixelStyle(XElement element, string property)
+    {
+        string style = (string?)element.Attribute("style") ?? string.Empty;
+        foreach (string declaration in style.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int separator = declaration.IndexOf(':');
+            if (separator <= 0 ||
+                !string.Equals(declaration[..separator].Trim(), property, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string value = declaration[(separator + 1)..].Trim();
+            if (value.EndsWith("px", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value[..^2].Trim();
+            }
+
+            return float.TryParse(
+                value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out float parsed)
+                ? parsed
+                : throw new InvalidDataException($"{property} 不是有效 px 数值：{value}");
+        }
+
+        throw new InvalidDataException($"元素缺少 inline style：{property}");
     }
 
     private static string DemoUiRoot()

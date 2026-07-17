@@ -845,6 +845,11 @@ foreach ($scenario in @($ui004PhysicalInputReport.scenarios)) {
       [string]$input.drained_events -ne '1') {
     throw "UI-004 物理输入 probe 未形成唯一按下/释放/动作事件：$scenarioName"
   }
+  if ($scenarioName.StartsWith('player-', [StringComparison]::Ordinal) -and
+      ([string]$input.pointer_pending -ne '0' -or
+       [string]$input.pointer_coalesced -ne '0')) {
+    throw "UI-004 Player 物理按钮边沿队列未完整、无损 drain：$scenarioName"
+  }
 
   $scenarioStdout = Resolve-ContainedPath $ui004PhysicalInputReportRoot "$scenarioName/stdout.log" "UI-004 $scenarioName stdout"
   $scenarioStderr = Resolve-ContainedPath $ui004PhysicalInputReportRoot "$scenarioName/stderr.log" "UI-004 $scenarioName stderr"

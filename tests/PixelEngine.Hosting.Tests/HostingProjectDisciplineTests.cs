@@ -817,6 +817,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("pixelengine.ui004-physical-input/v1", verifier, StringComparison.Ordinal);
         Assert.Contains("win32-sendinput", verifier, StringComparison.Ordinal);
         Assert.Contains("captureSha256", verifier, StringComparison.Ordinal);
+        Assert.Contains("--physical-ui-input-ready-file", physicalProbe, StringComparison.Ordinal);
+        Assert.Contains("Wait-ForPhysicalUiReady", physicalProbe, StringComparison.Ordinal);
         Assert.DoesNotContain("DllImport", physicalProbe, StringComparison.Ordinal);
         Assert.Contains("LibraryImport(\"user32.dll\"", physicalHelper, StringComparison.Ordinal);
         Assert.Contains("SetProcessDpiAwarenessContext", physicalHelper, StringComparison.Ordinal);
@@ -3340,6 +3342,8 @@ public sealed class HostingProjectDisciplineTests
                 {
                     raw_press_edges = "1",
                     raw_release_edges = "1",
+                    pointer_pending = "0",
+                    pointer_coalesced = "0",
                     button_calls = "2",
                     button_forwarded = "2",
                     drained_events = "1",
@@ -3362,6 +3366,8 @@ public sealed class HostingProjectDisciplineTests
                 {
                     raw_press_edges = "1",
                     raw_release_edges = "1",
+                    pointer_pending = "0",
+                    pointer_coalesced = "0",
                     button_calls = "2",
                     button_forwarded = "2",
                     drained_events = "1",
