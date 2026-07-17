@@ -258,8 +258,8 @@ public sealed class EditorAppTests
     {
         RecordingBackend backend = new();
         using EditorApp app = new(backend, new EditorAppOptions());
-        RecordingPanel source = new() { Visible = false };
-        RecordingPanel target = new() { Visible = true };
+        RecordingPanel source = new() { Title = "来源", DockWindowId = "SourceCanonical", Visible = false };
+        RecordingPanel target = new() { Title = "目标", DockWindowId = "TargetCanonical", Visible = true };
         app.AddPanel("editor.panel.source", source);
         app.AddPanel("editor.panel.target", target);
         app.Initialize();
@@ -282,7 +282,27 @@ public sealed class EditorAppTests
         Assert.True(source.Visible);
         Assert.Contains("CaptureDockLayout", backend.Events);
         Assert.Contains($"ApplyDockLayout:{layout.Length}", backend.Events);
-        Assert.Contains($"Dock:{source.Title}:{target.Title}:Tab", backend.Events);
+        Assert.Contains("Dock:###SourceCanonical:###TargetCanonical:Tab", backend.Events);
+    }
+
+    /// <summary>本地化显示标题不得导致 panel 快照丢失真实 dock node。</summary>
+    [Fact]
+    public void PanelSnapshotUsesPersistentDockWindowIdInsteadOfVisibleTitle()
+    {
+        RecordingBackend backend = new();
+        backend.DockWindows.Add("###Scene", new EditorDockWindowState(true, 42, 10f, 20f, 640f, 360f));
+        using EditorApp app = new(backend, new EditorAppOptions());
+        app.AddPanel(
+            "editor.panel.scene",
+            new RecordingPanel { Title = "场景", DockWindowId = "Scene", Visible = true });
+        app.Initialize();
+
+        EditorPanelSnapshot snapshot = Assert.Single(app.CapturePanels());
+
+        Assert.True(snapshot.DockStateKnown);
+        Assert.True(snapshot.Docked);
+        Assert.Equal(10f, snapshot.X);
+        Assert.Contains("CaptureDockWindow:###Scene", backend.Events);
     }
 
     /// <summary>
@@ -502,7 +522,9 @@ public sealed class EditorAppTests
 
     private sealed class RecordingPanel : IEditorPanel
     {
-        public string Title => "录制面板";
+        public string Title { get; init; } = "录制面板";
+
+        public string DockWindowId { get; init; } = "录制面板";
 
         public bool Visible { get; set; } = true;
 
@@ -536,6 +558,8 @@ public sealed class EditorAppTests
         public static RecordingBackend? Current;
 
         public List<string> Events { get; } = [];
+
+        public Dictionary<string, EditorDockWindowState> DockWindows { get; } = new(StringComparer.Ordinal);
 
         public int InitializeCount { get; private set; }
 
@@ -589,8 +613,8 @@ public sealed class EditorAppTests
 
         public EditorDockWindowState CaptureDockWindow(string windowTitle)
         {
-            _ = windowTitle;
-            return default;
+            Events.Add($"CaptureDockWindow:{windowTitle}");
+            return DockWindows.TryGetValue(windowTitle, out EditorDockWindowState state) ? state : default;
         }
 
         public bool TrySetDockWindow(EditorDockWindowRequest request, out string diagnostic)

@@ -371,21 +371,23 @@ internal sealed class EditorConsolePanel : IEditorPanel
     }
 
     [EditorUiControlPrimitive]
-    private static void DrawToolbarToggle(string label, string tooltip, ref bool value)
+    internal static void DrawToolbarToggle(string label, string tooltip, ref bool value)
     {
-        if (value)
+        bool selected = value;
+        if (selected)
         {
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.24f, 0.42f, 0.60f, 1f));
         }
 
-        if (ImGui.Button(label))
-        {
-            value = !value;
-        }
-
-        if (value)
+        bool clicked = ImGui.Button(label);
+        if (selected)
         {
             ImGui.PopStyleColor();
+        }
+
+        if (clicked)
+        {
+            value = !value;
         }
 
         if (ImGui.IsItemHovered())
@@ -395,23 +397,25 @@ internal sealed class EditorConsolePanel : IEditorPanel
     }
 
     [EditorUiControlPrimitive]
-    private static void DrawSeverityToggle(string tooltip, int count, ref bool value, Vector4 color)
+    internal static void DrawSeverityToggle(string tooltip, int count, ref bool value, Vector4 color)
     {
-        if (value)
+        bool selected = value;
+        if (selected)
         {
             ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(color.X * 0.28f, color.Y * 0.28f, color.Z * 0.28f, 1f));
         }
 
-        ImGui.PushStyleColor(ImGuiCol.Text, value ? color : new Vector4(color.X, color.Y, color.Z, 0.38f));
-        if (ImGui.Button($"{count.ToString(CultureInfo.InvariantCulture)}##console-{tooltip}"))
-        {
-            value = !value;
-        }
-
+        ImGui.PushStyleColor(ImGuiCol.Text, selected ? color : new Vector4(color.X, color.Y, color.Z, 0.38f));
+        bool clicked = ImGui.Button($"{count.ToString(CultureInfo.InvariantCulture)}##console-{tooltip}");
         ImGui.PopStyleColor();
-        if (value)
+        if (selected)
         {
             ImGui.PopStyleColor();
+        }
+
+        if (clicked)
+        {
+            value = !value;
         }
 
         if (ImGui.IsItemHovered())

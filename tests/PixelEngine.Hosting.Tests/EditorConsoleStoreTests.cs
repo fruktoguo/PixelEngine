@@ -1,7 +1,9 @@
+using Hexa.NET.ImGui;
 using PixelEngine.Editor.Shell;
 using PixelEngine.Editor.Shell.Build;
 using PixelEngine.Scripting;
 using PixelEngine.UI;
+using System.Numerics;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -12,6 +14,40 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class EditorConsoleStoreTests
 {
+    /// <summary>Console toggle 在点击改变状态时必须保持 ImGui style color 栈严格平衡。</summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void ConsoleToggleClickBalancesStyleColorStack(bool severity, bool initiallySelected)
+    {
+        ImGuiContextPtr context = ImGui.CreateContext();
+        try
+        {
+            ImGui.SetCurrentContext(context);
+            ImGuiIOPtr io = ImGui.GetIO();
+            io.DisplaySize = new Vector2(640f, 360f);
+            io.DeltaTime = 1f / 60f;
+            io.BackendFlags |= ImGuiBackendFlags.RendererHasTextures;
+            bool value = initiallySelected;
+
+            Vector2 clickPosition = DrawConsoleToggleFrame(severity, ref value);
+            ImGui.AddMousePosEvent(io, clickPosition.X, clickPosition.Y);
+            _ = DrawConsoleToggleFrame(severity, ref value);
+            ImGui.AddMouseButtonEvent(io, (int)ImGuiMouseButton.Left, true);
+            ImGui.AddMouseButtonEvent(io, (int)ImGuiMouseButton.Left, false);
+            _ = DrawConsoleToggleFrame(severity, ref value);
+            _ = DrawConsoleToggleFrame(severity, ref value);
+
+            Assert.Equal(!initiallySelected, value);
+        }
+        finally
+        {
+            ImGui.DestroyContext(context);
+        }
+    }
+
     /// <summary>
     /// 验证 Console snapshot 可按类别、严重度、来源、文本与时间窗过滤。
     /// </summary>
@@ -42,6 +78,28 @@ public sealed class EditorConsoleStoreTests
         Assert.Equal("asset-opener", entry.Source);
         Assert.Contains("missing script", entry.Text, StringComparison.Ordinal);
         Assert.Empty(store.Snapshot(new EditorConsoleFilter { Severity = EditorConsoleSeverity.Info, TextContains = "missing" }));
+    }
+
+    private static Vector2 DrawConsoleToggleFrame(bool severity, ref bool value)
+    {
+        ImGui.NewFrame();
+        ImGui.SetNextWindowPos(Vector2.Zero);
+        ImGui.SetNextWindowSize(new Vector2(640f, 360f));
+        _ = ImGui.Begin("Console toggle test", ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoMove);
+        ImGui.SetCursorPos(new Vector2(20f, 20f));
+        if (severity)
+        {
+            EditorConsolePanel.DrawSeverityToggle("Warning", 7, ref value, new Vector4(1f, 0.8f, 0.2f, 1f));
+        }
+        else
+        {
+            EditorConsolePanel.DrawToolbarToggle("Collapse", "Collapse repeated entries", ref value);
+        }
+
+        Vector2 center = (ImGui.GetItemRectMin() + ImGui.GetItemRectMax()) * 0.5f;
+        ImGui.End();
+        ImGui.EndFrame();
+        return center;
     }
 
     /// <summary>

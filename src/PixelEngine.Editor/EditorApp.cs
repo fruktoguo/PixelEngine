@@ -151,7 +151,7 @@ public sealed class EditorApp : IDisposable
             {
                 if (_panels[i] is not IEditorChromePanel)
                 {
-                    dockStates[i] = _controller.CaptureDockWindow(_panels[i].Title);
+                    dockStates[i] = _controller.CaptureDockWindow(ResolveDockWindowTitle(_panels[i]));
                 }
             }
         }
@@ -250,8 +250,8 @@ public sealed class EditorApp : IDisposable
         _panels[sourceIndex].Visible = true;
         EditorDockWindowRequest resolved = request with
         {
-            WindowTitle = _panels[sourceIndex].Title,
-            TargetWindowTitle = targetIndex >= 0 ? _panels[targetIndex].Title : null,
+            WindowTitle = ResolveDockWindowTitle(_panels[sourceIndex]),
+            TargetWindowTitle = targetIndex >= 0 ? ResolveDockWindowTitle(_panels[targetIndex]) : null,
         };
         return _controller.TrySetDockWindow(resolved, out diagnostic);
     }
@@ -661,6 +661,11 @@ public sealed class EditorApp : IDisposable
         }
 
         return -1;
+    }
+
+    private static string ResolveDockWindowTitle(IEditorPanel panel)
+    {
+        return EditorDockSpace.CreatePersistentWindowTitle(string.Empty, panel.DockWindowId);
     }
 
     private Dictionary<uint, string> CreateDockGroupIds(EditorDockWindowState[] states)

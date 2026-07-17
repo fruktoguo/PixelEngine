@@ -11,6 +11,14 @@ public interface IEditorPanel
     string Title { get; }
 
     /// <summary>
+    /// ImGui persistent dock tree 使用的 canonical window ID，不包含可见标题或 <c>###</c> 前缀。
+    /// </summary>
+    /// <remarks>
+    /// 默认与 <see cref="Title" /> 相同。本地化面板应保持该值跨语言稳定；临时最大化窗口不得替代原停靠 ID。
+    /// </remarks>
+    string DockWindowId => Title;
+
+    /// <summary>
     /// 面板是否可见。
     /// </summary>
     bool Visible { get; set; }

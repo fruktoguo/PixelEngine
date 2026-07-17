@@ -15,6 +15,7 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
     private readonly GuiFontManager _fontManager = new();
     private readonly GuiClipboardBridge _clipboard = new();
     private readonly ImGuiMouseReleaseScheduler _mouseReleaseScheduler = new();
+    private readonly ImGuiStyleScaleState _styleScale = new();
     private ImGuiContextPtr _context;
     private string _layoutPath = string.Empty;
     private ImGuiFrameMetrics _frameMetrics = ImGuiFrameMetrics.Create(1, 1, 1f, 1f);
@@ -66,17 +67,14 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         }
 
         GuiTheme.ApplyCurrent(options.Theme);
+        _styleScale.CaptureCurrent();
         _primaryFontPath = GuiFontManager.ResolvePrimaryFontFile(options.PrimaryFontPath);
         _cjkFallbackFontPath = _fontManager.ResolveCjkFontPath(options.CjkFallbackFontPath);
         _fontSizePixels = options.FontSizePixels;
         _fontAtlasScale = NormalizeScale(options.DpiScale);
         RebuildConfiguredFont(io, _fontAtlasScale);
         _appliedUiScale = _fontAtlasScale;
-        if (MathF.Abs(_appliedUiScale - 1f) > 0.0001f)
-        {
-            ImGui.GetStyle().ScaleAllSizes(_appliedUiScale);
-        }
-
+        _styleScale.Apply(_appliedUiScale);
         ImGui.GetStyle().FontScaleMain = 1f;
         if (File.Exists(_layoutPath))
         {
@@ -94,10 +92,9 @@ public sealed class HexaImGuiBackend(RenderWindow window) : IGuiImGuiBackend
         ThrowIfNotInitialized();
         SetCurrentContext();
         float normalized = NormalizeScale(scale);
-        float ratio = normalized / _appliedUiScale;
-        if (MathF.Abs(ratio - 1f) > 0.0001f)
+        if (MathF.Abs(normalized - _appliedUiScale) > 0.0001f)
         {
-            ImGui.GetStyle().ScaleAllSizes(ratio);
+            _styleScale.Apply(normalized);
             _appliedUiScale = normalized;
         }
 

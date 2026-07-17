@@ -54,13 +54,14 @@ internal static class EditorUiScale
 /// </summary>
 internal sealed class EditorUiScaleContextState
 {
+    private readonly ImGuiStyleScaleState _styleScale = new();
     private bool _initialized;
 
-    public float AppliedScale { get; private set; } = EditorUiScale.Default;
+    public float AppliedScale => _styleScale.AppliedScale;
 
     public void Reset()
     {
-        AppliedScale = EditorUiScale.Default;
+        _styleScale.Reset();
         _initialized = false;
     }
 
@@ -72,16 +73,11 @@ internal sealed class EditorUiScaleContextState
         if (!_initialized)
         {
             GuiTheme.ApplyCurrent(GuiThemeKind.Unity6Dark);
+            _styleScale.CaptureCurrent();
             _initialized = true;
         }
 
-        float ratio = EditorUiScale.GetScaleRatio(normalizedTarget, AppliedScale);
-        if (MathF.Abs(ratio - 1f) > 0.0001f)
-        {
-            style.ScaleAllSizes(ratio);
-        }
-
+        _styleScale.Apply(normalizedTarget);
         style.FontScaleMain = normalizedTarget / normalizedAtlas;
-        AppliedScale = normalizedTarget;
     }
 }

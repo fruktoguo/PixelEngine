@@ -11,6 +11,38 @@ namespace PixelEngine.UI.Tests;
 public sealed class GuiAppCombinedFrameTests
 {
     /// <summary>
+    /// 绝对 style 缩放必须消除相邻倍率反复截断，且始终满足 ImGui 的窗口边框命中宽度约束。
+    /// </summary>
+    [Fact]
+    public void ImGuiStyleScaleStateRestoresBaselineAcrossFineGrainedScaleChanges()
+    {
+        ImGuiContextPtr context = ImGui.CreateContext();
+        try
+        {
+            ImGui.SetCurrentContext(context);
+            GuiTheme.ApplyCurrent(GuiThemeKind.Unity6Dark);
+            ImGuiStyleScaleState state = new();
+            state.CaptureCurrent();
+
+            for (int percent = 200; percent >= 75; percent -= 5)
+            {
+                state.Apply(percent / 100f);
+                Assert.True(ImGui.GetStyle().WindowBorderHoverPadding > 0f);
+            }
+
+            ImGui.GetStyle().WindowBorderHoverPadding = 0f;
+            state.Apply(1.5f);
+
+            Assert.Equal(1.5f, state.AppliedScale);
+            Assert.Equal(6f, ImGui.GetStyle().WindowBorderHoverPadding);
+        }
+        finally
+        {
+            ImGui.DestroyContext(context);
+        }
+    }
+
+    /// <summary>
     /// 验证Draw Combined Frame Runs Managed Then Script In Single Frame。
     /// </summary>
     [Fact]
