@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
-  "generatedAt": "2026-07-18",
-  "generatedFromCommit": "5594da0e2dab52a344252c81957f588b43be005a",
+  "generatedAt": "2026-07-19",
+  "generatedFromCommit": "0fdd1e143c05e0785dbe0a476f5db531af703ed2",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -753,6 +753,19 @@
       "reportPath": "docs/evidence-2026-07-14-editor-003-unity-parity-cycle-13.md",
       "sha256": "06109b748a67c4e51ace99dd51491251ec6964c2e3fe626b0fe536ba47941424",
       "notes": "Preferences now has responsive label/value hierarchy and localized safe unformatted help text; the old percent-format corruption is fixed. A local Unity 6.5 probe proves both editors use byte-identical Inter-Regular but PixelEngine had a 18px instead of Unity 12px base and a different Windows CJK fallback, now aligned across Shell and opened-project contexts. Commit-bound en-US/zh-CN 150% captures, actual Inline Build footer and all six Game View scenarios pass. Further reproducible Inspector/Settings localization and hierarchy work remains, final output is stale, and physical input, different-DPI cross-screen and independent review are not claimed."
+    },
+    {
+      "entryId": "editor-003-unity-parity-cycle14-20260719",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "local_scene_game_current_world_complete_external_dpi_drag_review_blocked",
+      "commit": "0fdd1e143c05e0785dbe0a476f5db531af703ed2",
+      "runSessionId": "5710fa5a22bc450181128f59e7dec6eb",
+      "runIdentityStatus": "captured_commit_bound_local_editor_automation_run",
+      "hardware": "Microsoft Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64; real desktop GL Editor framebuffers",
+      "command": "pixelengine-editor discover, ping and capabilities --matrix against isolated Release Editor; Edit scene.capture/game.capture; TemporarySnapshot Play/Pause; stable runtime selection; runtime.entity.transform.set; Paused tool.scene.set/tool.brush.apply/runtime.cell.inspect; verified Scene/Game artifacts; play.stop; Edit workspace/cell/inspector rollback checks; workspace.exit; pwsh tools/run-tests.ps1 -Configuration Release -NoRestore; automation matrix --check; task/evidence catalog validation; git diff --check",
+      "reportPath": "docs/evidence-2026-07-19-editor-003-unity-parity-cycle-14.md",
+      "sha256": "226921215dd1d35282cd2d097692ee4d9af1646e750ac8373e544a22231262f1",
+      "notes": "Commit-bound Editor artifacts prove Edit Scene/Game both render the authoring world without a black or emissive-only Game frame. Paused Scene projects runtime chunks/entities/bodies and supports temporary Goal gizmo plus 81-cell Brush edits that appear in Game; Stop restores dirt, Goal Transform and a clean authoring scene. Final Release build is 0 warning/error and 14 projects total 2305 passed, 48 explicit environment smoke skipped, 0 failed. Different physical DPI/cross-screen, Explorer pointer drag, runtime physical numeric drag and independent reviewer remain external blockers, so EDITOR-003 stays blocked."
     },
     {
       "entryId": "ui-004-web-canvas-player-dogfood-20260714",
