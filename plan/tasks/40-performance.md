@@ -20,7 +20,7 @@
 - [!] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
   - 优先级：P0。
   - 依赖：`PERF-001`。
-  - 当前事实：2026-07-18 的独立初态口径使用 16 份互不共享的 23×23 full-dirty kernel。packed material lane 提交 `5355a5b9` 的正式 B4 为 10.809ms / 0 B，折算约 1.604M cells/8ms、仍低于 2M 下限 19.82%；该轮两 launch 为 10.07/11.63ms 且 `mValue=3.67`，99.9% CI 与干净基线 `65d90eb7` 的 11.344ms 小幅重叠，因此只登记为存在外部负载混杂风险的提交态进展。探索性 D2 为 10.274ms 但不用于完成判据。当前口径见 `docs/evidence-2026-07-18-perf-003-packed-material-lane.md`，前一稳定节点见 `docs/evidence-2026-07-18-perf-003-independent-full-active.md`。
+  - 当前事实：2026-07-18 的独立初态口径使用 16 份互不共享的 23×23 full-dirty kernel。液体 movement 调用图提交 `9d9a9dc8` 的 clean B6 为 10.253ms / 0 B / `mValue=2`，按 mean 折算约 1.691M cells/8ms、按 99.9% upper CI 10.412ms 折算约 1.665M，仍低于 2M 下限 15.47% / 16.76%。clean baseline `3d584af0` 为 10.284ms，两份 CI 大范围重叠，因此只证明最新提交态能力与 call-graph 机制，不宣称 0.30% 差异统计显著。当前口径见 `docs/evidence-2026-07-18-perf-003-liquid-movement-call-graph.md`，packed lane 前一节点见 `docs/evidence-2026-07-18-perf-003-packed-material-lane.md`。
   - 阻塞：本机已完成代表规模与 8 physical cores 校准但仍低于 2M/8ms；继续关闭需要 6-RID 目标硬件 BenchmarkDotNet 证据，或产品/架构负责人冻结新的分辨率、活跃率与降级策略后同步重校准 §1.4/§12.8。当前没有该外部硬件或决策输入，不能伪造完成。
   - 设计来源：`plan/03-simulation-kernel.md`；`plan/16-performance-hardening.md`；架构 §12.7/§12.8。
   - 验收：不得只优化 benchmark fixture；保留质量守恒和 checkerboard 不变式；若重校准，必须同步产品分辨率、活跃率假设、降级策略和架构置信度。
