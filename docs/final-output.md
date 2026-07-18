@@ -54,6 +54,10 @@ ASCII/CRLF 启动逻辑，实际编排由 `tools/run-final-output-one-click.ps1`
 更新脚本，成功替换后再对根 `最终输出/` 运行一次独立 verifier；两步都成功才打开输出目录。
 失败时控制台会保留错误与退出码，发布器在替换前失败仍保留旧的正式输出。
 
+若只需要编译源码，可双击仓库根目录的 `一键构建.bat`。它默认执行 Release solution build，
+需要时会由 `dotnet build` 自动 restore；不会运行 test、产品 probe、打包或 verifier，也不会修改
+`最终输出/`。命令行可传 `-Configuration Debug` 改为 Debug 构建。
+
 校验现有正式输出（不重新打包、不替换目录）：
 
 ```pwsh
