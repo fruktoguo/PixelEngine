@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-18",
-  "generatedFromCommit": "d3dcfc0a04db120ec6883866ad9e1db3b2eed28c",
+  "generatedFromCommit": "5de61121cf8c59646b90099543de8a4fa12f8fcb",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -116,6 +116,19 @@
       "reportPath": "docs/evidence-2026-07-18-perf-003-trymovedown-call-graph.md",
       "sha256": "6a84be4f8fbe0c307f65be72d8cdf061979c43d01159360058d28b5bcc921894",
       "notes": "TryMoveDown 将 32px 空列扫描隔离到 1972B NoInlining helper，首格碰撞路径从 3936B 缩到 1967B。clean full-active A8/B9 为 10.435/9.841ms，99.9% CI 不重叠；B9 mean 约 1.761M cells/8ms，仍低于 2M 下限。独立 Typical Dirty 为 22.105/20.133us；PERF-003 继续阻塞且仍缺六 RID 代表硬件证据。"
+    },
+    {
+      "entryId": "perf-003-column-occupancy-20260718",
+      "taskIds": ["PERF-003"],
+      "evidenceState": "local_formal_benchmark_target_gap_statistically_separated",
+      "commit": "5de61121cf8c59646b90099543de8a4fa12f8fcb",
+      "runSessionId": "local-20260718-perf003-column-occupancy",
+      "runIdentityStatus": "captured_commit_bound_local_formal_benchmark",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "在 75859635 detached control 上只把 TypicalDirty FramesPerInvoke 对齐到 12288，并与 clean 5de61121 分别执行 & .\\tools\\run-benchmark.ps1 -BenchmarkDotNetArgs @('--filter','*TypicalDirtyCellThroughputBenchmark*','*FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames*','--launchCount','2','--warmupCount','10','--iterationCount','20')；5de61121 追加 --profiler EP 的 1x3x3 EventPipe；DOTNET_ReadyToRun=0 / DOTNET_TieredCompilation=0 / DOTNET_JitDisasm=PixelEngine.Simulation.ChunkUpdater:TryMoveDown* 生成 FullOpts 汇编；dotnet test Simulation 204/204；dotnet test Hosting --filter FullyQualifiedName~PerformanceHardening 159/159；dotnet build PixelEngine.sln -c Release -p:TreatWarningsAsErrors=true",
+      "reportPath": "docs/evidence-2026-07-18-perf-003-column-occupancy.md",
+      "sha256": "ffc55e78fbb26d10f5c179210c45b5af4e37dbffa87f606db2cffb2ff6e3be5f",
+      "notes": "每 chunk 512B 派生列占用位图把垂直空列逐格 Material 读取改为 bit scan；两个 32-row word 保持 checkerboard 同 pass 无冲突，raw alias 失效并只在 active center/south 重建。clean B13 full-active 为 9.266ms / 0 B，相对同 fixture A10 10.887ms 改善 14.89%，99.9% CI 不重叠；约 1.871M cells/8ms，仍低于 2M 下限 6.46%。Typical Dirty 为 20.061/14.506us；PERF-003 继续阻塞且仍缺六 RID 代表硬件证据。"
     },
     {
       "entryId": "perf-004-zero-allocation-20260710",
