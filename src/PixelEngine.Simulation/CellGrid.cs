@@ -102,11 +102,11 @@ public sealed class CellGrid(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        ref ushort target = ref chunk.MaterialBuffer[local];
         ref byte flags = ref chunk.FlagsBuffer[local];
+        ushort target = chunk.GetMaterialAt(local);
         // 覆盖 RigidOwned cell 前先通知物理层，避免 stamp 与材质写入不一致。
         bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, flags, target);
-        target = material;
+        chunk.SetMaterialAt(local, material);
         if (wasRigidOwned)
         {
             flags = 0;
@@ -128,8 +128,8 @@ public sealed class CellGrid(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
-        chunk.MaterialBuffer[local] = material;
+        bool wasRigidOwned = NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.GetMaterialAt(local));
+        chunk.SetMaterialAt(local, material);
         if (wasRigidOwned)
         {
             chunk.FlagsBuffer[local] = 0;
@@ -201,14 +201,14 @@ public sealed class CellGrid(
 
         int local = CellAddressing.LocalIndex(wx, wy);
         byte flags = chunk.FlagsBuffer[local];
-        ushort material = chunk.MaterialBuffer[local];
+        ushort material = chunk.GetMaterialAt(local);
         if (CellFlags.Has(flags, CellFlags.RigidOwned))
         {
             _ = NotifyRigidDamageIfNeeded(wx, wy, flags, material);
             return false;
         }
 
-        chunk.MaterialBuffer[local] = 0;
+        chunk.SetMaterialAt(local, 0);
         chunk.FlagsBuffer[local] = 0;
         chunk.LifetimeBuffer[local] = 0;
         chunk.DamageBuffer[local] = 0;
@@ -228,7 +228,7 @@ public sealed class CellGrid(
             return false;
         }
 
-        chunk.MaterialBuffer[local] = 0;
+        chunk.SetMaterialAt(local, 0);
         chunk.FlagsBuffer[local] = 0;
         chunk.LifetimeBuffer[local] = 0;
         chunk.DamageBuffer[local] = 0;
@@ -248,7 +248,7 @@ public sealed class CellGrid(
 
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        chunk.MaterialBuffer[local] = material;
+        chunk.SetMaterialAt(local, material);
         chunk.FlagsBuffer[local] = CellFlags.RigidOwned;
         chunk.LifetimeBuffer[local] = 0;
         chunk.DamageBuffer[local] = 0;
@@ -274,7 +274,7 @@ public sealed class CellGrid(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        chunk.MaterialBuffer[local] = material;
+        chunk.SetMaterialAt(local, material);
         chunk.FlagsBuffer[local] = CellFlags.RigidOwned;
         chunk.LifetimeBuffer[local] = 0;
         chunk.DamageBuffer[local] = 0;

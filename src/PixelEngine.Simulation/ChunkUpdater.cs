@@ -313,61 +313,73 @@ internal static class ChunkUpdater
     {
         int sourceLocalX = sourceLocalIndex & (EngineConstants.ChunkSize - 1);
         int sourceLocalY = sourceLocalIndex >> EngineConstants.ChunkSizeLog2;
-        int firstCandidateY = wy + 1;
-        int targetY = firstCandidateY;
-        int firstTargetLocalY = sourceLocalY + 1;
+        int targetY;
         int targetSlot;
         int targetLocal;
-        if (firstTargetLocalY < EngineConstants.ChunkSize)
-        {
-            targetSlot = 4;
-            targetLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, firstTargetLocalY);
-        }
-        else
-        {
-            targetSlot = window.SlotOf(wx, firstCandidateY);
-            targetLocal = CellAddressing.LocalIndex(wx, firstCandidateY);
-        }
-        // 垂直扫描受 MoveCap 约束，保证目标仍在 halo 内且可一次交换到位。
-        for (int step = 2; step <= EngineConstants.MoveCap; step++)
-        {
-            int candidateY = wy + step;
-            int targetLocalY = sourceLocalY + step;
-            int candidateSlot;
-            int candidateLocal;
-            ushort targetMaterial;
-            byte targetFlags;
-            bool targetNonEmpty;
-            if (targetLocalY < EngineConstants.ChunkSize)
-            {
-                candidateSlot = 4;
-                candidateLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, targetLocalY);
-                targetNonEmpty = window.TryReadCenterNonEmptyMoveTarget(candidateLocal, out targetMaterial, out targetFlags);
-            }
-            else
-            {
-                candidateSlot = window.SlotOf(wx, candidateY);
-                candidateLocal = CellAddressing.LocalIndex(wx, candidateY);
-                targetNonEmpty = window.TryReadNonEmptyMoveTarget(wx, candidateY, out targetMaterial, out targetFlags);
-            }
 
+        // 每列拆成两个 32-row word：在 MoveCap 内最多查询中心/南邻各两个连续 word，
+        // 避免逐格 strided Material SoA 读取，同时仍保持 CPU 权威网格与 32px halo 约束。
+        if (window.TryFindFirstOccupiedBelow(
+            sourceLocalX,
+            sourceLocalY,
+            out int occupiedY,
+            out int occupiedSlot,
+            out int occupiedLocal))
+        {
+            bool targetNonEmpty = window.TryReadKnownNonEmptyMoveTarget(
+                occupiedSlot,
+                occupiedLocal,
+                out ushort targetMaterial,
+                out byte targetFlags);
+            Debug.Assert(targetNonEmpty, "列占用索引命中必须对应非空权威 Material cell。");
             if (!targetNonEmpty)
             {
-                targetY = candidateY;
-                targetSlot = candidateSlot;
-                targetLocal = candidateLocal;
-                continue;
+                movedX = wx;
+                movedY = wy;
+                return false;
             }
 
             if (!CellFlags.MatchesFrame(targetFlags, parityBit) &&
                 materials.DensityOf(targetMaterial) < sourceDensity)
             {
-                targetY = candidateY;
-                targetSlot = candidateSlot;
-                targetLocal = candidateLocal;
+                targetY = occupiedY;
+                targetSlot = occupiedSlot;
+                targetLocal = occupiedLocal;
             }
-
-            break;
+            else
+            {
+                targetY = occupiedY - 1;
+                int previousLocalY = sourceLocalY + (targetY - wy);
+                if (previousLocalY < EngineConstants.ChunkSize)
+                {
+                    targetSlot = 4;
+                    targetLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, previousLocalY);
+                }
+                else
+                {
+                    targetSlot = 7;
+                    targetLocal = CellAddressing.LocalIndexFromLocal(
+                        sourceLocalX,
+                        previousLocalY - EngineConstants.ChunkSize);
+                }
+            }
+        }
+        else
+        {
+            targetY = wy + EngineConstants.MoveCap;
+            int finalLocalY = sourceLocalY + EngineConstants.MoveCap;
+            if (finalLocalY < EngineConstants.ChunkSize)
+            {
+                targetSlot = 4;
+                targetLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, finalLocalY);
+            }
+            else
+            {
+                targetSlot = 7;
+                targetLocal = CellAddressing.LocalIndexFromLocal(
+                    sourceLocalX,
+                    finalLocalY - EngineConstants.ChunkSize);
+            }
         }
 
         return MoveToKnownEligibleTarget(

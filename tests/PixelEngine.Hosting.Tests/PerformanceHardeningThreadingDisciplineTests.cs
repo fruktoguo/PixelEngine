@@ -283,7 +283,7 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
         Assert.Contains("Vector128<ushort>", ops, StringComparison.Ordinal);
         Assert.Contains("ExtractMostSignificantBits", ops, StringComparison.Ordinal);
         Assert.Contains("BitOperations.PopCount", ops, StringComparison.Ordinal);
-        Assert.Contains("CellSpanOps.CountNonZeroUShort(chunk.MaterialBuffer)", kernel, StringComparison.Ordinal);
+        Assert.Contains("CellSpanOps.CountNonZeroUShort(chunk.Material)", kernel, StringComparison.Ordinal);
         Assert.Contains("CellSpanOps.SetParityForOccupiedCells", chunk, StringComparison.Ordinal);
     }
 
@@ -301,8 +301,9 @@ public sealed class PerformanceHardeningThreadingDisciplineTests
         // Assert：验证预期结果
         Assert.Contains("EditRectAtInputPhase", kernel, StringComparison.Ordinal);
         Assert.Contains("ClearRectAtInputPhase", kernel, StringComparison.Ordinal);
-        Assert.Contains("chunk.MaterialBuffer.AsSpan(localStart, run).Fill(material)", kernel, StringComparison.Ordinal);
-        Assert.Contains("chunk.MaterialBuffer.AsSpan(localStart, run).Clear()", kernel, StringComparison.Ordinal);
+        Assert.Contains("ushort[] materialBuffer = chunk.MaterialBuffer;", kernel, StringComparison.Ordinal);
+        Assert.Contains("materialBuffer.AsSpan(localStart, run).Fill(material)", kernel, StringComparison.Ordinal);
+        Assert.Contains("materialBuffer.AsSpan(localStart, run).Clear()", kernel, StringComparison.Ordinal);
         Assert.Contains("DirtyRegionMarker.MarkRectCurrent", kernel, StringComparison.Ordinal);
         Assert.Contains("public static void MarkRectCurrent", marker, StringComparison.Ordinal);
         Assert.Contains("_editApi.PaintRect", brush, StringComparison.Ordinal);

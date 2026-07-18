@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using PixelEngine.Core;
 
 namespace PixelEngine.Simulation;
 
@@ -243,8 +244,18 @@ public ref struct NeighborWindow
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void SetMaterial(int wx, int wy, ushort value)
     {
-        MaterialAt(wx, wy) = value;
-        DamageAt(wx, wy) = 0;
+        int slot = SlotOf(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        ref ushort material = ref Unsafe.Add(ref SelectMaterialBase(slot), local);
+        bool wasOccupied = material != 0;
+        material = value;
+        bool isOccupied = value != 0;
+        if (wasOccupied != isOccupied)
+        {
+            GetChunk(slot).SetColumnOccupancy(local, isOccupied);
+        }
+
+        Unsafe.Add(ref SelectDamageBase(slot), local) = 0;
     }
 
     /// <summary>
@@ -359,7 +370,14 @@ public ref struct NeighborWindow
         // 交换 Material/Flags/Lifetime 三元组；Damage 清零避免破坏度随 swap 漂移。
         ref ushort material1 = ref Unsafe.Add(ref SelectMaterialBase(slot1), local1);
         ref ushort material2 = ref Unsafe.Add(ref SelectMaterialBase(slot2), local2);
+        bool occupied1 = material1 != 0;
+        bool occupied2 = material2 != 0;
         (material1, material2) = (material2, material1);
+        if (occupied1 != occupied2)
+        {
+            GetChunk(slot1).SetColumnOccupancy(local1, occupied2);
+            GetChunk(slot2).SetColumnOccupancy(local2, occupied1);
+        }
 
         ref byte flags1 = ref Unsafe.Add(ref SelectFlagsBase(slot1), local1);
         ref byte flags2 = ref Unsafe.Add(ref SelectFlagsBase(slot2), local2);
@@ -416,6 +434,76 @@ public ref struct NeighborWindow
 
         targetFlags = Unsafe.Add(ref _flagsBase4, targetLocal);
         return true;
+    }
+
+    /// <summary>
+    /// 在已解析 slot/local 上读取非空 movement 目标，供列占用索引命中的唯一 cell 取值。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal bool TryReadKnownNonEmptyMoveTarget(
+        int targetSlot,
+        int targetLocal,
+        out ushort targetMaterial,
+        out byte targetFlags)
+    {
+        targetMaterial = Unsafe.Add(ref SelectMaterialBase(targetSlot), targetLocal);
+        if (targetMaterial == 0)
+        {
+            targetFlags = 0;
+            return false;
+        }
+
+        targetFlags = Unsafe.Add(ref SelectFlagsBase(targetSlot), targetLocal);
+        return true;
+    }
+
+    /// <summary>
+    /// 使用中心与南邻 chunk 的两级列位图，定位 MoveCap 内第一个非空 cell。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal readonly bool TryFindFirstOccupiedBelow(
+        int sourceLocalX,
+        int sourceLocalY,
+        out int targetY,
+        out int targetSlot,
+        out int targetLocal)
+    {
+        int firstLocalY = sourceLocalY + 2;
+        int lastLocalY = sourceLocalY + EngineConstants.MoveCap;
+        if (firstLocalY < EngineConstants.ChunkSize)
+        {
+            int foundLocalY = _chunk4.FindFirstOccupiedInColumn(
+                sourceLocalX,
+                firstLocalY,
+                Math.Min(lastLocalY, EngineConstants.ChunkSize - 1));
+            if (foundLocalY >= 0)
+            {
+                targetY = (BaseChunkY << EngineConstants.ChunkSizeLog2) + foundLocalY;
+                targetSlot = 4;
+                targetLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, foundLocalY);
+                return true;
+            }
+        }
+
+        if (lastLocalY >= EngineConstants.ChunkSize)
+        {
+            int foundLocalY = _chunk7.FindFirstOccupiedInColumn(
+                sourceLocalX,
+                Math.Max(0, firstLocalY - EngineConstants.ChunkSize),
+                lastLocalY - EngineConstants.ChunkSize);
+            if (foundLocalY >= 0)
+            {
+                targetY = ((BaseChunkY + 1) << EngineConstants.ChunkSizeLog2) + foundLocalY;
+                targetSlot = 7;
+                targetLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, foundLocalY);
+                return true;
+            }
+        }
+
+        targetY = 0;
+        targetSlot = 0;
+        targetLocal = 0;
+        return false;
     }
 
     /// <summary>
@@ -479,7 +567,14 @@ public ref struct NeighborWindow
         }
 
         ref ushort sourceMaterial = ref Unsafe.Add(ref SelectMaterialBase(sourceSlot), sourceLocal);
+        bool sourceOccupied = sourceMaterial != 0;
+        bool targetOccupied = targetMaterial != 0;
         (sourceMaterial, targetMaterial) = (targetMaterial, sourceMaterial);
+        if (sourceOccupied != targetOccupied)
+        {
+            GetChunk(sourceSlot).SetColumnOccupancy(sourceLocal, targetOccupied);
+            GetChunk(targetSlot).SetColumnOccupancy(targetLocal, sourceOccupied);
+        }
 
         ref byte sourceFlags = ref Unsafe.Add(ref SelectFlagsBase(sourceSlot), sourceLocal);
         (sourceFlags, targetFlags) = (targetFlags, sourceFlags);
@@ -556,6 +651,8 @@ public ref struct NeighborWindow
             targetY,
             parityBit,
             rigidDamageSink,
+            GetChunk(targetSlot),
+            targetLocal,
             ref targetMaterial,
             ref targetFlags,
             ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal),
@@ -592,6 +689,8 @@ public ref struct NeighborWindow
             targetY,
             parityBit,
             rigidDamageSink,
+            _chunk4,
+            targetLocal,
             ref targetMaterial,
             ref targetFlags,
             ref Unsafe.Add(ref _lifeBase4, targetLocal),
@@ -620,6 +719,8 @@ public ref struct NeighborWindow
             targetY,
             parityBit,
             rigidDamageSink,
+            GetChunk(targetSlot),
+            targetLocal,
             ref targetMaterial,
             ref targetFlags,
             ref Unsafe.Add(ref SelectLifetimeBase(targetSlot), targetLocal),
@@ -646,6 +747,8 @@ public ref struct NeighborWindow
             targetY,
             parityBit,
             rigidDamageSink,
+            _chunk4,
+            targetLocal,
             ref targetMaterial,
             ref targetFlags,
             ref Unsafe.Add(ref _lifeBase4, targetLocal),
@@ -659,6 +762,8 @@ public ref struct NeighborWindow
         int targetY,
         byte parityBit,
         IRigidDamageSink rigidDamageSink,
+        Chunk targetChunk,
+        int targetLocal,
         ref ushort targetMaterial,
         ref byte targetFlags,
         ref byte targetLifetime,
@@ -671,7 +776,13 @@ public ref struct NeighborWindow
         }
 
         ref ushort sourceMaterial = ref Unsafe.Add(ref _matBase4, sourceLocalIndex);
+        bool targetWasEmpty = targetMaterial == 0;
         (sourceMaterial, targetMaterial) = (targetMaterial, sourceMaterial);
+        if (targetWasEmpty)
+        {
+            _chunk4.SetColumnOccupancy(sourceLocalIndex, occupied: false);
+            targetChunk.SetColumnOccupancy(targetLocal, occupied: true);
+        }
 
         ref byte sourceFlags = ref Unsafe.Add(ref _flagsBase4, sourceLocalIndex);
         (sourceFlags, targetFlags) = (targetFlags, sourceFlags);

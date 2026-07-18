@@ -76,7 +76,7 @@ public static class MaterialLiveGridRemapper
             for (int i = 0; i < entry.Indices.Length; i++)
             {
                 int index = entry.Indices[i];
-                entry.Chunk.MaterialBuffer[index] = fallbackId;
+                entry.Chunk.SetMaterialAt(index, fallbackId);
                 entry.Chunk.DamageBuffer[index] = 0;
             }
 
@@ -98,7 +98,7 @@ public static class MaterialLiveGridRemapper
             for (int i = 0; i < entry.Indices.Length; i++)
             {
                 int index = entry.Indices[i];
-                entry.Chunk.MaterialBuffer[index] = entry.Materials[i];
+                entry.Chunk.SetMaterialAt(index, entry.Materials[i]);
                 entry.Chunk.DamageBuffer[index] = entry.Damage[i];
             }
 
@@ -130,7 +130,7 @@ public static class MaterialLiveGridRemapper
             for (int i = 0; i < entry.Indices.Length; i++)
             {
                 int index = entry.Indices[i];
-                if (entry.Chunk.MaterialBuffer[index] != entry.Materials[i] ||
+                if (entry.Chunk.GetMaterialAt(index) != entry.Materials[i] ||
                     entry.Chunk.DamageBuffer[index] != entry.Damage[i])
                 {
                     return false;
@@ -178,7 +178,7 @@ public static class MaterialLiveGridRemapper
             for (int i = 0; i < entry.Indices.Length; i++)
             {
                 int index = entry.Indices[i];
-                if (entry.Chunk.MaterialBuffer[index] != fallbackId ||
+                if (entry.Chunk.GetMaterialAt(index) != fallbackId ||
                     entry.Chunk.DamageBuffer[index] != 0)
                 {
                     return false;

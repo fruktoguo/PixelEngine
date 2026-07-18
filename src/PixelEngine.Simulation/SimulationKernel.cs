@@ -133,6 +133,8 @@ public sealed class SimulationKernel(
                     throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。");
                 }
 
+                ushort[] materialBuffer = chunk.MaterialBuffer;
+
                 int chunkMinX = cx * EngineConstants.ChunkSize;
                 int chunkMinY = cy * EngineConstants.ChunkSize;
                 int chunkMaxX = chunkMinX + EngineConstants.ChunkSize - 1;
@@ -149,10 +151,10 @@ public sealed class SimulationKernel(
                     int localStart = CellAddressing.LocalIndexFromLocal(localX, localY);
                     for (int i = 0; i < run; i++)
                     {
-                        NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[localStart + i], chunk.MaterialBuffer[localStart + i]);
+                        NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[localStart + i], materialBuffer[localStart + i]);
                     }
 
-                    chunk.MaterialBuffer.AsSpan(localStart, run).Fill(material);
+                    materialBuffer.AsSpan(localStart, run).Fill(material);
                     chunk.FlagsBuffer.AsSpan(localStart, run).Fill(flags);
                     chunk.LifetimeBuffer.AsSpan(localStart, run).Fill(lifetime);
                     chunk.DamageBuffer.AsSpan(localStart, run).Clear();
@@ -172,13 +174,13 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        if (chunk.MaterialBuffer[local] == 0 && chunk.FlagsBuffer[local] == 0 && chunk.LifetimeBuffer[local] == 0)
+        if (chunk.GetMaterialAt(local) == 0 && chunk.FlagsBuffer[local] == 0 && chunk.LifetimeBuffer[local] == 0)
         {
             return;
         }
 
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
-        chunk.MaterialBuffer[local] = 0;
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.GetMaterialAt(local));
+        chunk.SetMaterialAt(local, 0);
         chunk.FlagsBuffer[local] = 0;
         chunk.LifetimeBuffer[local] = 0;
         chunk.DamageBuffer[local] = 0;
@@ -209,6 +211,8 @@ public sealed class SimulationKernel(
                     throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。");
                 }
 
+                ushort[] materialBuffer = chunk.MaterialBuffer;
+
                 int chunkMinX = cx * EngineConstants.ChunkSize;
                 int chunkMinY = cy * EngineConstants.ChunkSize;
                 int chunkMaxX = chunkMinX + EngineConstants.ChunkSize - 1;
@@ -227,8 +231,8 @@ public sealed class SimulationKernel(
                     for (int i = 0; i < run; i++)
                     {
                         int local = localStart + i;
-                        rowChanged |= chunk.MaterialBuffer[local] != 0 || chunk.FlagsBuffer[local] != 0 || chunk.LifetimeBuffer[local] != 0 || chunk.DamageBuffer[local] != 0;
-                        NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
+                        rowChanged |= materialBuffer[local] != 0 || chunk.FlagsBuffer[local] != 0 || chunk.LifetimeBuffer[local] != 0 || chunk.DamageBuffer[local] != 0;
+                        NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[local], materialBuffer[local]);
                     }
 
                     if (!rowChanged)
@@ -236,7 +240,7 @@ public sealed class SimulationKernel(
                         continue;
                     }
 
-                    chunk.MaterialBuffer.AsSpan(localStart, run).Clear();
+                    materialBuffer.AsSpan(localStart, run).Clear();
                     chunk.FlagsBuffer.AsSpan(localStart, run).Clear();
                     chunk.LifetimeBuffer.AsSpan(localStart, run).Clear();
                     chunk.DamageBuffer.AsSpan(localStart, run).Clear();
@@ -310,13 +314,13 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        ushort material = chunk.MaterialBuffer[local];
+        ushort material = chunk.GetMaterialAt(local);
         flags = chunk.FlagsBuffer[local];
         lifetime = chunk.LifetimeBuffer[local];
         if (material != 0 || flags != 0 || lifetime != 0)
         {
             NotifyRigidDamageIfNeeded(wx, wy, flags, material);
-            chunk.MaterialBuffer[local] = 0;
+            chunk.SetMaterialAt(local, 0);
             chunk.FlagsBuffer[local] = 0;
             chunk.LifetimeBuffer[local] = 0;
             chunk.DamageBuffer[local] = 0;
@@ -348,7 +352,7 @@ public sealed class SimulationKernel(
         int localX = CellAddressing.LocalCoord(wx);
         int localY = CellAddressing.LocalCoord(wy);
         int local = CellAddressing.LocalIndexFromLocal(localX, localY);
-        ushort material = chunk.MaterialBuffer[local];
+        ushort material = chunk.GetMaterialAt(local);
         byte flags = chunk.FlagsBuffer[local];
         string materialName = material < materials.Count && !materials.IsTombstone(material)
             ? materials.GetName(material)
@@ -410,7 +414,7 @@ public sealed class SimulationKernel(
         long count = 0;
         foreach (Chunk chunk in _chunks.ResidentChunks)
         {
-            count += CellSpanOps.CountNonZeroUShort(chunk.MaterialBuffer);
+            count += CellSpanOps.CountNonZeroUShort(chunk.Material);
         }
 
         return count;
@@ -431,7 +435,7 @@ public sealed class SimulationKernel(
         }
 
         int local = CellAddressing.LocalIndex(wx, wy);
-        ushort material = chunk.MaterialBuffer[local];
+        ushort material = chunk.GetMaterialAt(local);
         if (material == 0)
         {
             chunk.DamageBuffer[local] = 0;
@@ -614,8 +618,8 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.MaterialBuffer[local]);
-        chunk.MaterialBuffer[local] = material;
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.GetMaterialAt(local));
+        chunk.SetMaterialAt(local, material);
         chunk.FlagsBuffer[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
         chunk.LifetimeBuffer[local] = DefaultLifetimeByte(material);
         chunk.DamageBuffer[local] = 0;
@@ -626,7 +630,7 @@ public sealed class SimulationKernel(
     {
         // 结构破坏落地：转为碎块材质或 Empty，并上报采集/碎屑副作用。
         ushort rubbleTarget = MaterialProps.RubbleTargetOf(sourceMaterial);
-        chunk.MaterialBuffer[local] = rubbleTarget;
+        chunk.SetMaterialAt(local, rubbleTarget);
         chunk.FlagsBuffer[local] = rubbleTarget == 0 ? (byte)0 : CellFlags.SetParity(0, CurrentParity);
         chunk.LifetimeBuffer[local] = DefaultLifetimeByte(rubbleTarget);
         chunk.DamageBuffer[local] = 0;

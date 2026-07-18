@@ -425,7 +425,7 @@ public sealed class TemperatureField
                 for (int lx = rect.MinX; lx <= rect.MaxX; lx++)
                 {
                     int local = CellAddressing.LocalIndexFromLocal(lx, ly);
-                    ushort material = chunk.MaterialBuffer[local];
+                    ushort material = chunk.GetMaterialAt(local);
                     byte flags = chunk.FlagsBuffer[local];
                     if (material == 0 ||
                         (!CellFlags.Has(flags, CellFlags.RigidOwned) && CellFlags.MatchesFrame(flags, parityBit)))
@@ -445,7 +445,7 @@ public sealed class TemperatureField
                         flags = CellFlags.Clear(flags, CellFlags.RigidOwned);
                     }
 
-                    chunk.MaterialBuffer[local] = target;
+                    chunk.SetMaterialAt(local, target);
                     chunk.LifetimeBuffer[local] = DefaultLifetimeByte(hot, target);
                     chunk.FlagsBuffer[local] = CellFlags.SetParity(flags, parityBit);
                     chunk.DamageBuffer[local] = 0;
@@ -729,7 +729,7 @@ public sealed class TemperatureField
         {
             for (int x = 0; x < EngineConstants.TempFieldDownscale; x++)
             {
-                ushort material = chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(startX + x, startY + y)];
+                ushort material = chunk.GetMaterialAt(CellAddressing.LocalIndexFromLocal(startX + x, startY + y));
                 sum += materials.HeatConduct[material];
             }
         }
@@ -761,7 +761,7 @@ public sealed class TemperatureField
         {
             for (int x = 0; x < EngineConstants.TempFieldDownscale; x++)
             {
-                ushort material = chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(startX + x, startY + y)];
+                ushort material = chunk.GetMaterialAt(CellAddressing.LocalIndexFromLocal(startX + x, startY + y));
                 sum += materials.HeatCapacity[material];
             }
         }

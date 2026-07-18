@@ -105,6 +105,45 @@ public sealed class SimulationMovementTests
     }
 
     /// <summary>
+    /// 验证同一 bottom-up pass 的早期 movement 会更新列索引，后续 cell 不会停在已清空的旧位置。
+    /// </summary>
+    [Fact]
+    public void StepCaUsesMovementUpdatedColumnOccupancyWithinSamePass()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Sand);
+        Set(center, 10, 20, Sand);
+        SetCurrentDirty(center, DirtyRect.Full);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(Sand, Get(center, 10, 42));
+        Assert.Equal(Sand, Get(center, 10, 52));
+        Assert.Equal(0, Get(center, 10, 19));
+    }
+
+    /// <summary>
+    /// 验证南邻仅通过可写 alias 填入障碍时，调度器会重建其列索引并停在跨界障碍上方。
+    /// </summary>
+    [Fact]
+    public void StepCaRebuildsSouthColumnOccupancyBeforeCrossChunkMove()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Chunk south = source.GetRequired(new ChunkCoord(0, 1));
+        Set(center, 10, 60, Sand);
+        Set(south, 10, 5, Solid);
+        SetCurrentDirty(center, DirtyRect.Full);
+        SimulationKernel kernel = new(source, CreateMaterials());
+
+        kernel.StepCa();
+
+        Assert.Equal(0, Get(center, 10, 60));
+        Assert.Equal(Sand, Get(south, 10, 4));
+        Assert.Equal(Solid, Get(south, 10, 5));
+    }
+
+    /// <summary>
     /// 验证 powder 左右斜下偏置随帧切换，避免稳定单侧漂移。
     /// </summary>
     [Fact]

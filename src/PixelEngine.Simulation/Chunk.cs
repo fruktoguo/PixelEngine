@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using PixelEngine.Core;
 
@@ -8,15 +11,22 @@ namespace PixelEngine.Simulation;
 /// </summary>
 public sealed class Chunk
 {
+    // 每列拆成上下两个 32-row word：checkerboard 同 pass 的南/北 32px halo 最多分别写入
+    // 同一中间 chunk 的低/高半区，避免两个 worker 对同一聚合 word 做冲突 RMW（docs §5.7）。
+    private const int ColumnHalfCount = 2;
     private const int IncomingSlotCount = 8;
+    private readonly ushort[] _materialBuffer;
+    private readonly uint[] _columnOccupancy;
     private readonly PaddedDirtyRectSlot[] _incoming;
+    private bool _columnOccupancyValid;
 
     /// <summary>
     /// 创建 chunk 并分配固定长度 POH SoA 数组。
     /// </summary>
     public Chunk(ChunkCoord coord)
     {
-        MaterialBuffer = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
+        _materialBuffer = GC.AllocateArray<ushort>(EngineConstants.ChunkArea, pinned: true);
+        _columnOccupancy = GC.AllocateArray<uint>(EngineConstants.ChunkSize * ColumnHalfCount, pinned: true);
         FlagsBuffer = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
         LifetimeBuffer = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
         DamageBuffer = GC.AllocateArray<byte>(EngineConstants.ChunkArea, pinned: true);
@@ -32,7 +42,7 @@ public sealed class Chunk
     /// <summary>
     /// 每 cell 的运行时材质 id，0 表示 Empty。
     /// </summary>
-    public ReadOnlySpan<ushort> Material => MaterialBuffer;
+    public ReadOnlySpan<ushort> Material => _materialBuffer;
 
     /// <summary>
     /// 每 cell 的运行时 flag。
@@ -51,7 +61,16 @@ public sealed class Chunk
 
     // 可写数组仅是实现 seam；公开调用者必须使用 CellGrid 或按相位划分的 edit API，
     // 以保持 dirty/parity/KeepAlive 与刚体 ownership 的耦合。
-    internal ushort[] MaterialBuffer { get; }
+    internal ushort[] MaterialBuffer
+    {
+        get
+        {
+            // 该数组只为反序列化与受信任测试保留；取得可写别名后无法追踪逐格写入，
+            // 因此下一次 CA 使用前必须从权威 Material SoA 重建派生列索引。
+            _columnOccupancyValid = false;
+            return _materialBuffer;
+        }
+    }
     internal byte[] FlagsBuffer { get; }
     internal byte[] LifetimeBuffer { get; }
     internal byte[] DamageBuffer { get; }
@@ -87,13 +106,15 @@ public sealed class Chunk
     public void Reset(ChunkCoord coord)
     {
         Coord = coord;
-        Array.Clear(MaterialBuffer);
+        Array.Clear(_materialBuffer);
+        Array.Clear(_columnOccupancy);
         Array.Clear(FlagsBuffer);
         Array.Clear(LifetimeBuffer);
         Array.Clear(DamageBuffer);
         ClearDirty();
         Parity = 0;
         State = ChunkState.Sleeping;
+        _columnOccupancyValid = true;
     }
 
     /// <summary>
@@ -101,7 +122,117 @@ public sealed class Chunk
     /// </summary>
     internal ref ushort GetMaterialBase()
     {
-        return ref MemoryMarshal.GetArrayDataReference(MaterialBuffer);
+        return ref MemoryMarshal.GetArrayDataReference(_materialBuffer);
+    }
+
+    /// <summary>
+    /// 读取单格 Material，不创建可写数组 alias。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal ushort GetMaterialAt(int localIndex)
+    {
+        return _materialBuffer[localIndex];
+    }
+
+    /// <summary>
+    /// 写入单格 Material，并在派生索引有效时增量维护对应占用位。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void SetMaterialAt(int localIndex, ushort material)
+    {
+        ushort previous = _materialBuffer[localIndex];
+        _materialBuffer[localIndex] = material;
+        bool previousOccupied = previous != 0;
+        bool occupied = material != 0;
+        if (_columnOccupancyValid && previousOccupied != occupied)
+        {
+            SetColumnOccupancy(localIndex, occupied);
+        }
+    }
+
+    /// <summary>
+    /// 使垂直 movement 使用的派生列占用索引与权威 Material SoA 一致。
+    /// </summary>
+    internal void EnsureColumnOccupancy()
+    {
+        if (_columnOccupancyValid)
+        {
+            return;
+        }
+
+        RebuildColumnOccupancy();
+    }
+
+    /// <summary>
+    /// 从权威 Material SoA 重建 64 列、每列上下两个 32-bit 半区的占用位图。
+    /// </summary>
+    internal void RebuildColumnOccupancy()
+    {
+        Array.Clear(_columnOccupancy);
+        ref ushort materialBase = ref MemoryMarshal.GetArrayDataReference(_materialBuffer);
+        for (int localY = 0; localY < EngineConstants.ChunkSize; localY++)
+        {
+            int local = localY << EngineConstants.ChunkSizeLog2;
+            int half = localY >> 5;
+            uint bit = 1U << (localY & 31);
+            for (int localX = 0; localX < EngineConstants.ChunkSize; localX++)
+            {
+                if (Unsafe.Add(ref materialBase, local + localX) != 0)
+                {
+                    _columnOccupancy[(localX * ColumnHalfCount) + half] |= bit;
+                }
+            }
+        }
+
+        _columnOccupancyValid = true;
+    }
+
+    /// <summary>
+    /// 增量更新单格的派生列占用位；调用方必须已经提交对应 Material 写入。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void SetColumnOccupancy(int localIndex, bool occupied)
+    {
+        Debug.Assert(_columnOccupancyValid);
+        int localX = localIndex & (EngineConstants.ChunkSize - 1);
+        int localY = localIndex >> EngineConstants.ChunkSizeLog2;
+        int wordIndex = (localX * ColumnHalfCount) + (localY >> 5);
+        uint mask = 1U << (localY & 31);
+        ref uint word = ref _columnOccupancy[wordIndex];
+        word = occupied ? word | mask : word & ~mask;
+    }
+
+    /// <summary>
+    /// 返回指定本地列和闭区间内第一个非空 cell 的 Y；没有占用时返回 -1。
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal int FindFirstOccupiedInColumn(int localX, int minLocalY, int maxLocalY)
+    {
+        Debug.Assert((uint)localX < EngineConstants.ChunkSize);
+        Debug.Assert((uint)minLocalY < EngineConstants.ChunkSize);
+        Debug.Assert((uint)maxLocalY < EngineConstants.ChunkSize);
+        Debug.Assert(minLocalY <= maxLocalY);
+        Debug.Assert(_columnOccupancyValid);
+
+        int firstHalf = minLocalY >> 5;
+        int lastHalf = maxLocalY >> 5;
+        for (int half = firstHalf; half <= lastHalf; half++)
+        {
+            int minBit = half == firstHalf ? minLocalY & 31 : 0;
+            int maxBit = half == lastHalf ? maxLocalY & 31 : 31;
+            uint bits = _columnOccupancy[(localX * ColumnHalfCount) + half] & (uint.MaxValue << minBit);
+            if (maxBit != 31)
+            {
+                bits &= (1U << (maxBit + 1)) - 1U;
+            }
+
+            if (bits != 0)
+            {
+                return (half << 5) + BitOperations.TrailingZeroCount(bits);
+            }
+        }
+
+        return -1;
     }
 
     /// <summary>
@@ -196,7 +327,7 @@ public sealed class Chunk
             int localStart = (ly * EngineConstants.ChunkSize) + rect.MinX;
             int run = rect.MaxX - rect.MinX + 1;
             CellSpanOps.SetParityForOccupiedCells(
-                MaterialBuffer.AsSpan(localStart, run),
+                _materialBuffer.AsSpan(localStart, run),
                 FlagsBuffer.AsSpan(localStart, run),
                 staleParity);
         }
@@ -207,6 +338,7 @@ public sealed class Chunk
     /// </summary>
     public void SetCurrentDirty(DirtyRect rect)
     {
+        EnsureColumnOccupancy();
         CurrentDirty = rect;
         State = rect.IsEmpty && WorkingDirty.IsEmpty ? ChunkState.Sleeping : ChunkState.Awake;
     }
@@ -216,6 +348,7 @@ public sealed class Chunk
     /// </summary>
     public void SetWorkingDirty(DirtyRect rect)
     {
+        EnsureColumnOccupancy();
         WorkingDirty = rect;
         State = rect.IsEmpty && CurrentDirty.IsEmpty ? ChunkState.Sleeping : ChunkState.Awake;
     }

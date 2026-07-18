@@ -187,6 +187,11 @@ public sealed class CheckerboardScheduler
                 continue;
             }
 
+            // 垂直 movement 最多向南跨一个 chunk。派生列位图只在 active 邻域首次失效时重建，
+            // sleeping 远区既不扫描 Material SoA，也不进入 CA 迭代。
+            neighborhood.Slot4.EnsureColumnOccupancy();
+            neighborhood.Slot7.EnsureColumnOccupancy();
+
             if (throttlePolicy.Enabled && !throttlePolicy.IsFullRate(chunk.Coord))
             {
                 _parityPrepareChunks[_parityPrepareCount++] = chunk;

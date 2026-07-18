@@ -9,13 +9,13 @@ namespace PixelEngine.Benchmarks;
 /// </summary>
 /// <remarks>
 /// 单帧约 0.03ms，直接测量会触发 BenchmarkDotNet MinIterationTime；本基准在一次计时内
-/// 依次运行 8192 个独立 kernel，并通过 <see cref="BenchmarkAttribute.OperationsPerInvoke" />
+/// 依次运行 12,288 个独立 kernel，并通过 <see cref="BenchmarkAttribute.OperationsPerInvoke" />
 /// 折算单帧。每个 kernel 只推进一帧，后续 dirty 收缩不会污染 measured workload。
 /// </remarks>
 [MemoryDiagnoser]
 public class TypicalDirtyCellThroughputBenchmark : IDisposable
 {
-    private const int FramesPerInvoke = 8192;
+    private const int FramesPerInvoke = 12_288;
     private const int DirtyMin = 24;
     private const int DirtyMaxExclusive = 40;
     private const int ActiveCellsPerFrame = (DirtyMaxExclusive - DirtyMin) * (DirtyMaxExclusive - DirtyMin);
@@ -27,7 +27,7 @@ public class TypicalDirtyCellThroughputBenchmark : IDisposable
     private JobSystem? _jobs;
 
     /// <summary>
-    /// 创建 8192 份互不共享可变网格的 16x16 dirty 场景与持久 worker。
+    /// 创建 12,288 份互不共享可变网格的 16x16 dirty 场景与持久 worker。
     /// </summary>
     [GlobalSetup]
     public void Setup()
@@ -61,7 +61,7 @@ public class TypicalDirtyCellThroughputBenchmark : IDisposable
     }
 
     /// <summary>
-    /// JobSystem 驱动 8192 个独立 16x16 dirty 初态各推进一帧。
+    /// JobSystem 驱动 12,288 个独立 16x16 dirty 初态各推进一帧。
     /// </summary>
     [Benchmark(OperationsPerInvoke = FramesPerInvoke)]
     public void StepJobSystemTypicalDirtyIndependentFrames()

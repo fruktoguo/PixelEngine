@@ -509,7 +509,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     {
         string benchmark = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "TypicalDirtyCellThroughputBenchmark.cs");
 
-        Assert.Contains("private const int FramesPerInvoke = 8192;", benchmark, StringComparison.Ordinal);
+        Assert.Contains("private const int FramesPerInvoke = 12_288;", benchmark, StringComparison.Ordinal);
         Assert.Contains("private readonly TypicalDirtyFrame[] _frames", benchmark, StringComparison.Ordinal);
         Assert.Contains("private Chunk[] _sharedGuards", benchmark, StringComparison.Ordinal);
         Assert.Contains("[Benchmark(OperationsPerInvoke = FramesPerInvoke)]", benchmark, StringComparison.Ordinal);
@@ -7350,7 +7350,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         string window = ReadRepositoryFile("src", "PixelEngine.Simulation", "NeighborWindow.cs");
         string updater = ReadRepositoryFile("src", "PixelEngine.Simulation", "ChunkUpdater.cs");
 
-        Assert.Contains("MemoryMarshal.GetArrayDataReference(MaterialBuffer)", chunk, StringComparison.Ordinal);
+        Assert.Contains("MemoryMarshal.GetArrayDataReference(_materialBuffer)", chunk, StringComparison.Ordinal);
         Assert.Contains("MemoryMarshal.GetArrayDataReference(FlagsBuffer)", chunk, StringComparison.Ordinal);
         Assert.Contains("MemoryMarshal.GetArrayDataReference(LifetimeBuffer)", chunk, StringComparison.Ordinal);
 
@@ -7363,6 +7363,11 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("Unsafe.Add(ref SelectLifetimeBase(slot), local)", window, StringComparison.Ordinal);
         Assert.Contains("TryMoveCellFromCenterKnownCenterTarget", window, StringComparison.Ordinal);
         Assert.Contains("MoveCellFromCenterKnownEligibleCenterTarget", window, StringComparison.Ordinal);
+        Assert.Contains("TryFindFirstOccupiedBelow", window, StringComparison.Ordinal);
+
+        Assert.Contains("private readonly uint[] _columnOccupancy", chunk, StringComparison.Ordinal);
+        Assert.Contains("FindFirstOccupiedInColumn", chunk, StringComparison.Ordinal);
+        Assert.Contains("_columnOccupancyValid = false;", chunk, StringComparison.Ordinal);
 
         Assert.Contains("NeighborWindow window = new(chunk.Coord, in neighborhood);", updater, StringComparison.Ordinal);
         Assert.Contains("ref ushort materialBase = ref chunk.GetMaterialBase();", updater, StringComparison.Ordinal);

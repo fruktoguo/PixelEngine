@@ -11,6 +11,7 @@ namespace PixelEngine.Simulation.Tests;
 public sealed class CheckerboardSchedulerTests
 {
     private const ushort Sand = 2;
+    private const ushort Gas = 3;
 
     /// <summary>
     /// 验证低活跃 chunk 数时 StepCa(JobSystem) 不触碰 JobSystem 派发路径，直接单线程回退。
@@ -241,6 +242,51 @@ public sealed class CheckerboardSchedulerTests
     }
 
     /// <summary>
+    /// 验证同一 checkerboard pass 的上下 active chunk 写入共享中间 chunk 时，
+    /// 南向 32px movement 与北向 gas movement 分别维护不同 32-row word，不发生 lost update。
+    /// </summary>
+    [Fact]
+    public void ParallelSamePassMaintainsSeparateColumnOccupancyHalves()
+    {
+        TestChunkSource source = CreateDenseSource(-1, -1, 3, 3);
+        SimulationKernel kernel = new(source, CreateMaterials());
+        using JobSystem jobs = new(workerCount: 4)
+        {
+            SingleThreadThreshold = 0,
+        };
+
+        for (int iteration = 0; iteration < 100; iteration++)
+        {
+            foreach (Chunk chunk in source.ResidentChunks)
+            {
+                chunk.Reset(chunk.Coord);
+            }
+
+            kernel.RestoreFrameState(frameIndex: 0, currentParity: 0);
+            for (int chunkX = 0; chunkX <= 2; chunkX += 2)
+            {
+                Chunk north = source.GetRequired(new ChunkCoord(chunkX, 0));
+                Chunk south = source.GetRequired(new ChunkCoord(chunkX, 2));
+                Set(north, 10, EngineConstants.ChunkSize - 1, Sand);
+                Set(south, 10, 0, Gas);
+                north.SetCurrentDirty(DirtyRect.Full);
+                south.SetCurrentDirty(DirtyRect.Full);
+            }
+
+            kernel.StepCa(jobs);
+
+            for (int chunkX = 0; chunkX <= 2; chunkX += 2)
+            {
+                Chunk middle = source.GetRequired(new ChunkCoord(chunkX, 1));
+                Assert.Equal(Sand, middle.Material[CellAddressing.LocalIndexFromLocal(10, 31)]);
+                Assert.Equal(Gas, middle.Material[CellAddressing.LocalIndexFromLocal(10, 63)]);
+                Assert.Equal(31, middle.FindFirstOccupiedInColumn(10, 0, 31));
+                Assert.Equal(63, middle.FindFirstOccupiedInColumn(10, 32, 63));
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证远区 chunk 被降频跳过时会把 current dirty 保留到下一帧，不会在 dirty swap 后睡眠丢工作。
     /// </summary>
     [Fact]
@@ -322,12 +368,12 @@ public sealed class CheckerboardSchedulerTests
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(
-            [CellType.Empty, CellType.Solid, CellType.Powder],
-            [0, 255, 120],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0],
-            [0, 0, 0]);
+            [CellType.Empty, CellType.Solid, CellType.Powder, CellType.Gas],
+            [0, 255, 120, 1],
+            [0, 0, 0, 1],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]);
     }
 
     private static TestChunkSource CreateDenseSource(int minX, int minY, int maxX, int maxY)

@@ -96,6 +96,58 @@ public sealed class SimulationDataStructureTests
     }
 
     /// <summary>
+    /// 验证列占用索引从可写 Material alias 重建，并正确覆盖两个 32-row 半区与闭区间掩码。
+    /// </summary>
+    [Fact]
+    public void ChunkColumnOccupancyRebuildsWritableAliasAcrossHalfBoundaries()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        const int localX = 7;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(localX, 0)] = 1;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(localX, 31)] = 2;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(localX, 32)] = 3;
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(localX, 63)] = 4;
+
+        chunk.EnsureColumnOccupancy();
+
+        Assert.Equal(0, chunk.FindFirstOccupiedInColumn(localX, 0, 63));
+        Assert.Equal(31, chunk.FindFirstOccupiedInColumn(localX, 1, 31));
+        Assert.Equal(32, chunk.FindFirstOccupiedInColumn(localX, 32, 62));
+        Assert.Equal(63, chunk.FindFirstOccupiedInColumn(localX, 33, 63));
+        Assert.Equal(-1, chunk.FindFirstOccupiedInColumn(localX + 1, 0, 63));
+
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(localX, 31)] = 0;
+        chunk.EnsureColumnOccupancy();
+        Assert.Equal(-1, chunk.FindFirstOccupiedInColumn(localX, 1, 31));
+
+        chunk.Reset(new ChunkCoord(1, 1));
+        Assert.Equal(-1, chunk.FindFirstOccupiedInColumn(localX, 0, 63));
+    }
+
+    /// <summary>
+    /// 验证 NeighborWindow 的空/非空写入与 swap 会增量维护派生列索引。
+    /// </summary>
+    [Fact]
+    public void NeighborWindowMaterialWritesAndSwapMaintainColumnOccupancy()
+    {
+        TestChunkSource source = CreateNeighborhoodSource(new ChunkCoord(0, 0), out Chunk center, out _);
+        NeighborWindow window = new(source, center.Coord);
+        const int localX = 9;
+        int baseY = center.Coord.Y << EngineConstants.ChunkSizeLog2;
+
+        window.SetMaterial(localX, baseY + 12, 1);
+        window.SetMaterial(localX, baseY + 40, 2);
+        Assert.Equal(12, center.FindFirstOccupiedInColumn(localX, 0, 63));
+
+        window.SetMaterial(localX, baseY + 12, 0);
+        Assert.Equal(40, center.FindFirstOccupiedInColumn(localX, 0, 63));
+
+        _ = window.Swap(localX, baseY + 40, localX, baseY + 20);
+        Assert.Equal(20, center.FindFirstOccupiedInColumn(localX, 0, 63));
+        Assert.Equal(-1, center.FindFirstOccupiedInColumn(localX, 21, 63));
+    }
+
+    /// <summary>
     /// 验证 CellGrid 通过 IChunkSource 路由世界坐标写入、标记 dirty，并按材质表返回类型。
     /// </summary>
     [Fact]
@@ -132,6 +184,31 @@ public sealed class SimulationDataStructureTests
         Assert.Equal(ChunkState.Awake, chunk.State);
         Assert.Equal(1, damageSink.Count);
         Assert.Equal((64, -1), damageSink.Last);
+        Assert.Equal(63, chunk.FindFirstOccupiedInColumn(0, 63, 63));
+    }
+
+    /// <summary>
+    /// 验证 CellGrid 受控单格写入和清空会增量维护列占用索引，无需下一帧全 chunk 重建。
+    /// </summary>
+    [Fact]
+    public void CellGridControlledWritesMaintainColumnOccupancy()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        TestChunkSource source = new(chunk);
+        MaterialPropsTable props = new(
+            [CellType.Empty, CellType.Solid],
+            [0, 255],
+            [0, 0],
+            [0, 0],
+            [0, 0],
+            [0, 0]);
+        CellGrid grid = new(source, props);
+
+        grid.SetMaterial(7, 40, 1);
+        Assert.Equal(40, chunk.FindFirstOccupiedInColumn(7, 0, 63));
+
+        Assert.True(grid.TryClearCell(7, 40));
+        Assert.Equal(-1, chunk.FindFirstOccupiedInColumn(7, 0, 63));
     }
 
     /// <summary>
