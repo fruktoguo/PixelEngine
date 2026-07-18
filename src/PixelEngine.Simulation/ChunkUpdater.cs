@@ -265,9 +265,8 @@ internal static class ChunkUpdater
                 out firstTargetFlags);
         }
 
-        if (firstTargetNonEmpty)
-        {
-            return !CellFlags.MatchesFrame(firstTargetFlags, parityBit) &&
+        return firstTargetNonEmpty
+            ? !CellFlags.MatchesFrame(firstTargetFlags, parityBit) &&
                 materials.DensityOf(firstTargetMaterial) < sourceDensity &&
                 MoveToKnownEligibleTarget(
                     ref window,
@@ -282,10 +281,53 @@ internal static class ChunkUpdater
                     targetLocal,
                     parityBit,
                     out movedX,
-                    out movedY);
-        }
+                    out movedY)
+            : TryMoveDownThroughEmptyColumn(
+                ref window,
+                materials,
+                rigidDamageSink,
+                diagnostics,
+                wx,
+                wy,
+                sourceLocalIndex,
+                sourceDensity,
+                parityBit,
+                out movedX,
+                out movedY);
+    }
 
+    // 将 32px 空列扫描隔离在 cold arm，避免密集材质常见的首格碰撞路径携带整段循环。
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool TryMoveDownThroughEmptyColumn(
+        ref NeighborWindow window,
+        MaterialPropsTable materials,
+        IRigidDamageSink rigidDamageSink,
+        SimulationDiagnostics diagnostics,
+        int wx,
+        int wy,
+        int sourceLocalIndex,
+        byte sourceDensity,
+        byte parityBit,
+        out int movedX,
+        out int movedY)
+    {
+        int sourceLocalX = sourceLocalIndex & (EngineConstants.ChunkSize - 1);
+        int sourceLocalY = sourceLocalIndex >> EngineConstants.ChunkSizeLog2;
+        int firstCandidateY = wy + 1;
         int targetY = firstCandidateY;
+        int firstTargetLocalY = sourceLocalY + 1;
+        int targetSlot;
+        int targetLocal;
+        if (firstTargetLocalY < EngineConstants.ChunkSize)
+        {
+            targetSlot = 4;
+            targetLocal = CellAddressing.LocalIndexFromLocal(sourceLocalX, firstTargetLocalY);
+        }
+        else
+        {
+            targetSlot = window.SlotOf(wx, firstCandidateY);
+            targetLocal = CellAddressing.LocalIndex(wx, firstCandidateY);
+        }
         // 垂直扫描受 MoveCap 约束，保证目标仍在 halo 内且可一次交换到位。
         for (int step = 2; step <= EngineConstants.MoveCap; step++)
         {
@@ -328,21 +370,20 @@ internal static class ChunkUpdater
             break;
         }
 
-        return targetY != wy &&
-            MoveToKnownEligibleTarget(
-                ref window,
-                rigidDamageSink,
-                diagnostics,
-                wx,
-                wy,
-                sourceLocalIndex,
-                wx,
-                targetY,
-                targetSlot,
-                targetLocal,
-                parityBit,
-                out movedX,
-                out movedY);
+        return MoveToKnownEligibleTarget(
+            ref window,
+            rigidDamageSink,
+            diagnostics,
+            wx,
+            wy,
+            sourceLocalIndex,
+            wx,
+            targetY,
+            targetSlot,
+            targetLocal,
+            parityBit,
+            out movedX,
+            out movedY);
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]

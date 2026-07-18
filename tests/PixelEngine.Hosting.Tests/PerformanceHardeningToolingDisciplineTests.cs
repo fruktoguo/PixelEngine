@@ -7382,6 +7382,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("CellType.Liquid => TryMovePowder", updater, StringComparison.Ordinal);
         Assert.Contains("dispersion != 0 && TryMoveLiquidHorizontal", updater, StringComparison.Ordinal);
         Assert.Matches(@"\[MethodImpl\(MethodImplOptions\.NoInlining\)\]\s+private static bool TryMoveLiquidHorizontal", updater);
+        Assert.Contains(": TryMoveDownThroughEmptyColumn(", updater, StringComparison.Ordinal);
+        Assert.Matches(@"\[MethodImpl\(MethodImplOptions\.NoInlining\)\]\s+private static bool TryMoveDownThroughEmptyColumn", updater);
         Assert.DoesNotContain("private static bool TryMoveLiquid(", updater, StringComparison.Ordinal);
         Assert.Contains("TryMoveToCenterKnownTarget", updater, StringComparison.Ordinal);
         Assert.Contains("sourceLocalIndex + EngineConstants.ChunkSize + firstDx", updater, StringComparison.Ordinal);
