@@ -11,6 +11,34 @@ namespace PixelEngine.UI.Tests;
 public sealed class GuiAppCombinedFrameTests
 {
     /// <summary>
+    /// Unity 深灰主题必须让窗口焦点标题保持中性，并仅用明度层级区分当前 tab。
+    /// </summary>
+    [Fact]
+    public void UnityThemeKeepsFocusedTitleNeutralAndSelectedTabDistinct()
+    {
+        ImGuiContextPtr context = ImGui.CreateContext();
+        try
+        {
+            ImGui.SetCurrentContext(context);
+            GuiTheme.ApplyCurrent(GuiThemeKind.Unity6Dark);
+            Span<System.Numerics.Vector4> colors = ImGui.GetStyle().Colors;
+
+            Assert.Equal(colors[(int)ImGuiCol.TitleBg], colors[(int)ImGuiCol.TitleBgActive]);
+            Assert.NotEqual(colors[(int)ImGuiCol.Tab], colors[(int)ImGuiCol.TabSelected]);
+            Assert.Equal(colors[(int)ImGuiCol.TabSelected], colors[(int)ImGuiCol.TabDimmedSelected]);
+            Assert.NotEqual(colors[(int)ImGuiCol.Header], colors[(int)ImGuiCol.TabSelected]);
+
+            GuiTheme.ApplyCurrent(GuiThemeKind.NeutralDark);
+            Assert.NotEqual(colors[(int)ImGuiCol.TitleBg], colors[(int)ImGuiCol.TitleBgActive]);
+            Assert.Equal(colors[(int)ImGuiCol.Header], colors[(int)ImGuiCol.TitleBgActive]);
+        }
+        finally
+        {
+            ImGui.DestroyContext(context);
+        }
+    }
+
+    /// <summary>
     /// 绝对 style 缩放必须消除相邻倍率反复截断，且始终满足 ImGui 的窗口边框命中宽度约束。
     /// </summary>
     [Fact]

@@ -302,6 +302,8 @@ public sealed class EditorAutomationCaptureE2ETests
             Tool = "Temperature",
             Shape = "Point",
             Radius = 0,
+            RadiusX = 0,
+            RadiusY = 0,
             Probability = 1f,
             TemperatureMode = "Target",
             TemperatureCelsius = expectedMutatedTemperature,

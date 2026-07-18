@@ -459,6 +459,8 @@ public sealed class EditorAppTests
         Assert.Equal(new Vector2(6f, 6f), tokens.WindowPadding);
         Assert.Equal(new Vector2(5f, 3f), tokens.FramePadding);
         Assert.Equal(new Vector4(0x2B / 255f, 0x2B / 255f, 0x2B / 255f, 1f), tokens.WindowBg);
+        Assert.Equal(tokens.TitleBg, tokens.TitleBgActive);
+        Assert.NotEqual(tokens.Tab, tokens.TabSelected);
         Assert.Equal(new Vector4(0x3B / 255f, 0x85 / 255f, 0xC5 / 255f, 1f), tokens.Accent);
     }
 

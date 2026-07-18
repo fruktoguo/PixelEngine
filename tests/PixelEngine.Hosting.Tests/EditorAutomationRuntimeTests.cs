@@ -1275,11 +1275,14 @@ public sealed class EditorAutomationRuntimeTests
     {
         Assert.Equal(1, EditorAutomationAuthoringApi.EstimateBrushStrokeCellVisits(1, 0));
         Assert.Equal(66_049, EditorAutomationAuthoringApi.EstimateBrushStrokeCellVisits(1, 128));
+        Assert.Equal(35, EditorAutomationAuthoringApi.EstimateBrushStrokeCellVisits(1, 3, 2));
         Assert.True(
             EditorAutomationAuthoringApi.EstimateBrushStrokeCellVisits(8192, 128) >
             EditorAutomationAuthoringApi.MaximumBrushStrokeCellVisits);
         _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
             EditorAutomationAuthoringApi.EstimateBrushStrokeCellVisits(0, 1));
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            EditorAutomationAuthoringApi.EstimateBrushStrokeCellVisits(1, 1, 129));
     }
 
     /// <summary>Inspector typed asset 字段拒绝类型冒充和 root escape，并返回规范编码。</summary>

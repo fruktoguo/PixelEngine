@@ -920,6 +920,9 @@ internal sealed class EditorShellHostExtension :
             MaterialName = materials.GetName(settings.MaterialId),
             MaterialId = settings.MaterialId,
             Radius = settings.Radius,
+            RadiusX = settings.RadiusX,
+            RadiusY = settings.RadiusY,
+            LockAspectRatio = settings.LockAspectRatio,
             Probability = settings.Probability,
             TemperatureMode = settings.TemperatureMode.ToString(),
             TemperatureCelsius = settings.TemperatureCelsius,
@@ -949,10 +952,13 @@ internal sealed class EditorShellHostExtension :
             !Enum.TryParse(settings.TemperatureMode, ignoreCase: true, out TemperatureBrushMode temperatureMode) ||
             !Enum.IsDefined(temperatureMode) ||
             settings.Radius is < 0 or > 128 ||
+            settings.EffectiveRadiusX is < 0 or > 128 ||
+            settings.EffectiveRadiusY is < 0 or > 128 ||
+            (settings.EffectiveLockAspectRatio && settings.EffectiveRadiusX != settings.EffectiveRadiusY) ||
             !float.IsFinite(settings.Probability) || settings.Probability is < 0f or > 1f ||
             !float.IsFinite(settings.TemperatureCelsius))
         {
-            diagnostic = "画刷设置无效：枚举、radius、probability 或 temperature 超出公共 API 契约。";
+            diagnostic = "画刷设置无效：枚举、横纵 radius、比例锁、probability 或 temperature 超出公共 API 契约。";
             return false;
         }
 
@@ -960,7 +966,9 @@ internal sealed class EditorShellHostExtension :
         target.Tool = tool;
         target.Shape = shape;
         target.MaterialId = materialId;
-        target.Radius = settings.Radius;
+        target.RadiusX = settings.EffectiveRadiusX;
+        target.RadiusY = settings.EffectiveRadiusY;
+        target.LockAspectRatio = settings.EffectiveLockAspectRatio;
         target.Probability = settings.Probability;
         target.TemperatureMode = temperatureMode;
         target.TemperatureCelsius = settings.TemperatureCelsius;

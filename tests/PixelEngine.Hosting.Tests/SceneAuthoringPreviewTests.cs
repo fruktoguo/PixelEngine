@@ -1043,6 +1043,39 @@ public sealed class SceneAuthoringPreviewTests
     }
 
     /// <summary>
+    /// 验证 Brush footprint 使用 cell 半径构造，并随 Scene camera 缩放而不是保持固定屏幕大小。
+    /// </summary>
+    [Fact]
+    public void BrushFootprintScalesWithAuthoringCameraAndPreservesIndependentAxes()
+    {
+        SceneBrushFootprintGeometry zoomedIn = SceneViewPanel.BuildBrushFootprintGeometry(
+            new Vector2(120f, 80f),
+            cellsPerPixel: 0.25f,
+            EditorBrushShape.Circle,
+            radiusX: 2,
+            radiusY: 5);
+        SceneBrushFootprintGeometry zoomedOut = SceneViewPanel.BuildBrushFootprintGeometry(
+            new Vector2(120f, 80f),
+            cellsPerPixel: 1f,
+            EditorBrushShape.Circle,
+            radiusX: 2,
+            radiusY: 5);
+        SceneBrushFootprintGeometry point = SceneViewPanel.BuildBrushFootprintGeometry(
+            Vector2.Zero,
+            cellsPerPixel: 0.5f,
+            EditorBrushShape.Point,
+            radiusX: 128,
+            radiusY: 128);
+
+        Assert.Equal(new Vector2(10f, 22f), zoomedIn.HalfSize);
+        Assert.Equal(new Vector2(2.5f, 5.5f), zoomedOut.HalfSize);
+        Assert.Equal(new Vector2(1f, 1f), point.HalfSize);
+        Assert.Equal(EditorBrushShape.Circle, zoomedIn.Shape);
+        _ = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            SceneViewPanel.BuildBrushFootprintGeometry(Vector2.Zero, 0f, EditorBrushShape.Circle, 1, 1));
+    }
+
+    /// <summary>
     /// 验证外部自动化可直接恢复 Scene authoring camera，并严格拒绝非有限值与越界 zoom。
     /// </summary>
     [Fact]

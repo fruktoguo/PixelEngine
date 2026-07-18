@@ -21,9 +21,32 @@ public sealed class MaterialBrushSettings
     public ushort MaterialId { get; set; }
 
     /// <summary>
-    /// 半径，0 表示单 cell。
+    /// 兼容旧调用方的统一半径；读取时返回横纵半径的较大值，写入时同时更新两轴。
     /// </summary>
-    public int Radius { get; set; } = 2;
+    public int Radius
+    {
+        get => Math.Max(RadiusX, RadiusY);
+        set
+        {
+            RadiusX = value;
+            RadiusY = value;
+        }
+    }
+
+    /// <summary>
+    /// 横向半径，0 表示仅覆盖中心列。
+    /// </summary>
+    public int RadiusX { get; set; } = 2;
+
+    /// <summary>
+    /// 纵向半径，0 表示仅覆盖中心行。
+    /// </summary>
+    public int RadiusY { get; set; } = 2;
+
+    /// <summary>
+    /// UI 调整一轴时是否同步另一轴；关闭后圆形变为椭圆、方形变为矩形。
+    /// </summary>
+    public bool LockAspectRatio { get; set; } = true;
 
     /// <summary>
     /// 应用概率，范围 0..1。
@@ -44,6 +67,16 @@ public sealed class MaterialBrushSettings
     /// 返回钳制后的半径。
     /// </summary>
     public int ClampedRadius => Math.Clamp(Radius, 0, 128);
+
+    /// <summary>
+    /// 返回钳制后的横向半径。
+    /// </summary>
+    public int ClampedRadiusX => Math.Clamp(RadiusX, 0, 128);
+
+    /// <summary>
+    /// 返回钳制后的纵向半径。
+    /// </summary>
+    public int ClampedRadiusY => Math.Clamp(RadiusY, 0, 128);
 
     /// <summary>
     /// 返回钳制后的概率。

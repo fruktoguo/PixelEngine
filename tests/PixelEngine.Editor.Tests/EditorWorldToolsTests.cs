@@ -36,6 +36,49 @@ public sealed class EditorWorldToolsTests
     }
 
     /// <summary>
+    /// 验证横纵半径可独立形成椭圆与矩形 footprint，旧 Radius 写入仍保持等轴兼容。
+    /// </summary>
+    [Fact]
+    public void BrushApplicatorSupportsIndependentHorizontalAndVerticalRadii()
+    {
+        RecordingEditApi edit = new();
+        MaterialBrushApplicator applicator = new(edit);
+        MaterialBrushSettings ellipse = new()
+        {
+            Tool = EditorBrushTool.Paint,
+            Shape = EditorBrushShape.Circle,
+            RadiusX = 2,
+            RadiusY = 1,
+            LockAspectRatio = false,
+            MaterialId = 3,
+        };
+
+        int ellipseWrites = applicator.ApplyAt(10, 20, ellipse);
+
+        Assert.Equal(7, ellipseWrites);
+        Assert.Contains((8, 20, (ushort)3), edit.Painted);
+        Assert.Contains((10, 19, (ushort)3), edit.Painted);
+        Assert.DoesNotContain((9, 19, (ushort)3), edit.Painted);
+
+        MaterialBrushSettings rectangle = new()
+        {
+            Tool = EditorBrushTool.Erase,
+            Shape = EditorBrushShape.Square,
+            RadiusX = 3,
+            RadiusY = 1,
+            LockAspectRatio = false,
+        };
+        int rectangleWrites = applicator.ApplyAt(4, 5, rectangle);
+
+        Assert.Equal(21, rectangleWrites);
+        Assert.Equal([(1, 4, 7, 6)], edit.ClearedRects);
+
+        rectangle.Radius = 2;
+        Assert.Equal(2, rectangle.RadiusX);
+        Assert.Equal(2, rectangle.RadiusY);
+    }
+
+    /// <summary>
     /// 验证概率为 0 时不会写世界。
     /// </summary>
     [Fact]

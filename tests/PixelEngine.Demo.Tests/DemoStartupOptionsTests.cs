@@ -363,6 +363,73 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证材质纯色回退与内容纹理的物理语义一致，避免水、冰、木材等在 Editor/无纹理路径中串色。
+    /// </summary>
+    [Fact]
+    public void DemoContentMaterialFallbackPaletteMatchesMaterialSemantics()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        DemoStartupOptions options = DemoStartupOptions.Parse([
+            "--headless",
+            "--no-hot-reload",
+            "--content",
+            contentRoot,
+        ]);
+        EngineProject project = DemoProgram.BuildProject(options);
+        using Engine engine = DemoProgram.BuildEngine(options, project);
+        _ = engine.LoadContentPackage();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        (string Name, uint BaseColorBgra)[] expected =
+        [
+            ("sand", 0xFF_DD_C5_7B),
+            ("dirt", 0xFF_64_42_2A),
+            ("ash", 0xFF_60_60_5C),
+            ("water", 0xFF_31_70_BE),
+            ("oil", 0xFF_28_20_32),
+            ("acid", 0xFF_64_DE_35),
+            ("lava", 0xFF_CF_59_13),
+            ("molten_metal", 0xFF_C7_7C_38),
+            ("steam", 0xFF_D9_E0_E5),
+            ("smoke", 0xFF_4F_4F_53),
+            ("acid_gas", 0xFF_7C_C9_5E),
+            ("fire", 0xFF_FF_95_2C),
+            ("stone", 0xFF_63_63_69),
+            ("wood", 0xFF_72_44_1F),
+            ("ice", 0xFF_AF_E0_F5),
+            ("metal", 0xFF_96_9C_A0),
+            ("glass", 0xFF_A8_D6_E4),
+            ("gravel", 0xFF_63_63_69),
+            ("crystal", 0xFF_69_E0_F2),
+        ];
+
+        foreach ((string name, uint baseColorBgra) in expected)
+        {
+            Assert.True(materials.TryGetId(name, out ushort id), $"Demo 缺少材质 {name}。");
+            Assert.Equal(baseColorBgra, materials.Get(id).BaseColorBGRA);
+        }
+
+        uint water = materials.Get(materials.GetIdOrFallback("water", 0)).BaseColorBGRA;
+        Assert.True(Blue(water) > Green(water) && Blue(water) > Red(water));
+        uint acid = materials.Get(materials.GetIdOrFallback("acid", 0)).BaseColorBGRA;
+        Assert.True(Green(acid) > Red(acid) && Green(acid) > Blue(acid));
+
+        static byte Red(uint bgra)
+        {
+            return (byte)(bgra >> 16);
+        }
+
+        static byte Green(uint bgra)
+        {
+            return (byte)(bgra >> 8);
+        }
+
+        static byte Blue(uint bgra)
+        {
+            return (byte)bgra;
+        }
+    }
+
+    /// <summary>
     /// 验证真实 Demo materials.json 的抗性数值会驱动 DamageCircle 差异化破坏。
     /// </summary>
     [Fact]

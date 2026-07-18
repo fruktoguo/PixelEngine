@@ -824,6 +824,9 @@ public sealed class AutomationSchemaTests
             MaterialName = "water",
             MaterialId = null,
             Radius = 8,
+            RadiusX = 12,
+            RadiusY = 4,
+            LockAspectRatio = false,
             Probability = 0.75f,
             TemperatureMode = "Target",
             TemperatureCelsius = 25f,
@@ -833,9 +836,30 @@ public sealed class AutomationSchemaTests
             AutomationJsonContext.Default.AutomationBrushSettings);
         Assert.Equal("water", brushJson.GetProperty("materialName").GetString());
         Assert.False(brushJson.TryGetProperty("materialId", out _));
+        Assert.Equal(12, brushJson.GetProperty("radiusX").GetInt32());
+        Assert.Equal(4, brushJson.GetProperty("radiusY").GetInt32());
+        Assert.False(brushJson.GetProperty("lockAspectRatio").GetBoolean());
         Assert.Equal(
             brush,
             brushJson.Deserialize(AutomationJsonContext.Default.AutomationBrushSettings));
+
+        AutomationBrushSettings legacyBrush = JsonSerializer.Deserialize(
+            """
+            {
+              "tool":"Paint",
+              "shape":"Circle",
+              "materialName":"water",
+              "radius":6,
+              "probability":1,
+              "temperatureMode":"Additive",
+              "temperatureCelsius":0
+            }
+            """,
+            AutomationJsonContext.Default.AutomationBrushSettings)
+            ?? throw new InvalidOperationException("旧 Brush payload roundtrip 返回 null。");
+        Assert.Equal(6, legacyBrush.EffectiveRadiusX);
+        Assert.Equal(6, legacyBrush.EffectiveRadiusY);
+        Assert.True(legacyBrush.EffectiveLockAspectRatio);
 
         _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(
             """

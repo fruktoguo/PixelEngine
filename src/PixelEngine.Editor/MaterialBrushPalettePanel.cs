@@ -178,11 +178,7 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         ImGui.Separator();
         DrawToolSelector();
         DrawShapeSelector();
-        int radius = Settings.Radius;
-        if (ImGui.SliderInt("半径", ref radius, 0, 64))
-        {
-            Settings.Radius = radius;
-        }
+        DrawSizeControls();
 
         float probability = Settings.Probability;
         if (ImGui.SliderFloat("概率", ref probability, 0f, 1f))
@@ -240,10 +236,59 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
         int shape = (int)Settings.Shape;
         _ = ImGui.RadioButton("点", ref shape, (int)EditorBrushShape.Point);
         ImGui.SameLine();
-        _ = ImGui.RadioButton("圆", ref shape, (int)EditorBrushShape.Circle);
+        _ = ImGui.RadioButton("椭圆", ref shape, (int)EditorBrushShape.Circle);
         ImGui.SameLine();
-        _ = ImGui.RadioButton("方", ref shape, (int)EditorBrushShape.Square);
+        _ = ImGui.RadioButton("矩形", ref shape, (int)EditorBrushShape.Square);
         Settings.Shape = (EditorBrushShape)shape;
+    }
+
+    [EditorUiControlPrimitive]
+    private void DrawSizeControls()
+    {
+        bool locked = Settings.LockAspectRatio;
+        if (ImGui.Checkbox("锁定横纵比例", ref locked))
+        {
+            Settings.LockAspectRatio = locked;
+            if (locked)
+            {
+                Settings.RadiusY = Settings.RadiusX;
+            }
+        }
+
+        bool point = Settings.Shape == EditorBrushShape.Point;
+        if (point)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        int radiusX = Settings.RadiusX;
+        if (ImGui.SliderInt("横向半径", ref radiusX, 0, 128))
+        {
+            Settings.RadiusX = radiusX;
+            if (Settings.LockAspectRatio)
+            {
+                Settings.RadiusY = radiusX;
+            }
+        }
+
+        int radiusY = Settings.RadiusY;
+        if (ImGui.SliderInt("纵向半径", ref radiusY, 0, 128))
+        {
+            Settings.RadiusY = radiusY;
+            if (Settings.LockAspectRatio)
+            {
+                Settings.RadiusX = radiusY;
+            }
+        }
+
+        if (point)
+        {
+            ImGui.EndDisabled();
+        }
+
+        int width = point ? 1 : (Settings.ClampedRadiusX * 2) + 1;
+        int height = point ? 1 : (Settings.ClampedRadiusY * 2) + 1;
+        ImGui.TextDisabled($"{width} x {height} cells");
     }
 
     [EditorUiCommands("panel.brush.material")]
@@ -255,13 +300,29 @@ public sealed class MaterialBrushPalettePanel : IEditorPanel
             return;
         }
 
-        _selectedIndex = Math.Clamp(_selectedIndex, 0, _entries.Length - 1);
+        int settingsIndex = IndexOfMaterial(Settings.MaterialId);
+        _selectedIndex = settingsIndex >= 0
+            ? settingsIndex
+            : Math.Clamp(_selectedIndex, 0, _entries.Length - 1);
         _ = ImGui.Combo("材质", ref _selectedIndex, _names, _names.Length);
         MaterialPaletteEntry selected = _entries[_selectedIndex];
         Settings.MaterialId = selected.Id;
         _ = ImGui.ColorButton("材质色", BgraToVector4(selected.BaseColorBgra), ImGuiColorEditFlags.NoTooltip, new Vector2(18f, 18f));
         ImGui.SameLine();
         ImGui.TextUnformatted(selected.Name);
+    }
+
+    private int IndexOfMaterial(ushort materialId)
+    {
+        for (int i = 0; i < _entries.Length; i++)
+        {
+            if (_entries[i].Id == materialId)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     [EditorUiCommands("panel.brush.temperature")]

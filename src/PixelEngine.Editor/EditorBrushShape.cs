@@ -11,12 +11,12 @@ public enum EditorBrushShape : byte
     Point,
 
     /// <summary>
-    /// 圆形。
+    /// 圆形或椭圆形；横纵半径相等时为圆形。
     /// </summary>
     Circle,
 
     /// <summary>
-    /// 方形。
+    /// 方形或矩形；横纵半径相等时为方形。
     /// </summary>
     Square,
 }

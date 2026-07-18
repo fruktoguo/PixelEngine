@@ -69,11 +69,13 @@ public sealed class MaterialBrushApplicator(
         out int skippedOutOfBoundsCells)
     {
         ArgumentNullException.ThrowIfNull(settings);
-        int radius = settings.ClampedRadius;
+        int radiusX = settings.Shape == EditorBrushShape.Point ? 0 : settings.ClampedRadiusX;
+        int radiusY = settings.Shape == EditorBrushShape.Point ? 0 : settings.ClampedRadiusY;
         if (TryApplyBulkRect(
             centerX,
             centerY,
-            radius,
+            radiusX,
+            radiusY,
             settings,
             bounds,
             out int bulkWrites,
@@ -85,11 +87,11 @@ public sealed class MaterialBrushApplicator(
 
         skippedOutOfBoundsCells = 0;
         int writes = 0;
-        for (int dy = -radius; dy <= radius; dy++)
+        for (int dy = -radiusY; dy <= radiusY; dy++)
         {
-            for (int dx = -radius; dx <= radius; dx++)
+            for (int dx = -radiusX; dx <= radiusX; dx++)
             {
-                if (!Contains(settings.Shape, radius, dx, dy))
+                if (!Contains(settings.Shape, radiusX, radiusY, dx, dy))
                 {
                     continue;
                 }
@@ -124,7 +126,8 @@ public sealed class MaterialBrushApplicator(
     private bool TryApplyBulkRect(
         int centerX,
         int centerY,
-        int radius,
+        int radiusX,
+        int radiusY,
         MaterialBrushSettings settings,
         MaterialBrushBounds bounds,
         out int writes,
@@ -139,15 +142,15 @@ public sealed class MaterialBrushApplicator(
             return false;
         }
 
-        int minX = centerX - radius;
-        int minY = centerY - radius;
-        int maxX = centerX + radius;
-        int maxY = centerY + radius;
+        int minX = centerX - radiusX;
+        int minY = centerY - radiusY;
+        int maxX = centerX + radiusX;
+        int maxY = centerY + radiusY;
         int clippedMinX = Math.Max(minX, bounds.MinX);
         int clippedMinY = Math.Max(minY, bounds.MinY);
         int clippedMaxX = Math.Min(maxX, bounds.MaxX);
         int clippedMaxY = Math.Min(maxY, bounds.MaxY);
-        int requestedCells = ((radius * 2) + 1) * ((radius * 2) + 1);
+        int requestedCells = ((radiusX * 2) + 1) * ((radiusY * 2) + 1);
         if (clippedMinX > clippedMaxX || clippedMinY > clippedMaxY)
         {
             skippedOutOfBoundsCells = requestedCells;
@@ -218,15 +221,30 @@ public sealed class MaterialBrushApplicator(
         return _inspectApi is null || _inspectApi.TryInspectCell(x, y, out _);
     }
 
-    private static bool Contains(EditorBrushShape shape, int radius, int dx, int dy)
+    private static bool Contains(EditorBrushShape shape, int radiusX, int radiusY, int dx, int dy)
     {
         return shape switch
         {
             EditorBrushShape.Point => dx == 0 && dy == 0,
-            EditorBrushShape.Circle => (dx * dx) + (dy * dy) <= radius * radius,
+            EditorBrushShape.Circle => ContainsEllipse(radiusX, radiusY, dx, dy),
             EditorBrushShape.Square => true,
             _ => throw new ArgumentOutOfRangeException(nameof(shape), shape, "未知画刷形状。"),
         };
+    }
+
+    private static bool ContainsEllipse(int radiusX, int radiusY, int dx, int dy)
+    {
+        if (radiusX == 0 || radiusY == 0)
+        {
+            return radiusX == 0
+                ? dx == 0 && Math.Abs(dy) <= radiusY
+                : dy == 0 && Math.Abs(dx) <= radiusX;
+        }
+
+        long radiusXSquared = (long)radiusX * radiusX;
+        long radiusYSquared = (long)radiusY * radiusY;
+        return ((long)dx * dx * radiusYSquared) + ((long)dy * dy * radiusXSquared) <=
+            radiusXSquared * radiusYSquared;
     }
 
     private void ApplyCell(int x, int y, MaterialBrushSettings settings)

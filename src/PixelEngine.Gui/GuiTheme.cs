@@ -39,6 +39,12 @@ public readonly record struct GuiThemeTokens(
     Vector4 TextDisabled,
     Vector4 WindowBg,
     Vector4 PanelBg,
+    Vector4 TitleBg,
+    Vector4 TitleBgActive,
+    Vector4 Tab,
+    Vector4 TabSelected,
+    Vector4 TabDimmed,
+    Vector4 TabDimmedSelected,
     Vector4 FrameBg,
     Vector4 Header,
     Vector4 HeaderHovered,
@@ -78,6 +84,12 @@ public static class GuiTheme
                 TextDisabled: Rgb(0x86, 0x86, 0x86),
                 WindowBg: Rgb(0x22, 0x22, 0x22),
                 PanelBg: Rgb(0x2A, 0x2A, 0x2A),
+                TitleBg: Rgb(0x2A, 0x2A, 0x2A),
+                TitleBgActive: Rgb(0x3A, 0x3A, 0x3A),
+                Tab: Rgb(0x2A, 0x2A, 0x2A),
+                TabSelected: Rgb(0x3A, 0x3A, 0x3A),
+                TabDimmed: Rgb(0x2A, 0x2A, 0x2A),
+                TabDimmedSelected: Rgb(0x3A, 0x3A, 0x3A),
                 FrameBg: Rgb(0x35, 0x35, 0x35),
                 Header: Rgb(0x3A, 0x3A, 0x3A),
                 HeaderHovered: Rgb(0x48, 0x48, 0x48),
@@ -104,6 +116,12 @@ public static class GuiTheme
                 TextDisabled: Rgb(0x89, 0x89, 0x89),
                 WindowBg: Rgb(0x2B, 0x2B, 0x2B),
                 PanelBg: Rgb(0x30, 0x30, 0x30),
+                TitleBg: Rgb(0x30, 0x30, 0x30),
+                TitleBgActive: Rgb(0x30, 0x30, 0x30),
+                Tab: Rgb(0x2B, 0x2B, 0x2B),
+                TabSelected: Rgb(0x3A, 0x3A, 0x3A),
+                TabDimmed: Rgb(0x2B, 0x2B, 0x2B),
+                TabDimmedSelected: Rgb(0x3A, 0x3A, 0x3A),
                 FrameBg: Rgb(0x3A, 0x3A, 0x3A),
                 Header: Rgb(0x3A, 0x6E, 0x96),
                 HeaderHovered: Rgb(0x4A, 0x4A, 0x4A),
@@ -157,8 +175,8 @@ public static class GuiTheme
         colors[(int)ImGuiCol.FrameBg] = tokens.FrameBg;
         colors[(int)ImGuiCol.FrameBgHovered] = tokens.HeaderHovered;
         colors[(int)ImGuiCol.FrameBgActive] = tokens.HeaderActive;
-        colors[(int)ImGuiCol.TitleBg] = tokens.PanelBg;
-        colors[(int)ImGuiCol.TitleBgActive] = tokens.Header;
+        colors[(int)ImGuiCol.TitleBg] = tokens.TitleBg;
+        colors[(int)ImGuiCol.TitleBgActive] = tokens.TitleBgActive;
         colors[(int)ImGuiCol.MenuBarBg] = tokens.PanelBg;
         colors[(int)ImGuiCol.Button] = tokens.Button;
         colors[(int)ImGuiCol.ButtonHovered] = tokens.ButtonHovered;
@@ -169,11 +187,11 @@ public static class GuiTheme
         colors[(int)ImGuiCol.Separator] = tokens.Border;
         colors[(int)ImGuiCol.SeparatorHovered] = tokens.Accent;
         colors[(int)ImGuiCol.SeparatorActive] = tokens.Accent;
-        colors[(int)ImGuiCol.Tab] = tokens.PanelBg;
+        colors[(int)ImGuiCol.Tab] = tokens.Tab;
         colors[(int)ImGuiCol.TabHovered] = tokens.HeaderHovered;
-        colors[(int)ImGuiCol.TabSelected] = tokens.Header;
-        colors[(int)ImGuiCol.TabDimmed] = tokens.PanelBg;
-        colors[(int)ImGuiCol.TabDimmedSelected] = tokens.Header;
+        colors[(int)ImGuiCol.TabSelected] = tokens.TabSelected;
+        colors[(int)ImGuiCol.TabDimmed] = tokens.TabDimmed;
+        colors[(int)ImGuiCol.TabDimmedSelected] = tokens.TabDimmedSelected;
         colors[(int)ImGuiCol.DockingPreview] = tokens.Accent;
         colors[(int)ImGuiCol.DockingEmptyBg] = tokens.WindowBg;
         colors[(int)ImGuiCol.CheckMark] = tokens.Accent;

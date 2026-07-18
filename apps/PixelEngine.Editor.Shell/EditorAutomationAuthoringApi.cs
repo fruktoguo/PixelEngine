@@ -2809,11 +2809,14 @@ internal sealed partial class EditorAutomationAuthoringApi(
             settings.MaterialName.Length > 256 ||
             settings.MaterialId is < ushort.MinValue or > ushort.MaxValue ||
             settings.Radius is < 0 or > 128 ||
+            settings.EffectiveRadiusX is < 0 or > 128 ||
+            settings.EffectiveRadiusY is < 0 or > 128 ||
+            (settings.EffectiveLockAspectRatio && settings.EffectiveRadiusX != settings.EffectiveRadiusY) ||
             !float.IsFinite(settings.Probability) || settings.Probability is < 0f or > 1f ||
             !float.IsFinite(settings.TemperatureCelsius))
         {
             throw Invalid(
-                "画刷设置无效：枚举、materialName/materialId、radius、probability 或 temperature " +
+                "画刷设置无效：枚举、materialName/materialId、横纵 radius、比例锁、probability 或 temperature " +
                 "超出公共 API 契约。");
         }
 
@@ -2859,7 +2862,14 @@ internal sealed partial class EditorAutomationAuthoringApi(
             throw StateUnavailable("当前工程没有可读取设置的世界画刷。");
         }
 
-        long estimatedCellVisits = EstimateBrushStrokeCellVisits(sampleCount, tool.Brush.Radius);
+        bool pointBrush = string.Equals(
+            tool.Brush.Shape,
+            nameof(EditorBrushShape.Point),
+            StringComparison.OrdinalIgnoreCase);
+        long estimatedCellVisits = EstimateBrushStrokeCellVisits(
+            sampleCount,
+            pointBrush ? 0 : tool.Brush.EffectiveRadiusX,
+            pointBrush ? 0 : tool.Brush.EffectiveRadiusY);
         if (estimatedCellVisits > MaximumBrushStrokeCellVisits)
         {
             throw Invalid(
@@ -2896,14 +2906,20 @@ internal sealed partial class EditorAutomationAuthoringApi(
 
     internal static long EstimateBrushStrokeCellVisits(long sampleCount, int radius)
     {
-        if (sampleCount < 1 || radius is < 0 or > 128)
+        return EstimateBrushStrokeCellVisits(sampleCount, radius, radius);
+    }
+
+    internal static long EstimateBrushStrokeCellVisits(long sampleCount, int radiusX, int radiusY)
+    {
+        if (sampleCount < 1 || radiusX is < 0 or > 128 || radiusY is < 0 or > 128)
         {
             throw new ArgumentOutOfRangeException(
-                sampleCount < 1 ? nameof(sampleCount) : nameof(radius));
+                sampleCount < 1 ? nameof(sampleCount) : radiusX is < 0 or > 128 ? nameof(radiusX) : nameof(radiusY));
         }
 
-        long diameter = (radius * 2L) + 1L;
-        return checked(sampleCount * diameter * diameter);
+        long width = (radiusX * 2L) + 1L;
+        long height = (radiusY * 2L) + 1L;
+        return checked(sampleCount * width * height);
     }
 
     private AutomationWorkspaceSnapshot CaptureWorkspace()

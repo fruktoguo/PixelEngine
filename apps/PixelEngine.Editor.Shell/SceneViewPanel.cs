@@ -36,11 +36,13 @@ internal sealed class SceneViewPanel(
     private const uint GizmoYAxisColor = 0xFF_65_CE_64;
     private const uint GizmoUniformColor = 0xFF_54_C8_E8;
     private const uint GizmoHighlightColor = 0xFF_FF_FF_FF;
+    private const uint BrushFootprintShadowColor = 0xD0_00_00_00;
+    private const uint BrushFootprintColor = 0xF0_FF_FF_FF;
     private const float GizmoAxisLength = 48f;
     private const float GizmoRotationRadius = 38f;
     private const float ToolOverlayInset = 8f;
     private const string SnapSettingsPopupName = "scene-gizmo-snap-settings";
-    private static readonly Vector2 ToolOverlayDesiredSize = new(300f, 390f);
+    private static readonly Vector2 ToolOverlayDesiredSize = new(300f, 430f);
     private readonly EditorSceneModel _scene = scene ?? throw new ArgumentNullException(nameof(scene));
     private readonly EditorUndoStack _undo = undo ?? throw new ArgumentNullException(nameof(undo));
     private readonly MaterialBrushPalettePanel? _brushPanel = brushPanel;
@@ -959,6 +961,7 @@ internal sealed class SceneViewPanel(
             DrawMarkers(drawList, preview);
             DrawWebCanvasPreview(drawList);
             DrawCanvasLabel(drawList, preview);
+            DrawBrushFootprint(drawList);
         }
         finally
         {
@@ -1376,6 +1379,117 @@ internal sealed class SceneViewPanel(
                 new Vector2(_canvasMin.X, screenY),
                 new Vector2(_canvasMin.X + _canvasSize.X, screenY),
                 major ? GridMajorColor : GridMinorColor);
+        }
+    }
+
+    private void DrawBrushFootprint(ImDrawListPtr drawList)
+    {
+        if (!MaterialBrushActive || _preparedMode != EditorMode.Edit || !_canvasHovered || _webCanvasPreviewHovered)
+        {
+            return;
+        }
+
+        Vector2 mouse = ImGui.GetIO().MousePos;
+        if (_brushPanel is { Visible: true })
+        {
+            SceneToolOverlayLayout overlay = ResolveToolOverlayLayout(
+                _canvasMin,
+                _canvasSize,
+                ToolOverlayDesiredSize,
+                ToolOverlayDock,
+                ToolOverlayFloatingOffset,
+                ToolOverlayInset);
+            if (mouse.X >= overlay.Position.X &&
+                mouse.Y >= overlay.Position.Y &&
+                mouse.X <= overlay.Position.X + overlay.Size.X &&
+                mouse.Y <= overlay.Position.Y + overlay.Size.Y)
+            {
+                return;
+            }
+        }
+
+        Vector2 world = _camera.CanvasToWorld(mouse - _canvasMin);
+        Vector2 snappedWorld = new(MathF.Round(world.X), MathF.Round(world.Y));
+        SceneBrushFootprintGeometry geometry = BuildBrushFootprintGeometry(
+            WorldToScreen(snappedWorld),
+            _camera.CellsPerPixel,
+            _brushPanel!.Settings.Shape,
+            _brushPanel.Settings.ClampedRadiusX,
+            _brushPanel.Settings.ClampedRadiusY);
+        DrawBrushFootprintOutline(drawList, in geometry, BrushFootprintShadowColor, 3.5f);
+        DrawBrushFootprintOutline(drawList, in geometry, BrushFootprintColor, 1.5f);
+        drawList.AddLine(
+            geometry.Center - new Vector2(4f, 0f),
+            geometry.Center + new Vector2(4f, 0f),
+            BrushFootprintColor,
+            1f);
+        drawList.AddLine(
+            geometry.Center - new Vector2(0f, 4f),
+            geometry.Center + new Vector2(0f, 4f),
+            BrushFootprintColor,
+            1f);
+    }
+
+    internal static SceneBrushFootprintGeometry BuildBrushFootprintGeometry(
+        Vector2 center,
+        float cellsPerPixel,
+        EditorBrushShape shape,
+        int radiusX,
+        int radiusY)
+    {
+        if (!float.IsFinite(center.X) ||
+            !float.IsFinite(center.Y) ||
+            !float.IsFinite(cellsPerPixel) ||
+            cellsPerPixel <= 0f ||
+            !Enum.IsDefined(shape) ||
+            radiusX is < 0 or > 128 ||
+            radiusY is < 0 or > 128)
+        {
+            throw new ArgumentOutOfRangeException(nameof(cellsPerPixel), "Brush footprint 参数无效或越界。");
+        }
+
+        if (shape == EditorBrushShape.Point)
+        {
+            radiusX = 0;
+            radiusY = 0;
+        }
+
+        return new SceneBrushFootprintGeometry(
+            center,
+            new Vector2(
+                (radiusX + 0.5f) / cellsPerPixel,
+                (radiusY + 0.5f) / cellsPerPixel),
+            shape);
+    }
+
+    private static void DrawBrushFootprintOutline(
+        ImDrawListPtr drawList,
+        in SceneBrushFootprintGeometry geometry,
+        uint color,
+        float thickness)
+    {
+        if (geometry.Shape is EditorBrushShape.Point or EditorBrushShape.Square)
+        {
+            drawList.AddRect(
+                geometry.Center - geometry.HalfSize,
+                geometry.Center + geometry.HalfSize,
+                color,
+                0f,
+                ImDrawFlags.None,
+                thickness);
+            return;
+        }
+
+        const int SegmentCount = 64;
+        Vector2 previous = geometry.Center + new Vector2(geometry.HalfSize.X, 0f);
+        for (int segment = 1; segment <= SegmentCount; segment++)
+        {
+            float angle = MathF.Tau * segment / SegmentCount;
+            Vector2 current = geometry.Center + new Vector2(
+                MathF.Cos(angle) * geometry.HalfSize.X,
+                MathF.Sin(angle) * geometry.HalfSize.Y);
+            drawList.AddLine(previous, current, color, thickness);
+            previous = current;
         }
     }
 
@@ -2109,6 +2223,11 @@ internal readonly record struct SceneGameObjectMarkerGeometry(
 internal readonly record struct SceneAnchorMarkerGeometry(
     Vector2 AxisX,
     Vector2 AxisY);
+
+internal readonly record struct SceneBrushFootprintGeometry(
+    Vector2 Center,
+    Vector2 HalfSize,
+    EditorBrushShape Shape);
 
 internal enum SceneToolOverlayDock
 {

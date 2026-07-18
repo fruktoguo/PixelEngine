@@ -1617,6 +1617,27 @@ public sealed record AutomationBrushSettings
     /// <summary>半径，范围 0..128。</summary>
     public required int Radius { get; init; }
 
+    /// <summary>横向半径，范围 0..128；省略时回退到兼容字段 <see cref="Radius" />。</summary>
+    public int? RadiusX { get; init; }
+
+    /// <summary>纵向半径，范围 0..128；省略时回退到兼容字段 <see cref="Radius" />。</summary>
+    public int? RadiusY { get; init; }
+
+    /// <summary>UI 调整一轴时是否同步另一轴；省略表示兼容默认 true。</summary>
+    public bool? LockAspectRatio { get; init; }
+
+    /// <summary>解析兼容字段后的有效横向半径。</summary>
+    [JsonIgnore]
+    public int EffectiveRadiusX => RadiusX ?? Radius;
+
+    /// <summary>解析兼容字段后的有效纵向半径。</summary>
+    [JsonIgnore]
+    public int EffectiveRadiusY => RadiusY ?? Radius;
+
+    /// <summary>解析兼容默认值后的比例锁状态。</summary>
+    [JsonIgnore]
+    public bool EffectiveLockAspectRatio => LockAspectRatio ?? true;
+
     /// <summary>应用概率，范围 0..1。</summary>
     public required float Probability { get; init; }
 

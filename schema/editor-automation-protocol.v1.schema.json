@@ -1587,6 +1587,9 @@
         "materialName": { "type": "string", "minLength": 1, "maxLength": 256 },
         "materialId": { "type": "integer", "minimum": 0, "maximum": 65535 },
         "radius": { "type": "integer", "minimum": 0, "maximum": 128 },
+        "radiusX": { "type": "integer", "minimum": 0, "maximum": 128 },
+        "radiusY": { "type": "integer", "minimum": 0, "maximum": 128 },
+        "lockAspectRatio": { "type": "boolean" },
         "probability": { "type": "number", "minimum": 0, "maximum": 1 },
         "temperatureMode": { "type": "string", "minLength": 1, "maxLength": 64 },
         "temperatureCelsius": { "type": "number" }
