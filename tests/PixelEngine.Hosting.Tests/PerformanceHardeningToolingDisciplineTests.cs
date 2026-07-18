@@ -69,6 +69,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("$BenchmarkDotNetArgs + $RemainingBenchmarkDotNetArgs", runner, StringComparison.Ordinal);
         Assert.Contains("$argument.IndexOf('=', [StringComparison]::Ordinal)", runner, StringComparison.Ordinal);
         Assert.Contains("$BenchmarkDotNetArgs = @(", runner, StringComparison.Ordinal);
+        Assert.Contains("& dotnet build-server shutdown", runner, StringComparison.Ordinal);
+        Assert.Contains("\"--disable-build-servers\"", runner, StringComparison.Ordinal);
         Assert.Contains("Generate Exception", runner, StringComparison.Ordinal);
         Assert.Contains("There are not any results runs", runner, StringComparison.Ordinal);
         Assert.Contains("DllNotFoundException", runner, StringComparison.Ordinal);

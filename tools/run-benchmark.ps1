@@ -141,6 +141,11 @@ $tempRoot = Join-Path ([IO.Path]::GetTempPath()) ("pixelengine-benchmark-workspa
 $isolatedArtifacts = Join-Path $tempRoot "BenchmarkDotNet.Artifacts"
 
 try {
+    & dotnet build-server shutdown
+    if ($LASTEXITCODE -ne 0) {
+        throw "关闭 .NET build servers 失败，无法建立隔离 benchmark 环境。"
+    }
+
     Copy-RepositoryForBenchmark -SourceRoot $root -DestinationRoot $tempRoot
 
     $relativeProject = [IO.Path]::GetRelativePath($root, $projectPath)
@@ -150,7 +155,12 @@ try {
         Remove-Item -LiteralPath $artifactsPath -Recurse -Force
     }
 
-    $arguments = @("run", "--project", $isolatedProject, "-c", "Release", "--") + $BenchmarkDotNetArgs + @("--artifacts", $isolatedArtifacts)
+    $arguments = @(
+        "run",
+        "--project", $isolatedProject,
+        "-c", "Release",
+        "--disable-build-servers",
+        "--") + $BenchmarkDotNetArgs + @("--artifacts", $isolatedArtifacts)
 
     Push-Location $tempRoot
     try {
