@@ -10,6 +10,7 @@ namespace PixelEngine.Simulation;
 /// </summary>
 internal static class ChunkUpdater
 {
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void UpdateChunk(
         Chunk chunk,
         in ChunkNeighborhood neighborhood,
