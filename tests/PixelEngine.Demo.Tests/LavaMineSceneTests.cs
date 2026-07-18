@@ -3,6 +3,7 @@ using PixelEngine.Audio;
 using PixelEngine.Hosting;
 using PixelEngine.Physics;
 using PixelEngine.Simulation;
+using PixelEngine.Simulation.Particles;
 using PixelEngine.Scripting;
 using Xunit;
 using ScriptScene = PixelEngine.Scripting.Scene;
@@ -128,6 +129,95 @@ public sealed class LavaMineSceneTests
             movedSnapshots,
             moved => TryFindSnapshot(splitSnapshots, moved.BodyKey, out RigidBodySnapshot before) &&
                 moved.Transform.Position.Y > before.Transform.Position.Y + 0.01f);
+    }
+
+    /// <summary>
+    /// 验证低于刚体像素下限的悬空固体碎岛会离开权威网格并作为有限寿命粒子下落，
+    /// 不会继续作为静态碰撞像素悬在空中。
+    /// </summary>
+    [Fact]
+    public async Task CollapseScanTurnsTinyDetachedSolidIslandIntoFallingDebris()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(scene);
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+
+        const int debrisX = 318;
+        const int debrisY = 40;
+        ClearRect(edit, 304, 24, 336, 64);
+        FillRect(edit, stone, debrisX, debrisY, debrisX + 3, debrisY + 1);
+        projectile.CollapseScanRadius = 8;
+        projectile.MinCollapsePixels = 8;
+        projectile.PlayerSupportProtectionRadius = 0;
+        int particlesBefore = particles.ActiveCount;
+
+        int convertedBodies = projectile.RunCollapseScanForTesting(debrisX + 1, debrisY, maxConversions: 1);
+
+        Assert.Equal(0, convertedBodies);
+        Assert.Equal(3, projectile.EjectedFloatingDebrisPixels);
+        Assert.Equal("debris_ejected_3", projectile.LastCollapseSkipReason);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(0, grid.GetMaterial(debrisX, debrisY));
+        Assert.Equal(0, grid.GetMaterial(debrisX + 1, debrisY));
+        Assert.Equal(0, grid.GetMaterial(debrisX + 2, debrisY));
+        Assert.Equal(particlesBefore + 3, particles.ActiveCount);
+        float firstParticleY = particles.ActiveReadOnly[particlesBefore].Y;
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(particlesBefore + 3, particles.ActiveCount);
+        Assert.True(particles.ActiveReadOnly[particlesBefore].Y > firstParticleY);
+    }
+
+    /// <summary>
+    /// 验证本次扫描达到刚体转换上限后仍会继续清理同一区域内的微小悬空碎屑。
+    /// </summary>
+    [Fact]
+    public async Task CollapseScanCleansTinyDebrisAfterReachingBodyConversionLimit()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(scene);
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+
+        const int bodyX = 314;
+        const int bodyY = 32;
+        const int debrisX = 318;
+        const int debrisY = 40;
+        ClearRect(edit, 300, 20, 340, 68);
+        FillRect(edit, stone, bodyX, bodyY, bodyX + 2, bodyY + 4);
+        FillRect(edit, stone, debrisX, debrisY, debrisX + 3, debrisY + 1);
+        projectile.CollapseScanRadius = 12;
+        projectile.MinCollapsePixels = 8;
+        projectile.PlayerSupportProtectionRadius = 0;
+        int particlesBefore = particles.ActiveCount;
+
+        int convertedBodies = projectile.RunCollapseScanForTesting(debrisX, debrisY, maxConversions: 1);
+
+        Assert.Equal(1, convertedBodies);
+        Assert.Equal(3, projectile.EjectedFloatingDebrisPixels);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(0, grid.GetMaterial(debrisX, debrisY));
+        Assert.Equal(0, grid.GetMaterial(debrisX + 1, debrisY));
+        Assert.Equal(0, grid.GetMaterial(debrisX + 2, debrisY));
+        Assert.Equal(particlesBefore + 3, particles.ActiveCount);
     }
 
     /// <summary>

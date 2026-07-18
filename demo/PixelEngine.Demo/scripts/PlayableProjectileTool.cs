@@ -7,6 +7,10 @@ namespace PixelEngine.Demo;
 /// </summary>
 public sealed class PlayableProjectileTool : Behaviour
 {
+    private const float FloatingDebrisFallSpeed = 24f;
+    private const ushort FloatingDebrisLifetimeTicks = 180;
+    private const int MaxFloatingDebrisPixelsPerScan = 256;
+
     private PlayerController? _player;
     private readonly CollapseScanScratch _collapseScanScratch = new();
     private float _cooldownRemaining;
@@ -137,6 +141,11 @@ public sealed class PlayableProjectileTool : Behaviour
     public int CollapsedFloatingIslands { get; private set; }
 
     /// <summary>
+    /// 已从权威网格转为下落自由粒子的微小悬空碎屑像素数。
+    /// </summary>
+    public int EjectedFloatingDebrisPixels { get; private set; }
+
+    /// <summary>
     /// 最近一次悬空固体岛转换的包围盒。
     /// </summary>
     public (int X, int Y, int Width, int Height) LastCollapsedRegion { get; private set; }
@@ -149,7 +158,9 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 面向 HUD 的悬空块转换状态；成功后优先显示最近一次转换区域。
     /// </summary>
-    public string CollapseStatus => CollapsedFloatingIslands > 0
+    public string CollapseStatus => LastCollapseSkipReason.StartsWith("debris_ejected_", StringComparison.Ordinal)
+        ? LastCollapseSkipReason
+        : CollapsedFloatingIslands > 0
         ? $"converted {LastCollapsedRegion.X},{LastCollapsedRegion.Y},{LastCollapsedRegion.Width}x{LastCollapsedRegion.Height}"
         : LastCollapseSkipReason;
 
@@ -372,6 +383,7 @@ public sealed class PlayableProjectileTool : Behaviour
         int[] cells = _collapseScanScratch.Cells;
         Array.Clear(visited, 0, area);
         int converted = 0;
+        int ejectedDebrisPixels = 0;
         LastCollapseSkipReason = "scan_empty";
         LastCollapseSolidCandidates = 0;
 
@@ -388,7 +400,7 @@ public sealed class PlayableProjectileTool : Behaviour
 
                 Array.Clear(component, 0, area);
                 int cellCount = FloodFillSolidIsland(localX, localY, originX, originY, size, visited, component, queue, cells, out int minX, out int minY, out int maxX, out int maxY, out ComponentBorderContact borderContact);
-                if (!CanConvertIsland(cellCount, minX, minY, maxX, maxY, borderContact, out string rejection))
+                if (!CanProcessIsland(cellCount, minX, minY, maxX, maxY, borderContact, out string rejection))
                 {
                     LastCollapseSkipReason = rejection;
                     continue;
@@ -410,6 +422,37 @@ public sealed class PlayableProjectileTool : Behaviour
                 int worldY = originY + minY;
                 int width = maxX - minX + 1;
                 int height = maxY - minY + 1;
+                if (cellCount < Math.Max(1, MinCollapsePixels))
+                {
+                    int remainingDebrisBudget = MaxFloatingDebrisPixelsPerScan - ejectedDebrisPixels;
+                    if (cellCount > remainingDebrisBudget)
+                    {
+                        LastCollapseSkipReason = "debris_budget_exhausted";
+                        continue;
+                    }
+
+                    int ejected = EjectFloatingDebris(originX, originY, size, cells, cellCount);
+                    if (ejected > 0)
+                    {
+                        EjectedFloatingDebrisPixels += ejected;
+                        ejectedDebrisPixels += ejected;
+                    }
+
+                    continue;
+                }
+
+                if (converted >= Math.Max(1, maxConversions))
+                {
+                    LastCollapseSkipReason = "conversion_limit";
+                    continue;
+                }
+
+                if (IntersectsPlayerSupportZone(worldX, worldY, width, height))
+                {
+                    LastCollapseSkipReason = "player_support_zone";
+                    continue;
+                }
+
                 if (!TryCreateBodyFromSolidBounds(worldX, worldY, width, height, "degenerate"))
                 {
                     continue;
@@ -418,10 +461,6 @@ public sealed class PlayableProjectileTool : Behaviour
                 LastCollapseSkipReason = "converted";
                 CollapsedFloatingIslands++;
                 converted++;
-                if (converted >= Math.Max(1, maxConversions))
-                {
-                    return converted;
-                }
             }
         }
 
@@ -438,6 +477,11 @@ public sealed class PlayableProjectileTool : Behaviour
         if (converted == 0 && AllowImpactFallbackCollapse)
         {
             converted += ConvertLocalImpactSlab(centerX, centerY);
+        }
+
+        if (converted == 0 && ejectedDebrisPixels > 0)
+        {
+            LastCollapseSkipReason = $"debris_ejected_{ejectedDebrisPixels}";
         }
 
         return converted;
@@ -514,7 +558,7 @@ public sealed class PlayableProjectileTool : Behaviour
         queue[tail++] = packed;
     }
 
-    private bool CanConvertIsland(
+    private bool CanProcessIsland(
         int cellCount,
         int minX,
         int minY,
@@ -523,12 +567,6 @@ public sealed class PlayableProjectileTool : Behaviour
         ComponentBorderContact borderContact,
         out string rejection)
     {
-        if (cellCount < Math.Max(1, MinCollapsePixels))
-        {
-            rejection = "too_few_pixels";
-            return false;
-        }
-
         if ((borderContact & (ComponentBorderContact.Left | ComponentBorderContact.Right | ComponentBorderContact.Bottom)) != 0)
         {
             rejection = $"scan_border_{borderContact}";
@@ -550,6 +588,35 @@ public sealed class PlayableProjectileTool : Behaviour
 
         rejection = "none";
         return true;
+    }
+
+    private int EjectFloatingDebris(int originX, int originY, int size, int[] cells, int cellCount)
+    {
+        int ejected = 0;
+        for (int i = 0; i < cellCount; i++)
+        {
+            int packed = cells[i];
+            int worldX = originX + (packed % size);
+            int worldY = originY + (packed / size);
+            CellView cell = Context.Cells.Sample(worldX, worldY);
+            if (cell.Material.Value == 0 || Context.Cells.IsRigidOwned(worldX, worldY))
+            {
+                continue;
+            }
+
+            float fallSpeed = FloatingDebrisFallSpeed + ((i & 3) * 3f);
+            Context.Particles.Spawn(new ParticleSpawnDesc(
+                worldX + 0.5f,
+                worldY + 0.5f,
+                VelocityX: 0f,
+                VelocityY: fallSpeed,
+                cell.Material,
+                FloatingDebrisLifetimeTicks));
+            Context.Cells.SetCell(worldX, worldY, default);
+            ejected++;
+        }
+
+        return ejected;
     }
 
     private bool HasExternalSupport(int originX, int originY, int size, int[] cells, int cellCount, bool[] component)
