@@ -23,6 +23,15 @@ internal enum EditorViewportCameraOwner
 }
 
 /// <summary>
+/// 视图当前观察的权威世界来源；相机和 presentation 仍由各自 surface 独立拥有。
+/// </summary>
+internal enum EditorViewportWorldSource
+{
+    AuthoringWorld,
+    RuntimeWorld,
+}
+
+/// <summary>
 /// 视口输入归属：编辑工具或 Game UI/玩法。
 /// </summary>
 internal enum EditorViewportInputOwner
@@ -68,6 +77,7 @@ internal readonly record struct EditorViewportContract(
     EditorViewportSurface Surface,
     string WindowTitle,
     EditorViewportCameraOwner CameraOwner,
+    EditorViewportWorldSource WorldSource,
     EditorViewportInputOwner InputOwner,
     bool UsesRuntimeViewportTexture,
     bool AllowsEditorOverlay,
@@ -94,6 +104,9 @@ internal static class EditorGameViewContract
             EditorViewportSurface.SceneView,
             EditorDockSpace.ViewportWindowTitle,
             EditorViewportCameraOwner.AuthoringCamera,
+            mode is EditorMode.Play or EditorMode.Paused
+                ? EditorViewportWorldSource.RuntimeWorld
+                : EditorViewportWorldSource.AuthoringWorld,
             EditorViewportInputOwner.AuthoringTools,
             UsesRuntimeViewportTexture: false,
             AllowsEditorOverlay: true,
@@ -112,6 +125,9 @@ internal static class EditorGameViewContract
             EditorViewportSurface.GameView,
             EditorDockSpace.GameViewWindowTitle,
             EditorViewportCameraOwner.RuntimePipelineCamera,
+            mode is EditorMode.Play or EditorMode.Paused
+                ? EditorViewportWorldSource.RuntimeWorld
+                : EditorViewportWorldSource.AuthoringWorld,
             mode is EditorMode.Play or EditorMode.Paused
                 ? EditorViewportInputOwner.GameUiThenGameplay
                 : EditorViewportInputOwner.AuthoringTools,

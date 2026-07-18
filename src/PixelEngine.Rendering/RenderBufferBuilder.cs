@@ -54,6 +54,18 @@ public sealed class RenderBufferBuilder(
     }
 
     /// <summary>
+    /// 使不依赖 dirty rect 的世界内容缓存失效。
+    /// </summary>
+    /// <remarks>
+    /// Editor authoring provider、运行态临时画刷与 Play 快照恢复可能在 render-only 帧改变 cell，
+    /// 调用方仍需通过 <see cref="RenderFrameContext.ForceRebuild"/> 请求本帧重建。
+    /// </remarks>
+    public void InvalidateWorldContent()
+    {
+        InvalidateEmptyWorldCache();
+    }
+
+    /// <summary>
     /// 构建 BGRA8 render buffer 及 emissive/occluder 副输出。
     /// </summary>
     /// <param name="context">渲染帧上下文。</param>

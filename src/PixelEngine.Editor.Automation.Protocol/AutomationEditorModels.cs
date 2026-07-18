@@ -1337,19 +1337,25 @@ public sealed record AutomationGameObjectSnapshot
 }
 
 /// <summary>
-/// 设置当前 GameObject selection。
+/// 设置当前 mode-aware Scene/Hierarchy selection。
 /// </summary>
 public sealed record AutomationSelectionSetRequest
 {
     /// <summary>DTO schema 版本。</summary>
     public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
 
-    /// <summary>目标 stable ID；null 表示清空 GameObject selection。</summary>
+    /// <summary>Edit 模式目标 GameObject stable ID。</summary>
     public int? StableId { get; init; }
+
+    /// <summary>Play/Paused 模式目标 runtime entity ID。</summary>
+    public string? EntityId { get; init; }
+
+    /// <summary>Play/Paused 模式目标 runtime body ID。</summary>
+    public string? BodyId { get; init; }
 }
 
 /// <summary>
-/// 当前 authoring GameObject selection 快照。
+/// 当前 mode-aware Scene/Hierarchy selection 快照。
 /// </summary>
 public sealed record AutomationSelectionSnapshot
 {
@@ -1361,6 +1367,12 @@ public sealed record AutomationSelectionSnapshot
 
     /// <summary>选中 GameObject resource ID；无选择时为 null。</summary>
     public string? ResourceId { get; init; }
+
+    /// <summary>选中 runtime entity ID；无选择或 Edit 模式时为 null。</summary>
+    public string? EntityId { get; init; }
+
+    /// <summary>选中 runtime body ID；无选择或 Edit 模式时为 null。</summary>
+    public string? BodyId { get; init; }
 }
 
 /// <summary>

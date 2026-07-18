@@ -50,6 +50,8 @@ public sealed class RenderPhaseDriver(
     private bool _frameBuilt;
     private bool _hasBuiltCamera;
     private bool _hadCpuParticleStamps;
+    private bool _worldInvalidated;
+    private bool _authoringVisibilityOverride;
 
     /// <summary>
     /// 最近一次相位 10 实际提交给 Rendering 的 overlay 命令数量，用于 Demo/测试诊断脚本可见层是否进入渲染链路。
@@ -60,6 +62,31 @@ public sealed class RenderPhaseDriver(
     /// RenderStyle 着色质量控制器，供 Hosting 过载策略独立降级 CPU 样式着色。
     /// </summary>
     public IRenderStyleQualityController RenderStyleQuality => _builder;
+
+    /// <summary>
+    /// 请求下一张 render-only 或 simulation frame 强制重建完整世界缓冲。
+    /// </summary>
+    /// <remarks>
+    /// Edit 模式不执行 dirty-rect swap；Scene authoring provider、画刷和 Play 快照恢复
+    /// 因此必须通过该显式边界通知 Game View，不能继续显示旧纹理或初始黑帧。
+    /// </remarks>
+    public void InvalidateWorld()
+    {
+        _builder.InvalidateWorldContent();
+        _worldInvalidated = true;
+    }
+
+    /// <summary>
+    /// 设置 Edit 模式的 authoring 可见性覆盖；启用时忽略尚未由 runtime 脚本 reveal 的 fog mask。
+    /// </summary>
+    /// <param name="enabled">是否显示完整 authoring world。</param>
+    /// <remarks>
+    /// 该覆盖只改变提交给渲染器的可见性输入，不修改权威 lighting/fog 状态；Play/Paused 必须关闭。
+    /// </remarks>
+    public void SetAuthoringVisibilityOverride(bool enabled)
+    {
+        _authoringVisibilityOverride = enabled;
+    }
 
     /// <summary>
     /// 注册相位 9 render buffer 构建与相位 10 GPU 上传/窗口 present。
@@ -79,7 +106,9 @@ public sealed class RenderPhaseDriver(
         bool forceRefreshForParticleErase = _sink.ParticleRenderMode == ParticleRenderMode.CpuStamp &&
             (_hadCpuParticleStamps || activeParticles.Length > 0);
         bool forceRefreshForCamera = !_hasBuiltCamera || CameraChanged(_lastBuiltCamera, camera);
-        bool forceRenderRefresh = forceRefreshForParticleErase || forceRefreshForCamera;
+        bool forceRefreshForWorld = _worldInvalidated;
+        _worldInvalidated = false;
+        bool forceRenderRefresh = forceRefreshForParticleErase || forceRefreshForCamera || forceRefreshForWorld;
         RenderFrameContext frame = new(
             _chunks,
             _materials,
@@ -140,7 +169,7 @@ public sealed class RenderPhaseDriver(
             _lighting.PointLights,
             activeParticles,
             _materials,
-            _lighting.FogOfWar,
+            _authoringVisibilityOverride ? null : _lighting.FogOfWar,
             context.Context.Profiler);
         _frameBuilt = false;
     }

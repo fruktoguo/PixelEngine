@@ -10,6 +10,8 @@ namespace PixelEngine.Editor.Shell;
 /// </summary>
 internal interface IAuthoringWorldTexture : IDisposable
 {
+    long Revision { get; }
+
     SceneWorldTextureSnapshot GetTexture(SceneAuthoringBounds requestedBounds);
 
     void Invalidate();
@@ -55,6 +57,8 @@ internal sealed class SceneWorldTexture : IAuthoringWorldTexture
         _uploader = new PboUploader(gl, sizeof(uint));
     }
 
+    public long Revision { get; private set; }
+
     public SceneWorldTextureSnapshot GetTexture(SceneAuthoringBounds requestedBounds)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -95,17 +99,19 @@ internal sealed class SceneWorldTexture : IAuthoringWorldTexture
                 forceRebuild: true);
             _builder.Build(in context, _buffer, _aux);
             _uploader.UploadFull(_texture, _buffer);
+            Revision++;
             _dirty = false;
         }
 
         return new SceneWorldTextureSnapshot(
-            new RenderViewportTexture(_texture.Handle, _texture.Width, _texture.Height),
+            new RenderViewportTexture(_texture.Handle, _texture.Width, _texture.Height, Revision),
             _textureBounds);
     }
 
     public void Invalidate()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        _builder.InvalidateWorldContent();
         _dirty = true;
     }
 

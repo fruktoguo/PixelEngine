@@ -538,6 +538,19 @@ internal sealed class EditorProjectSession : IDisposable
         _editorHost.SetAutomationGameObjectSelection(stableId);
     }
 
+    internal EditorAutomationSelectionSnapshot CaptureAutomationSelection()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _editorHost.CaptureAutomationSelection();
+    }
+
+    internal void SetAutomationRuntimeSelection(string? entityHandle, int? bodyId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        SceneModel.Select(null);
+        _editorHost.SetAutomationRuntimeSelection(entityHandle, bodyId);
+    }
+
     public static EditorProjectSession Open(EditorProject project, RenderWindow window, EditorShellApp app)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -749,6 +762,7 @@ internal sealed class EditorProjectSession : IDisposable
         }
 
         _ = Engine.StepOnce();
+        _editorHost.InvalidateAuthoringWorld();
         _editorHost.RequestGameViewFocus();
         Hosting.EditorPlaySessionSnapshot after = _playSession.Capture();
         return new Hosting.EditorPlaySessionResult(true, after, "Play session 已执行一个 step。");
@@ -768,6 +782,7 @@ internal sealed class EditorProjectSession : IDisposable
         }
 
         _ = Engine.StepOnce();
+        _editorHost.InvalidateAuthoringWorld();
         _editorHost.RequestGameViewFocus();
     }
 

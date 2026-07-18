@@ -302,6 +302,92 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 Edit 模式显式 world invalidation 会重建 Game View 使用的 render buffer，
+    /// 即使该帧不执行 simulation、chunk 也没有 dirty swap。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverRefreshesRenderOnlyFrameWhenWorldIsInvalidated()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        TestChunkSource chunks = new(chunk);
+        ParticleSystem particles = new(capacity: 16);
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 2, viewportHeight: 1, centerX: 1, centerY: 0.5f, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingSynchronizer lightingSync = new(new ScriptLightingApi(), cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new();
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        _ = engine.RunOneTick();
+        Assert.Equal(0u, sink.FirstPixel);
+
+        engine.EnterEditMode();
+        chunk.MaterialBuffer[CellAddressing.LocalIndexFromLocal(0, 0)] = 1;
+        driver.InvalidateWorld();
+        FrameTiming refreshed = engine.RunOneTick();
+
+        Assert.False(refreshed.RunSim);
+        Assert.Equal(2, sink.FrameCount);
+        Assert.Equal(0xFF_80_80_80u, sink.FirstPixel);
+    }
+
+    /// <summary>
+    /// 验证 Edit authoring presentation 只在提交边界忽略 runtime fog，关闭覆盖后仍恢复真实 fog 输入。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverAuthoringVisibilityOverrideDoesNotMutateRuntimeFog()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty));
+        TestChunkSource chunks = new(new Chunk(new ChunkCoord(0, 0)));
+        ScriptCameraApi camera = new(viewportWidth: 2, viewportHeight: 1, centerX: 1, centerY: 0.5f, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingApi lighting = new();
+        lighting.RevealAround(0, 0, radius: 1, alpha: 255);
+        ScriptLightingSynchronizer lightingSync = new(lighting, cameraSync);
+        lightingSync.Sync();
+        FogOfWarBuffer runtimeFog = Assert.IsType<FogOfWarBuffer>(lightingSync.FogOfWar);
+        RecordingRenderFrameSink sink = new();
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            new TemperatureField(),
+            new ParticleSystem(capacity: 1),
+            cameraSync,
+            lightingSync,
+            sink);
+
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        driver.SetAuthoringVisibilityOverride(true);
+        _ = engine.RunOneTick();
+        Assert.Null(sink.FogOfWar);
+        Assert.Same(runtimeFog, lightingSync.FogOfWar);
+
+        driver.SetAuthoringVisibilityOverride(false);
+        _ = engine.RunOneTick();
+        Assert.Same(runtimeFog, sink.FogOfWar);
+    }
+
+    /// <summary>
     /// 验证 CA iteration 调试叠层只显示本帧实际迭代区域，resident sleeping chunk 不产生迭代矩形。
     /// </summary>
     [Fact]

@@ -455,7 +455,7 @@ internal sealed partial class EditorAutomationAuthoringApi
                 "runtimeEntity",
                 [AutomationScopes.EditorControl],
                 ["play", "paused"],
-                ["panel.inspector.runtime.transform"],
+                ["panel.inspector.runtime.transform", "panel.scene.gizmo"],
                 SetRuntimeTransform,
                 AutomationExecutionPhase.EngineInputAndTime),
             ProductCommand(
@@ -4507,8 +4507,7 @@ internal sealed partial class EditorAutomationAuthoringApi
         EditorProjectSession session,
         in ScriptEntityInspection entity)
     {
-        string entityId =
-            $"play:{session.AutomationPlaySessionId}:entity:{entity.EntityId.ToString(CultureInfo.InvariantCulture)}";
+        string entityId = CreateRuntimeEntityId(session, entity.EntityId);
         ScriptComponentInspection[] orderedComponents =
         [
             .. entity.Components.OrderBy(static component => component.TypeName, StringComparer.Ordinal),
@@ -5028,6 +5027,11 @@ internal sealed partial class EditorAutomationAuthoringApi
             value <= 0
                 ? throw Invalid("entityId 不属于当前 Play session 或格式无效。")
                 : normalized;
+    }
+
+    private static string CreateRuntimeEntityId(EditorProjectSession session, int entityId)
+    {
+        return $"play:{session.AutomationPlaySessionId}:entity:{entityId.ToString(CultureInfo.InvariantCulture)}";
     }
 
     private static (string BodyId, int BodyKey) ValidateRuntimeBodyId(

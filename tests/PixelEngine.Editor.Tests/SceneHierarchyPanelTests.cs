@@ -42,12 +42,26 @@ public sealed class SceneHierarchyPanelTests
         Entity firstEntity = first.CreateEntity();
         Transform firstTransform = firstEntity.AddComponent<Transform>();
         firstTransform.SetPosition(10f, 20f);
+        firstTransform.RotationRadians = 0.5f;
+        firstTransform.ScaleX = 1.5f;
+        firstTransform.ScaleY = 2.5f;
         EditableHierarchyBehaviour firstBehaviour = firstEntity.AddComponent<EditableHierarchyBehaviour>();
         firstBehaviour.Speed = 3f;
         firstBehaviour.Offset = new Vector3(1f, 2f, 3f);
         firstBehaviour.Budget = 12.5m;
         ScriptScene current = first;
-        RuntimeSceneHierarchyDataSource source = RuntimeSceneHierarchyDataSource.CreateDynamic(() => current);
+        RuntimeSceneHierarchyDataSource source = RuntimeSceneHierarchyDataSource.CreateDynamic(
+            () => current,
+            displayNameProvider: entityId => entityId == firstEntity.Id ? "Player" : null);
+
+        SceneHierarchyEntityItem before = Assert.Single(source.Capture().Entities);
+        Assert.Equal("Player", before.DisplayName);
+        Assert.True(before.HasTransform);
+        Assert.Equal(10f, before.X);
+        Assert.Equal(20f, before.Y);
+        Assert.Equal(0.5f, before.RotationRadians);
+        Assert.Equal(1.5f, before.ScaleX);
+        Assert.Equal(2.5f, before.ScaleY);
 
         Assert.True(source.TrySetEntityTransform($"script:{firstEntity.Id}", 40f, 50f, 0.25f, 2f, 3f));
         Assert.True(source.TrySetBehaviourField($"script:{firstEntity.Id}", 0, nameof(EditableHierarchyBehaviour.Speed), 9f));
@@ -65,10 +79,19 @@ public sealed class SceneHierarchyPanelTests
         Assert.Equal(9f, firstBehaviour.Speed);
         Assert.Equal(new Vector3(4f, 5f, 6f), firstBehaviour.Offset);
         Assert.Equal(99.75m, firstBehaviour.Budget);
+        SceneHierarchyEntityItem edited = Assert.Single(source.Capture().Entities);
+        Assert.Equal(40f, edited.X);
+        Assert.Equal(50f, edited.Y);
+        Assert.Equal(0.25f, edited.RotationRadians);
+        Assert.Equal(2f, edited.ScaleX);
+        Assert.Equal(3f, edited.ScaleY);
 
         source.RestoreTemporaryEdits();
         Assert.Equal(10f, firstTransform.X);
         Assert.Equal(20f, firstTransform.Y);
+        Assert.Equal(0.5f, firstTransform.RotationRadians);
+        Assert.Equal(1.5f, firstTransform.ScaleX);
+        Assert.Equal(2.5f, firstTransform.ScaleY);
         Assert.Equal(3f, firstBehaviour.Speed);
         Assert.Equal(new Vector3(1f, 2f, 3f), firstBehaviour.Offset);
         Assert.Equal(12.5m, firstBehaviour.Budget);

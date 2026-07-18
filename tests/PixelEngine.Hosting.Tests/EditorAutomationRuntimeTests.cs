@@ -227,6 +227,9 @@ public sealed class EditorAutomationRuntimeTests
                     descriptor.SupportedModes.SequenceEqual(["play", "paused"]) &&
                     descriptor.UiCommandIds.Contains(
                         "panel.inspector.runtime.transform",
+                        StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains(
+                        "panel.scene.gizmo",
                         StringComparer.Ordinal));
                 Assert.Contains(capabilities.Items, descriptor =>
                     descriptor.Id == AutomationProtocolConstants.RuntimeComponentFieldSetMethod &&
@@ -336,14 +339,16 @@ public sealed class EditorAutomationRuntimeTests
                     descriptor.ResponseSchema == "#/$defs/brushApplyResult" &&
                     descriptor.ExecutionPhase == AutomationExecutionPhase.EngineInputAndTime &&
                     descriptor.OperationKind == AutomationOperationKind.Command &&
-                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden);
+                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden &&
+                    descriptor.SupportedModes.SequenceEqual(["edit", "play", "paused"]));
                 Assert.Contains(capabilities.Items, descriptor =>
                     descriptor.Id == AutomationProtocolConstants.BrushStrokeMethod &&
                     descriptor.RequestSchema == "#/$defs/brushStrokeRequest" &&
                     descriptor.ResponseSchema == "#/$defs/brushStrokeResult" &&
                     descriptor.ExecutionPhase == AutomationExecutionPhase.EngineInputAndTime &&
                     descriptor.OperationKind == AutomationOperationKind.Command &&
-                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden);
+                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden &&
+                    descriptor.SupportedModes.SequenceEqual(["edit", "play", "paused"]));
                 Assert.Contains(capabilities.Items, descriptor =>
                     descriptor.Id == AutomationProtocolConstants.RuntimePhysicsSetMethod &&
                     descriptor.ExecutionPhase == AutomationExecutionPhase.EditorIngress &&

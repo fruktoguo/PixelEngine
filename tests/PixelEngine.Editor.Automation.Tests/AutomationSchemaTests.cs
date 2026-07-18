@@ -183,6 +183,12 @@ public sealed class AutomationSchemaTests
         Assert.True(envelopeProperties.TryGetProperty("transactionId", out _));
         Assert.True(definitions.GetProperty("helloChallenge").GetProperty("properties")
             .TryGetProperty("serverProof", out _));
+        JsonElement selectionRequestProperties = definitions
+            .GetProperty("selectionSetRequest")
+            .GetProperty("properties");
+        Assert.True(selectionRequestProperties.TryGetProperty("stableId", out _));
+        Assert.True(selectionRequestProperties.TryGetProperty("entityId", out _));
+        Assert.True(selectionRequestProperties.TryGetProperty("bodyId", out _));
     }
 
     /// <summary>发布 capability matrix 受独立 Schema 约束，并通过 Client canonical 闭包验证。</summary>
@@ -281,6 +287,40 @@ public sealed class AutomationSchemaTests
             {"schemaVersion":1,"name":"Player","unexpected":true}
             """,
             AutomationJsonContext.Default.AutomationGameObjectCreateRequest));
+    }
+
+    /// <summary>Scene/Hierarchy selection 必须以同一 DTO 表达 Edit GameObject 与 Play entity/body。</summary>
+    [Fact]
+    public void SelectionDtosRoundTripModeAwareTargetsStrictly()
+    {
+        AutomationSelectionSetRequest request = new()
+        {
+            EntityId = "play:session:entity:3",
+        };
+        JsonElement requestJson = JsonSerializer.SerializeToElement(
+            request,
+            AutomationJsonContext.Default.AutomationSelectionSetRequest);
+        Assert.Equal(request.EntityId, requestJson.GetProperty("entityId").GetString());
+        Assert.Equal(
+            request,
+            requestJson.Deserialize(AutomationJsonContext.Default.AutomationSelectionSetRequest));
+
+        AutomationSelectionSnapshot snapshot = new()
+        {
+            BodyId = "play:session:body:11",
+            ResourceId = "play:session:body:11",
+        };
+        Assert.Equal(
+            snapshot,
+            JsonSerializer.SerializeToElement(
+                snapshot,
+                AutomationJsonContext.Default.AutomationSelectionSnapshot)
+                .Deserialize(AutomationJsonContext.Default.AutomationSelectionSnapshot));
+        _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(
+            """
+            {"schemaVersion":1,"entityId":"play:session:entity:3","runtimeHandle":"script:3"}
+            """,
+            AutomationJsonContext.Default.AutomationSelectionSetRequest));
     }
 
     /// <summary>能力矩阵与 Project Picker 合同保持显式版本、字符串枚举和 strict JSON。</summary>

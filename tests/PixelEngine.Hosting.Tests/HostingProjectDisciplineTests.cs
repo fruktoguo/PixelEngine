@@ -1781,7 +1781,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("WantCaptureMouse", source, StringComparison.Ordinal);
         Assert.Contains("IsGizmoCapturingMouse", source, StringComparison.Ordinal);
         Assert.Contains("hasSelection && IsGizmoCapturingMouse()", source, StringComparison.Ordinal);
-        Assert.Contains("if (MaterialBrushActive && _preparedMode == EditorMode.Edit)", source, StringComparison.Ordinal);
+        Assert.Contains("if (MaterialBrushActive)", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (MaterialBrushActive && _preparedMode == EditorMode.Edit)", source, StringComparison.Ordinal);
         Assert.Contains("TryPick", source, StringComparison.Ordinal);
         Assert.Contains("SelectGameObject", source, StringComparison.Ordinal);
         Assert.Contains("DrawGizmo", source, StringComparison.Ordinal);

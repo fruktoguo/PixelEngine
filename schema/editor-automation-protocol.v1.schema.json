@@ -1374,6 +1374,8 @@
       "properties": {
         "schemaVersion": { "const": 1 },
         "stableId": { "type": "integer", "minimum": 1 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bodyId": { "type": "string", "minLength": 1, "maxLength": 256 },
         "resourceId": { "type": "string", "minLength": 1, "maxLength": 256 }
       }
     },
@@ -1383,7 +1385,9 @@
       "required": ["schemaVersion"],
       "properties": {
         "schemaVersion": { "const": 1 },
-        "stableId": { "type": "integer", "minimum": 1 }
+        "stableId": { "type": "integer", "minimum": 1 },
+        "entityId": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "bodyId": { "type": "string", "minLength": 1, "maxLength": 256 }
       }
     },
     "gameObjectCreateRequest": {

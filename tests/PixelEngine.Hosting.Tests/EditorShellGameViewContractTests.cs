@@ -63,6 +63,7 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(EditorViewportSurface.SceneView, contract.Surface);
         Assert.Equal(EditorDockSpace.ViewportWindowTitle, contract.WindowTitle);
         Assert.Equal(EditorViewportCameraOwner.AuthoringCamera, contract.CameraOwner);
+        Assert.Equal(EditorViewportWorldSource.RuntimeWorld, contract.WorldSource);
         Assert.Equal(EditorViewportInputOwner.AuthoringTools, contract.InputOwner);
         Assert.False(contract.UsesRuntimeViewportTexture);
         Assert.True(contract.AllowsEditorOverlay);
@@ -88,6 +89,7 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(EditorViewportSurface.GameView, contract.Surface);
         Assert.Equal(EditorDockSpace.GameViewWindowTitle, contract.WindowTitle);
         Assert.Equal(EditorViewportCameraOwner.RuntimePipelineCamera, contract.CameraOwner);
+        Assert.Equal(EditorViewportWorldSource.RuntimeWorld, contract.WorldSource);
         Assert.Equal(EditorViewportInputOwner.GameUiThenGameplay, contract.InputOwner);
         Assert.True(contract.UsesRuntimeViewportTexture);
         Assert.True(contract.AllowsEditorOverlay);
@@ -100,6 +102,22 @@ public sealed class EditorShellGameViewContractTests
         Assert.Equal(EditorViewportCoordinateSpace.ViewportTexturePixels, contract.GameUiCoordinateSpace);
         Assert.Equal(EditorViewportCoordinateSpace.FramebufferPixels, contract.GameUiOutputCoordinateSpace);
         Assert.Equal(EditorViewportHitTestSource.PanelLocalImageRectMappedToViewport, contract.GameUiHitTestSource);
+    }
+
+    /// <summary>
+    /// 验证 Edit 模式下 Scene 与 Game 观察同一 authoring world；两者只保留相机与 presentation 差异。
+    /// </summary>
+    [Fact]
+    public void EditModeSceneAndGameUseSameAuthoringWorld()
+    {
+        EditorViewportContract scene = EditorGameViewContract.SceneView(Editor.EditorMode.Edit);
+        EditorViewportContract game = EditorGameViewContract.GameView(Editor.EditorMode.Edit);
+
+        Assert.Equal(EditorViewportWorldSource.AuthoringWorld, scene.WorldSource);
+        Assert.Equal(scene.WorldSource, game.WorldSource);
+        Assert.Equal(EditorViewportInputOwner.AuthoringTools, scene.InputOwner);
+        Assert.Equal(EditorViewportInputOwner.AuthoringTools, game.InputOwner);
+        Assert.NotEqual(scene.CameraOwner, game.CameraOwner);
     }
 
     /// <summary>

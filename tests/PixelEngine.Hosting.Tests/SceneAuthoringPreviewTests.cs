@@ -212,10 +212,10 @@ public sealed class SceneAuthoringPreviewTests
     }
 
     /// <summary>
-    /// 验证世界画刷默认关闭，并与对象工具、selection 与 Play mode 形成单一互斥工具状态。
+    /// 验证世界画刷默认关闭、与对象工具互斥，并在 Edit/Play 间持续写入同一个当前 world。
     /// </summary>
     [Fact]
-    public void SceneMaterialBrushIsExplicitMutuallyExclusiveAndEditOnly()
+    public void SceneMaterialBrushIsExplicitMutuallyExclusiveAndAvailableInPlay()
     {
         EditorSceneModel scene = EditorSceneModel.FromDocument(new EngineSceneDocument
         {
@@ -236,7 +236,13 @@ public sealed class SceneAuthoringPreviewTests
         brush.HostInSceneView();
         brush.Visible = false;
         RecordingWorldTexture worldTexture = new();
-        SceneViewPanel panel = new(scene, new EditorUndoStack(), brush, worldTexture);
+        int worldChangedCount = 0;
+        SceneViewPanel panel = new(
+            scene,
+            new EditorUndoStack(),
+            brush,
+            worldTexture,
+            worldChanged: () => worldChangedCount++);
         EditorSelection selection = new();
         scene.Select(1);
         selection.SelectGameObject(1);
@@ -258,6 +264,7 @@ public sealed class SceneAuthoringPreviewTests
         Assert.True(panel.MaterialBrushActive);
         Assert.NotEmpty(edit.Painted);
         Assert.Equal(1, worldTexture.InvalidationCount);
+        Assert.Equal(1, worldChangedCount);
         Assert.Equal(1, selection.GameObjectStableId);
         Assert.False(panel.BeginGizmoTransform(1));
 
@@ -267,8 +274,71 @@ public sealed class SceneAuthoringPreviewTests
 
         Assert.True(panel.SetMaterialBrushActive(true));
         panel.PrepareFrame(selectedStableId: 1, EditorUiMode.Play);
-        Assert.False(panel.MaterialBrushActive);
-        Assert.False(panel.SetMaterialBrushActive(true));
+        Assert.True(panel.MaterialBrushActive);
+        panel.HandleScenePointer(selection, new Vector2(400f, 225f), clicked: true, dragging: false);
+        Assert.True(panel.SetMaterialBrushActive(true));
+        Assert.Equal(2, worldTexture.InvalidationCount);
+        Assert.Equal(2, worldChangedCount);
+    }
+
+    /// <summary>
+    /// 验证 Play/Paused 的 Scene View 从 runtime hierarchy 拾取、聚焦并临时修改同一实体，
+    /// Stop 路径使用的数据源恢复后不污染 authoring baseline。
+    /// </summary>
+    [Fact]
+    public void SceneRuntimeSelectionAndGizmoEditSameLiveEntityAndRestore()
+    {
+        PixelEngine.Scripting.Scene runtimeScene = new();
+        Entity entity = runtimeScene.CreateEntity();
+        Transform transform = entity.AddComponent<Transform>();
+        transform.SetPosition(120f, 72f);
+        transform.RotationRadians = 0.25f;
+        transform.ScaleX = 1.5f;
+        transform.ScaleY = 2f;
+        RuntimeSceneHierarchyDataSource runtime = RuntimeSceneHierarchyDataSource.CreateDynamic(
+            () => runtimeScene,
+            displayNameProvider: id => id == entity.Id ? "Player" : null);
+        int worldChangedCount = 0;
+        SceneViewPanel panel = new(
+            EditorSceneModel.Empty("runtime-world"),
+            new EditorUndoStack(),
+            runtimeSource: runtime,
+            worldChanged: () => worldChangedCount++);
+        string handle = $"script:{entity.Id}";
+        panel.PrepareFrame(null, EditorUiMode.Play, handle);
+
+        Assert.True(panel.TryPickRuntimeWorld(new Vector2(120f, 72f), out string? pickedEntity, out int? pickedBody));
+        Assert.Equal(handle, pickedEntity);
+        Assert.Null(pickedBody);
+
+        EditorSelection selection = new();
+        selection.SelectEntity(handle);
+        Assert.True(panel.FrameSelected(selection));
+        Assert.Equal(120f, panel.CameraSnapshot.CenterX, precision: 3);
+        Assert.Equal(72f, panel.CameraSnapshot.CenterY, precision: 3);
+
+        EditorSceneTransform desired = new()
+        {
+            X = 180f,
+            Y = 96f,
+            RotationRadians = 0.75f,
+            ScaleX = 2.5f,
+            ScaleY = 3f,
+        };
+        Assert.True(panel.ApplyRuntimeGizmoWorldTransform(handle, desired));
+        Assert.Equal(180f, transform.X);
+        Assert.Equal(96f, transform.Y);
+        Assert.Equal(0.75f, transform.RotationRadians);
+        Assert.Equal(2.5f, transform.ScaleX);
+        Assert.Equal(3f, transform.ScaleY);
+        Assert.Equal(1, worldChangedCount);
+
+        runtime.RestoreTemporaryEdits();
+        Assert.Equal(120f, transform.X);
+        Assert.Equal(72f, transform.Y);
+        Assert.Equal(0.25f, transform.RotationRadians);
+        Assert.Equal(1.5f, transform.ScaleX);
+        Assert.Equal(2f, transform.ScaleY);
     }
 
     /// <summary>
@@ -1379,6 +1449,8 @@ public sealed class SceneAuthoringPreviewTests
     private sealed class RecordingWorldTexture : IAuthoringWorldTexture
     {
         public int InvalidationCount { get; private set; }
+
+        public long Revision => InvalidationCount;
 
         public SceneWorldTextureSnapshot GetTexture(SceneAuthoringBounds requestedBounds)
         {

@@ -468,7 +468,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 "sceneToolSetRequest",
                 "sceneToolSnapshot",
                 [AutomationScopes.EditorControl],
-                ["edit"],
+                AllModes,
                 ["panel.scene.toolbar", "panel.scene.camera", "panel.scene.snap", "shortcut.w", "shortcut.e", "shortcut.r"],
                 SetSceneTool),
             Command(
@@ -477,7 +477,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 "sceneFrameRequest",
                 "sceneToolSnapshot",
                 [AutomationScopes.EditorControl],
-                ["edit"],
+                AllModes,
                 ["shortcut.f", "panel.scene.frame"],
                 FrameScene),
             Command(
@@ -486,7 +486,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 "brushApplyRequest",
                 "brushApplyResult",
                 [AutomationScopes.ProjectWrite],
-                ["edit"],
+                AllModes,
                 ["panel.scene.brush"],
                 ApplyBrush,
                 executionPhase: AutomationExecutionPhase.EngineInputAndTime),
@@ -496,7 +496,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
                 "brushStrokeRequest",
                 "brushStrokeResult",
                 [AutomationScopes.ProjectWrite],
-                ["edit"],
+                AllModes,
                 ["panel.scene.brush.stroke"],
                 ApplyBrushStroke,
                 executionPhase: AutomationExecutionPhase.EngineInputAndTime),
@@ -1726,30 +1726,101 @@ internal sealed partial class EditorAutomationAuthoringApi(
             AutomationProtocolConstants.HierarchySelectionSetMethod);
         ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.HierarchySelectionSetMethod);
         EditorProjectSession session = RequireSession();
-        if (request.StableId is { } stableId)
+        int targetCount = (request.StableId.HasValue ? 1 : 0) +
+            (request.EntityId is not null ? 1 : 0) +
+            (request.BodyId is not null ? 1 : 0);
+        if (targetCount > 1)
         {
-            _ = RequireGameObject(session.SceneModel, stableId);
+            throw Invalid("selection 只能指定 stableId、entityId 或 bodyId 之一。");
         }
 
-        int? before = session.SceneModel.SelectedStableId;
+        bool runtimeMode = session.Engine.Mode != EngineExecutionMode.Edit;
+        int? desiredStableId = null;
+        string? desiredEntityId = null;
+        string? desiredEntityHandle = null;
+        string? desiredBodyId = null;
+        int? desiredBodyKey = null;
+        if (!runtimeMode)
+        {
+            if (request.EntityId is not null || request.BodyId is not null)
+            {
+                throw StateUnavailable("Edit mode selection 只接受 authoring stableId。");
+            }
+
+            if (request.StableId is { } editStableId)
+            {
+                _ = RequireGameObject(session.SceneModel, editStableId);
+                desiredStableId = editStableId;
+            }
+        }
+        else
+        {
+            session = RequireRuntimeSession();
+            if (request.StableId is { } runtimeStableId)
+            {
+                _ = RequireGameObject(session.SceneModel, runtimeStableId);
+                if (!session.RuntimeProjection.TryGetRuntimeEntityId(runtimeStableId, out int runtimeEntityId))
+                {
+                    throw NotFound($"GameObject stableId={runtimeStableId} 没有当前 Play session 的 runtime entity。");
+                }
+
+                desiredEntityId = CreateRuntimeEntityId(session, runtimeEntityId);
+                desiredEntityHandle = RequireRuntimeEntityInspection(session, desiredEntityId).Handle;
+            }
+            else if (request.EntityId is not null)
+            {
+                desiredEntityId = ValidateRuntimeEntityId(session, request.EntityId);
+                desiredEntityHandle = RequireRuntimeEntityInspection(session, desiredEntityId).Handle;
+            }
+            else if (request.BodyId is not null)
+            {
+                (string bodyId, int bodyKey) = ValidateRuntimeBodyId(session, request.BodyId);
+                desiredBodyId = bodyId;
+                if (!session.TryGetAutomationRuntimeBody(bodyKey, out _))
+                {
+                    throw NotFound($"Runtime body '{desiredBodyId}' 不存在于当前 Play session。");
+                }
+
+                desiredBodyKey = bodyKey;
+            }
+        }
+
+        AutomationSelectionSnapshot before = CaptureSelection(session);
+        AutomationSelectionSnapshot desired = new()
+        {
+            StableId = desiredStableId,
+            EntityId = desiredEntityId,
+            BodyId = desiredBodyId,
+            ResourceId = desiredStableId is { } selectedStableId
+                ? GameObjectResource(session, selectedStableId)
+                : desiredEntityId ?? desiredBodyId,
+        };
         string[] resources =
         [
             SelectionResource(session),
-            .. new[] { before, request.StableId }
-                .Where(static stableId => stableId.HasValue)
-                .Select(stableId => GameObjectResource(session, stableId!.Value))
+            .. new[] { before.ResourceId, desired.ResourceId }
+                .Where(static resourceId => !string.IsNullOrWhiteSpace(resourceId))
+                .Select(static resourceId => resourceId!)
                 .Distinct(StringComparer.Ordinal),
         ];
-        if (before == request.StableId)
+        if (before == desired)
         {
             return Result(
-                CaptureSelection(session),
+                before,
                 AutomationJsonContext.Default.AutomationSelectionSnapshot,
                 resources);
         }
 
         context.Revisions.EnsureCanAdvance(resources);
-        session.SetAutomationGameObjectSelection(request.StableId);
+        if (runtimeMode)
+        {
+            session.SetAutomationRuntimeSelection(desiredEntityHandle, desiredBodyKey);
+        }
+        else
+        {
+            session.SetAutomationGameObjectSelection(desiredStableId);
+        }
+
         AutomationRevisionSnapshot revision = context.Revisions.Advance(resources);
         return Result(
             CaptureSelection(session),
@@ -2639,7 +2710,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
             throw Invalid("Scene tool 或 gizmo space 无效。");
         }
 
-        EditorProjectSession session = RequireEditSession();
+        EditorProjectSession session = RequireSession();
         if (request.Brush is not null)
         {
             ValidateBrushSettings(session, request.Brush);
@@ -2721,7 +2792,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
             throw Invalid("Scene frame target 无效。");
         }
 
-        EditorProjectSession session = RequireEditSession();
+        EditorProjectSession session = RequireSession();
         string[] resources = [SceneViewResource(session)];
         if (!session.TryCaptureAutomationSceneTool(out AutomationSceneToolSnapshot before))
         {
@@ -2764,8 +2835,8 @@ internal sealed partial class EditorAutomationAuthoringApi(
             AutomationJsonContext.Default.AutomationBrushApplyRequest,
             AutomationProtocolConstants.BrushApplyMethod);
         ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.BrushApplyMethod);
-        EditorProjectSession session = RequireEditSession();
-        string[] resources = [AuthoringWorldResource(session), SceneViewResource(session)];
+        EditorProjectSession session = RequireSession();
+        string[] resources = CurrentWorldAndSceneViewResources(session);
         context.Revisions.EnsureCanAdvance(resources);
         if (!session.TryApplyAutomationBrush(
             request.X,
@@ -2855,7 +2926,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
             }
         }
 
-        EditorProjectSession session = RequireEditSession();
+        EditorProjectSession session = RequireSession();
         if (!session.TryCaptureAutomationSceneTool(out AutomationSceneToolSnapshot tool) ||
             tool.Brush is null)
         {
@@ -2878,7 +2949,7 @@ internal sealed partial class EditorAutomationAuthoringApi(
         }
 
         context.CancellationToken.ThrowIfCancellationRequested();
-        string[] resources = [AuthoringWorldResource(session), SceneViewResource(session)];
+        string[] resources = CurrentWorldAndSceneViewResources(session);
         context.Revisions.EnsureCanAdvance(resources);
         if (!session.TryApplyAutomationBrushStroke(
             request.Points,
@@ -3149,12 +3220,44 @@ internal sealed partial class EditorAutomationAuthoringApi(
 
     private static AutomationSelectionSnapshot CaptureSelection(EditorProjectSession session)
     {
-        int? stableId = session.SceneModel.SelectedStableId;
+        if (session.Engine.Mode == EngineExecutionMode.Edit)
+        {
+            int? stableId = session.SceneModel.SelectedStableId;
+            return new AutomationSelectionSnapshot
+            {
+                StableId = stableId,
+                ResourceId = stableId is { } value ? GameObjectResource(session, value) : null,
+            };
+        }
+
+        EditorAutomationSelectionSnapshot selection = session.CaptureAutomationSelection();
+        string? entityId = TryCreateRuntimeEntityId(session, selection.EntityHandle);
+        string? bodyId = selection.BodyId is { } bodyKey
+            ? CreateRuntimeBodyId(session, bodyKey)
+            : null;
         return new AutomationSelectionSnapshot
         {
-            StableId = stableId,
-            ResourceId = stableId is { } value ? GameObjectResource(session, value) : null,
+            EntityId = entityId,
+            BodyId = bodyId,
+            ResourceId = entityId ?? bodyId,
         };
+    }
+
+    private static string? TryCreateRuntimeEntityId(
+        EditorProjectSession session,
+        string? entityHandle)
+    {
+        const string Prefix = "script:";
+        return entityHandle is not null &&
+            entityHandle.StartsWith(Prefix, StringComparison.Ordinal) &&
+            int.TryParse(
+                entityHandle.AsSpan(Prefix.Length),
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out int entityId) &&
+            entityId > 0
+                ? CreateRuntimeEntityId(session, entityId)
+                : null;
     }
 
     private static AutomationPanelInfo MapPanel(EditorPanelSnapshot panel)
@@ -3544,6 +3647,13 @@ internal sealed partial class EditorAutomationAuthoringApi(
     private static string AuthoringWorldResource(EditorProjectSession session)
     {
         return $"{EditorAutomationRuntime.CreateSceneResourceId(session)}:authoring-world";
+    }
+
+    private static string[] CurrentWorldAndSceneViewResources(EditorProjectSession session)
+    {
+        return session.Engine.Mode == EngineExecutionMode.Edit
+            ? [AuthoringWorldResource(session), SceneViewResource(session)]
+            : [.. RuntimeWorldResources(session), SceneViewResource(session)];
     }
 
     private static string AssetResource(EditorProjectSession session, string assetPath)

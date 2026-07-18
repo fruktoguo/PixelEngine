@@ -19,7 +19,22 @@ public readonly record struct SceneHierarchySnapshot(
 /// <param name="Handle">Editor 选择态使用的实体句柄。</param>
 /// <param name="DisplayName">显示名。</param>
 /// <param name="ComponentCount">Behaviour 组件数量。</param>
-public readonly record struct SceneHierarchyEntityItem(string Handle, string DisplayName, int ComponentCount);
+/// <param name="HasTransform">实体是否拥有可在 Scene View 检视的 Transform。</param>
+/// <param name="X">世界 X 坐标。</param>
+/// <param name="Y">世界 Y 坐标。</param>
+/// <param name="RotationRadians">世界旋转，单位弧度。</param>
+/// <param name="ScaleX">X 缩放。</param>
+/// <param name="ScaleY">Y 缩放。</param>
+public readonly record struct SceneHierarchyEntityItem(
+    string Handle,
+    string DisplayName,
+    int ComponentCount,
+    bool HasTransform = false,
+    float X = 0f,
+    float Y = 0f,
+    float RotationRadians = 0f,
+    float ScaleX = 1f,
+    float ScaleY = 1f);
 
 /// <summary>
 /// 场景层级刚体条目。
@@ -107,6 +122,7 @@ public interface IViewportFocusService
 public sealed class RuntimeSceneHierarchyDataSource : IRuntimeSceneEditorDataSource
 {
     private readonly Func<Scene?> _sceneProvider;
+    private readonly Func<int, string?>? _displayNameProvider;
     private readonly PhysicsSystem? _physics;
     private readonly Dictionary<string, RuntimeTransformSnapshot> _transformBaselines = new(StringComparer.Ordinal);
     private readonly Dictionary<RuntimeFieldKey, object?> _fieldBaselines = [];
@@ -116,18 +132,20 @@ public sealed class RuntimeSceneHierarchyDataSource : IRuntimeSceneEditorDataSou
     /// <param name="scriptScene">固定脚本 Scene；可为空。</param>
     /// <param name="physics">可选物理系统。</param>
     public RuntimeSceneHierarchyDataSource(Scene? scriptScene = null, PhysicsSystem? physics = null)
-        : this(() => scriptScene, physics, dynamicProvider: false)
+        : this(() => scriptScene, physics, displayNameProvider: null, dynamicProvider: false)
     {
     }
 
     private RuntimeSceneHierarchyDataSource(
         Func<Scene?> sceneProvider,
         PhysicsSystem? physics,
+        Func<int, string?>? displayNameProvider,
         bool dynamicProvider)
     {
         _ = dynamicProvider;
         _sceneProvider = sceneProvider ?? throw new ArgumentNullException(nameof(sceneProvider));
         _physics = physics;
+        _displayNameProvider = displayNameProvider;
     }
 
     /// <summary>
@@ -135,12 +153,18 @@ public sealed class RuntimeSceneHierarchyDataSource : IRuntimeSceneEditorDataSou
     /// </summary>
     /// <param name="sceneProvider">当前脚本 Scene provider。</param>
     /// <param name="physics">可选物理系统。</param>
+    /// <param name="displayNameProvider">可选的 authoring 名称解析器；动态实体返回空即可使用组件名回退。</param>
     /// <returns>动态 runtime 层级数据源。</returns>
     public static RuntimeSceneHierarchyDataSource CreateDynamic(
         Func<Scene?> sceneProvider,
-        PhysicsSystem? physics = null)
+        PhysicsSystem? physics = null,
+        Func<int, string?>? displayNameProvider = null)
     {
-        return new RuntimeSceneHierarchyDataSource(sceneProvider, physics, dynamicProvider: true);
+        return new RuntimeSceneHierarchyDataSource(
+            sceneProvider,
+            physics,
+            displayNameProvider,
+            dynamicProvider: true);
     }
 
     /// <inheritdoc />
@@ -303,13 +327,23 @@ public sealed class RuntimeSceneHierarchyDataSource : IRuntimeSceneEditorDataSou
         for (int i = 0; i < entities.Length; i++)
         {
             ScriptEntityInspection entity = entities[i];
-            string displayName = entity.Components.Length == 0
-                ? $"Entity {entity.EntityId}"
-                : $"{GetShortTypeName(entity.Components[0].TypeName)} · Entity {entity.EntityId}";
+            string? projectedName = _displayNameProvider?.Invoke(entity.EntityId);
+            string displayName = !string.IsNullOrWhiteSpace(projectedName)
+                ? projectedName
+                : entity.Components.Length == 0
+                    ? $"Entity {entity.EntityId}"
+                    : $"{GetShortTypeName(entity.Components[0].TypeName)} · Entity {entity.EntityId}";
+            Transform? transform = entity.Transform;
             items[i] = new SceneHierarchyEntityItem(
                 entity.Handle,
                 displayName,
-                entity.Components.Length);
+                entity.Components.Length,
+                transform is not null,
+                transform?.X ?? 0f,
+                transform?.Y ?? 0f,
+                transform?.RotationRadians ?? 0f,
+                transform?.ScaleX ?? 1f,
+                transform?.ScaleY ?? 1f);
         }
 
         return items;

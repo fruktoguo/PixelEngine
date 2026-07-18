@@ -142,6 +142,11 @@ internal sealed class EditorShellHostExtension :
             rotationRadians,
             scaleX,
             scaleY);
+        if (applied)
+        {
+            InvalidateAuthoringWorld();
+        }
+
         diagnostic = applied ? string.Empty : "Runtime entity Transform 已失效或包含非有限值。";
         return applied;
     }
@@ -284,7 +289,7 @@ internal sealed class EditorShellHostExtension :
             Kind = "scene-view",
             Width = rect.Width,
             Height = rect.Height,
-            ContentRevision = _sceneModel?.Version ?? 0,
+            ContentRevision = panel.CurrentWorldTextureRevision,
             RgbaBottomUp = rgba,
         };
     }
@@ -622,10 +627,9 @@ internal sealed class EditorShellHostExtension :
             return false;
         }
 
-        if (request.Tool == AutomationSceneTool.Brush &&
-            (_brushPanel is null || CapturePlayMode() != EditorMode.Edit))
+        if (request.Tool == AutomationSceneTool.Brush && _brushPanel is null)
         {
-            diagnostic = "当前工程没有可用世界画刷，或 Editor 不在 Edit mode。";
+            diagnostic = "当前工程没有可用世界画刷。";
             return false;
         }
 
@@ -814,10 +818,10 @@ internal sealed class EditorShellHostExtension :
             return false;
         }
 
-        if (!_sceneViewPanel.MaterialBrushActive || CapturePlayMode() != EditorMode.Edit)
+        if (!_sceneViewPanel.MaterialBrushActive)
         {
             result = null!;
-            diagnostic = "世界画刷必须在 Edit mode 显式激活后才能应用。";
+            diagnostic = "世界画刷必须先在 Scene View 显式激活。";
             return false;
         }
 
@@ -846,10 +850,10 @@ internal sealed class EditorShellHostExtension :
             return false;
         }
 
-        if (!_sceneViewPanel.MaterialBrushActive || CapturePlayMode() != EditorMode.Edit)
+        if (!_sceneViewPanel.MaterialBrushActive)
         {
             result = null!;
-            diagnostic = "世界画刷必须在 Edit mode 显式激活后才能应用。";
+            diagnostic = "世界画刷必须先在 Scene View 显式激活。";
             return false;
         }
 
@@ -985,6 +989,11 @@ internal sealed class EditorShellHostExtension :
     public void PrepareFrame()
     {
         EditorMode mode = CapturePlayMode();
+        if (_engine?.Context.TryGetService(out RenderPhaseDriver render) == true)
+        {
+            render.SetAuthoringVisibilityOverride(mode == EditorMode.Edit);
+        }
+
         if (_assetBrowserDataSource?.ApplyPendingChanges() == true)
         {
             _app.NotifyAutomationAssetsChanged();
@@ -1001,13 +1010,23 @@ internal sealed class EditorShellHostExtension :
             _sceneViewPanel?.InvalidateWorldTexture();
         }
 
+        if (mode == EditorMode.Play)
+        {
+            // Scene View 保留独立 authoring camera，但其 cell texture 必须观察本帧活动 runtime chunks。
+            _sceneViewPanel?.InvalidateWorldTexture();
+        }
+
         _lastPreparedMode = mode;
         _gameViewPanel?.PrepareFrame(mode);
         _gameObjectInspectorPanel?.PrepareFrame(
             _editor.Selection.GameObjectStableId,
             _editor.Selection.EntityHandle);
         // Scene View 关闭后 EditorApp 不再 Draw 面板；gizmo 事务仍须响应 selection/mode/scene 生命周期。
-        _sceneViewPanel?.PrepareFrame(_editor.Selection.GameObjectStableId, mode);
+        _sceneViewPanel?.PrepareFrame(
+            _editor.Selection.GameObjectStableId,
+            mode,
+            _editor.Selection.EntityHandle,
+            _editor.Selection.BodyId);
         _consolePanel?.PrepareFrame();
         if (_buildSettingsPanel?.HasPendingWork == true)
         {
@@ -1152,6 +1171,25 @@ internal sealed class EditorShellHostExtension :
         }
     }
 
+    internal void SetAutomationRuntimeSelection(string? entityHandle, int? bodyId)
+    {
+        if (!string.IsNullOrWhiteSpace(entityHandle) && bodyId.HasValue)
+        {
+            throw new ArgumentException("Runtime selection 只能指定 entity 或 body 之一。");
+        }
+
+        EditorSelection selection = _editor.Selection;
+        selection.Clear();
+        if (!string.IsNullOrWhiteSpace(entityHandle))
+        {
+            selection.SelectEntity(entityHandle);
+        }
+        else if (bodyId.HasValue)
+        {
+            selection.SelectBody(bodyId.Value);
+        }
+    }
+
     public void RequestGameViewFocus()
     {
         if (_gameViewPanel is not null)
@@ -1164,6 +1202,10 @@ internal sealed class EditorShellHostExtension :
     public void InvalidateAuthoringWorld()
     {
         _sceneViewPanel?.InvalidateWorldTexture();
+        if (_engine?.Context.TryGetService(out RenderPhaseDriver render) == true)
+        {
+            render.InvalidateWorld();
+        }
     }
 
     internal EditorAssetBrowserDataSource RequireAutomationAssetDatabase()
@@ -1570,6 +1612,7 @@ internal sealed class EditorShellHostExtension :
         _textureThumbnailProvider ??= new EditorTextureThumbnailProvider(_project.ContentRootPath, window);
         // 注册层级/Inspector/资产浏览器/构建设置等 ImGui 面板
         RegisterPanels(engine, window, pipeline);
+        InvalidateAuthoringWorld();
         EditorWindowInputConnector input = new(window, _editor.Input);
         EditorExternalAssetDropConnector externalAssetDrop = new(
             window,
@@ -1751,7 +1794,16 @@ internal sealed class EditorShellHostExtension :
                 : null;
             RuntimeSceneHierarchyDataSource runtimeHierarchy = RuntimeSceneHierarchyDataSource.CreateDynamic(
                 () => engine.CurrentScene?.ScriptScene,
-                runtimePhysics);
+                runtimePhysics,
+                entityId =>
+                {
+                    EditorProjectSession? session = _app.CurrentSession;
+                    return session is not null &&
+                        session.RuntimeProjection.TryGetStableId(entityId, out int stableId) &&
+                        session.SceneModel.TryGet(stableId, out EditorGameObject? gameObject)
+                            ? gameObject.Name
+                            : null;
+                });
             _runtimeHierarchy = runtimeHierarchy;
             _editor.AddPanel(EditorPanelIds.Hierarchy, new GameObjectHierarchyPanel(
                 _sceneModel,
@@ -1821,7 +1873,9 @@ internal sealed class EditorShellHostExtension :
             brushPanel,
             sceneWorldTexture,
             () => _authoringWorld?.Snapshot ?? default,
-            _sceneWebCanvasPreview);
+            _sceneWebCanvasPreview,
+            _runtimeHierarchy,
+            InvalidateAuthoringWorld);
         _undoStack.BeforeOperation = FlushPendingAuthoringEdits;
         _editor.AddPanel(EditorPanelIds.Scene, _sceneViewPanel);
         _playerSettingsPanel = new PlayerSettingsPanel(_project, () => _app.UiScale);

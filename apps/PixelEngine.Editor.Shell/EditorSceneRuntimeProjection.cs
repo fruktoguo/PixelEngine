@@ -9,6 +9,7 @@ namespace PixelEngine.Editor.Shell;
 internal sealed class EditorSceneRuntimeProjection
 {
     private readonly Dictionary<int, int> _stableToRuntime = [];
+    private readonly Dictionary<int, int> _runtimeToStable = [];
 
     private EditorSceneRuntimeProjection(Scripting.Scene scene)
     {
@@ -24,6 +25,11 @@ internal sealed class EditorSceneRuntimeProjection
         return _stableToRuntime.TryGetValue(stableId, out entityId);
     }
 
+    public bool TryGetStableId(int entityId, out int stableId)
+    {
+        return _runtimeToStable.TryGetValue(entityId, out stableId);
+    }
+
     public static EditorSceneRuntimeProjection Build(EditorSceneModel model, ScriptAssemblyRegistry scriptAssemblies)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -34,6 +40,7 @@ internal sealed class EditorSceneRuntimeProjection
         {
             Entity entity = projection.Scene.CreateEntity();
             projection._stableToRuntime.Add(gameObject.StableId, entity.Id);
+            projection._runtimeToStable.Add(entity.Id, gameObject.StableId);
             bool effectivelyEnabled = gameObject.Enabled &&
                 (!gameObject.ParentId.HasValue || enabledByStableId[gameObject.ParentId.Value]);
             enabledByStableId.Add(gameObject.StableId, effectivelyEnabled);

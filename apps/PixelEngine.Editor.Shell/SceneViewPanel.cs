@@ -16,7 +16,9 @@ internal sealed class SceneViewPanel(
     MaterialBrushPalettePanel? brushPanel = null,
     IAuthoringWorldTexture? worldTexture = null,
     Func<AuthoringWorldPreviewSnapshot>? authoringWorldSnapshot = null,
-    SceneWebCanvasAuthoringPreview? webCanvasPreview = null) : IEditorPanel, IDisposable
+    SceneWebCanvasAuthoringPreview? webCanvasPreview = null,
+    IRuntimeSceneEditorDataSource? runtimeSource = null,
+    Action? worldChanged = null) : IEditorPanel, IDisposable
 {
     private const uint CanvasColor = 0xFF_18_1A_1F;
     private const uint WorldColor = 0xFF_25_2A_34;
@@ -27,6 +29,7 @@ internal sealed class SceneViewPanel(
     private const uint SelectedColor = 0xFF_66_E8_FF;
     private const uint SpawnColor = 0xFF_74_D6_7A;
     private const uint GoalColor = 0xFF_72_D8_FF;
+    private const uint RuntimeBodyColor = 0xFF_D5_9B_59;
     private const uint TestColor = 0xFF_AE_83_F2;
     private const uint ToolbarSelectedColor = 0xFF_C5_85_3B;
     private const uint ToolbarHoveredColor = 0xFF_4A_4A_4A;
@@ -49,7 +52,10 @@ internal sealed class SceneViewPanel(
     private readonly IAuthoringWorldTexture? _worldTexture = worldTexture;
     private readonly Func<AuthoringWorldPreviewSnapshot>? _authoringWorldSnapshot = authoringWorldSnapshot;
     private readonly SceneWebCanvasAuthoringPreview? _webCanvasPreview = webCanvasPreview;
+    private readonly IRuntimeSceneEditorDataSource? _runtimeSource = runtimeSource;
+    private readonly Action? _worldChanged = worldChanged;
     private readonly SceneAuthoringCamera _camera = new();
+    private static readonly SceneHierarchySnapshot EmptyRuntimeSnapshot = new([], []);
     private Vector2 _canvasMin;
     private Vector2 _canvasSize;
     private bool _canvasHovered;
@@ -77,8 +83,12 @@ internal sealed class SceneViewPanel(
     private Vector2 _gizmoDragStartWorldPoint;
     private Vector2 _gizmoDragCenterScreen;
     private EditorSceneTransform? _gizmoDragStartWorldTransform;
+    private SceneHierarchySnapshot _runtimeSnapshot = EmptyRuntimeSnapshot;
+    private string? _runtimeGizmoEntityHandle;
     private EditorMode _preparedMode = EditorMode.Edit;
     private int? _preparedSelectedStableId;
+    private string? _preparedSelectedEntityHandle;
+    private int? _preparedSelectedBodyId;
     private bool _disposed;
 
     public string Title => EditorDockSpace.ViewportWindowTitle;
@@ -107,6 +117,8 @@ internal sealed class SceneViewPanel(
     public SceneAuthoringPreview Preview => EnsurePreview();
 
     public SceneAuthoringCameraSnapshot CameraSnapshot => _camera.Snapshot;
+
+    internal long CurrentWorldTextureRevision => _worldTexture?.Revision ?? 0;
 
     internal bool TryGetAutomationCaptureRect(
         RenderWindow window,
@@ -190,10 +202,16 @@ internal sealed class SceneViewPanel(
     /// Scene View 被关闭或切到后台时仍可能发生 selection、mode、对象删除与场景替换，
     /// 因此事务收尾不能只依赖当前帧鼠标 release 边沿。
     /// </remarks>
-    internal void PrepareFrame(int? selectedStableId, EditorMode mode)
+    internal void PrepareFrame(
+        int? selectedStableId,
+        EditorMode mode,
+        string? selectedEntityHandle = null,
+        int? selectedBodyId = null)
     {
         _preparedMode = mode;
         _preparedSelectedStableId = selectedStableId;
+        _preparedSelectedEntityHandle = selectedEntityHandle;
+        _preparedSelectedBodyId = selectedBodyId;
         if (!Visible || mode != EditorMode.Edit)
         {
             _webCanvasPreview?.Request(null, false, false, 0f, 0f);
@@ -204,9 +222,11 @@ internal sealed class SceneViewPanel(
             _brushPanel.SetActive(false);
         }
 
-        if (mode != EditorMode.Edit && MaterialBrushActive)
+        if (_runtimeGizmoEntityHandle is not null &&
+            (mode == EditorMode.Edit ||
+             !string.Equals(_runtimeGizmoEntityHandle, selectedEntityHandle, StringComparison.Ordinal)))
         {
-            _ = SetMaterialBrushActive(false);
+            CompleteRuntimeGizmoTransform();
         }
 
         if (!_gizmoTransactionStableId.HasValue)
@@ -229,7 +249,12 @@ internal sealed class SceneViewPanel(
     [EditorUiCommands("panel.scene")]
     public void Draw(in EditorContext context)
     {
-        PrepareFrame(context.Selection.GameObjectStableId ?? _scene.SelectedStableId, _preparedMode);
+        PrepareFrame(
+            context.Selection.GameObjectStableId ?? _scene.SelectedStableId,
+            _preparedMode,
+            context.Selection.EntityHandle,
+            context.Selection.BodyId);
+        RefreshRuntimeSnapshot();
         string windowTitle = EditorLocalization.GetWindowTitle("window.scene", "Scene", Title);
         if (!ImGui.Begin(windowTitle, ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoScrollWithMouse))
         {
@@ -263,6 +288,28 @@ internal sealed class SceneViewPanel(
     internal bool FrameSelected(EditorSelection selection)
     {
         ArgumentNullException.ThrowIfNull(selection);
+        if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            RefreshRuntimeSnapshot();
+            if (!string.IsNullOrWhiteSpace(selection.EntityHandle) &&
+                TryFindRuntimeEntity(selection.EntityHandle, out SceneHierarchyEntityItem entity) &&
+                entity.HasTransform)
+            {
+                _camera.FramePoint(new Vector2(entity.X, entity.Y));
+                _cameraAutoFit = false;
+                return true;
+            }
+
+            if (selection.BodyId is { } bodyId && TryFindRuntimeBody(bodyId, out SceneHierarchyBodyItem body))
+            {
+                _camera.FramePoint(new Vector2(body.X, body.Y));
+                _cameraAutoFit = false;
+                return true;
+            }
+
+            return false;
+        }
+
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
         if (!stableId.HasValue || !_scene.TryGet(stableId.Value, out EditorGameObject? gameObject))
         {
@@ -526,7 +573,7 @@ internal sealed class SceneViewPanel(
         if (SceneToolbarButton(
             SceneToolbarIcon.Brush,
             MaterialBrushActive,
-            _brushPanel is not null && _preparedMode == EditorMode.Edit,
+            _brushPanel is not null,
             "Material Brush (B)"))
         {
             _ = SetMaterialBrushActive(true);
@@ -539,7 +586,12 @@ internal sealed class SceneViewPanel(
         }
 
         int? selectedStableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
-        bool canFrameSelected = selectedStableId.HasValue && _scene.TryGet(selectedStableId.Value, out _);
+        bool canFrameSelected = _preparedMode is EditorMode.Play or EditorMode.Paused
+            ? (!string.IsNullOrWhiteSpace(selection.EntityHandle) &&
+               TryFindRuntimeEntity(selection.EntityHandle, out SceneHierarchyEntityItem selectedEntity) &&
+               selectedEntity.HasTransform) ||
+              (selection.BodyId is { } selectedBodyId && TryFindRuntimeBody(selectedBodyId, out _))
+            : selectedStableId.HasValue && _scene.TryGet(selectedStableId.Value, out _);
         ImGui.SameLine(0f, 2f);
         if (SceneToolbarButton(
             SceneToolbarIcon.FrameSelected,
@@ -626,6 +678,8 @@ internal sealed class SceneViewPanel(
             _ = CommitGizmoTransform();
         }
 
+        CompleteRuntimeGizmoTransform();
+
         ClearGizmoInteraction();
         _ = SetMaterialBrushActive(false);
         Operation = operation;
@@ -643,15 +697,15 @@ internal sealed class SceneViewPanel(
             return true;
         }
 
-        if (active && _preparedMode != EditorMode.Edit)
-        {
-            _brushPanel.SetActive(false);
-            return false;
-        }
-
         if (active && _gizmoTransactionStableId.HasValue)
         {
             _ = CommitGizmoTransform();
+        }
+
+        if (active)
+        {
+            CompleteRuntimeGizmoTransform();
+            ClearGizmoInteraction();
         }
 
         if (active)
@@ -665,7 +719,7 @@ internal sealed class SceneViewPanel(
 
     internal int ApplyMaterialBrushAt(int worldX, int worldY)
     {
-        if (_brushPanel is null || !MaterialBrushActive || _preparedMode != EditorMode.Edit)
+        if (_brushPanel is null || !MaterialBrushActive)
         {
             return 0;
         }
@@ -680,6 +734,7 @@ internal sealed class SceneViewPanel(
         if (writes > 0)
         {
             InvalidateWorldTexture();
+            _worldChanged?.Invoke();
         }
 
         return writes;
@@ -696,6 +751,8 @@ internal sealed class SceneViewPanel(
         {
             _ = CommitGizmoTransform();
         }
+
+        CompleteRuntimeGizmoTransform();
 
         ClearGizmoInteraction();
         GizmoMode = GizmoMode == ImGuizmoMode.Local ? ImGuizmoMode.World : ImGuizmoMode.Local;
@@ -721,6 +778,8 @@ internal sealed class SceneViewPanel(
             _ = CommitGizmoTransform();
         }
 
+        CompleteRuntimeGizmoTransform();
+
         ClearGizmoInteraction();
         SnapSettings = settings;
     }
@@ -739,6 +798,8 @@ internal sealed class SceneViewPanel(
         {
             _ = CommitGizmoTransform();
         }
+
+        CompleteRuntimeGizmoTransform();
 
         ClearGizmoInteraction();
         _camera.SetView(centerX, centerY, cellsPerPixel);
@@ -958,8 +1019,16 @@ internal sealed class SceneViewPanel(
             }
 
             DrawBoundary(drawList, preview.Bounds);
-            DrawMarkers(drawList, preview);
-            DrawWebCanvasPreview(drawList);
+            if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+            {
+                DrawRuntimeMarkers(drawList);
+            }
+            else
+            {
+                DrawMarkers(drawList, preview);
+                DrawWebCanvasPreview(drawList);
+            }
+
             DrawCanvasLabel(drawList, preview);
             DrawBrushFootprint(drawList);
         }
@@ -1384,7 +1453,7 @@ internal sealed class SceneViewPanel(
 
     private void DrawBrushFootprint(ImDrawListPtr drawList)
     {
-        if (!MaterialBrushActive || _preparedMode != EditorMode.Edit || !_canvasHovered || _webCanvasPreviewHovered)
+        if (!MaterialBrushActive || !_canvasHovered || _webCanvasPreviewHovered)
         {
             return;
         }
@@ -1516,54 +1585,145 @@ internal sealed class SceneViewPanel(
                     SceneAuthoringMarkerKind.GameObject => ObjectColor,
                     _ => ObjectColor,
                 };
-            float markerRadius = marker.Kind == SceneAuthoringMarkerKind.GameObject ? 6f : 10f;
-            if (marker.Kind == SceneAuthoringMarkerKind.PlayerSpawn)
+            DrawMarkerShape(drawList, marker, screen, color, selected);
+            DrawMarkerLabel(drawList, marker.Name, screen, color);
+        }
+    }
+
+    private void DrawRuntimeMarkers(ImDrawListPtr drawList)
+    {
+        IReadOnlyList<SceneHierarchyEntityItem> entities = _runtimeSnapshot.Entities;
+        for (int i = 0; i < entities.Count; i++)
+        {
+            SceneHierarchyEntityItem entity = entities[i];
+            if (!entity.HasTransform)
             {
-                SceneAnchorMarkerGeometry geometry = BuildAnchorMarkerGeometry(marker, markerRadius);
-                drawList.AddTriangleFilled(
-                    screen - geometry.AxisY,
-                    screen + geometry.AxisX + geometry.AxisY,
-                    screen - geometry.AxisX + geometry.AxisY,
-                    color);
-            }
-            else if (marker.Kind == SceneAuthoringMarkerKind.Goal)
-            {
-                SceneAnchorMarkerGeometry geometry = BuildAnchorMarkerGeometry(marker, markerRadius);
-                Vector2 topLeft = screen - geometry.AxisX - geometry.AxisY;
-                Vector2 topRight = screen + geometry.AxisX - geometry.AxisY;
-                Vector2 bottomRight = screen + geometry.AxisX + geometry.AxisY;
-                Vector2 bottomLeft = screen - geometry.AxisX + geometry.AxisY;
-                drawList.AddTriangleFilled(topLeft, topRight, bottomRight, color);
-                drawList.AddTriangleFilled(topLeft, bottomRight, bottomLeft, color);
-            }
-            else
-            {
-                DrawGameObjectMarker(drawList, marker, screen, color, selected);
+                continue;
             }
 
-            Vector2 textSize = ImGui.CalcTextSize(marker.Name);
-            Vector2 labelMin = screen + new Vector2(14f, -(textSize.Y * 0.5f));
-            float labelMinX = _canvasMin.X + 4f;
-            float labelMinY = _canvasMin.Y + 4f;
-            float labelMaxX = Math.Max(labelMinX, _canvasMin.X + _canvasSize.X - textSize.X - 12f);
-            float labelMaxY = Math.Max(labelMinY, _canvasMin.Y + _canvasSize.Y - textSize.Y - 8f);
-            labelMin.X = Math.Clamp(labelMin.X, labelMinX, labelMaxX);
-            labelMin.Y = Math.Clamp(labelMin.Y, labelMinY, labelMaxY);
-            drawList.AddRectFilled(labelMin - new Vector2(4f, 2f), labelMin + textSize + new Vector2(4f, 2f), 0xD9222429, 3f);
-            drawList.AddText(labelMin, color, marker.Name);
+            SceneAuthoringMarker marker = new(
+                StableId: null,
+                entity.DisplayName,
+                new Vector2(entity.X, entity.Y),
+                ResolveRuntimeMarkerKind(entity.DisplayName),
+                entity.RotationRadians,
+                entity.ScaleX,
+                entity.ScaleY);
+            bool selected = string.Equals(
+                entity.Handle,
+                _preparedSelectedEntityHandle,
+                StringComparison.Ordinal);
+            uint color = selected
+                ? SelectedColor
+                : marker.Kind switch
+                {
+                    SceneAuthoringMarkerKind.PlayerSpawn => SpawnColor,
+                    SceneAuthoringMarkerKind.Goal => GoalColor,
+                    SceneAuthoringMarkerKind.GameObject => ObjectColor,
+                    _ => ObjectColor,
+                };
+            Vector2 screen = WorldToScreen(marker.Position);
+            DrawMarkerShape(drawList, marker, screen, color, selected);
+            DrawMarkerLabel(drawList, marker.Name, screen, color);
         }
+
+        IReadOnlyList<SceneHierarchyBodyItem> bodies = _runtimeSnapshot.Bodies;
+        for (int i = 0; i < bodies.Count; i++)
+        {
+            SceneHierarchyBodyItem body = bodies[i];
+            Vector2 screen = WorldToScreen(new Vector2(body.X, body.Y));
+            bool selected = _preparedSelectedBodyId == body.BodyKey;
+            uint color = selected ? SelectedColor : RuntimeBodyColor;
+            drawList.AddRectFilled(
+                screen - new Vector2(selected ? 6f : 5f),
+                screen + new Vector2(selected ? 6f : 5f),
+                color,
+                1f);
+            drawList.AddRect(
+                screen - new Vector2(9f),
+                screen + new Vector2(9f),
+                color,
+                1f,
+                ImDrawFlags.None,
+                selected ? 2f : 1f);
+            DrawMarkerLabel(drawList, body.DisplayName, screen, color);
+        }
+    }
+
+    private static SceneAuthoringMarkerKind ResolveRuntimeMarkerKind(string displayName)
+    {
+        return displayName.Contains("Player", StringComparison.OrdinalIgnoreCase)
+            ? SceneAuthoringMarkerKind.PlayerSpawn
+            : displayName.Contains("Goal", StringComparison.OrdinalIgnoreCase)
+                ? SceneAuthoringMarkerKind.Goal
+                : SceneAuthoringMarkerKind.GameObject;
+    }
+
+    private static void DrawMarkerShape(
+        ImDrawListPtr drawList,
+        in SceneAuthoringMarker marker,
+        Vector2 screen,
+        uint color,
+        bool selected)
+    {
+        float markerRadius = marker.Kind == SceneAuthoringMarkerKind.GameObject ? 6f : 10f;
+        if (marker.Kind == SceneAuthoringMarkerKind.PlayerSpawn)
+        {
+            SceneAnchorMarkerGeometry geometry = BuildAnchorMarkerGeometry(marker, markerRadius);
+            drawList.AddTriangleFilled(
+                screen - geometry.AxisY,
+                screen + geometry.AxisX + geometry.AxisY,
+                screen - geometry.AxisX + geometry.AxisY,
+                color);
+        }
+        else if (marker.Kind == SceneAuthoringMarkerKind.Goal)
+        {
+            SceneAnchorMarkerGeometry geometry = BuildAnchorMarkerGeometry(marker, markerRadius);
+            Vector2 topLeft = screen - geometry.AxisX - geometry.AxisY;
+            Vector2 topRight = screen + geometry.AxisX - geometry.AxisY;
+            Vector2 bottomRight = screen + geometry.AxisX + geometry.AxisY;
+            Vector2 bottomLeft = screen - geometry.AxisX + geometry.AxisY;
+            drawList.AddTriangleFilled(topLeft, topRight, bottomRight, color);
+            drawList.AddTriangleFilled(topLeft, bottomRight, bottomLeft, color);
+        }
+        else
+        {
+            DrawGameObjectMarker(drawList, marker, screen, color, selected);
+        }
+    }
+
+    private void DrawMarkerLabel(ImDrawListPtr drawList, string label, Vector2 screen, uint color)
+    {
+        Vector2 textSize = ImGui.CalcTextSize(label);
+        Vector2 labelMin = screen + new Vector2(14f, -(textSize.Y * 0.5f));
+        float labelMinX = _canvasMin.X + 4f;
+        float labelMinY = _canvasMin.Y + 4f;
+        float labelMaxX = Math.Max(labelMinX, _canvasMin.X + _canvasSize.X - textSize.X - 12f);
+        float labelMaxY = Math.Max(labelMinY, _canvasMin.Y + _canvasSize.Y - textSize.Y - 8f);
+        labelMin.X = Math.Clamp(labelMin.X, labelMinX, labelMaxX);
+        labelMin.Y = Math.Clamp(labelMin.Y, labelMinY, labelMaxY);
+        drawList.AddRectFilled(
+            labelMin - new Vector2(4f, 2f),
+            labelMin + textSize + new Vector2(4f, 2f),
+            0xD9222429,
+            3f);
+        drawList.AddText(labelMin, color, label);
     }
 
     private void DrawCanvasLabel(ImDrawListPtr drawList, SceneAuthoringPreview preview)
     {
-        uint color = preview.IsTestScene ? TestColor : BoundaryColor;
+        bool runtime = _preparedMode is EditorMode.Play or EditorMode.Paused;
+        uint color = runtime ? SelectedColor : preview.IsTestScene ? TestColor : BoundaryColor;
         string worldKind = preview.HasAuthoritativeWorld
             ? "authoritative cell world"
             : preview.IsExplicitEmptyScene ? "explicit empty scene" : "object bounds";
+        string modeLabel = runtime
+            ? "Runtime World · live"
+            : preview.StatusLabel;
         drawList.AddText(
             _canvasMin + new Vector2(10f, 10f),
             color,
-            $"{preview.StatusLabel} · {worldKind} · {preview.Bounds.Width:0}×{preview.Bounds.Height:0} cells");
+            $"{modeLabel} · {worldKind} · {preview.Bounds.Width:0}×{preview.Bounds.Height:0} cells");
     }
 
     private static void DrawGameObjectMarker(
@@ -1643,7 +1803,9 @@ internal sealed class SceneViewPanel(
     [EditorUiCommands("panel.scene.selection", "panel.scene.brush.stroke")]
     private void HandleSceneMouse(EditorSelection selection)
     {
-        bool hasSelection = selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
+        bool hasSelection = _preparedMode is EditorMode.Play or EditorMode.Paused
+            ? !string.IsNullOrWhiteSpace(selection.EntityHandle) || selection.BodyId.HasValue
+            : selection.GameObjectStableId.HasValue || _scene.SelectedStableId.HasValue;
         if (!_canvasHovered ||
             _toolOverlayHovered ||
             _webCanvasPreviewHovered ||
@@ -1670,9 +1832,9 @@ internal sealed class SceneViewPanel(
             return;
         }
 
-        // plan 19：对象工具与世界画刷互斥。画刷激活时左键只编辑世界，
-        // 不允许同一次输入再拾取或清空 GameObject selection。
-        if (MaterialBrushActive && _preparedMode == EditorMode.Edit)
+        // plan 19：对象工具与世界画刷互斥。Edit 写 authoring world，Play/Paused
+        // 写当前 runtime world；同一次输入都不能再拾取或清空对象 selection。
+        if (MaterialBrushActive)
         {
             Vector2 world = _camera.CanvasToWorld(panelPoint);
             _ = ApplyMaterialBrushAt(
@@ -1684,6 +1846,29 @@ internal sealed class SceneViewPanel(
 
         if (!clicked)
         {
+            return;
+        }
+
+        if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            Vector2 world = _camera.CanvasToWorld(panelPoint);
+            if (TryPickRuntimeWorld(world, out string? entityHandle, out int? bodyId))
+            {
+                _scene.Select(null);
+                if (!string.IsNullOrWhiteSpace(entityHandle))
+                {
+                    selection.SelectEntity(entityHandle);
+                }
+                else if (bodyId.HasValue)
+                {
+                    selection.SelectBody(bodyId.Value);
+                }
+
+                return;
+            }
+
+            _scene.Select(null);
+            selection.Clear();
             return;
         }
 
@@ -1701,6 +1886,103 @@ internal sealed class SceneViewPanel(
         }
     }
 
+    internal bool TryPickRuntimeWorld(
+        Vector2 world,
+        out string? entityHandle,
+        out int? bodyId)
+    {
+        entityHandle = null;
+        bodyId = null;
+        if (_runtimeSource is null ||
+            _preparedMode == EditorMode.Edit ||
+            !float.IsFinite(world.X) ||
+            !float.IsFinite(world.Y))
+        {
+            return false;
+        }
+
+        RefreshRuntimeSnapshot();
+        float pickRadius = MathF.Max(8f, _camera.CellsPerPixel * 12f);
+        float bestDistanceSquared = pickRadius * pickRadius;
+        IReadOnlyList<SceneHierarchyEntityItem> entities = _runtimeSnapshot.Entities;
+        for (int i = 0; i < entities.Count; i++)
+        {
+            SceneHierarchyEntityItem entity = entities[i];
+            if (!entity.HasTransform)
+            {
+                continue;
+            }
+
+            float dx = entity.X - world.X;
+            float dy = entity.Y - world.Y;
+            float distanceSquared = (dx * dx) + (dy * dy);
+            if (distanceSquared <= bestDistanceSquared)
+            {
+                bestDistanceSquared = distanceSquared;
+                entityHandle = entity.Handle;
+                bodyId = null;
+            }
+        }
+
+        // runtime body 通常与其逻辑实体重叠；Scene 点击优先选择可编辑实体，
+        // body 只作为附近没有实体时的回退，避免同坐标 body 抢走 gizmo 入口。
+        IReadOnlyList<SceneHierarchyBodyItem> bodies = _runtimeSnapshot.Bodies;
+        for (int i = 0; entityHandle is null && i < bodies.Count; i++)
+        {
+            SceneHierarchyBodyItem body = bodies[i];
+            float dx = body.X - world.X;
+            float dy = body.Y - world.Y;
+            float distanceSquared = (dx * dx) + (dy * dy);
+            if (distanceSquared <= bestDistanceSquared)
+            {
+                bestDistanceSquared = distanceSquared;
+                entityHandle = null;
+                bodyId = body.BodyKey;
+            }
+        }
+
+        return entityHandle is not null || bodyId.HasValue;
+    }
+
+    private void RefreshRuntimeSnapshot()
+    {
+        _runtimeSnapshot = _preparedMode is EditorMode.Play or EditorMode.Paused && _runtimeSource is not null
+            ? _runtimeSource.Capture()
+            : EmptyRuntimeSnapshot;
+    }
+
+    private bool TryFindRuntimeEntity(string handle, out SceneHierarchyEntityItem entity)
+    {
+        IReadOnlyList<SceneHierarchyEntityItem> entities = _runtimeSnapshot.Entities;
+        for (int i = 0; i < entities.Count; i++)
+        {
+            if (string.Equals(entities[i].Handle, handle, StringComparison.Ordinal))
+            {
+                entity = entities[i];
+                return true;
+            }
+        }
+
+        entity = default;
+        return false;
+    }
+
+    private bool TryFindRuntimeBody(int bodyId, out SceneHierarchyBodyItem body)
+    {
+        IReadOnlyList<SceneHierarchyBodyItem> bodies = _runtimeSnapshot.Bodies;
+        for (int i = 0; i < bodies.Count; i++)
+        {
+            if (bodies[i].BodyKey == bodyId)
+            {
+                body = bodies[i];
+                return true;
+            }
+        }
+
+        body = default;
+        return false;
+    }
+
     private bool IsGizmoCapturingMouse()
     {
         return _activeGizmoHandle != SceneGizmoHandle.None ||
@@ -1711,7 +1993,17 @@ internal sealed class SceneViewPanel(
     private void DrawGizmo(EditorSelection selection)
     {
         int? stableId = selection.GameObjectStableId ?? _scene.SelectedStableId;
-        PrepareFrame(stableId, _preparedMode);
+        PrepareFrame(
+            stableId,
+            _preparedMode,
+            selection.EntityHandle,
+            selection.BodyId);
+        if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            DrawRuntimeGizmo(selection);
+            return;
+        }
+
         if ((_toolOverlayHovered && _activeGizmoHandle == SceneGizmoHandle.None) ||
             MaterialBrushActive ||
             !stableId.HasValue ||
@@ -1801,6 +2093,169 @@ internal sealed class SceneViewPanel(
         {
             drawList.PopClipRect();
         }
+    }
+
+    [EditorUiControlPrimitive]
+    private void DrawRuntimeGizmo(EditorSelection selection)
+    {
+        string? entityHandle = selection.EntityHandle;
+        if ((_toolOverlayHovered && _activeGizmoHandle == SceneGizmoHandle.None) ||
+            MaterialBrushActive ||
+            string.IsNullOrWhiteSpace(entityHandle) ||
+            !TryFindRuntimeEntity(entityHandle, out SceneHierarchyEntityItem entity) ||
+            !entity.HasTransform)
+        {
+            CompleteRuntimeGizmoTransform();
+            ClearGizmoInteraction();
+            return;
+        }
+
+        EditorSceneTransform world = ToEditorTransform(entity);
+        SceneGizmoGeometry geometry = BuildGizmoGeometry(
+            world,
+            WorldToScreen(new Vector2(world.X, world.Y)),
+            GizmoMode);
+        ImGuiIOPtr io = ImGui.GetIO();
+        _hoveredGizmoHandle = _canvasHovered
+            ? ResolveGizmoHandle(in geometry, Operation, io.MousePos)
+            : SceneGizmoHandle.None;
+
+        if (_activeGizmoHandle == SceneGizmoHandle.None &&
+            _hoveredGizmoHandle != SceneGizmoHandle.None &&
+            ImGui.IsMouseClicked(ImGuiMouseButton.Left) &&
+            BeginRuntimeGizmoTransform(entityHandle))
+        {
+            _activeGizmoHandle = _hoveredGizmoHandle;
+            _gizmoDragStartScreen = io.MousePos;
+            _gizmoDragStartWorldPoint = _camera.CanvasToWorld(io.MousePos - _canvasMin);
+            _gizmoDragCenterScreen = geometry.Center;
+            _gizmoDragStartWorldTransform = world.Clone();
+        }
+
+        if (_activeGizmoHandle != SceneGizmoHandle.None && _gizmoDragStartWorldTransform is not null)
+        {
+            if (ImGui.IsKeyPressed(ImGuiKey.Escape))
+            {
+                _ = CancelRuntimeGizmoTransform();
+                ClearGizmoInteraction();
+            }
+            else if (ImGui.IsMouseDown(ImGuiMouseButton.Left))
+            {
+                Vector2 currentWorldPoint = _camera.CanvasToWorld(io.MousePos - _canvasMin);
+                EditorSceneTransform nextWorld = ApplyGizmoDrag(
+                    _gizmoDragStartWorldTransform,
+                    _activeGizmoHandle,
+                    Operation,
+                    GizmoMode,
+                    _gizmoDragStartWorldPoint,
+                    currentWorldPoint,
+                    _gizmoDragStartScreen,
+                    io.MousePos,
+                    _gizmoDragCenterScreen);
+                nextWorld = ApplyGizmoSnap(
+                    _gizmoDragStartWorldTransform,
+                    nextWorld,
+                    _activeGizmoHandle,
+                    Operation,
+                    GizmoMode,
+                    SnapSettings);
+                if (ApplyRuntimeGizmoWorldTransform(entityHandle, nextWorld))
+                {
+                    world = nextWorld;
+                    geometry = BuildGizmoGeometry(
+                        world,
+                        WorldToScreen(new Vector2(world.X, world.Y)),
+                        GizmoMode);
+                }
+            }
+            else
+            {
+                CompleteRuntimeGizmoTransform();
+                ClearGizmoInteraction();
+            }
+        }
+
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.PushClipRect(_canvasMin, _canvasMin + _canvasSize, true);
+        try
+        {
+            DrawGizmoGeometry(drawList, in geometry, world.RotationRadians, Operation);
+        }
+        finally
+        {
+            drawList.PopClipRect();
+        }
+    }
+
+    internal bool ApplyRuntimeGizmoWorldTransform(
+        string entityHandle,
+        EditorSceneTransform worldTransform)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(entityHandle);
+        ArgumentNullException.ThrowIfNull(worldTransform);
+        bool applied = _preparedMode is EditorMode.Play or EditorMode.Paused &&
+            !MaterialBrushActive &&
+            _runtimeSource?.TrySetEntityTransform(
+                entityHandle,
+                worldTransform.X,
+                worldTransform.Y,
+                worldTransform.RotationRadians,
+                worldTransform.ScaleX,
+                worldTransform.ScaleY) == true;
+        if (applied)
+        {
+            _worldChanged?.Invoke();
+        }
+
+        return applied;
+    }
+
+    private bool BeginRuntimeGizmoTransform(string entityHandle)
+    {
+        if (_preparedMode == EditorMode.Edit || MaterialBrushActive || _runtimeSource is null)
+        {
+            CompleteRuntimeGizmoTransform();
+            return false;
+        }
+
+        if (!string.Equals(_runtimeGizmoEntityHandle, entityHandle, StringComparison.Ordinal))
+        {
+            CompleteRuntimeGizmoTransform();
+            _runtimeGizmoEntityHandle = entityHandle;
+        }
+
+        return true;
+    }
+
+    private bool CancelRuntimeGizmoTransform()
+    {
+        if (_runtimeGizmoEntityHandle is null || _gizmoDragStartWorldTransform is null)
+        {
+            return false;
+        }
+
+        bool restored = ApplyRuntimeGizmoWorldTransform(
+            _runtimeGizmoEntityHandle,
+            _gizmoDragStartWorldTransform);
+        _runtimeGizmoEntityHandle = null;
+        return restored;
+    }
+
+    private void CompleteRuntimeGizmoTransform()
+    {
+        _runtimeGizmoEntityHandle = null;
+    }
+
+    private static EditorSceneTransform ToEditorTransform(in SceneHierarchyEntityItem entity)
+    {
+        return new EditorSceneTransform
+        {
+            X = entity.X,
+            Y = entity.Y,
+            RotationRadians = entity.RotationRadians,
+            ScaleX = entity.ScaleX,
+            ScaleY = entity.ScaleY,
+        };
     }
 
     internal static SceneGizmoGeometry BuildGizmoGeometry(
@@ -2184,6 +2639,7 @@ internal sealed class SceneViewPanel(
         }
 
         _webCanvasPreview?.Request(null, false, false, 0f, 0f);
+        CompleteRuntimeGizmoTransform();
         _worldTexture?.Dispose();
         _disposed = true;
     }
