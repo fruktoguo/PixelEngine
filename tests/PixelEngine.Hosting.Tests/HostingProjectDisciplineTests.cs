@@ -378,6 +378,35 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证双击入口复用正式发布器，并在目录替换后再次独立审计，不能退化为普通 build 快捷方式。
+    /// </summary>
+    [Fact]
+    public void FinalOutputOneClickBatchUpdatesVerifiesAndPreservesFailureExitCode()
+    {
+        string root = FindRepositoryRoot();
+        string batchPath = Path.Combine(root, "一键更新最终输出.bat");
+        byte[] batchBytes = File.ReadAllBytes(batchPath);
+        string batch = Encoding.ASCII.GetString(batchBytes);
+        string runner = File.ReadAllText(Path.Combine(root, "tools", "run-final-output-one-click.ps1"));
+
+        int updateIndex = runner.IndexOf("update-final-output.ps1", StringComparison.OrdinalIgnoreCase);
+        int verifyIndex = runner.IndexOf("verify-final-output.ps1", StringComparison.OrdinalIgnoreCase);
+
+        Assert.All(batchBytes, value => Assert.InRange(value, (byte)0, (byte)0x7F));
+        Assert.DoesNotContain("\n", batch.Replace("\r\n", string.Empty, StringComparison.Ordinal));
+        Assert.Contains("where pwsh.exe", batch, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("tools\\run-final-output-one-click.ps1", batch, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("set \"EXIT_CODE=%ERRORLEVEL%\"", batch, StringComparison.Ordinal);
+        Assert.Contains("exit /b %EXIT_CODE%", batch, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("pause >nul", batch, StringComparison.OrdinalIgnoreCase);
+        Assert.True(updateIndex >= 0, "PowerShell runner 必须调用正式输出更新脚本。");
+        Assert.True(verifyIndex > updateIndex, "PowerShell runner 必须在发布完成后重新运行独立 verifier。");
+        Assert.Contains("if ($CheckOnly)", runner, StringComparison.Ordinal);
+        Assert.Contains("batchAscii=True batchCrlf=True", runner, StringComparison.Ordinal);
+        Assert.Contains("Start-Process -FilePath explorer.exe", runner, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证本机正式输出提供独立审计入口，可在不重新打包的情况下校验 manifest、入口和 SHA256SUMS。
     /// </summary>
     [Fact]

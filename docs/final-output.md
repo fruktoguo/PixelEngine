@@ -49,6 +49,11 @@
 pwsh -NoProfile -File tools/update-final-output.ps1
 ```
 
+Windows 下也可直接双击仓库根目录的 `一键更新最终输出.bat`。BAT 只保留 codepage 无关的
+ASCII/CRLF 启动逻辑，实际编排由 `tools/run-final-output-one-click.ps1` 执行：先运行同一正式输出
+更新脚本，成功替换后再对根 `最终输出/` 运行一次独立 verifier；两步都成功才打开输出目录。
+失败时控制台会保留错误与退出码，发布器在替换前失败仍保留旧的正式输出。
+
 校验现有正式输出（不重新打包、不替换目录）：
 
 ```pwsh
