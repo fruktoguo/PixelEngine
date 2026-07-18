@@ -19,8 +19,11 @@ public sealed class LightingPassContractTests
         Assert.Contains("uWorldTexture", fragment, StringComparison.Ordinal);
         Assert.Contains("uEmissiveTexture", fragment, StringComparison.Ordinal);
         Assert.Contains("uVisibilityTexture", fragment, StringComparison.Ordinal);
-        Assert.Contains("worldColor.rgb * visibility", fragment, StringComparison.Ordinal);
-        Assert.Contains("+ emissive", fragment, StringComparison.Ordinal);
+        Assert.Contains("uDecodeWorldSrgb", fragment, StringComparison.Ordinal);
+        Assert.Contains("AuthoredSrgbToLinear", fragment, StringComparison.Ordinal);
+        Assert.Contains("worldLinear * visibility", fragment, StringComparison.Ordinal);
+        Assert.Contains("max(litWorld, emissive)", fragment, StringComparison.Ordinal);
+        Assert.DoesNotContain("+ emissive", fragment, StringComparison.Ordinal);
     }
 
     /// <summary>

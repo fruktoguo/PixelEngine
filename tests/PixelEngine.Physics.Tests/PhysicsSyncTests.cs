@@ -217,6 +217,7 @@ public sealed class PhysicsSyncTests
             Assert.True(
                 body.PreviousTransform.Position.Y < 48f,
                 $"刚体应被角色 proxy 阻挡在玩家上方，actualY={body.PreviousTransform.Position.Y:F2}, contacts={totalProxyContacts}, firstContact={firstProxyContactFrame}。");
+            Assert.Equal(1, totalProxyContacts);
         }
         finally
         {

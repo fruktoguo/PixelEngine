@@ -23,6 +23,7 @@ public sealed class PhysicsSystem : IDisposable
     private const float CharacterProxyHorizontalPadding = 0.25f;
     private const float CharacterProxyTopPadding = 6f;
     private const float CharacterProxyBottomPadding = 0.25f;
+    private const int CharacterProxySupportHysteresisPixels = 1;
 
     private readonly RigidDamageQueue? _damageQueue;
     private readonly RigidBodyDestruction? _destruction;
@@ -368,11 +369,6 @@ public sealed class PhysicsSystem : IDisposable
         int stamped = StampAllBodies();
         RecordSub(FrameSubPhase.PhysicsInverseSample, inverseSampleStarted);
         LastCharacterProxyOverlapClearedCount = ClearCharacterProxyOverlaps();
-        if (LastCharacterProxyOverlapClearedCount > 0)
-        {
-            LastCharacterProxyContactCount++;
-        }
-
         LastStampedCellCount = Math.Max(0, stamped - LastCharacterProxyOverlapClearedCount);
     }
 
@@ -1008,15 +1004,23 @@ public sealed class PhysicsSystem : IDisposable
                     (int)MathF.Ceiling(proxy.MaxY));
                 RectI sweptBounds = bodyBounds;
                 sweptBounds.Encapsulate(in previousBounds);
-                if (!sweptBounds.Intersects(in proxyBounds))
+                bool wasSupported = proxy.SupportedBodies.TryGetValue(
+                    body.BodyKey,
+                    out PixelRigidBody? supportedBody) &&
+                    ReferenceEquals(supportedBody, body);
+                bool withinSupportHysteresis = wasSupported &&
+                    sweptBounds.MinX < proxyBounds.MaxX &&
+                    sweptBounds.MaxX > proxyBounds.MinX &&
+                    sweptBounds.MinY < proxyBounds.MaxY &&
+                    sweptBounds.MaxY >= proxyBounds.MinY - CharacterProxySupportHysteresisPixels;
+                if (!sweptBounds.Intersects(in proxyBounds) && !withinSupportHysteresis)
                 {
                     _ = proxy.SupportedBodies.Remove(body.BodyKey);
                     continue;
                 }
 
-                bool continuingContact = proxy.SupportedBodies.TryGetValue(body.BodyKey, out PixelRigidBody? supportedBody) &&
-                    ReferenceEquals(supportedBody, body) &&
-                    sweptBounds.MaxY >= proxyBounds.MinY;
+                bool continuingContact = wasSupported &&
+                    sweptBounds.MaxY >= proxyBounds.MinY - CharacterProxySupportHysteresisPixels;
                 bool firstContactFromAbove = sweptBounds.MaxY >= proxyBounds.MinY &&
                     previousBounds.MinY <= proxyBounds.MaxY &&
                     previousBounds.MaxY <= proxyBounds.MaxY;
@@ -1049,7 +1053,11 @@ public sealed class PhysicsSystem : IDisposable
                     });
                 Box2D.b2Body_SetAngularVelocity(body.BodyId, 0f);
                 proxy.SupportedBodies[body.BodyKey] = body;
-                LastCharacterProxyContactCount++;
+                if (!continuingContact)
+                {
+                    LastCharacterProxyContactCount++;
+                }
+
                 break;
             }
         }
@@ -1140,6 +1148,7 @@ public sealed class PhysicsSystem : IDisposable
         int cleared = 0;
         foreach (CharacterProxy proxy in _characterProxies.Values)
         {
+            bool untrackedImpactRecorded = false;
             RectI rect = proxy.Controller.Bounds.ToRectI();
             for (int y = rect.MinY; y < rect.MaxY; y++)
             {
@@ -1151,9 +1160,22 @@ public sealed class PhysicsSystem : IDisposable
                         continue;
                     }
 
+                    bool hasStamp = Registry.TryGet(x, y, out RigidStamp stamp);
                     if (Grid.TryClearRigidOwnedCell(x, y))
                     {
                         cleared++;
+                        if (hasStamp &&
+                            !proxy.SupportedBodies.ContainsKey(stamp.BodyKey) &&
+                            PhysicsWorld.TryGetBody(stamp.BodyKey, out PixelRigidBody? overlapBody))
+                        {
+                            proxy.SupportedBodies.Add(stamp.BodyKey, overlapBody);
+                            LastCharacterProxyContactCount++;
+                        }
+                        else if (!hasStamp && !untrackedImpactRecorded)
+                        {
+                            untrackedImpactRecorded = true;
+                            LastCharacterProxyContactCount++;
+                        }
                     }
 
                     _ = Registry.Remove(x, y);

@@ -3,7 +3,7 @@ using Silk.NET.OpenGL;
 namespace PixelEngine.Rendering;
 
 /// <summary>
-/// 线性颜色到 sRGB 的 gamma 校正 pass。
+/// 线性颜色到 display-referred sRGB 的 gamma 校正 pass。
 /// </summary>
 public sealed class GammaPass : IDisposable
 {
@@ -28,7 +28,7 @@ public sealed class GammaPass : IDisposable
     /// <param name="source">输入颜色目标。</param>
     /// <param name="destination">输出颜色目标。</param>
     /// <param name="quad">全屏三角形。</param>
-    /// <param name="gamma">gamma 值，默认 2.2。</param>
+    /// <param name="gamma">gamma 值，默认 2.2，与 authored 材质色的输入解码对称。</param>
     public void Render(ColorRenderTarget source, ColorRenderTarget destination, FullscreenQuad quad, float gamma = 2.2f)
     {
         if (!float.IsFinite(gamma) || gamma <= 0f)

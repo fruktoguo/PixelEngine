@@ -340,7 +340,7 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
         byte[] mask = new byte[buffer.Width * buffer.Height];
         mask.AsSpan().Fill(255);
 
-        buffer.Pixels.Fill(0xFF102030u);
+        buffer.Pixels.Fill(0xFF606060u);
         uploader.UploadFull(world, buffer);
         emissive.Upload(buffer.Pixels);
         occluder.Upload(mask);
@@ -349,6 +349,11 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
         scene.BindFramebuffer();
         window.Gl.Viewport(0, 0, (uint)scene.Width, (uint)scene.Height);
         composite.Render(world, emissive, visibility, quad);
+        byte[] composedPixels = ReadTextureRgba(window.Gl, scene.Handle, scene.Width, scene.Height);
+        byte[] composedCenter = PixelAtTopLeftOrigin(composedPixels, scene.Width, x: 8, y: 8);
+        Assert.InRange(composedCenter[0], (byte)26, (byte)34);
+        Assert.InRange(composedCenter[1], (byte)26, (byte)34);
+        Assert.InRange(composedCenter[2], (byte)26, (byte)34);
         bloom.Render(scene, postA, quad, BloomSettings.Default);
         dither.Render(postA, postB, quad);
         gamma.Render(postB, postA, quad);
@@ -493,6 +498,20 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
         return Math.Max(rgba[0], Math.Max(rgba[1], rgba[2]));
     }
 
+    private static void AssertPixelNear(
+        byte[] rgba,
+        int expectedR,
+        int expectedG,
+        int expectedB,
+        int tolerance,
+        string label)
+    {
+        Assert.InRange(Math.Abs(rgba[0] - expectedR), 0, tolerance);
+        Assert.InRange(Math.Abs(rgba[1] - expectedG), 0, tolerance);
+        Assert.InRange(Math.Abs(rgba[2] - expectedB), 0, tolerance);
+        Assert.True(rgba[3] > 250, $"{label} alpha 应保持不透明，actual rgba=({rgba[0]},{rgba[1]},{rgba[2]},{rgba[3]})");
+    }
+
     /// <summary>
     /// RenderPipeline 单帧渲染（含 CRT 与叠加）不抛异常。
     /// </summary>
@@ -532,6 +551,39 @@ public sealed class RenderWindowIntegrationTests(ITestOutputHelper output)
 
         Assert.True(top[0] > top[2], $"最终 viewport 顶部应为 CPU 第 0 行红色，actual rgba=({top[0]},{top[1]},{top[2]},{top[3]})");
         Assert.True(bottom[2] > bottom[0], $"最终 viewport 底部应为 CPU 末行蓝色，actual rgba=({bottom[0]},{bottom[1]},{bottom[2]},{bottom[3]})");
+    }
+
+    /// <summary>
+    /// 默认 gamma 链必须把 authored sRGB 材质色在线性光照前后原样还原，避免 Game View 整体提亮或 emissive 偏黄。
+    /// </summary>
+    [NativeSmokeFact]
+    public void RenderPipelinePreservesAuthoredMaterialColorsThroughDefaultGammaWhenExplicitlyEnabled()
+    {
+        using RenderWindow window = CreateSmokeWindow("PixelEngine authored color smoke", RenderBackendPreference.Auto);
+        using RenderPipeline pipeline = new(window, 16, 8);
+        RenderBuffer buffer = new(16, 8);
+        RenderAuxBuffers aux = new(16, 8);
+        const uint Stone = 0xFF5D6169u;
+        const uint Lava = 0xFFCF5913u;
+        for (int y = 0; y < buffer.Height; y++)
+        {
+            int row = y * buffer.Width;
+            buffer.Pixels.Slice(row, 8).Fill(Stone);
+            buffer.Pixels.Slice(row + 8, 8).Fill(Lava);
+            aux.Emissive.Slice(row + 8, 8).Fill(Lava);
+        }
+
+        pipeline.Settings.QualityLevel = LightingQualityLevel.BloomDisabled;
+        pipeline.Settings.EnableDither = false;
+        pipeline.Settings.EnableFogOfWar = false;
+        pipeline.RenderFrame(buffer, aux, CameraState.OneToOne(0, 0, buffer.Width, buffer.Height), [], []);
+
+        RenderViewportTexture viewport = pipeline.CurrentViewportTexture;
+        byte[] pixels = ReadTextureRgba(window.Gl, viewport.Handle, viewport.Width, viewport.Height);
+        byte[] stone = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 4, y: 4);
+        byte[] lava = PixelAtTopLeftOrigin(pixels, viewport.Width, x: 12, y: 4);
+        AssertPixelNear(stone, expectedR: 0x5D, expectedG: 0x61, expectedB: 0x69, tolerance: 4, "stone");
+        AssertPixelNear(lava, expectedR: 0xCF, expectedG: 0x59, expectedB: 0x13, tolerance: 4, "lava");
     }
 
     /// <summary>

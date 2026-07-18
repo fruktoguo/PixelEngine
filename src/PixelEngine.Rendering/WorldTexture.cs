@@ -12,7 +12,7 @@ public sealed class WorldTexture : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// 创建 BGRA8 世界纹理。
+    /// 创建 BGRA8 世界纹理；通道保存相位 9 产出的 display-referred sRGB 材质色。
     /// </summary>
     /// <param name="gl">OpenGL 入口。</param>
     /// <param name="width">纹理宽度。</param>

@@ -55,7 +55,12 @@ public sealed class GpuComputeShaderSourcesTests
         Assert.Contains("scene.rgb + bloom", GpuComputeShaderSources.BloomUpsampleComposite, StringComparison.Ordinal);
         Assert.Contains("vec2 cpuUv = vec2(uv.x, 1.0 - uv.y);", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
         Assert.Contains("float visibility = texture(uVisibilityTexture, cpuUv).r", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.Contains("AuthoredSrgbToLinear", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
         Assert.Contains("world.rgb * visibility * uExposure", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.Contains("max(litWorld, emissive)", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.DoesNotContain("+ emissive", GpuComputeShaderSources.LightComposite, StringComparison.Ordinal);
+        Assert.Contains("AuthoredSrgbToLinear", GpuComputeShaderSources.RadianceCascadeBuild, StringComparison.Ordinal);
+        Assert.Contains("LinearToAuthoredSrgb", GpuComputeShaderSources.ParticlePointSpriteFragment, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -266,7 +266,7 @@ void main()
 }
 """;
 
-    // --- CP-L0：fragment composite 的可选 compute 替代路径（world × visibility + emissive）---
+    // --- CP-L0：fragment composite 的可选 compute 替代路径（保色 world/emissive 合成）---
 
     /// <summary>
     /// light composite compute shader，将世界色、光照与自发光合成到输出 image。
@@ -283,6 +283,11 @@ layout(rgba8, binding = 0) writeonly uniform image2D uOutputImage;
 uniform ivec2 uOutputSize;
 uniform float uExposure;
 
+vec3 AuthoredSrgbToLinear(vec3 color)
+{
+    return pow(max(color, vec3(0.0)), vec3(2.2));
+}
+
 void main()
 {
     ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
@@ -295,8 +300,9 @@ void main()
     vec2 cpuUv = vec2(uv.x, 1.0 - uv.y);
     vec4 world = texture(uWorldTexture, uv);
     float visibility = texture(uVisibilityTexture, cpuUv).r;
-    vec3 emissive = texture(uEmissiveTexture, cpuUv).rgb;
-    vec3 color = (world.rgb * visibility * uExposure) + emissive;
+    vec3 emissive = AuthoredSrgbToLinear(texture(uEmissiveTexture, cpuUv).rgb);
+    vec3 litWorld = world.rgb * visibility * uExposure;
+    vec3 color = max(litWorld, emissive);
     imageStore(uOutputImage, pixel, vec4(clamp(color, 0.0, 1.0), world.a));
 }
 """;
@@ -386,6 +392,11 @@ uniform int uRayCount;
 uniform float uCascadeRadius;
 uniform int uMaxRaySteps;
 
+vec3 AuthoredSrgbToLinear(vec3 color)
+{
+    return pow(max(color, vec3(0.0)), vec3(2.2));
+}
+
 void main()
 {
     // Render-side image output only; this pass has no GPU->CPU readback semantics.
@@ -421,7 +432,7 @@ void main()
                 break;
             }
 
-            vec3 emissive = texture(uEmissiveTexture, sampleUv).rgb;
+            vec3 emissive = AuthoredSrgbToLinear(texture(uEmissiveTexture, sampleUv).rgb);
             rayRadiance += emissive * transmittance;
             transmittance *= 0.92;
         }
@@ -611,6 +622,16 @@ in vec2 vWorldPosition;
 layout(location = 0) out vec4 oSceneColor;
 layout(location = 1) out vec4 oEmissiveColor;
 
+vec3 AuthoredSrgbToLinear(vec3 color)
+{
+    return pow(max(color, vec3(0.0)), vec3(2.2));
+}
+
+vec3 LinearToAuthoredSrgb(vec3 color)
+{
+    return pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
+}
+
 vec2 pointSpriteUv()
 {
     return gl_PointCoord;
@@ -633,8 +654,11 @@ void main()
         discard;
     }
 
-    oSceneColor = scene;
-    oEmissiveColor = vec4(scene.rgb * vEmissive * uEmissiveScale, scene.a);
+    vec3 sceneLinear = AuthoredSrgbToLinear(scene.rgb);
+    oSceneColor = vec4(sceneLinear, scene.a);
+    oEmissiveColor = vec4(
+        LinearToAuthoredSrgb(sceneLinear * vEmissive * uEmissiveScale),
+        scene.a);
 }
 """;
 

@@ -598,7 +598,7 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证 PlayerHealth 会按玩家 AABB 采样危险材质，造成伤害、喷粒子、播放受击音效并在死亡后重生。
+    /// 验证 PlayerHealth 会按玩家 AABB 采样危险材质，造成伤害、显示清晰闪烁、播放受击音效并在死亡后重生。
     /// </summary>
     [Fact]
     public void PlayerHealthSamplesHazardsEmitsFeedbackAndRespawns()
@@ -613,11 +613,10 @@ public sealed class PlayerControllerIntegrationTests
         PlayerController player = entity.AddComponent<PlayerController>();
         player.SpawnX = 12f;
         player.SpawnY = 12f;
+        PlayerVisual visual = entity.AddComponent<PlayerVisual>();
         PlayerHealth health = entity.AddComponent<PlayerHealth>();
         health.MaxHealth = 20f;
         health.LavaDamagePerSecond = 60f;
-        health.HurtParticleCount = 4;
-        health.HurtParticleSpeed = 20f;
         health.HurtSoundCooldown = 0f;
         FillRect(grid, lava, minX: 12, minY: 12, maxX: 18, maxY: 24);
 
@@ -629,7 +628,8 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal("player_hurt.wav", audio.LastCue);
         Assert.Equal(player.CenterX, audio.LastX, precision: 3);
         Assert.Equal(player.CenterY, audio.LastY, precision: 3);
-        Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
+        Assert.True(visual.DamageFlashRemainingSeconds > 0f);
+        Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
 
         health.LavaDamagePerSecond = 2_000f;
         engine.RunHeadlessTicks(1);
@@ -637,8 +637,35 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(health.MaxHealth, health.Health);
         Assert.True(health.DamageEventCount >= 2);
         Assert.Equal(1, health.RespawnCount);
+        Assert.Equal(0, health.HazardContactCellCount);
+        Assert.Equal(0f, health.HazardContactFraction);
         Assert.Equal(player.SpawnX, player.State.X, precision: 3);
         Assert.Equal(player.SpawnY, player.State.Y, precision: 3);
+    }
+
+    /// <summary>
+    /// 验证零散单个危险 cell 只按玩家宽度覆盖比例结算，不等同整身浸入熔岩。
+    /// </summary>
+    [Fact]
+    public void PlayerHealthScalesSparseHazardContactByCoverage()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out _, out ScriptScene scene, materials);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+        health.MaxHealth = 100f;
+        health.LavaDamagePerSecond = 60f;
+        FillRect(grid, lava, minX: 12, minY: 12, maxX: 13, maxY: 13);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, health.HazardContactCellCount);
+        Assert.Equal(1f / player.Width, health.HazardContactFraction, precision: 4);
+        Assert.InRange(health.Health, 99.8f, 99.9f);
     }
 
     /// <summary>
@@ -684,7 +711,6 @@ public sealed class PlayerControllerIntegrationTests
         health.LavaDamagePerSecond = 60f;
         health.FireDamagePerSecond = 20f;
         health.AcidDamagePerSecond = 40f;
-        health.HurtParticleCount = 0;
         FillRect(grid, hazard, minX: 12, minY: 12, maxX: 18, maxY: 24);
 
         engine.RunHeadlessTicks(1);
@@ -1526,6 +1552,7 @@ public sealed class PlayerControllerIntegrationTests
         using Engine engine = CreateManualScriptEngine(out ScriptInputApi input, out CellGrid grid, out _, out ScriptScene scene, materials);
         Entity entity = scene.CreateEntity();
         PlayerController player = entity.AddComponent<PlayerController>();
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
         player.SpawnX = 12f;
         player.SpawnY = 26f;
         player.MaxRunSpeed = 145f;
@@ -1544,6 +1571,9 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.True(player.State.X > startX + 12f, $"玩家应能越过非平整粉末地面继续移动，start={startX}, state={Describe(player.State)}");
         Assert.False(player.State.OnWallRight, $"沙堆小台阶不应长期被判为右墙，state={Describe(player.State)}");
+        Assert.Equal(health.MaxHealth, health.Health);
+        Assert.Equal(0, health.DamageEventCount);
+        Assert.Equal(0, health.HazardContactCellCount);
     }
 
     /// <summary>

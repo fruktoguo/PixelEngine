@@ -13,7 +13,7 @@ public sealed unsafe class EmissiveBuffer : IDisposable
     private bool _disposed;
 
     /// <summary>
-    /// 创建 BGRA8/RGBA8 emissive buffer。HDR 格式由后续 capability gate 扩展，默认路径保持 GL3.3/ES3 兼容。
+    /// 创建 BGRA8/RGBA8 emissive buffer；CPU/GPU 写入均保持 authored sRGB，采样方在线性光照前解码。
     /// </summary>
     /// <param name="gl">OpenGL 入口。</param>
     /// <param name="width">宽度。</param>

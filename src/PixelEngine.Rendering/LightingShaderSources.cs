@@ -25,7 +25,7 @@ void main()
     }
 
     /// <summary>
-    /// 世界纹理 + emissive + 可见性遮罩 additive composite fragment shader。
+    /// 世界纹理、emissive 与可见性遮罩的保色 composite fragment shader。
     /// </summary>
     /// <param name="profile">GLSL profile。</param>
     /// <returns>shader 源码。</returns>
@@ -38,14 +38,24 @@ layout(location = 0) out vec4 fragColor;
 uniform sampler2D uWorldTexture;
 uniform sampler2D uEmissiveTexture;
 uniform sampler2D uVisibilityTexture;
+uniform int uDecodeWorldSrgb;
+
+vec3 AuthoredSrgbToLinear(vec3 color)
+{
+    return pow(max(color, vec3(0.0)), vec3(2.2));
+}
 
 void main()
 {
     vec4 worldColor = texture(uWorldTexture, vUv);
+    vec3 worldLinear = uDecodeWorldSrgb != 0
+        ? AuthoredSrgbToLinear(worldColor.rgb)
+        : worldColor.rgb;
     vec2 cpuUv = vec2(vUv.x, 1.0 - vUv.y);
-    vec3 emissive = texture(uEmissiveTexture, cpuUv).rgb;
+    vec3 emissive = AuthoredSrgbToLinear(texture(uEmissiveTexture, cpuUv).rgb);
     float visibility = texture(uVisibilityTexture, cpuUv).r;
-    vec3 color = (worldColor.rgb * visibility) + emissive;
+    vec3 litWorld = worldLinear * visibility;
+    vec3 color = max(litWorld, emissive);
     fragColor = vec4(clamp(color, 0.0, 1.0), worldColor.a);
 }
 """;

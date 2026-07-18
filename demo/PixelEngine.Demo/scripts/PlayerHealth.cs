@@ -11,7 +11,7 @@ public sealed class PlayerHealth : Behaviour
     private MaterialId _lava;
     private MaterialId _fire;
     private MaterialId _acid;
-    private MaterialId _bloodMaterial;
+    private PlayerVisual? _visual;
     private float _hurtCooldown;
     private bool _materialsResolved;
 
@@ -26,7 +26,7 @@ public sealed class PlayerHealth : Behaviour
     public float Health { get; private set; }
 
     /// <summary>
-    /// 本次运行累计受到危险材质伤害的次数，供窗口探针与 HUD 验证。
+    /// 本次运行累计受到伤害的次数，供窗口探针与 HUD 验证。
     /// </summary>
     public int DamageEventCount { get; private set; }
 
@@ -51,19 +51,24 @@ public sealed class PlayerHealth : Behaviour
     public float AcidDamagePerSecond { get; set; } = 45f;
 
     /// <summary>
-    /// 受击音效最小间隔，单位秒。
+    /// 受击音效与视觉闪烁的最小间隔，单位秒。
     /// </summary>
     public float HurtSoundCooldown { get; set; } = 0.35f;
 
     /// <summary>
-    /// 受击时喷出的粒子数量。
+    /// 最近一次采样到的危险 cell 数量。
     /// </summary>
-    public int HurtParticleCount { get; set; } = 10;
+    public int HazardContactCellCount { get; private set; }
 
     /// <summary>
-    /// 受击粒子速度。
+    /// 危险接触覆盖度；一整行玩家宽度计为 1，范围 0..1。
     /// </summary>
-    public float HurtParticleSpeed { get; set; } = 70f;
+    public float HazardContactFraction { get; private set; }
+
+    /// <summary>
+    /// 玩家受击闪烁持续时间，单位秒。
+    /// </summary>
+    public float HurtFlashSeconds { get; set; } = 0.12f;
 
     /// <summary>
     /// 强制按熔岩伤害计算；仅供窗口运行态健康链路探针使用。
@@ -76,6 +81,7 @@ public sealed class PlayerHealth : Behaviour
         Health = MaxHealth;
         ResolveMaterials();
         _ = Entity.TryGetComponent<PlayerController>(out _player);
+        _ = Entity.TryGetComponent<PlayerVisual>(out _visual);
     }
 
     /// <inheritdoc />
@@ -112,6 +118,8 @@ public sealed class PlayerHealth : Behaviour
     public void Respawn()
     {
         Health = MaxHealth;
+        HazardContactCellCount = 0;
+        HazardContactFraction = 0f;
         RespawnCount++;
         _player?.Respawn();
     }
@@ -140,7 +148,6 @@ public sealed class PlayerHealth : Behaviour
         _lava = Context.Materials.Resolve("lava");
         _fire = Context.Materials.Resolve("fire");
         _acid = Context.Materials.Resolve("acid");
-        _bloodMaterial = Context.Materials.Resolve("ash");
         _materialsResolved = _lava.IsValid && _fire.IsValid && _acid.IsValid;
     }
 
@@ -148,6 +155,8 @@ public sealed class PlayerHealth : Behaviour
     {
         if (ForceHazardForProbe)
         {
+            HazardContactCellCount = 1;
+            HazardContactFraction = 1f;
             return LavaDamagePerSecond;
         }
 
@@ -156,7 +165,10 @@ public sealed class PlayerHealth : Behaviour
         int minY = (int)MathF.Floor(state.Y);
         int maxX = (int)MathF.Ceiling(state.X + state.Width);
         int maxY = (int)MathF.Ceiling(state.Y + state.Height);
-        float damage = 0f;
+        int horizontalSamples = Math.Max(1, maxX - minX);
+        int hazardCells = 0;
+        float accumulatedDamage = 0f;
+        float peakDamage = 0f;
         for (int y = minY; y < maxY; y++)
         {
             for (int x = minX; x < maxX; x++)
@@ -166,11 +178,23 @@ public sealed class PlayerHealth : Behaviour
                     continue;
                 }
 
-                damage = MathF.Max(damage, DamageFor(material));
+                float cellDamage = DamageFor(material);
+                if (cellDamage <= 0f)
+                {
+                    continue;
+                }
+
+                hazardCells++;
+                accumulatedDamage += cellDamage;
+                peakDamage = MathF.Max(peakDamage, cellDamage);
             }
         }
 
-        return damage;
+        HazardContactCellCount = hazardCells;
+        HazardContactFraction = Math.Clamp(hazardCells / (float)horizontalSamples, 0f, 1f);
+        return peakDamage <= 0f
+            ? 0f
+            : MathF.Min(peakDamage, accumulatedDamage / horizontalSamples);
     }
 
     private bool TryGetMaterial(int x, int y, out MaterialId material)
@@ -270,15 +294,18 @@ public sealed class PlayerHealth : Behaviour
             return;
         }
 
-        if (_bloodMaterial.IsValid && HurtParticleCount > 0)
+        if (_hurtCooldown > 0f)
         {
-            Context.Particles.Burst(_player.CenterX, _player.CenterY, _bloodMaterial, HurtParticleCount, HurtParticleSpeed);
+            return;
         }
 
-        if (_hurtCooldown <= 0f)
+        if (_visual is null)
         {
-            Context.Audio.PlayAt("player_hurt.wav", _player.CenterX, _player.CenterY);
-            _hurtCooldown = HurtSoundCooldown;
+            _ = Entity.TryGetComponent<PlayerVisual>(out _visual);
         }
+
+        _visual?.ShowDamageFeedback(HurtFlashSeconds);
+        Context.Audio.PlayAt("player_hurt.wav", _player.CenterX, _player.CenterY);
+        _hurtCooldown = MathF.Max(0f, HurtSoundCooldown);
     }
 }

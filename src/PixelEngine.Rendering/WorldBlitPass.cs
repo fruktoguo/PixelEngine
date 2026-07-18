@@ -3,7 +3,7 @@ using Silk.NET.OpenGL;
 namespace PixelEngine.Rendering;
 
 /// <summary>
-/// 将视口大小的世界纹理以 nearest 采样 blit 到内部颜色目标。
+/// 将视口大小的 authored sRGB 世界纹理解码后，以 nearest 采样 blit 到 linear 内部颜色目标。
 /// </summary>
 public sealed class WorldBlitPass : IDisposable
 {
@@ -75,9 +75,15 @@ layout(location = 0) out vec4 fragColor;
 
 uniform sampler2D uWorldTexture;
 
+vec3 AuthoredSrgbToLinear(vec3 color)
+{
+    return pow(max(color, vec3(0.0)), vec3(2.2));
+}
+
 void main()
 {
-    fragColor = texture(uWorldTexture, vec2(vUv.x, 1.0 - vUv.y));
+    vec4 authoredColor = texture(uWorldTexture, vec2(vUv.x, 1.0 - vUv.y));
+    fragColor = vec4(AuthoredSrgbToLinear(authoredColor.rgb), authoredColor.a);
 }
 """;
     }

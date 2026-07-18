@@ -3,7 +3,7 @@ using PixelEngine.Rendering.Compute;
 namespace PixelEngine.Rendering;
 
 /// <summary>
-/// GL compute 光照合成 pass：scene * visibility + emissive，作为 plan/08 fragment composite 的可选替代路径。
+/// GL compute 光照合成 pass：以 emissive 补足被 visibility 压暗的 scene，作为 plan/08 fragment composite 的可选替代路径。
 /// </summary>
 /// <remarks>
 /// 本 pass 仅在渲染相位 10 使用，复用 plan/08 的 GL 上下文与纹理资源，不读取 CPU 权威模拟数据。
@@ -48,7 +48,7 @@ public sealed class ComputeLightCompositePass
             throw new ArgumentException("Compute light composite 输入与输出尺寸必须一致。", nameof(destination));
         }
 
-        // CP-L0 compute dispatch：scene × visibility + emissive，替代 fragment CompositePass。
+        // CP-L0 compute dispatch 与 fragment 语义一致：保留材质色相，避免 emissive albedo 被重复相加。
         _pipeline.DispatchLightComposite(
             scene.Handle,
             visibility.Handle,

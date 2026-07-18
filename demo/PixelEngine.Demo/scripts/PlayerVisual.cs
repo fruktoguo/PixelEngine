@@ -27,6 +27,21 @@ public sealed class PlayerVisual : Behaviour
     public uint CrosshairColorBgra { get; set; } = 0xFF_F8_DA_8C;
 
     /// <summary>
+    /// 受击闪烁时的主体颜色。
+    /// </summary>
+    public uint DamageFlashBodyColorBgra { get; set; } = 0xFF_FF_5A_52;
+
+    /// <summary>
+    /// 受击闪烁时的轮廓颜色。
+    /// </summary>
+    public uint DamageFlashOutlineColorBgra { get; set; } = 0xFF_FF_E8_E2;
+
+    /// <summary>
+    /// 当前剩余受击闪烁时间，单位秒。
+    /// </summary>
+    public float DamageFlashRemainingSeconds { get; private set; }
+
+    /// <summary>
     /// 最近一帧提交的 overlay 命令数量。
     /// </summary>
     public int LastOverlayCommandsSubmitted { get; private set; }
@@ -45,7 +60,11 @@ public sealed class PlayerVisual : Behaviour
     /// <inheritdoc />
     protected override void OnUpdate(float dt)
     {
-        _ = dt;
+        if (float.IsFinite(dt) && dt > 0f)
+        {
+            DamageFlashRemainingSeconds = MathF.Max(0f, DamageFlashRemainingSeconds - dt);
+        }
+
         ResolveComponents();
         if (_player is null)
         {
@@ -70,6 +89,20 @@ public sealed class PlayerVisual : Behaviour
         DrawTracer();
         RevealViewport();
         Context.Lighting.AddPointLight(_player.CenterX, _player.CenterY, 96f, 0xFF_F8_DA_8C, 0.42f);
+    }
+
+    /// <summary>
+    /// 触发不写入权威 cell world 的短促受击闪烁。
+    /// </summary>
+    /// <param name="durationSeconds">闪烁持续时间，单位秒。</param>
+    public void ShowDamageFeedback(float durationSeconds)
+    {
+        if (!float.IsFinite(durationSeconds) || durationSeconds <= 0f)
+        {
+            return;
+        }
+
+        DamageFlashRemainingSeconds = MathF.Max(DamageFlashRemainingSeconds, durationSeconds);
     }
 
     private void ResolveComponents()
@@ -100,9 +133,12 @@ public sealed class PlayerVisual : Behaviour
 
         Context.Overlay.SolidRectangle(x + 1f, y + height - 3f, width + 4f, 3f, 0x80_00_00_00);
         LastOverlayCommandsSubmitted++;
-        Context.Overlay.SolidRectangle(x, y, width, height, BodyColorBgra);
+        bool damageFlash = DamageFlashRemainingSeconds > 0f;
+        uint bodyColor = damageFlash ? DamageFlashBodyColorBgra : BodyColorBgra;
+        uint outlineColor = damageFlash ? DamageFlashOutlineColorBgra : OutlineColorBgra;
+        Context.Overlay.SolidRectangle(x, y, width, height, bodyColor);
         LastOverlayCommandsSubmitted++;
-        Context.Overlay.OutlineRectangle(x - 1f, y - 1f, width + 2f, height + 2f, 2f, OutlineColorBgra);
+        Context.Overlay.OutlineRectangle(x - 1f, y - 1f, width + 2f, height + 2f, 2f, outlineColor);
         LastOverlayCommandsSubmitted++;
 
         float eyeX = _facing >= 0f ? x + (width * 0.68f) : x + (width * 0.22f);
