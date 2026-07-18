@@ -768,6 +768,19 @@
       "notes": "Commit-bound Editor artifacts prove Edit Scene/Game both render the authoring world without a black or emissive-only Game frame. Paused Scene projects runtime chunks/entities/bodies and supports temporary Goal gizmo plus 81-cell Brush edits that appear in Game; Stop restores dirt, Goal Transform and a clean authoring scene. Final Release build is 0 warning/error and 14 projects total 2305 passed, 48 explicit environment smoke skipped, 0 failed. Different physical DPI/cross-screen, Explorer pointer drag, runtime physical numeric drag and independent reviewer remain external blockers, so EDITOR-003 stays blocked."
     },
     {
+      "entryId": "editor-003-game-color-damage-feedback-20260719",
+      "taskIds": ["EDITOR-003"],
+      "evidenceState": "local_game_color_damage_feedback_complete_external_dpi_drag_review_blocked",
+      "commit": "d22aeab85f7e7004818763ac96edb99092a1e88e",
+      "runSessionId": "7af9bbea48ed4fb29f47b2a985f20ff8",
+      "runIdentityStatus": "captured_commit_bound_local_editor_automation_run",
+      "hardware": "Microsoft Windows build 26100; AMD Ryzen 7 5800X; AMD Radeon RX 7900 XT driver 32.0.31021.5001; .NET SDK 10.0.108; win-x64; real desktop GL Editor framebuffers",
+      "command": "pixelengine-editor discover, ping and capabilities --matrix against isolated d22aeab8 Release Editor; TemporarySnapshot Play/Pause; 296-tick slope runtime entity/particle inspection; verified Scene/Game captures; paused runtime-only camera relocation and one-step rigid impact; representative lava pixel sampling; play.stop/workspace.exit; solution Release build; Physics/Rendering/Demo full tests; PIXELENGINE_RENDERING_GL_SMOKE=1 direct composite/authored color/GPU particle/compute/Radiance Cascades tests; task/evidence catalog validation; git diff --check",
+      "reportPath": "docs/evidence-2026-07-19-editor-003-game-color-damage-feedback.md",
+      "sha256": "6a1a945ad7f05bdaf307f53b91c14158640efc5bba817c943aeabde9a3b37ba4",
+      "notes": "Commit-bound Scene/Game artifacts and pixel samples show lava #D35D15 versus #D45D15 instead of yellow, with authored sRGB/linear/gamma and emissive paths aligned. The default slope remains at 100 health with zero damage over 296 simulation ticks; one real rigid impact triggers a 0.12-second overlay flash with zero active particles. Release build and affected full/native GL regressions pass. Different physical DPI/cross-screen, Explorer pointer drag, runtime physical numeric drag and independent reviewer remain external blockers, so EDITOR-003 stays blocked."
+    },
+    {
       "entryId": "ui-004-web-canvas-player-dogfood-20260714",
       "taskIds": ["UI-004"],
       "evidenceState": "local_player_dogfood_complete_external_window_matrix_pending",
