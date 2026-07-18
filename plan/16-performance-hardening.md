@@ -111,6 +111,8 @@
 2026-07-18 packed material lane 复测：`5355a5b9` 将 CA update 同时消费的 type/density/dispersion/reaction/custom gate 合并为每材质 32-bit 派生 lane，保留原 SoA 权威列且不增加 per-cell 字段；EventPipe 中旧 `ReactionCountOf` / `PropertyFlagsOf` 热栈 frame 已消失。提交态 B4 为 10.809ms / 0 B、约 1.604M cells/8ms，但两 launch 10.07/11.63ms 构成 `mValue=3.67` 双峰，不能挑快簇或用未提交 D2 关闭任务。详见 `docs/evidence-2026-07-18-perf-003-packed-material-lane.md`，PERF-003 继续阻塞。
 
 2026-07-18 liquid movement 调用图复测：`9d9a9dc8` 让 liquid 直接调用 powder movement，仅在失败且 dispersion 非零时进入 `NoInlining` 水平 helper；JIT 将 `UpdateChunk` 从 baseline 3,149B 控制在 3,254B，并拒绝了 6,264B 的无门控内联版本。clean A5/B6 为 10.284/10.253ms、均 0 B 且 `mValue=2`，但 99.9% CI 未分离；B6 mean 约 1.691M cells/8ms，仍低于 2M。详见 `docs/evidence-2026-07-18-perf-003-liquid-movement-call-graph.md`，PERF-003 继续阻塞。
+
+2026-07-18 垂直 movement 调用图复测：新增 8,192 个独立单帧 kernel 的 Typical Dirty 基准，以超过 100ms 的 workload 消除短 iteration 与连续帧 dirty 收缩；共享 guard 的 SoA/dirty/state/parity 在每轮前后 fail-closed 校验。`c18bc33d` 把 `TryMoveDown` 的首格非空路径从 3,936B 缩至 1,967B，1,972B 空列扫描 helper 显式 `NoInlining`。clean full-active A8/B9 为 10.435/9.841ms，99.9% CI 不重叠，Typical Dirty 为 22.105/20.133us；B9 mean/upper CI 仍只约 1.761M/1.726M cells/8ms。详见 `docs/evidence-2026-07-18-perf-003-trymovedown-call-graph.md`，PERF-003 继续阻塞。
 - [!] 最终 cells/frame 命令：在每个代表 RID 上运行 Release BenchmarkDotNet，保留完整报告和 SHA256，再交给 `performance-target-evidence-preflight`。
 - [!] 最终 hardware counter 命令：在 Windows elevated ETW 或等价目标 runner 上采集 `Cache Misses` 与 `Branch Mispredictions`，不能用列缺失报告替代。
 - [!] 最终 frame budget 命令：用真实窗口或 headless 诊断长跑至少 60 秒，导出每 phase p99、样本数、场景名和固定 tick 无追帧字段。

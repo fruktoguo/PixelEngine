@@ -105,6 +105,19 @@
       "notes": "liquid 直接复用 powder movement，并以 NoInlining 把非零 dispersion 水平扫描留在最内层 dispatch 外；UpdateChunk FullOpts 为 3254B，拒绝了 6264B 的无门控内联方案。clean A5/B6 为 10.284/10.253ms、均 0 B 且 mValue=2，但 0.30% 差异的 99.9% CI 未分离；B6 mean 约 1.691M cells/8ms，仍低于 2M 下限，不关闭 PERF-003。"
     },
     {
+      "entryId": "perf-003-trymovedown-call-graph-20260718",
+      "taskIds": ["PERF-003"],
+      "evidenceState": "local_formal_benchmark_target_gap_statistically_separated",
+      "commit": "c18bc33db9cbdcc65866d41bace90477dd62b58b",
+      "runSessionId": "local-20260718-perf003-trymovedown-call-graph",
+      "runIdentityStatus": "captured",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "在 1eefa4a3 detached baseline 与 c18bc33d clean optimized 上执行 & .\\tools\\run-benchmark.ps1 -BenchmarkDotNetArgs @('--filter','*TypicalDirtyCellThroughputBenchmark*','*FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames*','--launchCount','2','--warmupCount','10','--iterationCount','20')；DOTNET_ReadyToRun=0 / DOTNET_TieredCompilation=0 / DOTNET_JitDisasm=PixelEngine.Simulation.ChunkUpdater:TryMoveDown* 生成 FullOpts 汇编；dotnet test tests/PixelEngine.Simulation.Tests/PixelEngine.Simulation.Tests.csproj -c Release -p:TreatWarningsAsErrors=true；dotnet test tests/PixelEngine.Hosting.Tests/PixelEngine.Hosting.Tests.csproj -c Release --no-build --filter FullyQualifiedName~PerformanceHardeningToolingDisciplineTests；dotnet build PixelEngine.sln -c Release -p:TreatWarningsAsErrors=true",
+      "reportPath": "docs/evidence-2026-07-18-perf-003-trymovedown-call-graph.md",
+      "sha256": "6a84be4f8fbe0c307f65be72d8cdf061979c43d01159360058d28b5bcc921894",
+      "notes": "TryMoveDown 将 32px 空列扫描隔离到 1972B NoInlining helper，首格碰撞路径从 3936B 缩到 1967B。clean full-active A8/B9 为 10.435/9.841ms，99.9% CI 不重叠；B9 mean 约 1.761M cells/8ms，仍低于 2M 下限。独立 Typical Dirty 为 22.105/20.133us；PERF-003 继续阻塞且仍缺六 RID 代表硬件证据。"
+    },
+    {
       "entryId": "perf-004-zero-allocation-20260710",
       "taskIds": ["PERF-004"],
       "evidenceState": "complete_local_zero_allocation",
