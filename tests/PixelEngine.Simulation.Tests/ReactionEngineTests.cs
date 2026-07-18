@@ -47,6 +47,30 @@ public sealed class ReactionEngineTests
     }
 
     /// <summary>
+    /// 验证 CA 从全零 lifetime 快路径产生反应产物时，当前帧 parity 会阻止新 lifetime 在同一 tick 递减。
+    /// </summary>
+    [Fact]
+    public void StepCaDefersReactionProductLifetimeUntilNextTick()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        Set(center, 10, 10, Fire);
+        Set(center, 11, 10, Wood);
+        center.SetCurrentDirty(DirtyRect.Full);
+        ReactionSetup setup = CreateSetup(Reaction(Fire, Wood, Fire, Ash, 255));
+        SimulationKernel kernel = new(
+            source,
+            new MaterialPropsTable(setup.Materials.Hot),
+            reactionExecutor: setup.Engine);
+
+        kernel.StepCa();
+
+        Assert.Equal(5, GetLifetime(center, 10, 10));
+        Assert.Equal(9, GetLifetime(center, 11, 10));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 10, 10), kernel.CurrentParity));
+        Assert.True(CellFlags.MatchesFrame(GetFlags(center, 11, 10), kernel.CurrentParity));
+    }
+
+    /// <summary>
     /// 验证概率 0 永不触发、255 必定触发，中间概率按传入随机 byte 裁决。
     /// </summary>
     [Fact]

@@ -30,6 +30,67 @@ internal static class ChunkUpdater
             return;
         }
 
+        // 满宽 dirty 行在 Lifetime SoA 中连续；一次向量化预扫可选择完全不触碰 lifetime 的专门化 core。
+        bool fullWidth = rect.MinX == 0 && rect.MaxX == EngineConstants.ChunkSize - 1;
+        int lifetimeStart = rect.MinY << EngineConstants.ChunkSizeLog2;
+        int lifetimeLength = (rect.MaxY - rect.MinY + 1) << EngineConstants.ChunkSizeLog2;
+        bool hasLifetime = !fullWidth ||
+            chunk.Lifetime.Slice(lifetimeStart, lifetimeLength).IndexOfAnyExcept((byte)0) >= 0;
+        if (hasLifetime)
+        {
+            UpdateChunkCore<LifetimeAwareMode>(
+                chunk,
+                in neighborhood,
+                chunks,
+                materials,
+                parityBit,
+                frameIndex,
+                worldSeed,
+                rigidDamageSink,
+                reactionExecutor,
+                lifetimeSink,
+                customUpdateExecutor,
+                diagnostics,
+                rect);
+        }
+        else
+        {
+            UpdateChunkCore<LifetimeFreeMode>(
+                chunk,
+                in neighborhood,
+                chunks,
+                materials,
+                parityBit,
+                frameIndex,
+                worldSeed,
+                rigidDamageSink,
+                reactionExecutor,
+                lifetimeSink,
+                customUpdateExecutor,
+                diagnostics,
+                rect);
+        }
+    }
+
+    // 值类型 mode 让 JIT 生成两份 core，并把 processLifetime 常量折叠，避免热循环内保留模式分支。
+    private static void UpdateChunkCore<TLifetimeMode>(
+        Chunk chunk,
+        in ChunkNeighborhood neighborhood,
+        IChunkSource chunks,
+        MaterialPropsTable materials,
+        byte parityBit,
+        uint frameIndex,
+        ulong worldSeed,
+        IRigidDamageSink rigidDamageSink,
+        IReactionExecutor reactionExecutor,
+        ILifetimeSink lifetimeSink,
+        IMaterialCustomUpdateExecutor customUpdateExecutor,
+        SimulationDiagnostics diagnostics,
+        DirtyRect rect)
+        where TLifetimeMode : struct
+    {
+        bool processLifetime = typeof(TLifetimeMode) == typeof(LifetimeAwareMode);
+
         // 以 3x3 邻域窗口读写，跨界移动/反应恒落在 32px halo 内。
         NeighborWindow window = new(chunk.Coord, in neighborhood);
         Pcg32 rng = RngFactory.ForChunk(worldSeed, chunk.Coord.X, chunk.Coord.Y, frameIndex);
@@ -70,24 +131,27 @@ internal static class ChunkUpdater
                     }
 
                     // lifetime 先于位移：到期可能清空 cell，后续 movement 直接跳过。
-                    ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);
-                    if (lifetime != 0)
+                    if (processLifetime)
                     {
-                        ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);
-                        material = Unsafe.Add(ref materialBase, localOffset);
-                        if (material == 0)
+                        ref byte lifetime = ref Unsafe.Add(ref lifetimeBase, localOffset);
+                        if (lifetime != 0)
                         {
-                            wx++;
-                            localOffset++;
-                            continue;
-                        }
+                            ProcessLifetime(ref window, chunk, lifetimeSink, wx, wy, material, parityBit, ref lifetime);
+                            material = Unsafe.Add(ref materialBase, localOffset);
+                            if (material == 0)
+                            {
+                                wx++;
+                                localOffset++;
+                                continue;
+                            }
 
-                        flags = Unsafe.Add(ref flagsBase, localOffset);
-                        if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
-                        {
-                            wx++;
-                            localOffset++;
-                            continue;
+                            flags = Unsafe.Add(ref flagsBase, localOffset);
+                            if (CellFlags.MatchesFrame(flags, parityBit) || CellFlags.Has(flags, CellFlags.RigidOwned))
+                            {
+                                wx++;
+                                localOffset++;
+                                continue;
+                            }
                         }
                     }
 
@@ -158,6 +222,10 @@ internal static class ChunkUpdater
             }
         }
     }
+
+    private readonly struct LifetimeAwareMode;
+
+    private readonly struct LifetimeFreeMode;
 
     private static bool TryMovePowder(
         ref NeighborWindow window,
