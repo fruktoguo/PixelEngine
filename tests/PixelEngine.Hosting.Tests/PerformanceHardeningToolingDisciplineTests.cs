@@ -7353,6 +7353,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("MaterialHotTable.CellUpdateHasCustomUpdate(updateProperties)", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("materials.ReactionCountOf(material)", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("materials.PropertyFlagsOf(material)", updater, StringComparison.Ordinal);
+        Assert.Contains("CellType.Liquid => TryMovePowder", updater, StringComparison.Ordinal);
+        Assert.Contains("dispersion != 0 && TryMoveLiquidHorizontal", updater, StringComparison.Ordinal);
+        Assert.Matches(@"\[MethodImpl\(MethodImplOptions\.NoInlining\)\]\s+private static bool TryMoveLiquidHorizontal", updater);
+        Assert.DoesNotContain("private static bool TryMoveLiquid(", updater, StringComparison.Ordinal);
         Assert.Contains("TryMoveToCenterKnownTarget", updater, StringComparison.Ordinal);
         Assert.Contains("sourceLocalIndex + EngineConstants.ChunkSize + firstDx", updater, StringComparison.Ordinal);
         Assert.DoesNotContain("ushort activeMaterial = window.GetMaterial(activeX, activeY);", updater, StringComparison.Ordinal);

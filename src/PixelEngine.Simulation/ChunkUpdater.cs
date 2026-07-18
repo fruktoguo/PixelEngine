@@ -103,7 +103,8 @@ internal static class ChunkUpdater
                         CellType.Empty => false,
                         CellType.Solid => false,
                         CellType.Powder => TryMovePowder(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, parityBit, preferNegative, out activeX, out activeY),
-                        CellType.Liquid => TryMoveLiquid(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, dispersion, parityBit, preferNegative, out activeX, out activeY),
+                        CellType.Liquid => TryMovePowder(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, parityBit, preferNegative, out activeX, out activeY) ||
+                            (dispersion != 0 && TryMoveLiquidHorizontal(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, dispersion, parityBit, preferNegative, out activeX, out activeY)),
                         CellType.Gas => TryMoveGas(ref window, materials, rigidDamageSink, diagnostics, wx, wy, localOffset, sourceDensity, dispersion, parityBit, ref rng, out activeX, out activeY),
                         CellType.Fire => false,
                         _ => throw new InvalidOperationException($"未知 CellType：{materialType}。"),
@@ -344,7 +345,8 @@ internal static class ChunkUpdater
                 out movedY);
     }
 
-    private static bool TryMoveLiquid(
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static bool TryMoveLiquidHorizontal(
         ref NeighborWindow window,
         MaterialPropsTable materials,
         IRigidDamageSink rigidDamageSink,
@@ -359,20 +361,7 @@ internal static class ChunkUpdater
         out int targetX,
         out int targetY)
     {
-        if (TryMovePowder(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, sourceDensity, parityBit, preferNegative, out targetX, out targetY))
-        {
-            return true;
-        }
-
-        // dispersion=0 表示液体不进行水平扩散；跳过两个必然失败的水平扫描，
-        // 保持 movement 语义不变并避免在 full-active 静态液体场景重复解析邻域。
-        if (dispersion == 0)
-        {
-            targetX = wx;
-            targetY = wy;
-            return false;
-        }
-
+        Debug.Assert(dispersion != 0, "零 dispersion 液体必须在调用水平扩散前短路。");
         int firstDir = preferNegative ? -1 : 1;
         return TryMoveHorizontal(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, sourceDensity, dispersion, parityBit, firstDir, out targetX, out targetY) ||
             TryMoveHorizontal(ref window, materials, rigidDamageSink, diagnostics, wx, wy, sourceLocalIndex, sourceDensity, dispersion, parityBit, -firstDir, out targetX, out targetY);
