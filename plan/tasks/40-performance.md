@@ -20,7 +20,7 @@
 - [!] `PERF-003` 让 full-active CA 达到 2–4M cells/8ms 目标，或基于代表硬件和产品场景正式重校准架构指标。
   - 优先级：P0。
   - 依赖：`PERF-001`。
-  - 当前事实：2026-07-18 的独立初态口径使用 16 份互不共享的 23×23 full-dirty kernel。`5de61121` 为每个 chunk 增加 512B 派生列占用位图，用两个 32-row word 保持 checkerboard 同 pass 无冲突，并把首格为空后的最多 31 次 strided Material 读取改为 bit scan。clean B13 为 9.266ms / `Allocated -`，相对同 fixture 的 detached control A10 10.887ms 改善 14.89%；99.9% CI 为 9.106–9.426ms / 10.134–11.640ms。按 B13 mean / upper CI 折算约 1.871M / 1.839M cells/8ms，仍低于 2M 下限 6.46% / 8.05%。12,288 个独立 Typical Dirty 单帧 kernel 同时从 20.061us 降至 14.506us（27.69%）；当前口径见 `docs/evidence-2026-07-18-perf-003-column-occupancy.md`，前一节点见 `docs/evidence-2026-07-18-perf-003-trymovedown-call-graph.md`。
+  - 当前事实：2026-07-18 的独立初态口径使用 16 份互不共享的 23×23 full-dirty kernel。`5de61121` 为每个 chunk 增加 512B 派生列占用位图并把垂直空列逐格读取改为 bit scan；`a8c7cffb` 进一步修复 benchmark 外层 `dotnet run` 遗留 MSBuild/VBCSCompiler 污染测量的问题。当前 `5594da0e` 的 clean-runner B18 为 8.946ms / `Allocated -`，99.9% CI 8.834–9.059ms；按 mean / upper CI 折算约 1.938M / 1.914M cells/8ms，仍低于 2M 下限 3.12% / 4.32%。12,288 个独立 Typical Dirty 单帧 kernel 为 12.416us / `Allocated -`，99.9% CI 12.045–12.788us。满宽 lifetime 专门化在 clean candidate-control-candidate 中没有稳定收益并已于 `5594da0e` 撤回；当前口径见 `docs/evidence-2026-07-18-perf-003-runner-clean-baseline.md`，列占用机制见 `docs/evidence-2026-07-18-perf-003-column-occupancy.md`。
   - 阻塞：本机已完成代表规模与 8 physical cores 校准但仍低于 2M/8ms；继续关闭需要 6-RID 目标硬件 BenchmarkDotNet 证据，或产品/架构负责人冻结新的分辨率、活跃率与降级策略后同步重校准 §1.4/§12.8。当前没有该外部硬件或决策输入，不能伪造完成。
   - 设计来源：`plan/03-simulation-kernel.md`；`plan/16-performance-hardening.md`；架构 §12.7/§12.8。
   - 验收：不得只优化 benchmark fixture；保留质量守恒和 checkerboard 不变式；若重校准，必须同步产品分辨率、活跃率假设、降级策略和架构置信度。

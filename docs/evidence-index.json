@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-18",
-  "generatedFromCommit": "5de61121cf8c59646b90099543de8a4fa12f8fcb",
+  "generatedFromCommit": "5594da0e2dab52a344252c81957f588b43be005a",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -129,6 +129,19 @@
       "reportPath": "docs/evidence-2026-07-18-perf-003-column-occupancy.md",
       "sha256": "ffc55e78fbb26d10f5c179210c45b5af4e37dbffa87f606db2cffb2ff6e3be5f",
       "notes": "每 chunk 512B 派生列占用位图把垂直空列逐格 Material 读取改为 bit scan；两个 32-row word 保持 checkerboard 同 pass 无冲突，raw alias 失效并只在 active center/south 重建。clean B13 full-active 为 9.266ms / 0 B，相对同 fixture A10 10.887ms 改善 14.89%，99.9% CI 不重叠；约 1.871M cells/8ms，仍低于 2M 下限 6.46%。Typical Dirty 为 20.061/14.506us；PERF-003 继续阻塞且仍缺六 RID 代表硬件证据。"
+    },
+    {
+      "entryId": "perf-003-runner-clean-baseline-20260718",
+      "taskIds": ["PERF-003"],
+      "evidenceState": "local_formal_benchmark_target_gap_runner_isolated",
+      "commit": "5594da0e2dab52a344252c81957f588b43be005a",
+      "runSessionId": "local-20260718-perf003-runner-clean-b18",
+      "runIdentityStatus": "captured_commit_bound_local_formal_benchmark",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; .NET SDK 10.0.108; .NET 10.0.8; win-x64",
+      "command": "& .\\tools\\run-benchmark.ps1 -Artifacts artifacts/perf-003-5594da0e-runner-clean-b18-20260718 -BenchmarkDotNetArgs @('--filter','*TypicalDirtyCellThroughputBenchmark*','*FullActiveCellThroughputBenchmark.StepJobSystemFullActive2MIndependentFrames*','--launchCount','2','--warmupCount','10','--iterationCount','20')；dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1 /p:TreatWarningsAsErrors=true；dotnet test Simulation 204/204；dotnet test Hosting --filter FullyQualifiedName~PerformanceHardening 159/159；pwsh tools/validate-task-catalog.ps1；pwsh tools/validate-evidence-index.ps1",
+      "reportPath": "docs/evidence-2026-07-18-perf-003-runner-clean-baseline.md",
+      "sha256": "527fae6291eef1d158b75eb3c3d73e780ba03aa57fd4d4ba65d57c27602d00d3",
+      "notes": "a8c7cffb 让 runner 预先 shutdown 并给外层 dotnet run 传 --disable-build-servers，smoke 与 B18 后均无 MSBuild node/VBCSCompiler 残留。5594da0e B18 full-active 为 8.946ms / 0 B、约 1.938M cells/8ms，仍低于 2M 下限 3.12%；Typical Dirty 为 12.416us / 0 B。lifetime mode 的 clean A-B-A 无稳定收益并已撤回，PERF-003 继续阻塞。"
     },
     {
       "entryId": "perf-004-zero-allocation-20260710",
