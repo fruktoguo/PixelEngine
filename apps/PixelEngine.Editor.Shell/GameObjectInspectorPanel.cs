@@ -737,7 +737,8 @@ internal sealed class GameObjectInspectorPanel(
     private static void SetTooltipUnformatted(string text)
     {
         _ = ImGui.BeginTooltip();
-        TextWrappedUnformatted(text);
+        // Auto-resize tooltip 在首个 item 前没有可用内容宽度，不能复用面板内的 region-based 换行。
+        ImGui.TextUnformatted(text);
         ImGui.EndTooltip();
     }
 
