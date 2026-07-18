@@ -502,6 +502,32 @@ public sealed class PerformanceHardeningToolingDisciplineTests
     }
 
     /// <summary>
+    /// 验证 typical dirty 回归基准用独立单帧 kernel 拉长 workload，不靠连续帧或短 iteration 得出结论。
+    /// </summary>
+    [Fact]
+    public void TypicalDirtyBenchmarkUsesIndependentSingleFrames()
+    {
+        string benchmark = ReadRepositoryFile("bench", "PixelEngine.Benchmarks", "TypicalDirtyCellThroughputBenchmark.cs");
+
+        Assert.Contains("private const int FramesPerInvoke = 8192;", benchmark, StringComparison.Ordinal);
+        Assert.Contains("private readonly TypicalDirtyFrame[] _frames", benchmark, StringComparison.Ordinal);
+        Assert.Contains("private Chunk[] _sharedGuards", benchmark, StringComparison.Ordinal);
+        Assert.Contains("[Benchmark(OperationsPerInvoke = FramesPerInvoke)]", benchmark, StringComparison.Ordinal);
+        Assert.Contains("StepJobSystemTypicalDirtyIndependentFrames", benchmark, StringComparison.Ordinal);
+        Assert.Contains("_frames[i].Reset();", benchmark, StringComparison.Ordinal);
+        Assert.Contains("CoveredCells != ActiveCellsPerFrame", benchmark, StringComparison.Ordinal);
+        Assert.Contains("[IterationCleanup]", benchmark, StringComparison.Ordinal);
+        Assert.Contains("ValidateSharedGuards();", benchmark, StringComparison.Ordinal);
+        Assert.Contains("chunks[4] = _center;", benchmark, StringComparison.Ordinal);
+        Assert.Contains("chunks[7] = _south;", benchmark, StringComparison.Ordinal);
+        Assert.Contains("chunk.GetIncomingDirty(slot).IsEmpty", benchmark, StringComparison.Ordinal);
+        Assert.Contains("chunk.Material[cell] != 0", benchmark, StringComparison.Ordinal);
+        Assert.Contains("Kernel.RestoreFrameState(frameIndex: 0, currentParity: 0);", benchmark, StringComparison.Ordinal);
+        Assert.Contains("_center.SetCurrentDirty(new DirtyRect", benchmark, StringComparison.Ordinal);
+        Assert.Contains("kernel.StepCa(jobs);", benchmark, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证目标硬件性能证据预检要求 AVX-512、6 RID cells/frame、帧预算与硬件计数器 scope/hash，不把本机短样本当作通过。
     /// </summary>
     [Fact]
