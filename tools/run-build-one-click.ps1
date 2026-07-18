@@ -1,6 +1,12 @@
 param(
+  [ValidateSet('win-x64', 'win-arm64')]
+  [string]$Rid = 'win-x64',
+
   [ValidateSet('Debug', 'Release')]
   [string]$Configuration = 'Release',
+
+  [ValidateSet('ManagedFallback', 'RmlUi', 'Ultralight')]
+  [string]$DemoRuntimeUiBackend = 'RmlUi',
 
   [switch]$CheckOnly
 )
@@ -8,7 +14,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 if ($PSVersionTable.PSVersion.Major -lt 7) {
-  throw '一键构建需要 PowerShell 7+。'
+  throw '一键快速输出需要 PowerShell 7+。'
 }
 
 $utf8NoBom = [Text.UTF8Encoding]::new($false)
@@ -18,12 +24,13 @@ $OutputEncoding = $utf8NoBom
 
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $batchPath = Join-Path $repoRoot '一键构建.bat'
-$solutionPath = Join-Path $repoRoot 'PixelEngine.sln'
-$dotnet = (Get-Command dotnet.exe -ErrorAction Stop).Source
+$fastOutputScript = Join-Path $PSScriptRoot 'update-final-output-fast.ps1'
+$outputRoot = Join-Path $repoRoot '最终输出'
+$pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
 
-foreach ($requiredFile in @($batchPath, $solutionPath)) {
+foreach ($requiredFile in @($batchPath, $fastOutputScript)) {
   if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
-    throw "一键构建缺少必需文件：$requiredFile"
+    throw "一键快速输出缺少必需文件：$requiredFile"
   }
 }
 
@@ -38,24 +45,33 @@ if ($batchText -match '(?<!\r)\n') {
 }
 
 if ($CheckOnly) {
-  Write-Host 'one_click_build_preflight ok=True batchAscii=True batchCrlf=True tests=False finalOutput=False'
+  Write-Host 'one_click_fast_output_preflight ok=True batchAscii=True batchCrlf=True tests=False probes=False verifier=False'
   exit 0
 }
 
 Write-Host '============================================================'
-Write-Host "PixelEngine 一键构建（$Configuration）"
-Write-Host '仅编译 solution；不运行测试、产品探针或最终输出发布。'
+Write-Host "PixelEngine 快速输出（$Rid / $Configuration）"
+Write-Host '生成可运行编辑器和可玩 Demo；跳过测试、产品探针与 verifier。'
 Write-Host '============================================================'
 Write-Host
 
-& $dotnet build $solutionPath -c $Configuration --disable-build-servers
+& $pwsh `
+  -NoLogo `
+  -NoProfile `
+  -ExecutionPolicy Bypass `
+  -File $fastOutputScript `
+  -Rid $Rid `
+  -Configuration $Configuration `
+  -DemoRuntimeUiBackend $DemoRuntimeUiBackend
 $exitCode = $LASTEXITCODE
 if ($exitCode -ne 0) {
   Write-Host
-  Write-Host "[FAILED] 构建失败，退出码：$exitCode" -ForegroundColor Red
+  Write-Host "[FAILED] 快速输出失败，退出码：$exitCode" -ForegroundColor Red
+  Write-Host '旧的最终输出仍会保留；请根据上方错误修复后重试。'
   exit $exitCode
 }
 
 Write-Host
-Write-Host "[SUCCESS] PixelEngine.sln $Configuration 构建完成；未运行任何测试。" -ForegroundColor Green
+Write-Host "[SUCCESS] 编辑器和可玩 Demo 已输出到：$outputRoot" -ForegroundColor Green
+Start-Process -FilePath explorer.exe -ArgumentList @($outputRoot)
 exit 0

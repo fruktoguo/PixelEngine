@@ -407,30 +407,40 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
-    /// 验证纯构建双击入口只编译 solution，不暗中运行测试、产品探针或正式输出发布。
+    /// 验证快速输出双击入口会打包 Editor 与 Demo，但不暗中运行测试、产品探针或 verifier。
     /// </summary>
     [Fact]
-    public void OneClickBuildBatchBuildsSolutionWithoutTestsOrFinalOutputPublishing()
+    public void OneClickBuildBatchPackagesEditorAndGameWithoutTestsOrProductProbes()
     {
         string root = FindRepositoryRoot();
         string batchPath = Path.Combine(root, "一键构建.bat");
         byte[] batchBytes = File.ReadAllBytes(batchPath);
         string batch = Encoding.ASCII.GetString(batchBytes);
         string runner = File.ReadAllText(Path.Combine(root, "tools", "run-build-one-click.ps1"));
+        string fastOutput = File.ReadAllText(Path.Combine(root, "tools", "update-final-output-fast.ps1"));
 
         Assert.All(batchBytes, value => Assert.InRange(value, (byte)0, (byte)0x7F));
         Assert.DoesNotContain("\n", batch.Replace("\r\n", string.Empty, StringComparison.Ordinal));
         Assert.Contains("tools\\run-build-one-click.ps1", batch, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("set \"EXIT_CODE=%ERRORLEVEL%\"", batch, StringComparison.Ordinal);
         Assert.Contains("pause >nul", batch, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("& $dotnet build $solutionPath", runner, StringComparison.Ordinal);
+        Assert.Contains("update-final-output-fast.ps1", runner, StringComparison.Ordinal);
         Assert.Contains("[string]$Configuration = 'Release'", runner, StringComparison.Ordinal);
-        Assert.Contains("--disable-build-servers", runner, StringComparison.Ordinal);
-        Assert.Contains("tests=False finalOutput=False", runner, StringComparison.Ordinal);
-        Assert.DoesNotContain("dotnet test", runner, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("run-tests.ps1", runner, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("update-final-output.ps1", runner, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("verify-final-output.ps1", runner, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("tests=False probes=False verifier=False", runner, StringComparison.Ordinal);
+        Assert.Contains("build-native.ps1", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("publish-r2r.ps1", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("package.ps1", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("'publish', $editorProject", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("$finalEditorDir = Join-Path $nextRoot '编辑器'", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("$finalDemoDir = Join-Path $nextRoot '游戏Demo'", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("Replace-FinalOutput $nextRoot $outputRootFull", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("verified = $false", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("testsRun = $false", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("probesRun = $false", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("verifierRun = $false", fastOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet test", fastOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("run-tests.ps1", fastOutput, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("verify-final-output.ps1", fastOutput, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
