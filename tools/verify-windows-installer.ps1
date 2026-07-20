@@ -143,9 +143,26 @@ if ($installFolderLocator.Count -ne 1 -or
   throw 'MSI INSTALLFOLDER registry search contract is invalid.'
 }
 
-$mediaRows = @(Invoke-MsiQuery 'SELECT `Cabinet` FROM `Media`' 1)
-if ($mediaRows.Count -ne 1 -or -not ([string]$mediaRows[0].Values[0]).StartsWith('#', [StringComparison]::Ordinal)) {
-  throw 'MSI payload cabinet is not embedded.'
+$mediaRows = @(Invoke-MsiQuery 'SELECT `DiskId`, `LastSequence`, `Cabinet` FROM `Media` ORDER BY `DiskId`' 3)
+if ($mediaRows.Count -lt 1) {
+  throw 'MSI payload does not contain a media cabinet.'
+}
+$previousDiskId = 0
+$previousLastSequence = 0
+foreach ($mediaRow in $mediaRows) {
+  $diskId = [int]$mediaRow.Values[0]
+  $lastSequence = [int]$mediaRow.Values[1]
+  $cabinet = [string]$mediaRow.Values[2]
+  if ($diskId -ne ($previousDiskId + 1) -or
+      $lastSequence -le $previousLastSequence -or
+      -not $cabinet.StartsWith('#', [StringComparison]::Ordinal)) {
+    throw "MSI media sequence or embedded cabinet contract is invalid: disk=$diskId lastSequence=$lastSequence cabinet=$cabinet"
+  }
+  $previousDiskId = $diskId
+  $previousLastSequence = $lastSequence
+}
+if ($previousLastSequence -ne $files.Count) {
+  throw "MSI media does not cover every File row: lastSequence=$previousLastSequence files=$($files.Count)"
 }
 
 $report = [ordered]@{
@@ -161,6 +178,7 @@ $report = [ordered]@{
   perUser = $true
   fileCount = $files.Count
   shortcutCount = $shortcuts.Count
+  cabinetCount = $mediaRows.Count
   embeddedCabinet = $true
   sha256 = (Get-FileHash -LiteralPath $msiFull -Algorithm SHA256).Hash.ToLowerInvariant()
 }

@@ -312,6 +312,7 @@ if ($manifest.rid -eq 'win-x64') {
       $windowsInstallerVerification.perUser -ne $true -or
       [int]$windowsInstallerVerification.fileCount -lt 1 -or
       [int]$windowsInstallerVerification.shortcutCount -ne 2 -or
+      [int]$windowsInstallerVerification.cabinetCount -lt 1 -or
       $windowsInstallerVerification.embeddedCabinet -ne $true -or
       $windowsInstallerVerification.sha256 -ne $installerSha256) {
     throw 'Windows 安装器静态验证报告不符合产品、目录、快捷方式或 payload 合同。'

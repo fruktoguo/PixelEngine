@@ -538,6 +538,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("installDirectoryPersisted = $true", verify, StringComparison.Ordinal);
         Assert.Contains("AppSearch", verify, StringComparison.Ordinal);
         Assert.Contains("RegLocator", verify, StringComparison.Ordinal);
+        Assert.Contains("$previousLastSequence -ne $files.Count", verify, StringComparison.Ordinal);
         Assert.Contains("INSTALLFOLDER=`\"$CustomInstallRoot`\"", installTest, StringComparison.Ordinal);
         Assert.Contains("customPathContainsNonAscii", installTest, StringComparison.Ordinal);
         Assert.Contains("editorLaunchVerified", installTest, StringComparison.Ordinal);
@@ -3756,6 +3757,7 @@ public sealed class HostingProjectDisciplineTests
                 perUser = true,
                 fileCount = 276,
                 shortcutCount = 2,
+                cabinetCount = 2,
                 embeddedCabinet = true,
                 sha256 = installerSha256,
             }));
