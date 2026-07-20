@@ -89,6 +89,24 @@ public sealed class WorldManager : IChunkSource
     }
 
     /// <summary>
+    /// 在流式队列已排空的安全点切换到一个新的程序化世界实例。
+    /// </summary>
+    /// <param name="focusX">新世界初始焦点 X。</param>
+    /// <param name="focusY">新世界初始焦点 Y。</param>
+    /// <param name="chunkStore">新世界的 chunk store。</param>
+    /// <param name="chunkInitializer">新世界的缺失 chunk 初始化器。</param>
+    public void ResetForNewWorld(
+        long focusX,
+        long focusY,
+        IChunkStore chunkStore,
+        IWorldChunkInitializer? chunkInitializer)
+    {
+        _promotedActiveCoords.Clear();
+        Camera.SetFocus(focusX, focusY);
+        Streamer.ResetForNewWorld(chunkStore, chunkInitializer);
+    }
+
+    /// <summary>
     /// 返回指定驻留 chunk 是否属于当前模拟 active 区；border 与 cached chunk 返回 false。
     /// </summary>
     /// <param name="coord">目标 chunk 坐标。</param>

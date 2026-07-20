@@ -23,7 +23,10 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
             _engine.Mode == EngineExecutionMode.Play,
             _engine.IsShutdownRequested,
             _engine.RequestedSimHz,
-            _engine.Context.Clock.FrameIndex);
+            _engine.Context.Clock.FrameIndex,
+            _engine.Context.TryGetService(out PixelEngine.Simulation.SimulationKernel kernel) ? kernel.WorldSeed : 0,
+            _engine.LastRuntimeRestartStatus,
+            _engine.LastRuntimeRestartMessage);
     }
 
     /// <summary>
@@ -67,7 +70,17 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
     /// <returns>重开请求结果。</returns>
     public RuntimeControlResult RequestRestartCurrentScene()
     {
-        return _engine.RestartCurrentScene();
+        return _engine.RequestRestartCurrentSceneAtSafePoint();
+    }
+
+    /// <summary>
+    /// 以指定 seed 重建当前流式程序化场景，并恢复脚本运行基线。
+    /// </summary>
+    /// <param name="worldSeed">新程序化世界 seed。</param>
+    /// <returns>重建请求结果。</returns>
+    public RuntimeControlResult RequestRestartCurrentProceduralWorld(ulong worldSeed)
+    {
+        return _engine.RequestRestartCurrentProceduralWorldAtSafePoint(worldSeed);
     }
 
     /// <summary>

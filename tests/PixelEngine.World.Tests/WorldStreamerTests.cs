@@ -179,6 +179,58 @@ public sealed class WorldStreamerTests
     }
 
     /// <summary>
+    /// 验证 world 替换会清空 live 驻留/温度/预算，并让同坐标只读取新的 store 与 initializer。
+    /// </summary>
+    [Fact]
+    public void ResetForNewWorldSwitchesStoreAndInitializerWithoutLeakingResidentState()
+    {
+        ResidentChunkMap chunks = new();
+        ResidencyTable residency = new();
+        ChunkMemoryBudget budget = Budget();
+        TemperatureField temperature = new();
+        MemoryChunkStore firstStore = new();
+        RecordingChunkInitializer firstInitializer = new(material: 1, temperature: (Half)18f);
+        WorldStreamer streamer = new(
+            chunks,
+            residency,
+            budget,
+            temperature,
+            firstStore,
+            IdentityRemap(),
+            chunkInitializer: firstInitializer);
+        ChunkCoord coord = new(-2, 3);
+
+        streamer.SubmitPlan(new ResidencyPlan([coord], [], []));
+        _ = streamer.ProcessIoOnce();
+        _ = streamer.ApplyPrepared(frame: 1);
+        Assert.True(chunks.TryGetChunk(coord, out Chunk first));
+        first.MaterialBuffer[0] = 0;
+        Assert.Equal(ChunkMemoryBudget.EstimatedResidentChunkBytes, budget.ResidentBytes);
+
+        MemoryChunkStore secondStore = new();
+        RecordingChunkInitializer secondInitializer = new(material: 2, temperature: (Half)29f);
+        streamer.ResetForNewWorld(secondStore, secondInitializer);
+
+        Assert.Equal(0, chunks.Count);
+        Assert.Equal(0, residency.Count);
+        Assert.Equal(0, budget.ResidentBytes);
+        Assert.Equal(0f, temperature.GetTemperature(coord.X << 6, coord.Y << 6));
+        Assert.Equal(0, streamer.PendingRequestCount);
+        Assert.Equal(0, streamer.PendingCompletedCount);
+
+        streamer.SubmitPlan(new ResidencyPlan([coord], [], []));
+        _ = streamer.ProcessIoOnce();
+        _ = streamer.ApplyPrepared(frame: 2);
+
+        Assert.Equal(1, firstInitializer.CallCount);
+        Assert.Equal(1, secondInitializer.CallCount);
+        Assert.True(chunks.TryGetChunk(coord, out Chunk second));
+        Assert.Equal(2, second.Material[0]);
+        Assert.Equal(29f, temperature.GetTemperature(coord.X << 6, coord.Y << 6));
+        Assert.Equal(ChunkMemoryBudget.EstimatedResidentChunkBytes, budget.ResidentBytes);
+    }
+
+    /// <summary>
     /// 验证 WorldManager façade 会按相机 active/border 计算提交装载请求。
     /// </summary>
     [Fact]

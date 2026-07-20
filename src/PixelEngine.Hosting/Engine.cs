@@ -33,6 +33,8 @@ public sealed class Engine : IDisposable
     private readonly double[] _renderFrameSortScratchMs = new double[RenderFrameSampleCapacity];
     private IScriptRuntime? _attachedScriptRuntime;
     private EngineWorldSnapshotStore? _restartSnapshotStore;
+    private StreamingProceduralWorldAttachment? _streamingProceduralAttachment;
+    private PendingRuntimeRestart? _pendingRuntimeRestart;
     private EngineSceneCanvasSet? _sceneCanvasSet;
     private bool _editorHostExtensionsAttached;
     private bool _windowRuntimeAttached;
@@ -40,6 +42,7 @@ public sealed class Engine : IDisposable
     private int _renderFrameSampleCount;
     private double _renderFrameSampleSumMs;
     private bool _restartSnapshotCaptured;
+    private bool _executingPhases;
     private bool _disposed;
 
     internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
@@ -225,6 +228,36 @@ public sealed class Engine : IDisposable
             : new RuntimeControlResult(false, "内嵌 Demo Editor 已迁移到独立编辑器壳；请启动 PixelEngine。");
     }
 
+    internal RuntimeRestartStatus LastRuntimeRestartStatus { get; private set; }
+
+    internal string? LastRuntimeRestartMessage { get; private set; }
+
+    internal RuntimeControlResult RequestRestartCurrentSceneAtSafePoint()
+    {
+        ThrowIfShutdown();
+        return !_executingPhases
+            ? RecordRuntimeRestartResult(RestartCurrentScene())
+            : !_restartSnapshotCaptured || _restartSnapshotStore is null
+                ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "重开关卡快照尚未捕获。"))
+                : QueueRuntimeRestart(new PendingRuntimeRestart(RuntimeRestartKind.CurrentScene, 0));
+    }
+
+    internal RuntimeControlResult RequestRestartCurrentProceduralWorldAtSafePoint(ulong worldSeed)
+    {
+        ThrowIfShutdown();
+        return !_executingPhases
+            ? RecordRuntimeRestartResult(RestartCurrentProceduralWorld(worldSeed))
+            : !_restartSnapshotCaptured || _restartSnapshotStore is null
+                ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "重开关卡快照尚未捕获。"))
+                : _streamingProceduralAttachment is null
+                    ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "当前场景不是已装配的流式程序化世界。"))
+                    : !Context.TryGetService(out WorldManager _) ||
+                        !Context.TryGetService(out SimulationKernel _) ||
+                        !Context.TryGetService(out ParticleSystem _)
+                        ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "当前程序化场景缺少 World/Simulation 运行服务。"))
+                        : QueueRuntimeRestart(new PendingRuntimeRestart(RuntimeRestartKind.ProceduralWorld, worldSeed));
+    }
+
     /// <summary>
     /// 将当前关卡恢复到首次脚本 tick 后捕获的运行基线，并回到 Play 模式。
     /// </summary>
@@ -238,6 +271,7 @@ public sealed class Engine : IDisposable
         }
 
         EndScriptPlaySession();
+        ResetTransientRuntimeState();
         SaveLoadOperationResult restore = _restartSnapshotStore.RestoreTemporarySnapshot();
         if (!restore.Success)
         {
@@ -251,6 +285,98 @@ public sealed class Engine : IDisposable
             load.HasValue
                 ? $"已重开当前关卡：tick={load.Value.GameTimeTicks}, chunks={load.Value.LoadedChunkCount}。"
                 : "已重开当前关卡。");
+    }
+
+    /// <summary>
+    /// 以指定 seed 原子重建当前流式程序化 world，并恢复首次脚本 tick 捕获的脚本基线。
+    /// </summary>
+    /// <param name="worldSeed">新程序化世界的权威 seed。</param>
+    /// <returns>重建结果；场景类型或运行基线不满足时返回失败。</returns>
+    public RuntimeControlResult RestartCurrentProceduralWorld(ulong worldSeed)
+    {
+        ThrowIfShutdown();
+        if (!_restartSnapshotCaptured || _restartSnapshotStore is null)
+        {
+            return new RuntimeControlResult(false, "重开关卡快照尚未捕获。");
+        }
+
+        if (_streamingProceduralAttachment is not StreamingProceduralWorldAttachment current)
+        {
+            return new RuntimeControlResult(false, "当前场景不是已装配的流式程序化世界。");
+        }
+
+        if (!Context.TryGetService(out WorldManager world) ||
+            !Context.TryGetService(out SimulationKernel kernel) ||
+            !Context.TryGetService(out ParticleSystem _))
+        {
+            return new RuntimeControlResult(false, "当前程序化场景缺少 World/Simulation 运行服务。");
+        }
+
+        ProceduralWorldDescriptor descriptor;
+        try
+        {
+            ProceduralWorldBuildRequest request = new(current.Key, current.Materials, worldSeed);
+            descriptor = current.Generator.Describe(in request).Validate();
+            if (descriptor.Extent != ProceduralWorldExtent.Infinite)
+            {
+                return new RuntimeControlResult(false, "流式程序化世界重建必须返回 Infinite descriptor。");
+            }
+
+            if (descriptor.WorldSeed != worldSeed)
+            {
+                return new RuntimeControlResult(false, "程序化生成器未采用宿主请求的 world seed。");
+            }
+
+            DrainStreamingForWorldReplacement(world);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            return new RuntimeControlResult(false, $"程序化世界重建预检失败：{exception.Message}");
+        }
+
+        StreamingProceduralWorldAttachment replacement = current with { Descriptor = descriptor };
+        EndScriptPlaySession();
+        ResetTransientRuntimeState();
+        try
+        {
+            ResetStreamingWorld(world, kernel, replacement);
+            SaveLoadOperationResult scriptRestore = _restartSnapshotStore.RestoreScriptSnapshotOnly();
+            if (!scriptRestore.Success)
+            {
+                throw new InvalidOperationException(scriptRestore.Message);
+            }
+
+            _streamingProceduralAttachment = replacement;
+            ResetRestartSnapshot();
+            EnterPlayMode();
+            return new RuntimeControlResult(
+                true,
+                $"已重建程序化世界：seed={descriptor.WorldSeed:X16}, chunks={world.Chunks.Count}。");
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
+        {
+            try
+            {
+                DrainStreamingForWorldReplacement(world);
+                ConfigureStreamingWorld(world, current);
+                SaveLoadOperationResult rollback = _restartSnapshotStore.RestoreTemporarySnapshot();
+                if (!rollback.Success)
+                {
+                    throw new InvalidOperationException(rollback.Message);
+                }
+
+                _streamingProceduralAttachment = current;
+                EnterPlayMode();
+            }
+            catch (Exception rollbackException)
+            {
+                throw new InvalidOperationException(
+                    $"程序化世界重建失败且回滚失败：reload={exception.Message}; rollback={rollbackException.Message}",
+                    new AggregateException(exception, rollbackException));
+            }
+
+            return new RuntimeControlResult(false, $"程序化世界重建失败，已恢复旧运行基线：{exception.Message}");
+        }
     }
 
     /// <summary>
@@ -1207,6 +1333,7 @@ public sealed class Engine : IDisposable
         }
 
         ResetRestartSnapshot();
+        _streamingProceduralAttachment = null;
         MaterialTable materials = Context.GetService<MaterialTable>();
         ResidentChunkMap chunks = new();
         AddResidentChunks(chunks, worldWidthCells, worldHeightCells);
@@ -1291,6 +1418,7 @@ public sealed class Engine : IDisposable
         }
 
         ResetRestartSnapshot();
+        _streamingProceduralAttachment = null;
         string resolvedPath = Path.GetFullPath(savePath);
         MaterialTable materials = Context.GetService<MaterialTable>();
         _ = materials.GetName(fallbackMaterialId);
@@ -2668,6 +2796,8 @@ public sealed class Engine : IDisposable
             return true;
         }
 
+        _streamingProceduralAttachment = null;
+
         IProceduralWorldGenerator generator = registration.Finite ??
             throw new InvalidOperationException($"程序化世界注册项 {key} 没有可用生成器。");
         ProceduralWorldDescriptor descriptor = generator.Describe(in request).Validate();
@@ -2749,7 +2879,7 @@ public sealed class Engine : IDisposable
     {
         _ = materials.GetName(fallbackMaterialId);
         TemperatureField temperature = new();
-        StreamingProceduralChunkInitializer initializer = new(key, materialQuery, generator);
+        StreamingProceduralChunkInitializer initializer = new(key, materialQuery, generator, descriptor.WorldSeed);
         WorldManager world = new(
             new WorldCamera(
                 descriptor.InitialFocusX,
@@ -2775,6 +2905,12 @@ public sealed class Engine : IDisposable
         _ = AttachWorldManager(world);
         _ = EnsureRuntimeWorldStateBridge(particles);
         PrimeStreamingWorld(world, descriptor.FrameIndex);
+        _streamingProceduralAttachment = new StreamingProceduralWorldAttachment(
+            key,
+            generator,
+            materialQuery,
+            descriptor,
+            proceduralWorldRoot);
     }
 
     private void PrimeStreamingWorld(WorldManager world, uint frameIndex)
@@ -2821,7 +2957,8 @@ public sealed class Engine : IDisposable
     private sealed class StreamingProceduralChunkInitializer(
         string key,
         IMaterialQuery materials,
-        IStreamingProceduralWorldGenerator generator) : IWorldChunkInitializer
+        IStreamingProceduralWorldGenerator generator,
+        ulong worldSeed) : IWorldChunkInitializer
     {
         public void Initialize(in WorldChunkInitializationContext context)
         {
@@ -2834,11 +2971,130 @@ public sealed class Engine : IDisposable
                 context.OriginCellY,
                 context.SizeCells,
                 context.TemperatureSizeCells,
+                worldSeed,
                 context.MaterialCells,
                 context.TemperatureCells);
             generator.PopulateChunk(in buildContext);
         }
     }
+
+    private void ResetStreamingWorld(
+        WorldManager world,
+        SimulationKernel kernel,
+        StreamingProceduralWorldAttachment attachment)
+    {
+        ConfigureStreamingWorld(world, attachment);
+        kernel.RestoreWorldState(attachment.Descriptor.WorldSeed, attachment.Descriptor.FrameIndex, currentParity: 0);
+        Context.Clock.RestoreCounters(attachment.Descriptor.FrameIndex, attachment.Descriptor.FrameIndex);
+        PrimeStreamingWorld(world, attachment.Descriptor.FrameIndex);
+    }
+
+    private void ConfigureStreamingWorld(
+        WorldManager world,
+        StreamingProceduralWorldAttachment attachment)
+    {
+        StreamingProceduralChunkInitializer initializer = new(
+            attachment.Key,
+            attachment.Materials,
+            attachment.Generator,
+            attachment.Descriptor.WorldSeed);
+        world.ResetForNewWorld(
+            attachment.Descriptor.InitialFocusX,
+            attachment.Descriptor.InitialFocusY,
+            new RegionFileStore(ResolveProceduralWorldPath(attachment.Descriptor, attachment.ProceduralWorldRoot)),
+            initializer);
+    }
+
+    private void DrainStreamingForWorldReplacement(WorldManager world)
+    {
+        _ = world.Streamer.ProcessIoOnce(Context.Jobs);
+        _ = world.Streamer.ApplyPrepared(Context.Clock.FrameIndex);
+        if (world.Streamer.PendingRequestCount != 0 || world.Streamer.PendingCompletedCount != 0)
+        {
+            throw new InvalidOperationException("流式队列未能在 world 替换安全点排空。");
+        }
+    }
+
+    private void ResetTransientRuntimeState()
+    {
+        if (Context.TryGetService(out ScriptSimulationContext scripts))
+        {
+            scripts.ResetRuntimeState();
+        }
+
+        if (Context.TryGetService(out RuntimeWorldStateBridge stateBridge))
+        {
+            stateBridge.ResetRuntimeState();
+            return;
+        }
+
+        if (Context.TryGetService(out ParticleSystem particles))
+        {
+            particles.Clear();
+        }
+
+        if (Context.TryGetService(out PhysicsSystem physics))
+        {
+            physics.ResetRuntimeState();
+        }
+    }
+
+    private RuntimeControlResult QueueRuntimeRestart(PendingRuntimeRestart request)
+    {
+        if (_pendingRuntimeRestart is PendingRuntimeRestart pending)
+        {
+            bool sameRequest = pending.Kind == request.Kind && pending.WorldSeed == request.WorldSeed;
+            return new RuntimeControlResult(
+                sameRequest,
+                sameRequest ? "相同的重开请求已在等待相位安全点。" : "已有另一个重开请求在等待相位安全点。");
+        }
+
+        _pendingRuntimeRestart = request;
+        LastRuntimeRestartStatus = RuntimeRestartStatus.Pending;
+        LastRuntimeRestartMessage = request.Kind == RuntimeRestartKind.ProceduralWorld
+            ? $"已请求在相位安全点重建程序化世界：seed={request.WorldSeed:X16}。"
+            : "已请求在相位安全点重开当前关卡。";
+        return new RuntimeControlResult(true, LastRuntimeRestartMessage);
+    }
+
+    private bool ApplyPendingRuntimeRestart()
+    {
+        if (_pendingRuntimeRestart is not PendingRuntimeRestart request)
+        {
+            return false;
+        }
+
+        _pendingRuntimeRestart = null;
+        RuntimeControlResult result = request.Kind == RuntimeRestartKind.ProceduralWorld
+            ? RestartCurrentProceduralWorld(request.WorldSeed)
+            : RestartCurrentScene();
+        _ = RecordRuntimeRestartResult(result);
+        return result.Success;
+    }
+
+    private RuntimeControlResult RecordRuntimeRestartResult(RuntimeControlResult result)
+    {
+        LastRuntimeRestartStatus = result.Success
+            ? RuntimeRestartStatus.Succeeded
+            : RuntimeRestartStatus.Failed;
+        LastRuntimeRestartMessage = result.Message;
+        return result;
+    }
+
+    private enum RuntimeRestartKind
+    {
+        CurrentScene,
+        ProceduralWorld,
+    }
+
+    private readonly record struct PendingRuntimeRestart(RuntimeRestartKind Kind, ulong WorldSeed);
+
+    private sealed record StreamingProceduralWorldAttachment(
+        string Key,
+        IStreamingProceduralWorldGenerator Generator,
+        IMaterialQuery Materials,
+        ProceduralWorldDescriptor Descriptor,
+        string? ProceduralWorldRoot);
 
     private IMaterialQuery ResolveMaterialQuery(MaterialTable materials)
     {
@@ -2967,10 +3223,23 @@ public sealed class Engine : IDisposable
             }
 
             // 相位 1-11：按 EnginePhasePipeline 顺序执行各子系统 tick。
-            Phases.Execute(this, timing);
+            _executingPhases = true;
+            try
+            {
+                Phases.Execute(this, timing);
+            }
+            finally
+            {
+                _executingPhases = false;
+            }
+
+            bool restartedAtSafePoint = ApplyPendingRuntimeRestart();
             Context.Counters.SimHz = Context.Clock.SimHz;
             // 首次脚本 tick 后捕获重开关卡基线快照。
-            TryCaptureRestartSnapshot(timing);
+            if (!restartedAtSafePoint)
+            {
+                TryCaptureRestartSnapshot(timing);
+            }
             if (IsShutdownRequested)
             {
                 Shutdown();

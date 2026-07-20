@@ -215,6 +215,24 @@ internal sealed class ScriptCommandQueue : IDisposable
         return written;
     }
 
+    /// <summary>
+    /// 丢弃全部目标下尚未落地的命令；仅允许在 Hosting 的 world/session 替换安全点调用。
+    /// </summary>
+    public void Clear()
+    {
+        lock (_registryGate)
+        {
+            for (int target = 0; target < _registeredBuckets.Length; target++)
+            {
+                List<Bucket> buckets = _registeredBuckets[target];
+                for (int i = 0; i < buckets.Count; i++)
+                {
+                    buckets[i].Clear();
+                }
+            }
+        }
+    }
+
     public void Dispose()
     {
         for (int i = 0; i < _buckets.Length; i++)
@@ -274,6 +292,12 @@ internal sealed class ScriptCommandQueue : IDisposable
             _commands.AsSpan(0, count).Clear();
             Count = 0;
             return count;
+        }
+
+        public void Clear()
+        {
+            _commands.AsSpan(0, Count).Clear();
+            Count = 0;
         }
 
         public void Dispose()

@@ -188,6 +188,10 @@ public sealed class PlayerController : Behaviour
     {
         _postPhysicsSubscription?.Dispose();
         _postPhysicsSubscription = null;
+        // CharacterHandle 属于当前 Play session；Hosting 重开 world 后由 OnStart 创建新代理。
+        _body = default;
+        _hasBody = false;
+        State = default;
     }
 
     /// <inheritdoc />

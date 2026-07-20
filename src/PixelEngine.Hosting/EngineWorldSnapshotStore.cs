@@ -88,6 +88,32 @@ public sealed class EngineWorldSnapshotStore(
     }
 
     /// <summary>
+    /// 仅恢复与当前 restart baseline 同源的脚本实体/字段快照，不触碰 world 数据。
+    /// </summary>
+    /// <returns>恢复结果。</returns>
+    internal SaveLoadOperationResult RestoreScriptSnapshotOnly()
+    {
+        if (_snapshot is null || _scriptSnapshot is null)
+        {
+            return new SaveLoadOperationResult(false, "没有可恢复的脚本运行基线。", null, null);
+        }
+
+        try
+        {
+            _engine.RestoreScriptPlaySessionSnapshot(_scriptSnapshot);
+            return new SaveLoadOperationResult(
+                true,
+                $"已恢复脚本运行基线：tick={_snapshot.GameTimeTicks}。",
+                CreateSlotInfo(_snapshot, chunkCount: 0),
+                null);
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ArgumentException)
+        {
+            return new SaveLoadOperationResult(false, exception.Message, null, null);
+        }
+    }
+
+    /// <summary>
     /// 删除仍未恢复的临时快照。
     /// </summary>
     public void Dispose()

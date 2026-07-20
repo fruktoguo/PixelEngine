@@ -520,6 +520,19 @@ public sealed class PhysicsSystem : IDisposable
         return restored;
     }
 
+    /// <summary>
+    /// 清除 world/session 替换前的动态刚体、角色代理、静态地形 collider 与瞬态破坏状态。
+    /// </summary>
+    public void ResetRuntimeState()
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        DestroyCharacterProxies();
+        _characterProxies.Clear();
+        _staticTerrainColliders?.Clear();
+        ClearDynamicBodiesForSnapshotRestore();
+        LastCharacterProxyContactCount = 0;
+    }
+
     private void ClearDynamicBodiesForSnapshotRestore()
     {
         int slotCount = PhysicsWorld.BodySlotCount;

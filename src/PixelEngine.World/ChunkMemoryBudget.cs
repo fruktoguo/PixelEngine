@@ -87,6 +87,14 @@ public sealed class ChunkMemoryBudget
     }
 
     /// <summary>
+    /// 在完整 world 替换安全点把常驻记账恢复为零。
+    /// </summary>
+    public void Reset()
+    {
+        Volatile.Write(ref _residentBytes, 0);
+    }
+
+    /// <summary>
     /// 选择 border 外 cached chunk 进行 LRU 驱逐，直到预计字节数降到目标水位。
     /// </summary>
     public ReadOnlySpan<ChunkCoord> SelectEvictions(ResidencyTable table, ChunkRect border, long targetBytes)

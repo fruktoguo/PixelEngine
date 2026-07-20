@@ -44,6 +44,16 @@ internal sealed class RuntimeWorldStateBridge(ParticleSystem particles) : IWorld
     }
 
     /// <summary>
+    /// 清除 world/session 替换前的自由粒子、动态刚体、角色代理与暂存快照。
+    /// </summary>
+    public void ResetRuntimeState()
+    {
+        _particles.Clear();
+        _pendingRigidBodies.Clear();
+        _physics?.ResetRuntimeState();
+    }
+
+    /// <summary>
     /// 将当前自由粒子活跃前缀转换为存档 DTO。
     /// </summary>
     /// <param name="destination">目标快照缓冲区。</param>

@@ -171,7 +171,11 @@ public readonly record struct ProceduralWorldDescriptor(
 /// </summary>
 /// <param name="Key">场景描述中的程序化生成器键。</param>
 /// <param name="Materials">材质查询能力。</param>
-public readonly record struct ProceduralWorldBuildRequest(string Key, IMaterialQuery Materials);
+/// <param name="WorldSeedOverride">宿主显式请求的新世界 seed；首次装配时为空。</param>
+public readonly record struct ProceduralWorldBuildRequest(
+    string Key,
+    IMaterialQuery Materials,
+    ulong? WorldSeedOverride = null);
 
 /// <summary>
 /// 程序化世界填充上下文。
@@ -202,6 +206,7 @@ public readonly ref struct ProceduralChunkBuildContext
         long originCellY,
         int sizeCells,
         int temperatureSizeCells,
+        ulong worldSeed,
         Span<ushort> materialCells,
         Span<Half> temperatureCells)
     {
@@ -213,6 +218,7 @@ public readonly ref struct ProceduralChunkBuildContext
         OriginCellY = originCellY;
         SizeCells = sizeCells;
         TemperatureSizeCells = temperatureSizeCells;
+        WorldSeed = worldSeed;
         MaterialCells = materialCells;
         TemperatureCells = temperatureCells;
     }
@@ -256,6 +262,11 @@ public readonly ref struct ProceduralChunkBuildContext
     /// 降采样温度 chunk 边长。
     /// </summary>
     public int TemperatureSizeCells { get; }
+
+    /// <summary>
+    /// 当前程序化世界的权威 seed。生成器必须使用本值而不是可变全局状态，保证 worker 并行与重载隔离。
+    /// </summary>
+    public ulong WorldSeed { get; }
 
     /// <summary>
     /// 可写初始材质 id。

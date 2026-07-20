@@ -1227,6 +1227,7 @@ public sealed class EditorShellBuildTests
         yield return ("content/textures/17_gravel.png", "png");
         yield return ("content/textures/18_boundary_stone.png", "png");
         yield return ("content/scenes/lava-mine.scene", "{}");
+        yield return ("content/scenes/infinite-sandbox.scene", "{}");
         if (includeImGui)
         {
             yield return ("app/Hexa.NET.ImGui.dll", "imgui");

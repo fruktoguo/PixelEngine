@@ -887,6 +887,94 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证公开 runtime API 会以新 seed 原子替换流式 world、脚本基线与瞬态粒子，并切换 seed 隔离存储。
+    /// </summary>
+    [Fact]
+    public void RuntimeRestartCurrentProceduralWorldRebuildsSeededWorldAndScriptBaseline()
+    {
+        string worldRoot = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine.Hosting.ProceduralRestart",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            MaterialTable materials = Materials(
+                ("empty", CellType.Empty),
+                ("stone", CellType.Solid),
+                ("metal", CellType.Solid));
+            SeedSwitchingStreamingWorldGenerator generator = new();
+            Scripting.Scene scriptScene = new();
+            SnapshotCounterBehaviour script = scriptScene.CreateEntity().AddComponent<SnapshotCounterBehaviour>();
+            RestartableCharacterBehaviour character = scriptScene.CreateEntity().AddComponent<RestartableCharacterBehaviour>();
+            DeferredProceduralRestartBehaviour restartRequester = scriptScene.CreateEntity().AddComponent<DeferredProceduralRestartBehaviour>();
+            script.Score = 7;
+            restartRequester.TargetSeed = 202;
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(2)
+                .AddScene(new SceneDescriptor("seeded-world", SceneSourceKind.Procedural, "seed-switch"))
+                .WithStartScene("seeded-world")
+                .Build();
+            engine.Context.RegisterService(materials);
+            engine.RegisterStreamingProceduralWorldGenerator("seed-switch", generator);
+            _ = engine.AttachCurrentSceneWorld(
+                particleCapacity: 8,
+                streamingConfig: new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 0,
+                    BorderRingWidth = 1,
+                    MaxStreamOpsPerFrame = 128,
+                },
+                proceduralWorldRoot: worldRoot);
+            engine.AttachScriptScene(scriptScene);
+            ScriptSimulationContext context = engine.AttachScriptingFromServices();
+
+            _ = engine.RunOneTick();
+            Assert.Equal(101UL, context.Runtime.Capture().WorldSeed);
+            Assert.Equal(1, context.Cells.GetMaterial(0, 0).Value);
+            Assert.Equal(1, character.StartCount);
+            Assert.True(character.HasLiveHandle);
+            context.Cells.SetCell(0, 0, new MaterialId(1));
+            script.Score = 99;
+            ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+            ParticleSpawn spawn = new(0, 0, 0, 0, Material: 1, ColorVariant: 0, Life: 10);
+            Assert.True(particles.TrySpawn(in spawn));
+            restartRequester.Requested = true;
+
+            _ = engine.RunOneTick();
+
+            Assert.True(restartRequester.WasAccepted);
+            Assert.Equal(RuntimeRestartStatus.Pending, restartRequester.StatusWhenAccepted);
+            Assert.Equal(RuntimeRestartStatus.Succeeded, context.Runtime.Capture().RestartStatus);
+            Assert.Equal(202UL, engine.Context.GetService<SimulationKernel>().WorldSeed);
+            Assert.Equal(202UL, context.Runtime.Capture().WorldSeed);
+            Assert.Equal(7, script.Score);
+            Assert.Equal(0, particles.ActiveCount);
+            Assert.Equal(2, context.Cells.GetMaterial(0, 0).Value);
+            Assert.Equal(2f, engine.Context.GetService<TemperatureField>().GetTemperature(0, 0));
+            Assert.Equal(0, engine.Context.GetService<WorldManager>().Streamer.PendingRequestCount);
+            Assert.False(character.HasLiveHandle);
+
+            _ = engine.RunOneTick();
+            Assert.Equal(2, context.Cells.GetMaterial(0, 0).Value);
+            Assert.Equal(2, character.StartCount);
+            Assert.True(character.HasLiveHandle);
+            Assert.False(character.Faulted);
+            Assert.Equal(0, scriptScene.ScriptExceptionCount);
+            Assert.Equal(2, generator.DescribedSeeds.Length);
+            Assert.Contains(101UL, generator.DescribedSeeds);
+            Assert.Contains(202UL, generator.DescribedSeeds);
+            Assert.Contains(202UL, generator.PopulatedSeeds);
+        }
+        finally
+        {
+            if (Directory.Exists(worldRoot))
+            {
+                Directory.Delete(worldRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证无限 descriptor 拒绝可逃逸持久化根的键。
     /// </summary>
     [Fact]
@@ -1584,6 +1672,116 @@ public sealed class SceneAndHeadlessTests
             {
                 _ = _generatedCoords.Add((context.ChunkX, context.ChunkY));
             }
+        }
+    }
+
+    private sealed class SeedSwitchingStreamingWorldGenerator : IStreamingProceduralWorldGenerator
+    {
+        private readonly Lock _gate = new();
+        private readonly HashSet<ulong> _describedSeeds = [];
+        private readonly HashSet<ulong> _populatedSeeds = [];
+
+        public ulong[] DescribedSeeds
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _describedSeeds];
+                }
+            }
+        }
+
+        public ulong[] PopulatedSeeds
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _populatedSeeds];
+                }
+            }
+        }
+
+        public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
+        {
+            ulong seed = request.WorldSeedOverride ?? 101UL;
+            lock (_gate)
+            {
+                _ = _describedSeeds.Add(seed);
+            }
+
+            return ProceduralWorldDescriptor.CreateInfinite(seed, 0, 0, "seed-switch-v1");
+        }
+
+        public void PopulateChunk(in ProceduralChunkBuildContext context)
+        {
+            lock (_gate)
+            {
+                _ = _populatedSeeds.Add(context.WorldSeed);
+            }
+
+            context.MaterialCells[0] = context.WorldSeed % 2 == 0
+                ? context.Materials.Resolve("metal").Value
+                : context.Materials.Resolve("stone").Value;
+            context.TemperatureCells[0] = (Half)(context.WorldSeed % 50);
+        }
+    }
+
+    private sealed class RestartableCharacterBehaviour : Behaviour
+    {
+        private CharacterHandle _handle;
+
+        public int StartCount { get; set; }
+
+        public bool HasLiveHandle { get; private set; }
+
+        protected override void OnStart()
+        {
+            _handle = Context.Character.Create(4, 4, 4, 6);
+            _ = Context.Character.GetState(_handle);
+            HasLiveHandle = true;
+            StartCount++;
+        }
+
+        protected override void OnUpdate(float dt)
+        {
+            _ = dt;
+            if (HasLiveHandle)
+            {
+                _ = Context.Character.GetState(_handle);
+            }
+        }
+
+        protected override void OnDestroy()
+        {
+            _handle = default;
+            HasLiveHandle = false;
+        }
+    }
+
+    private sealed class DeferredProceduralRestartBehaviour : Behaviour
+    {
+        public ulong TargetSeed { get; set; }
+
+        public bool Requested { get; set; }
+
+        public bool WasAccepted { get; private set; }
+
+        public RuntimeRestartStatus StatusWhenAccepted { get; private set; }
+
+        protected override void OnUpdate(float dt)
+        {
+            _ = dt;
+            if (!Requested)
+            {
+                return;
+            }
+
+            Requested = false;
+            RuntimeControlResult result = Context.Runtime.RequestRestartCurrentProceduralWorld(TargetSeed);
+            WasAccepted = result.Success;
+            StatusWhenAccepted = Context.Runtime.Capture().RestartStatus;
         }
     }
 

@@ -951,6 +951,21 @@ public interface IRuntimeControlApi
     RuntimeControlResult RequestRestartCurrentScene();
 
     /// <summary>
+    /// 以指定世界 seed 重建当前流式程序化场景，同时恢复脚本基线并清除旧世界瞬态状态。
+    /// </summary>
+    /// <param name="worldSeed">新程序化世界的权威 seed。</param>
+    /// <returns>控制操作结果；当前场景不是流式程序化世界或基线尚未捕获时返回失败。</returns>
+    /// <remarks>
+    /// 重建会结束当前 Play session，并使旧 <see cref="BodyHandle"/> / <see cref="CharacterHandle"/> 失效。
+    /// Behaviour 应在 OnDestroy 释放运行时句柄，并在 OnStart 重新创建。
+    /// </remarks>
+    RuntimeControlResult RequestRestartCurrentProceduralWorld(ulong worldSeed)
+    {
+        _ = worldSeed;
+        return new RuntimeControlResult(false, "当前宿主不支持流式程序化世界重建。");
+    }
+
+    /// <summary>
     /// 捕获运行时可由游戏 UI 切换的设置状态。
     /// </summary>
     /// <returns>运行时设置快照。</returns>
@@ -978,11 +993,35 @@ public interface IRuntimeControlApi
 /// <param name="IsShutdownRequested">是否已请求关闭。</param>
 /// <param name="RequestedSimHz">当前请求的 sim 频率。</param>
 /// <param name="FrameCount">当前渲染帧序号。</param>
+/// <param name="WorldSeed">当前 Simulation world seed；尚未装配世界时为 0。</param>
+/// <param name="RestartStatus">最近一次脚本重开请求的状态。</param>
+/// <param name="RestartMessage">最近一次脚本重开请求的可显示结果；尚未请求时为空。</param>
 public readonly record struct RuntimeControlSnapshot(
     bool IsPlaying,
     bool IsShutdownRequested,
     double RequestedSimHz,
-    long FrameCount);
+    long FrameCount,
+    ulong WorldSeed = 0,
+    RuntimeRestartStatus RestartStatus = RuntimeRestartStatus.None,
+    string? RestartMessage = null);
+
+/// <summary>
+/// 脚本重开请求在 Hosting 相位安全点的执行状态。
+/// </summary>
+public enum RuntimeRestartStatus
+{
+    /// <summary>尚未提交过重开请求。</summary>
+    None,
+
+    /// <summary>请求已接纳，等待当前帧管线抵达安全点。</summary>
+    Pending,
+
+    /// <summary>最近一次请求已成功完成。</summary>
+    Succeeded,
+
+    /// <summary>最近一次请求执行失败，当前或回滚后的 world 仍保持可运行。</summary>
+    Failed,
+}
 
 /// <summary>
 /// 运行时控制操作结果。

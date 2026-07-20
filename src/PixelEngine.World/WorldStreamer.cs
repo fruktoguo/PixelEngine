@@ -15,11 +15,11 @@ public sealed class WorldStreamer
     private readonly ResidencyTable _residency;
     private readonly ChunkMemoryBudget _budget;
     private readonly TemperatureField _temperature;
-    private readonly IChunkStore _chunkStore;
+    private IChunkStore _chunkStore;
     private readonly MaterialRemap _materialRemap;
     private readonly ChunkCodec _chunkCodec;
     private readonly ChunkPool _chunkPool;
-    private readonly IWorldChunkInitializer? _chunkInitializer;
+    private IWorldChunkInitializer? _chunkInitializer;
     private readonly StreamingRequestQueue _requests;
     private readonly CompletedChunkQueue _completed;
     private readonly PreparationBatch _preparationBatch;
@@ -82,6 +82,39 @@ public sealed class WorldStreamer
     /// 待应用完成事件数量。
     /// </summary>
     public int PendingCompletedCount => _completed.Count;
+
+    /// <summary>
+    /// 在请求与完成队列均为空的 world 替换安全点切换存储和缺失 chunk 初始化器。
+    /// </summary>
+    /// <param name="chunkStore">新世界的 chunk store。</param>
+    /// <param name="chunkInitializer">新世界的缺失 chunk 初始化器。</param>
+    public void ResetForNewWorld(IChunkStore chunkStore, IWorldChunkInitializer? chunkInitializer)
+    {
+        ArgumentNullException.ThrowIfNull(chunkStore);
+        if (PendingRequestCount != 0 || PendingCompletedCount != 0)
+        {
+            throw new InvalidOperationException("流式队列尚未排空，不能替换 world。");
+        }
+
+        ReadOnlySpan<Chunk> resident = _chunks.ResidentChunks;
+        for (int i = 0; i < resident.Length; i++)
+        {
+            _chunkPool.Return(resident[i]);
+        }
+
+        _chunks.Clear();
+        _residency.Clear();
+        _temperature.Clear();
+        _budget.Reset();
+        _pendingLoadedCoords.Clear();
+        _requestBatch.AsSpan().Clear();
+        _preparedBatch.AsSpan().Clear();
+        _loadedChunkBatch.AsSpan().Clear();
+        _detachedChunkBatch.AsSpan().Clear();
+        _chunkStore = chunkStore;
+        _chunkInitializer = chunkInitializer;
+        CurrentParityBit = 0;
+    }
 
     /// <summary>
     /// 相位 2：把后台完成的装载 / 卸载结果应用回 live world。

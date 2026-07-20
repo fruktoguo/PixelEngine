@@ -232,6 +232,21 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     }
 
     /// <summary>
+    /// 清除 world/session 替换前的延迟命令与脚本句柄映射。
+    /// </summary>
+    /// <remarks>
+    /// 仅由 Hosting 在结束旧 Play session 后、恢复新 session 前调用；普通 gameplay 不应逐帧调用。
+    /// </remarks>
+    public void ResetRuntimeState()
+    {
+        ThrowIfDisposed();
+        _commands.Clear();
+        _bodies?.Reset();
+        _character.Reset();
+        ClearFrameTransientRequests();
+    }
+
+    /// <summary>
     /// 在 dirty rectangle swap 前落地脚本 cell 写命令，使下一次 CA 可见。
     /// </summary>
     /// <returns>已落地的命令数量。</returns>
@@ -950,6 +965,11 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             slot = DestroyedBodyKey;
         }
 
+        public void Reset()
+        {
+            _bodyKeys.Clear();
+        }
+
         private bool TryGetBodyKey(BodyHandle handle, out int bodyKey)
         {
             if ((uint)handle.Value >= (uint)_bodyKeys.Count)
@@ -1043,6 +1063,11 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public CharacterState GetState(CharacterHandle handle)
         {
             return GetSlot(handle).State;
+        }
+
+        public void Reset()
+        {
+            _characters.Clear();
         }
 
         private CharacterSlot GetSlot(CharacterHandle handle)

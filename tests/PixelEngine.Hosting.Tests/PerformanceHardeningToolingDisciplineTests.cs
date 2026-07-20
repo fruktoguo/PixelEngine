@@ -5732,6 +5732,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = WriteTextEvidence(Path.Combine(content, "textures", "17_gravel.png"), "gravel");
             _ = WriteTextEvidence(Path.Combine(content, "textures", "18_boundary_stone.png"), "boundary");
             _ = WriteTextEvidence(Path.Combine(content, "scenes", "lava-mine.scene"), "scene");
+            _ = WriteTextEvidence(Path.Combine(content, "scenes", "infinite-sandbox.scene"), "scene");
             _ = WriteTextEvidence(Path.Combine(temp, "scripts", "ExternalProjectBehaviour.cs"), "external project script");
 
             // Act：执行被测操作
@@ -5752,6 +5753,8 @@ public sealed class PerformanceHardeningToolingDisciplineTests
                 playerOutput,
                 "-StartScene",
                 "scenes/lava-mine.scene",
+                "-IncludeScene",
+                "scenes/infinite-sandbox.scene",
                 "-WindowMode",
                 "BorderlessFullscreen",
                 "-ContentRoot",
@@ -5825,6 +5828,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "textures", "17_gravel.png")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "textures", "18_boundary_stone.png")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "scenes", "lava-mine.scene")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "content", "scenes", "infinite-sandbox.scene")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "scripts", "ExternalProjectBehaviour.cs")));
             Assert.False(Directory.Exists(Path.Combine(packageDir, "app", "content")));
             Assert.False(File.Exists(Path.Combine(packageDir, "PixelEngine.Demo.dll")));
@@ -8895,6 +8899,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "17_gravel.png"), "gravel");
         _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "18_boundary_stone.png"), "boundary");
         _ = WriteTextEvidence(Path.Combine(root, "content", "scenes", "lava-mine.scene"), "scene");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "scenes", "infinite-sandbox.scene"), "scene");
 
         RewriteFriendlyExpandedPackageChecksum(root);
     }
