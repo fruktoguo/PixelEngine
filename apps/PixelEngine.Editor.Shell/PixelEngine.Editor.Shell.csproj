@@ -1,8 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <AssemblyName>PixelEngine.Editor.Shell</AssemblyName>
+    <AssemblyName>PixelEngine</AssemblyName>
     <RootNamespace>PixelEngine.Editor.Shell</RootNamespace>
+    <AssemblyTitle>PixelEngine</AssemblyTitle>
+    <Product>PixelEngine</Product>
+    <Description>High-performance 2D pixel game engine and editor.</Description>
+    <Company>PixelEngine</Company>
+    <ApplicationIcon>..\..\assets\branding\PixelEngine.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ServerGarbageCollection>false</ServerGarbageCollection>
     <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>

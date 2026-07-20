@@ -210,7 +210,7 @@ public sealed class Engine : IDisposable
         ThrowIfShutdown();
         return Context.Options.Headless
             ? new RuntimeControlResult(false, "headless 模式没有窗口，不能打开 Editor。")
-            : new RuntimeControlResult(false, "内嵌 Demo Editor 已迁移到独立编辑器壳；请启动 PixelEngine.Editor.Shell。");
+            : new RuntimeControlResult(false, "内嵌 Demo Editor 已迁移到独立编辑器；请启动 PixelEngine。");
     }
 
     /// <summary>

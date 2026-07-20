@@ -43,6 +43,7 @@ public sealed class EditorCodeWorkspaceOpenServiceTests
         Assert.Contains("PixelEngine.Scripting.dll", projectBefore, StringComparison.Ordinal);
         Assert.DoesNotContain("PixelEngine.Editor.dll", projectBefore, StringComparison.Ordinal);
         Assert.DoesNotContain("PixelEngine.Editor.Shell.dll", projectBefore, StringComparison.Ordinal);
+        Assert.DoesNotContain("PixelEngine.dll", projectBefore, StringComparison.Ordinal);
 
         ProcessResult build = RunDotNet("build", first.ProjectPath, "-c", "Release", "--nologo");
         Assert.True(build.ExitCode == 0, build.Output);

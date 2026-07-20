@@ -1,5 +1,5 @@
 param(
-  [string]$EditorPath = 'apps/PixelEngine.Editor.Shell/bin/Release/net10.0/PixelEngine.Editor.Shell.exe',
+  [string]$EditorPath = 'apps/PixelEngine.Editor.Shell/bin/Release/net10.0/PixelEngine.exe',
 
   [string]$DemoPath = 'demo/PixelEngine.Demo/bin/Release/net10.0/PixelEngine.Demo.exe',
 

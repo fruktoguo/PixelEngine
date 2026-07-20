@@ -34,7 +34,7 @@ public sealed class EditorAutomationCaptureE2ETests
         string logRoot = Path.Combine(root, "logs");
         _ = EditorProject.CreateNew(projectRoot, "Automation Capture");
         _ = Directory.CreateDirectory(logRoot);
-        string shellPath = Path.Combine(AppContext.BaseDirectory, "PixelEngine.Editor.Shell.exe");
+        string shellPath = Path.Combine(AppContext.BaseDirectory, "PixelEngine.exe");
         Assert.True(File.Exists(shellPath), shellPath);
         using Process process = new()
         {
@@ -1788,7 +1788,7 @@ public sealed class EditorAutomationCaptureE2ETests
         string logRoot = Path.Combine(root, "logs");
         CopyDemoProject(projectRoot);
         _ = Directory.CreateDirectory(logRoot);
-        string shellPath = Path.Combine(AppContext.BaseDirectory, "PixelEngine.Editor.Shell.exe");
+        string shellPath = Path.Combine(AppContext.BaseDirectory, "PixelEngine.exe");
         Assert.True(File.Exists(shellPath), shellPath);
         using Process process = new()
         {

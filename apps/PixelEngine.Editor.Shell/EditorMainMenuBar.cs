@@ -744,14 +744,14 @@ internal sealed class EditorMainMenuBar
             return;
         }
 
-        ImGui.TextUnformatted("PixelEngine Editor");
+        ImGui.TextUnformatted(PixelEngineProduct.Name);
         ImGui.TextUnformatted(app.HasOpenProject
             ? app.CurrentProject!.Name
             : L.Get("status.noProject", "No Project"));
         ImGui.Separator();
         if (ImGui.MenuItem(L.Get("help.about", "About")))
         {
-            ImGui.OpenPopup("About PixelEngine Editor");
+            ImGui.OpenPopup(PixelEngineProduct.AboutPopupTitle);
         }
 
         if (ImGui.MenuItem(L.Get("help.shortcuts", "Shortcuts")))
@@ -759,9 +759,9 @@ internal sealed class EditorMainMenuBar
             app.ShowPreferences(EditorPreferencesCategory.Shortcuts);
         }
 
-        if (ImGui.BeginPopup("About PixelEngine Editor"))
+        if (ImGui.BeginPopup(PixelEngineProduct.AboutPopupTitle))
         {
-            ImGui.TextUnformatted("PixelEngine Editor");
+            ImGui.TextUnformatted(PixelEngineProduct.Name);
             ImGui.TextUnformatted(L.Get("help.description", "Standalone editor shell"));
             ImGui.EndPopup();
         }

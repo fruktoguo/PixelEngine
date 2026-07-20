@@ -103,7 +103,7 @@ $nativeBuildScript = Join-Path $PSScriptRoot 'build-native.ps1'
 $demoPublishScript = Join-Path $PSScriptRoot 'publish-r2r.ps1'
 $packageScript = Join-Path $PSScriptRoot 'package.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
-$editorExe = Join-Path $finalEditorDir 'PixelEngine.Editor.Shell.exe'
+$editorExe = Join-Path $finalEditorDir 'PixelEngine.exe'
 $demoExe = Join-Path $finalDemoDir 'PixelEngine Demo.exe'
 
 foreach ($requiredFile in @($nativeBuildScript, $demoPublishScript, $packageScript, $editorProject)) {
@@ -191,7 +191,7 @@ try {
     testsRun = $false
     probesRun = $false
     verifierRun = $false
-    editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
+    editorExecutable = '编辑器/PixelEngine.exe'
     demoExecutable = '游戏Demo/PixelEngine Demo.exe'
   }
   $manifest | ConvertTo-Json -Depth 4 |
@@ -203,7 +203,7 @@ PixelEngine 开发者快速输出
 这份目录只完成 native build、Editor publish、Demo publish/package。
 未运行测试、窗口/输入探针或正式 verifier，不能作为正式验收证据。
 
-- 编辑器：编辑器\PixelEngine.Editor.Shell.exe
+- 编辑器：编辑器\PixelEngine.exe
 - 可玩游戏：游戏Demo\PixelEngine Demo.exe
 - 快速构建身份：_快速构建\manifest.json
 
@@ -214,7 +214,7 @@ PixelEngine 开发者快速输出
   $succeeded = $true
 
   Write-Host "快速输出已更新：$outputRootFull"
-  Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.Editor.Shell.exe')"
+  Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.exe')"
   Write-Host "游戏入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
   Write-Host '测试 / probe / verifier：全部跳过'
 }

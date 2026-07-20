@@ -124,6 +124,72 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Editor 的用户可见产品身份、矢量源、多尺寸 Windows 图标和发布入口保持统一。
+    /// </summary>
+    [Fact]
+    public void EditorProductIdentityUsesPixelEngineNameAndMultiResolutionIcon()
+    {
+        string root = FindRepositoryRoot();
+        string projectPath = Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "PixelEngine.Editor.Shell.csproj");
+        XDocument project = XDocument.Load(projectPath);
+
+        Assert.Equal("PixelEngine", project.Descendants("AssemblyName").Single().Value);
+        Assert.Equal("PixelEngine.Editor.Shell", project.Descendants("RootNamespace").Single().Value);
+        Assert.Equal("PixelEngine", project.Descendants("AssemblyTitle").Single().Value);
+        Assert.Equal("PixelEngine", project.Descendants("Product").Single().Value);
+        Assert.Equal("PixelEngine", project.Descendants("Company").Single().Value);
+        Assert.Equal("..\\..\\assets\\branding\\PixelEngine.ico", project.Descendants("ApplicationIcon").Single().Value);
+
+        string svgPath = Path.Combine(root, "assets", "branding", "PixelEngine.svg");
+        XDocument svg = XDocument.Load(svgPath);
+        XElement svgRoot = Assert.IsType<XElement>(svg.Root);
+        Assert.Equal("0 0 512 512", svgRoot.Attribute("viewBox")?.Value);
+        Assert.Equal("PixelEngine", svgRoot.Elements().Single(element => element.Name.LocalName == "title").Value);
+        Assert.DoesNotContain(
+            svgRoot.Elements().Where(element => element.Name.LocalName == "rect"),
+            element => element.Attribute("x")?.Value == "0" && element.Attribute("y")?.Value == "0");
+
+        byte[] icon = File.ReadAllBytes(Path.Combine(root, "assets", "branding", "PixelEngine.ico"));
+        Assert.True(icon.Length > 6);
+        Assert.Equal((ushort)0, BitConverter.ToUInt16(icon, 0));
+        Assert.Equal((ushort)1, BitConverter.ToUInt16(icon, 2));
+        ushort layerCount = BitConverter.ToUInt16(icon, 4);
+        Assert.Equal(7, layerCount);
+        int[] expectedSizes = [16, 24, 32, 48, 64, 128, 256];
+        for (int index = 0; index < layerCount; index++)
+        {
+            int entryOffset = 6 + (index * 16);
+            int width = icon[entryOffset] == 0 ? 256 : icon[entryOffset];
+            int height = icon[entryOffset + 1] == 0 ? 256 : icon[entryOffset + 1];
+            ushort bitsPerPixel = BitConverter.ToUInt16(icon, entryOffset + 6);
+            uint byteCount = BitConverter.ToUInt32(icon, entryOffset + 8);
+            uint imageOffset = BitConverter.ToUInt32(icon, entryOffset + 12);
+            Assert.Equal(expectedSizes[index], width);
+            Assert.Equal(expectedSizes[index], height);
+            Assert.Equal((ushort)32, bitsPerPixel);
+            Assert.InRange(imageOffset + byteCount, 1u, (uint)icon.Length);
+            Assert.Equal([0x89, 0x50, 0x4E, 0x47], icon.AsSpan((int)imageOffset, 4).ToArray());
+        }
+
+        string[] entrypointFiles =
+        [
+            Path.Combine(root, "tools", "update-final-output.ps1"),
+            Path.Combine(root, "tools", "update-final-output-fast.ps1"),
+            Path.Combine(root, "tools", "run-editor-build-settings-probe.ps1"),
+            Path.Combine(root, "tools", "run-editor-gameview-presentation-probe.ps1"),
+            Path.Combine(root, "tools", "run-editor-runtime-inspector-probe.ps1"),
+            Path.Combine(root, "tools", "run-ui004-physical-input-probe.ps1"),
+            Path.Combine(root, "docs", "final-output.md"),
+        ];
+        foreach (string entrypointFile in entrypointFiles)
+        {
+            string source = File.ReadAllText(entrypointFile);
+            Assert.Contains("PixelEngine.exe", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("PixelEngine.Editor.Shell.exe", source, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// 验证用户入口显式固定本机目标场景定档的 Workstation + Concurrent GC 组合。
     /// </summary>
     [Fact]
@@ -3041,7 +3107,7 @@ public sealed class HostingProjectDisciplineTests
 
     private static void WriteMinimalFinalOutput(string outputRoot, string gitCommit)
     {
-        WriteTextFile(outputRoot, "编辑器/PixelEngine.Editor.Shell.exe", "editor");
+        WriteTextFile(outputRoot, "编辑器/PixelEngine.exe", "editor");
         WriteTextFile(outputRoot, "游戏Demo/PixelEngine Demo.exe", "demo");
         string[] scriptReferenceAssemblies =
         [
@@ -3308,7 +3374,7 @@ public sealed class HostingProjectDisciplineTests
                 skipped = Array.Empty<object>(),
                 editor = new
                 {
-                    executableSha256 = Sha256Hex(Path.Combine(outputRoot, "编辑器", "PixelEngine.Editor.Shell.exe")),
+                    executableSha256 = Sha256Hex(Path.Combine(outputRoot, "编辑器", "PixelEngine.exe")),
                     processId = 1_000,
                     processStartUtc = DateTimeOffset.UnixEpoch,
                     exitCode = 0,
@@ -3553,7 +3619,7 @@ public sealed class HostingProjectDisciplineTests
                 gitCommit,
                 binaries = new
                 {
-                    editorSha256 = Sha256Hex(Path.Combine(outputRoot, "编辑器", "PixelEngine.Editor.Shell.exe")),
+                    editorSha256 = Sha256Hex(Path.Combine(outputRoot, "编辑器", "PixelEngine.exe")),
                     demoSha256 = Sha256Hex(Path.Combine(outputRoot, "游戏Demo", "PixelEngine Demo.exe")),
                     cliSha256 = Sha256Hex(Path.Combine(outputRoot, "自动化", "CLI", "pixelengine-editor.exe")),
                     inputHelperSha256 = Sha256Text("physical input helper"),
@@ -3625,7 +3691,7 @@ public sealed class HostingProjectDisciplineTests
                     "System.Collections.Immutable.dll",
                     "System.Text.Json.dll",
                 },
-                editorExecutable = "编辑器/PixelEngine.Editor.Shell.exe",
+                editorExecutable = "编辑器/PixelEngine.exe",
                 demoExecutable = "游戏Demo/PixelEngine Demo.exe",
                 automation = new
                 {

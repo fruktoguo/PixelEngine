@@ -2457,10 +2457,10 @@ internal sealed class EditorShellApp
     {
         RenderWindow window = _activeWindow
             ?? throw new InvalidOperationException("Editor 顶层窗口尚未创建。");
-        string title = CurrentProject is null || CurrentSession is null
-            ? "PixelEngine Hub"
-            : $"PixelEngine Editor - {CurrentProject.Name} - {CurrentSession.CurrentSceneDisplayName}" +
-                (CurrentSession.SceneModel.IsDirty ? "*" : string.Empty);
+        string title = PixelEngineProduct.FormatWindowTitle(
+            CurrentProject?.Name,
+            CurrentSession?.CurrentSceneDisplayName,
+            CurrentSession?.SceneModel.IsDirty == true);
         return new AutomationWindowSnapshot
         {
             LogicalWidth = window.LogicalWidth,

@@ -78,7 +78,7 @@ internal sealed class EditorShellWindow : IDisposable
         int normalizedHeight = height > 0 ? height : EditorWorkspaceWindowState.DefaultHeight;
         RenderWindowOptions windowOptions = new()
         {
-            Title = "PixelEngine Editor",
+            Title = PixelEngineProduct.Name,
             Width = normalizedWidth,
             Height = normalizedHeight,
             PositionX = x,
@@ -116,15 +116,7 @@ internal sealed class EditorShellWindow : IDisposable
 
     public void SetTitle(string? projectName, string? sceneName, bool dirty)
     {
-        if (string.IsNullOrWhiteSpace(projectName))
-        {
-            Window.SetTitle("PixelEngine Hub");
-            return;
-        }
-
-        string project = projectName;
-        string scene = string.IsNullOrWhiteSpace(sceneName) ? "No Scene" : sceneName;
-        Window.SetTitle($"PixelEngine Editor - {project} - {scene}{(dirty ? "*" : string.Empty)}");
+        Window.SetTitle(PixelEngineProduct.FormatWindowTitle(projectName, sceneName, dirty));
     }
 
     public void Dispose()

@@ -307,7 +307,8 @@ foreach ($dependencyFileNameValue in $declaredScriptReferenceManagedDependencies
     throw "manifest editorScriptReferenceManagedDependencies 文件名非法：$dependencyFileName"
   }
 
-  if ($dependencyFileName.StartsWith('PixelEngine.', [StringComparison]::OrdinalIgnoreCase) -or
+  if ($dependencyFileName.Equals('PixelEngine.dll', [StringComparison]::OrdinalIgnoreCase) -or
+      $dependencyFileName.StartsWith('PixelEngine.', [StringComparison]::OrdinalIgnoreCase) -or
       $dependencyFileName.Equals('PixelEngine.Editor.dll', [StringComparison]::OrdinalIgnoreCase) -or
       $dependencyFileName.Equals('PixelEngine.Editor.Shell.dll', [StringComparison]::OrdinalIgnoreCase)) {
     throw "manifest editorScriptReferenceManagedDependencies 不得包含 PixelEngine primary/Editor 装配：$dependencyFileName"

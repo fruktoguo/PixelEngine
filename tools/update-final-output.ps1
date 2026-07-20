@@ -260,6 +260,7 @@ function Copy-ScriptReferenceAssemblies(
     ForEach-Object {
       $assemblyName = [IO.Path]::GetFileNameWithoutExtension($_.Name)
       if ($primaryAssemblySet.Contains($assemblyName) -or
+          $assemblyName.Equals('PixelEngine', [StringComparison]::OrdinalIgnoreCase) -or
           $assemblyName.Equals('PixelEngine.Editor', [StringComparison]::OrdinalIgnoreCase) -or
           $assemblyName.StartsWith('PixelEngine.Editor.', [StringComparison]::OrdinalIgnoreCase)) {
         return
@@ -364,7 +365,7 @@ $editorGameViewProbeScript = Join-Path $repoRoot 'tools/run-editor-gameview-pres
 $ui004PhysicalInputProbeScript = Join-Path $repoRoot 'tools/run-ui004-physical-input-probe.ps1'
 $demoProjectRoot = Join-Path $repoRoot 'demo/PixelEngine.Demo'
 $demoBuildScript = Join-Path $repoRoot 'tools/build-player.ps1'
-$editorExe = Join-Path $editorPublish 'PixelEngine.Editor.Shell.exe'
+$editorExe = Join-Path $editorPublish 'PixelEngine.exe'
 $automationCliExe = Join-Path $automationCliPublish 'pixelengine-editor.exe'
 $physicalInputHelperExe = Join-Path $physicalInputHelperPublish 'pixelengine-physical-input.exe'
 $scriptReferenceAssemblyNames = @(
@@ -758,7 +759,7 @@ $manifest = [ordered]@{
   editorScriptReferenceAssemblies = $scriptReferenceAssemblyNames
   editorScriptReferenceManagedDependencyPolicy = 'managed-editor-publish-dlls-excluding-editor-and-native'
   editorScriptReferenceManagedDependencies = $scriptReferenceManagedDependencies
-  editorExecutable = '编辑器/PixelEngine.Editor.Shell.exe'
+  editorExecutable = '编辑器/PixelEngine.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
   automation = [ordered]@{
     cliExecutable = $automationCliRelative
@@ -846,7 +847,7 @@ PixelEngine 正式输出
 此目录只由 tools/update-final-output.ps1 更新。脚本会先在 artifacts/final-output-staging 下构建与验证，编辑器默认工作台和游戏 Demo 窗口验证全部通过后，才替换本目录。
 默认编辑器运行目录会清理 .pdb/.xml 开发元数据；需要诊断符号时请显式使用 -IncludeEditorSymbols 重新生成。编辑器\ScriptReferenceAssemblies 是独立脚本工程的产品 SDK 引用目录，固定保留 PixelEngine managed DLL、XML IntelliSense 文档及所需第三方 managed dependency DLL，但不包含 PixelEngine.Editor、native DLL 或 PDB。
 
-- 编辑器：编辑器\PixelEngine.Editor.Shell.exe
+- 编辑器：编辑器\PixelEngine.exe
 - 脚本开发 SDK：编辑器\ScriptReferenceAssemblies\
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe
 - 自动化 CLI：自动化\CLI\pixelengine-editor.exe
@@ -873,7 +874,7 @@ $verifyFinalOutputResult = Invoke-ProcessChecked `
 Replace-FinalOutput $nextRoot $outputRootFull
 
 Write-Host "正式输出已更新：$outputRootFull"
-Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.Editor.Shell.exe')"
+Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.exe')"
 Write-Host "脚本开发 SDK：$(Join-Path $outputRootFull '编辑器/ScriptReferenceAssemblies')"
 Write-Host "Demo 入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
 Write-Host "自动化 CLI：$(Join-Path $outputRootFull $automationCliRelative)"
