@@ -9,7 +9,8 @@
 - [x] `SCOPE-003` 生产 UI 基线是 RmlUi 主后端 + ManagedFallback 必备回退；Ultralight 是许可与 native SDK 驱动的可选高保真 profile，默认 inactive，不阻塞 Windows-first 1.0。
 - [x] `SCOPE-004` M14 表示必需产品能力和自动化链闭合；M15 表示真实窗口人工体验、目标硬件、native leak、远端 CI 和发行证据闭合。M14 条目不得再被 M15 的可选后端或外部发行证据重复阻塞。
 - [x] `SCOPE-005` 证据状态严格分层：自动化测试证明契约，scripted probe 证明入口，人工材料证明体验，目标硬件报告证明性能，tag workflow 证明发行。任何较低层证据不得冒充较高层完成态。
-- [x] `SCOPE-006` Showcase Demo 的唯一正式验收路线是“横向熔岩矿洞逃生”：从左侧出生点穿越熔岩坑和可拆障碍到达右侧出口；旧“引水成石桥/坍塌木桥”仅保留为历史机制测试，不再作为产品完成条件。
+- [x] `SCOPE-006` Showcase Demo 的唯一正式验收路线曾定为“横向熔岩矿洞逃生”：从左侧出生点穿越熔岩坑和可拆障碍到达右侧出口；该历史范围先由 `DEMO-006` 的 Infinite Sandbox、再由 `SCOPE-007` 的双模式战役目标取代，仅用于解释旧证据。
+- [x] `SCOPE-007` Showcase Demo 的当前产品目标是“原创像素 Roguelite Campaign + 可选 Infinite Sandbox”。Campaign 借鉴《Noita》公开的下降探索、层间整备、构筑、永久死亡与终局结构，但所有名称、地图、剧情、角色、敌人、法术、数值和资产必须原创；Sandbox 保留 `DEMO-006` 的无终点世界。Demo 只经公开 API 实现，Engine Core 不硬编码玩法专属类型。设计依据：`docs/PixelEngine-原创Roguelite战役设计.md`。
 
 ## 当前能力声明
 

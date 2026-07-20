@@ -162,6 +162,49 @@
   - 提交节点：一，canonical task、产品目标、架构与详细设计；二，缺失 chunk 初始化公开 API、流式 procedural Hosting 装配与 World/Hosting 测试；三，Demo 自然地形、无边界相机、沙盒 UI / 启动入口与 Demo 测试；四，真实窗口 / CLI 证据、最终输出与 canonical 完成状态。每个节点按 `AGENTS.md §6` 中文提交。
   - 完成证据：`docs/evidence-2026-07-20-demo-006-infinite-sandbox.md`（Evidence Index: `demo-006-infinite-sandbox-20260720`）；Release build 0 warning / 0 error，Simulation 207/207、World 46/46、Demo 156 passed / 1 native GL skipped、Hosting 976 passed / 7 环境条件 skipped；公共 Editor CLI Play/Pause/Step/Stop/Exit、Scene/Game 双重 SHA256 截图、负坐标 runtime 检视、最终 RmlUi 玩家包 1080x720 截图与 exit 0 均通过。
 
+- [~] `DEMO-007` 建立 Campaign / InfiniteSandbox 双模式、完整 run lifecycle 与纵深战役世界拓扑。
+  - 优先级：P0。
+  - 依赖：`DEMO-006`、`BASE-007`、`BASE-010`、`BASE-015`、`SCOPE-007`。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §2–§4、§8；`docs/PixelEngine-架构与需求设计.md` §1.5；`plan/13-demo-game.md` §3.16–§3.17。
+  - 验收：主菜单可选择默认 Campaign 或 InfiniteSandbox；`content/campaign.json` 经公开 Content/Config API 加载并校验；Campaign 使用显式 run seed/state 和 `MainMenu -> StartingRun -> Exploring <-> StillForge -> Finale -> Completed/Dead -> RunSummary` 生命周期；Campaign 死亡以新 seed 原子替换 world/script/entity/UI 并清理旧刚体/粒子/事件，Sandbox 继续安全重生且无结算；程序化 generator 按深度生成八个原创区域带、七个 Still Forge 锚点、无限横向侧区和确定性连接，修改 chunk 仍以 region store 优先且 resident 预算有界；HUD 显示模式、seed、区域、深度和 run 状态；现有六武器与环境危险构成此任务内真实可玩闭环，不挂载后续法术/敌人/商店占位；Demo 只使用公开 API。定向测试覆盖 schema、同 seed/跨加载顺序、区域边界/负坐标、模式隔离、死亡替换、资源清理、存档优先和 UI；Release build、真实 Editor/Player 输入与 framebuffer 证据通过。
+  - 提交节点：一，`SCOPE-007`、权威战役设计、canonical 依赖图与本任务 `[~]`；二，通用公开 mode/run/content 合同和生命周期替换能力；三，纵深区域/Still Forge 拓扑与流式生成；四，Campaign/Sandbox UI、死亡/重开产品流；五，自动化、真实窗口证据、最终输出与本任务 `[x]`。每个节点按 `AGENTS.md §6` 中文提交。
+
+- [ ] `DEMO-008` 实现八个原创纵深区域、程序化遭遇点、无限侧区和跨区捷径。
+  - 优先级：P0。
+  - 依赖：`DEMO-007`。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §3；`plan/13-demo-game.md` §3.17。
+  - 验收：`content/biomes.json` 定义各区域材料 palette、地层/洞穴/结构规则、环境危险、地标、出口、侧区与捷径；每区具备可辨识且可玩的原创地形语法，不复制参考地图；全局 seed/chunk 坐标决定生成且跨边界连续，加载顺序无关，修改持久化优先；横向探索无硬边界、纵深主路径始终可达；生成热路径、resident 预算、自动化、性能和真实窗口长路线证据通过。
+
+- [ ] `DEMO-009` 实现完整的导器 / 符式数据、施法求值、库存与构筑编辑系统。
+  - 优先级：P0。
+  - 依赖：`DEMO-007`、`BASE-011`、`BASE-014`。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §5；`docs/PixelEngine-架构与需求设计.md` §1.5；`plan/13-demo-game.md` §3.18。
+  - 验收：catalog 以稳定字符串键入盘并在加载期完整校验；导器完整支持容量、能量、恢复、延迟、充能、扩散、顺序/扰序和 Always effect；符式覆盖投射、修饰、触发、材料、移动与实用类别；有界 evaluator 对递归、操作数、投射物和世界效果 fail-closed，稳态 cast 零托管分配；拾取/丢弃/换装/库存/编辑/HUD/存取均可用；所有效果只经公开 API 延迟到安全相位；性质测试、组合测试、分配基准和真实输入证据通过。
+
+- [ ] `DEMO-010` 实现原创敌人、统一战斗/状态、战利品、货币与区域生态。
+  - 优先级：P0。
+  - 依赖：`DEMO-007`、`BASE-006`、`BASE-011`。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §6；`plan/13-demo-game.md` §3.19。
+  - 验收：`content/enemies.json` 定义每区原创敌人族群、移动、感知、攻击、抗性、材料交互、掉落和 spawn budget；玩家与敌人共享统一伤害/状态/投射/世界效果合同；实体流送与卸载状态明确，常驻数量/寻路/查询有硬预算，稳态无逐实体分配；货币与掉落由 run seed 确定且 UI/拾取真实改写 run state；AI、战斗、材料互动、性能与真实窗口遭遇证据通过。
+
+- [ ] `DEMO-011` 实现 Still Forge 恢复、补给、交易、导器编辑和能力烙印闭环。
+  - 优先级：P0。
+  - 依赖：`DEMO-008`、`DEMO-009`、`DEMO-010`。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §3、§6；`plan/13-demo-game.md` §3.19。
+  - 验收：每层锻台完整提供生命恢复、资源补充、购买/出售、库存对比、导器编辑和三选一能力烙印；库存、价格、重抽与候选由 run seed/数据生成，交易原子化且失败有反馈；选择后未选项关闭并持久进入 run state；保护/离开/破坏结果走统一世界规则；Web-first UI 与 ManagedFallback 功能等价，键鼠/手柄可用；自动化与真实输入闭环通过。
+
+- [ ] `DEMO-012` 实现源核实验庭、多阶段 Boss、完成/死亡结算与下一轮。
+  - 优先级：P0。
+  - 依赖：`DEMO-008`、`DEMO-009`、`DEMO-010`、`DEMO-011`。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §7；`plan/13-demo-game.md` §3.20。
+  - 验收：玩家主动取用原创源核后触发多阶段 Boss，攻击真实作用于材料、投射物、场地和玩家；普通完成、永久死亡和数据化下一轮条件完整可达；RunSummary 显示真实统计/构筑并可开始干净新 run 或返回菜单；所有结果可靠清理旧 world/script/entity/UI/physics/particle/audio/event/ALC 状态；headless 全流程、真实 Player 通关/死亡/下一轮和泄漏长跑证据通过。
+
+- [ ] `DEMO-013` 完成原创像素 Roguelite 全流程平衡、可访问性、性能、证据与最终输出。
+  - 优先级：P0。
+  - 依赖：`DEMO-007`–`DEMO-012`、`DEMO-001`–`DEMO-003` 的可在本机闭合项；外部 reviewer/硬件缺口按 `SCOPE-005` 如实标注，不得假绿。
+  - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §9；`docs/PixelEngine-核心目标与产品定位.md` §7。
+  - 验收：默认 Campaign 可从主菜单连续完成八区、七锻台、构筑、战斗、Boss 和结算，Sandbox 仍完整可选；难度、经济、掉落、构筑和敌人组合无已知必现软锁，输入/字幕/闪光与可读性设置可用；目标场景性能、稳态分配、长跑生命周期、全 solution 测试、真实 PixelEngine Editor/Player 路线、同源截图/日志/evidence index、clean final-output、安装包与独立 verifier 全通过；原创内容审计确认不包含 Noita 专有资产或近似地图。
+
 ## 对外文档
 
 - [!] `DOC-001` 新增根 README、Getting Started 和一个从新建工程到 build-player 的最小完整教程。阻塞：文档骨架、玩家脚本链修复及本机干净工程 R2R 复验已完成；待 `EDITOR-003` 独立人工 reviewer 与 `REL-001` 冻结 candidate 后，按最终界面/命令从干净目录人工复走 Project Picker → Script → Play → Build And Run。

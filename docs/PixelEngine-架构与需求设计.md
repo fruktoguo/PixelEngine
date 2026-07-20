@@ -1,7 +1,7 @@
 # PixelEngine 架构与需求设计文档
 
 > 面向 .NET 10 LTS（2026）的 Noita 级别 2D 像素世界引擎 + Unity-like Editor + Web-first 透明 HTML UI Runtime + Showcase Demo Game
-> 版本：v2.2（新增核心目标与产品定位锚文档）
+> 版本：v2.3（新增原创像素 Roguelite 战役边界）
 > 作者：Lead Architect
 > 产品北极星：`PixelEngine-核心目标与产品定位.md`。本文负责技术架构，最终产品形态、目标用户、Demo 完整度与优先级判断以该文档为产品层依据。
 > 置信度标注约定：本文在关键结论处标注 [高] / [中] / [低]。来自 GDC 2019 "Exploring the Tech and Design of Noita" talk 与多方实现交叉验证者为 [高]；由社区实现反推、未经官方确认者为 [中]；纯属推断 / 需实测者为 [低]。涉及 .NET 10 / Box2D v3 / OpenGL 的 API 事实均按 2026 年官方文档校核。
@@ -12,9 +12,9 @@
 
 ### 1.1 项目定位
 
-本项目是一个自研 2D 像素游戏引擎，其 **WORLD（世界模拟）层对标 Noita（Nolla Games 的 "Falling Everything" 引擎）**。引擎必须复刻 Noita 的世界技术核心：每个屏幕像素都是一个被独立模拟、且可参与碰撞的物质单元（material cell），具体包括 falling-sand 细胞自动机（cellular automata, CA）、自由粒子（free particles）、像素级精确碰撞（pixel-perfect collision）、细胞生命周期（cell lifecycle）、以及材质反应（material reactions）。产品交付物由四个面组成：可复用引擎内核、面向资深 Unity 用户的 Unity-like Editor、面向玩家的 Web-first 透明 HTML UI Runtime，以及 Showcase Demo Game。Showcase Demo Game 不以堆叠手工关卡取胜，而是用可向正负方向持续流送的程序化无限沙盒证明射击/爆炸地形破坏、切割后刚体物理、透明 HTML UI、性能/手感和公开 API dogfood。
+本项目是一个自研 2D 像素游戏引擎，其 **WORLD（世界模拟）层对标 Noita（Nolla Games 的 "Falling Everything" 引擎）**。引擎必须复刻 Noita 的世界技术核心：每个屏幕像素都是一个被独立模拟、且可参与碰撞的物质单元（material cell），具体包括 falling-sand 细胞自动机（cellular automata, CA）、自由粒子（free particles）、像素级精确碰撞（pixel-perfect collision）、细胞生命周期（cell lifecycle）、以及材质反应（material reactions）。产品交付物由四个面组成：可复用引擎内核、面向资深 Unity 用户的 Unity-like Editor、面向玩家的 Web-first 透明 HTML UI Runtime，以及 Showcase Demo Game。Showcase Demo Game 在 `DEMO-006` 的流式无限沙盒地基上增加原创像素 Roguelite 战役：纵深程序化区域、层间安全枢纽、导器/符式构筑、敌人/经济、Boss、永久死亡与下一轮；同时保留可单独选择的无终点 Infinite Sandbox。
 
-**明确不在范围内**的是 Noita 的法杖 / 法术系统（wand/spell system）。我们只做「世界」这一半，不做 roguelite 的构筑玩法。这一点对架构很关键：它意味着我们不需要为成千上万种 modifier 的运行时组合做开放式脚本架构，可以把材质 / 反应做成相对收敛的数据驱动表。
+**引擎内核不复刻或硬编码 Noita 的法杖 / 法术内容**。原创构筑以 Demo 层的 `Conduit/Glyph` 数据、预编译 catalog 和有界命令求值器实现，只通过 Scripting/Hosting 的公开世界效果、投射物、粒子、音频和 UI API 驱动引擎。引擎仍保持无玩法内核，材质 / 反应继续使用收敛的数据驱动表；若 Demo 需要通用能力，补的是可复用公开 API，而不是 Noita 专属类型或内部后门。完整产品边界见 `PixelEngine-原创Roguelite战役设计.md`。
 
 ### 1.2 「对标 Noita 世界」的具体含义
 
@@ -55,6 +55,17 @@
 GC：稳态帧循环内**零托管分配**，Gen0 极少触发，无可感知 GC 停顿。
 
 兼容性：默认构建在 OpenGL 3.3 Core 基线上运行（覆盖 ~2010 年后几乎所有桌面 GPU / iGPU）；对问题 Intel / 老驱动提供 OpenGL ES 3.0 + ANGLE 回退路径。
+
+### 1.5 战役玩法架构边界
+
+战役系统属于 `demo/PixelEngine.Demo` 的稀疏 gameplay 层，不进入 Simulation/World/Physics 的权威 cell 热路径，也不改变本文件的十条架构不变式：
+
+- `Campaign` 与 `InfiniteSandbox` 是显式模式。两者共用确定性初始 chunk 生成和流送；Campaign 叠加纵深区域、run state 和结算，Sandbox 保持无终点安全重生。
+- run seed 决定初始区域、掉落、敌人、商店与能力候选；实时 CA/physics 仍按 §6 允许非 bit 级确定，不宣称回放确定性。
+- 导器/符式求值在加载期把稳定字符串键编译为紧凑 runtime id，稳态使用固定容量 command buffer，禁止 LINQ、装箱、闭包和逐 cast 分配；所有世界写入延迟到 Hosting 规定的安全相位。
+- 玩家、敌人、物品和投射物是数量受预算约束的稀疏实体，不把通用 ECS 或对象身份写进 per-cell SoA。
+- 死亡、完成和新一轮必须走完整 world/script/entity/UI 生命周期替换，不能以传送玩家或覆盖几个字段冒充新 run。
+- 具体流程、原创内容边界和任务顺序以 `PixelEngine-原创Roguelite战役设计.md` 与 `plan/tasks/` 为准。
 
 ---
 
