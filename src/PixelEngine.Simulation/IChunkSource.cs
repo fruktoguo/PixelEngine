@@ -19,4 +19,12 @@ public interface IChunkSource
     /// 解析以 center 为中心的 3x3 邻域，slot=(dy+1)*3+(dx+1)。
     /// </summary>
     bool ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood);
+
+    /// <summary>
+    /// 返回指定驻留 chunk 是否属于当前模拟 active 区；固定世界默认全部 active。
+    /// </summary>
+    bool IsSimulationActive(ChunkCoord coord)
+    {
+        return true;
+    }
 }

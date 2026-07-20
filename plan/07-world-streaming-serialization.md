@@ -13,6 +13,8 @@
 
 程序化世界的修改持久化采用“存档优先”语义：首次进入坐标时生成，卸载时写 region store，重入后读取存档而不重新生成。初始化失败不得发布半个 chunk；pool chunk、温度数组与队列状态必须按现有异常安全路径归还。缺失存档的温度块必须先清零，禁止把 `ArrayPool` 旧数据带入新世界。
 
+流式世界的 Simulation `IChunkSource` 由 `WorldManager` 自身提供：resident map 继续保存 active + border / cached chunk，但 checkerboard、材质相变与粒子沉积只把 `ChunkResidencyState.Active` 视为可模拟。active 边缘 CA / temperature 写入 border 时产生的 current / working / incoming dirty 必须保留到下一帧相位 2；`WorldManager.ApplyResidency` 在清理 sleeping border 之前捕获这些待处理工作，把对应 border 临时提升为 active 并扩出新的外圈 border。这样 border 默认 sleep，同时 KeepAlive 仍保证跨界写入会被继续处理，不能用“跳过 inactive”换取静默丢失边界工作。
+
 ---
 
 ## 1. 目标与范围

@@ -15,6 +15,8 @@
 
 `.scene` 可通过互斥于 `initialSaveDirectory` 的 `proceduralWorldGenerator` 字段声明流式生成器。Hosting 先查询显式注册表，再从该场景已物化的 Behaviour 中发现实现 `IStreamingProceduralWorldGenerator` 的同键实例；因此独立 Editor 无需反向引用 Demo 程序集，也能在动态脚本加载后装配和运行该世界。默认 Demo 场景 `scenes/infinite-sandbox.scene` 使用此路径。
 
+Editor 打开工程时必须先加载 `.scene`、注册项目脚本并物化 Behaviour，之后才调用 `AttachCurrentSceneWorld` 解析场景声明的生成器；Content、World、Audio、Physics 的装配顺序不得让 World 抢在动态脚本注册之前。默认 720x480 authoring preview 使用 Editor 专属 streaming margin 覆盖完整 0-based 画布；preview 刷新只清理上一份 authoring 画布范围，不能清空外围 border ring，否则 dirty padding 会越过驻留边界。
+
 ---
 
 ## 1. 当前产品职责

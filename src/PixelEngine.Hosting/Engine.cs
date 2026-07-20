@@ -1321,7 +1321,8 @@ public sealed class Engine : IDisposable
             particles,
             temperature,
             result.WorldSeed,
-            checked((uint)result.GameTimeTicks));
+            checked((uint)result.GameTimeTicks),
+            simulationChunks: world);
         Context.Clock.RestoreCounters(result.GameTimeTicks, result.GameTimeTicks);
         _ = AttachWorldManager(world);
         Context.RegisterService<IWorldStateSnapshotSource>(stateBridge);
@@ -2444,14 +2445,16 @@ public sealed class Engine : IDisposable
         ParticleSystem particles,
         TemperatureField temperature,
         ulong worldSeed = 0,
-        uint frameIndex = 0)
+        uint frameIndex = 0,
+        IChunkSource? simulationChunks = null)
     {
+        IChunkSource simulationSource = simulationChunks ?? chunks;
         ConfigureMaterialRuntimeBehaviours(materials, particles, temperature, out IReactionExecutor? reactionExecutor, out ILifetimeSink? lifetimeSink);
         MaterialPropsTable props = new(materials.Hot);
         RigidDamageQueue damageQueue = ResolveRigidDamageQueue();
-        CellGrid grid = new(chunks, props, damageQueue);
+        CellGrid grid = new(simulationSource, props, damageQueue);
         SimulationKernel kernel = new(
-            chunks,
+            simulationSource,
             props,
             worldSeed: worldSeed,
             rigidDamageSink: damageQueue,
@@ -2465,7 +2468,7 @@ public sealed class Engine : IDisposable
             kernel.RestoreFrameState(frameIndex, CurrentParityFromGameTime(frameIndex));
         }
 
-        SimulationPhaseDriver driver = new(chunks, grid, kernel, particles, temperature, materials);
+        SimulationPhaseDriver driver = new(simulationSource, grid, kernel, particles, temperature, materials);
         driver.RegisterPhases(Phases);
         SimulationEditApi editApi = new(
             kernel,
@@ -2475,7 +2478,7 @@ public sealed class Engine : IDisposable
 
         Context.RegisterService(driver.GetType(), driver);
         Context.RegisterService(chunks);
-        Context.RegisterService<IChunkSource>(chunks);
+        Context.RegisterService<IChunkSource>(simulationSource);
         Context.RegisterService(grid);
         Context.RegisterService(kernel);
         Context.RegisterService(particles);
@@ -2766,7 +2769,8 @@ public sealed class Engine : IDisposable
             particles,
             temperature,
             descriptor.WorldSeed,
-            descriptor.FrameIndex);
+            descriptor.FrameIndex,
+            simulationChunks: world);
         Context.Clock.RestoreCounters(descriptor.FrameIndex, descriptor.FrameIndex);
         _ = AttachWorldManager(world);
         _ = EnsureRuntimeWorldStateBridge(particles);

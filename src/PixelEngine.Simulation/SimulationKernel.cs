@@ -602,6 +602,46 @@ public sealed class SimulationKernel(
             : throw new InvalidOperationException($"目标 chunk 未驻留：{coord}。");
     }
 
+    /// <summary>
+    /// 在 dirty halo 完整驻留时原子写入粒子沉积，并返回被替换的材质。
+    /// </summary>
+    internal bool TryDepositParticleCell(
+        int wx,
+        int wy,
+        ushort material,
+        byte persistentFlags,
+        out ushort replacedMaterial)
+    {
+        ChunkCoord coord = CellAddressing.WorldToChunk(wx, wy);
+        if (!_chunks.IsSimulationActive(coord))
+        {
+            replacedMaterial = 0;
+            return false;
+        }
+
+        if (!DirtyRegionMarker.TryMarkCell(
+                _chunks,
+                wx,
+                wy,
+                DirtyPhaseTarget.Current,
+                includeBoundaryNeighbors: true,
+                Diagnostics))
+        {
+            replacedMaterial = 0;
+            return false;
+        }
+
+        Chunk chunk = RequireChunk(wx, wy);
+        int local = CellAddressing.LocalIndex(wx, wy);
+        replacedMaterial = chunk.GetMaterialAt(local);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], replacedMaterial);
+        chunk.SetMaterialAt(local, material);
+        chunk.FlagsBuffer[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
+        chunk.LifetimeBuffer[local] = DefaultLifetimeByte(material);
+        chunk.DamageBuffer[local] = 0;
+        return true;
+    }
+
     private void AdvanceParity()
     {
         CurrentParity ^= CellFlags.Parity;

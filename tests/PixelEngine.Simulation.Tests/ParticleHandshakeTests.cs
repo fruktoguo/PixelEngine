@@ -336,6 +336,51 @@ public sealed class ParticleHandshakeTests
         Assert.Equal(0, particles.Stats.DepositedThisTick);
     }
 
+    /// <summary>
+    /// 验证粒子到达最外驻留 chunk 边缘时不会跨缺失 dirty halo 写入或抛异常。
+    /// </summary>
+    [Fact]
+    public void ResolveDepositsDefersWhenDirtyHaloIsNotResident()
+    {
+        Chunk edge = new(new ChunkCoord(0, 0));
+        TestChunkSource source = new(edge);
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials);
+        SimulationKernel kernel = new(source, materials);
+        ParticleSystem particles = new(capacity: 1);
+        _ = particles.TrySpawn(new ParticleSpawn(63.25f, 10.25f, 0, 0, Sand, 0, 10));
+
+        particles.IntegrateAndAdvance(grid);
+        particles.ResolveDeposits(kernel, grid);
+
+        Assert.Equal(1, particles.ActiveCount);
+        Assert.Equal(0, Get(edge, 63, 10));
+        Assert.Equal(0, particles.Stats.DepositedThisTick);
+        Assert.Equal(DirtyRect.Empty, edge.CurrentDirty);
+    }
+
+    /// <summary>
+    /// 验证 resident border chunk 不接收粒子沉积，直至它被 World 提升为 active。
+    /// </summary>
+    [Fact]
+    public void ResolveDepositsDefersInsideInactiveResidentChunk()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        _ = source.InactiveChunks.Add(center.Coord);
+        MaterialPropsTable materials = CreateMaterials();
+        CellGrid grid = new(source, materials);
+        SimulationKernel kernel = new(source, materials);
+        ParticleSystem particles = new(capacity: 1);
+        _ = particles.TrySpawn(new ParticleSpawn(10.25f, 10.25f, 0, 0, Sand, 0, 10));
+
+        particles.IntegrateAndAdvance(grid);
+        particles.ResolveDeposits(kernel, grid);
+
+        Assert.Equal(1, particles.ActiveCount);
+        Assert.Equal(0, Get(center, 10, 10));
+        Assert.Equal(DirtyRect.Empty, center.CurrentDirty);
+    }
+
     private static MaterialPropsTable CreateMaterials()
     {
         return new MaterialPropsTable(
@@ -394,6 +439,13 @@ public sealed class ParticleHandshakeTests
         }
 
         public ReadOnlySpan<Chunk> ResidentChunks => _resident;
+
+        public HashSet<ChunkCoord> InactiveChunks { get; } = [];
+
+        public bool IsSimulationActive(ChunkCoord coord)
+        {
+            return !InactiveChunks.Contains(coord);
+        }
 
         public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
         {

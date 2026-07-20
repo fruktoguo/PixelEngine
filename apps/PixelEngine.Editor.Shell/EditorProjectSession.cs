@@ -5,6 +5,7 @@ using PixelEngine.Editor.Shell.Settings;
 using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
+using PixelEngine.World;
 
 namespace PixelEngine.Editor.Shell;
 
@@ -580,9 +581,7 @@ internal sealed class EditorProjectSession : IDisposable
         Engine engine = engineBuilder.Build();
         try
         {
-            AttachContentAndWorld(engine);
-            AttachProjectAudio(engine);
-            _ = engine.AttachPhysics();
+            AttachContent(engine);
             EditorSceneModel sceneModel = LoadSceneModel(project, sceneRelativePath);
             EditorUndoStack undoStack = app.SharedUndoStack;
             undoStack.Clear();
@@ -600,6 +599,9 @@ internal sealed class EditorProjectSession : IDisposable
             engine.Context.RegisterService<IScriptHotReloadDiagnosticSink>(new EditorConsoleScriptHotReloadDiagnosticSink(app.ConsoleStore));
             RegisterInitialProjectScriptAssembly(project, engine, app.ConsoleStore);
             EditorSceneRuntimeProjection projection = ProjectAuthoringScene(engine, sceneModel);
+            AttachWorld(engine);
+            AttachProjectAudio(engine);
+            _ = engine.AttachPhysics();
             AuthoringWorldPreviewRuntime authoringWorld = new(
                 engine.Context.GetService<IChunkSource>(),
                 engine.Context.GetService<IMaterialQuery>(),
@@ -1349,7 +1351,7 @@ internal sealed class EditorProjectSession : IDisposable
         _disposed = true;
     }
 
-    private static void AttachContentAndWorld(Engine engine)
+    private static void AttachContent(Engine engine)
     {
         if (engine.HasContentPackage())
         {
@@ -1359,14 +1361,27 @@ internal sealed class EditorProjectSession : IDisposable
         {
             RegisterFallbackEditorMaterials(engine);
         }
+    }
 
-        if (engine.AttachCurrentSceneWorld(DefaultParticleCapacity) is null && !engine.IsSimulationWorldAttached)
+    private static void AttachWorld(Engine engine)
+    {
+        if (engine.AttachCurrentSceneWorld(
+                DefaultParticleCapacity,
+                streamingConfig: CreateEditorWorldStreamingConfig()) is null &&
+            !engine.IsSimulationWorldAttached)
         {
             _ = engine.AttachResidentSimulationWorld(
                 DefaultEditorWorldWidth,
                 DefaultEditorWorldHeight,
                 DefaultParticleCapacity);
         }
+    }
+
+    internal static WorldStreamingConfig CreateEditorWorldStreamingConfig()
+    {
+        // Authoring providers paint a 0-based 720x480 canvas, while runtime streaming starts around
+        // the procedural focus. Six activation chunks plus the border cover chunk (11,7) at 640x360.
+        return new WorldStreamingConfig { ActivationMarginChunks = 6 };
     }
 
     internal static void AttachProjectAudio(Engine engine)

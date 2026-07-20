@@ -29,6 +29,7 @@ public sealed class AuthoringWorldPreviewRuntimeTests
         Assert.Equal(1, firstProvider.PopulateCount);
         Assert.Equal(0, firstProvider.AdoptCount);
         Assert.Equal(1, edit.ClearRectCount);
+        Assert.Equal((0, 0, 63, 63), edit.LastClearRect);
         Assert.Equal(1, edit.PaintCellCount);
         Assert.Equal(
             new AuthoringWorldPreviewSnapshot(
@@ -189,6 +190,8 @@ public sealed class AuthoringWorldPreviewRuntimeTests
 
         public int ClearRectCount { get; private set; }
 
+        public (int MinX, int MinY, int MaxX, int MaxY) LastClearRect { get; private set; }
+
         public void PaintCell(int worldX, int worldY, ushort material)
         {
             PaintCellCount++;
@@ -206,6 +209,7 @@ public sealed class AuthoringWorldPreviewRuntimeTests
         public int ClearRect(int minX, int minY, int maxX, int maxY)
         {
             ClearRectCount++;
+            LastClearRect = (minX, minY, maxX, maxY);
             return checked((maxX - minX + 1) * (maxY - minY + 1));
         }
 

@@ -607,16 +607,28 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
 
         if (targetMaterial == 0)
         {
-            kernel.DepositCell(x, y, particle.Material, persistentFlags: 0);
-            return true;
+            return kernel.TryDepositParticleCell(
+                x,
+                y,
+                particle.Material,
+                persistentFlags: 0,
+                out _);
         }
 
         // 更重粒子可挤占较轻 occupant，被挤出的材质留在粒子槽等待邻格沉积。
         if (grid.MaterialProps.DensityOf(particle.Material) > grid.MaterialProps.DensityOf(targetMaterial))
         {
-            _ = kernel.ReadAndClearCell(x, y, out _, out _);
-            kernel.DepositCell(x, y, particle.Material, persistentFlags: 0);
-            particle.Material = targetMaterial;
+            if (!kernel.TryDepositParticleCell(
+                    x,
+                    y,
+                    particle.Material,
+                    persistentFlags: 0,
+                    out ushort displacedMaterial))
+            {
+                return false;
+            }
+
+            particle.Material = displacedMaterial;
             particle.Vx = 0;
             particle.Vy = 0;
             _particles[particleIndex] = particle;
@@ -632,13 +644,14 @@ public sealed class ParticleSystem : IParticleReadback, ICellDestructionSink
 
     private static bool TryDepositNeighbor(SimulationKernel kernel, CellGrid grid, Particle particle, int x, int y)
     {
-        if (!grid.TryGetMaterial(x, y, out ushort material) || material != 0)
-        {
-            return false;
-        }
-
-        kernel.DepositCell(x, y, particle.Material, persistentFlags: 0);
-        return true;
+        return grid.TryGetMaterial(x, y, out ushort material) &&
+            material == 0 &&
+            kernel.TryDepositParticleCell(
+                x,
+                y,
+                particle.Material,
+                persistentFlags: 0,
+                out _);
     }
 
     private static ParticleSpawn CreateEjectionSpawn(

@@ -68,7 +68,7 @@ public sealed class ResidencyBoundaryTests
     }
 
     /// <summary>
-    /// 验证 active 边缘 CA 写入 border 后，World 会根据 KeepAlive 诊断补齐新的外圈 border。
+    /// 验证 active 边缘 CA 写入 border 后，World 会保留 KeepAlive dirty、提升目标并补齐新外圈。
     /// </summary>
     [Fact]
     public void ActiveEdgeKeepAlivePromotesBorderAndLoadsOuterRing()
@@ -81,7 +81,7 @@ public sealed class ResidencyBoundaryTests
         Chunk south = GetChunk(manager, new ChunkCoord(0, 1));
         center.SetCurrentDirty(DirtyRect.Full);
         Set(center, 10, EngineConstants.ChunkSize - 1, Sand);
-        SimulationKernel kernel = new(manager.Chunks, CreateProps());
+        SimulationKernel kernel = new(manager, CreateProps());
 
         kernel.StepCa();
 
@@ -90,8 +90,9 @@ public sealed class ResidencyBoundaryTests
         BoundaryWakeSnapshot[] wakes = new BoundaryWakeSnapshot[4];
         int wakeCount = kernel.CopyBoundaryWakeSnapshots(wakes);
         Assert.Equal(1, wakeCount);
+        Assert.False(south.WorkingDirty.IsEmpty && south.CurrentDirty.IsEmpty &&
+            Enumerable.Range(0, south.IncomingDirtySlotCount).All(i => south.GetIncomingDirty(i).IsEmpty));
 
-        manager.NotifyBoundaryWakes(wakes.AsSpan(0, wakeCount));
         manager.ApplyResidency(frame: 3);
 
         Assert.True(manager.Residency.TryGetInfo(new ChunkCoord(0, 1), out ChunkResidencyInfo promoted));

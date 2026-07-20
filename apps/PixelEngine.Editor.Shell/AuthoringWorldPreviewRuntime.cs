@@ -18,6 +18,8 @@ internal sealed class AuthoringWorldPreviewRuntime
     private ulong _lastContentFingerprint;
     private long _snapshotVersion;
     private bool _hasAuthoritativeWorld;
+    private int _authoringWidthCells;
+    private int _authoringHeightCells;
 
     public AuthoringWorldPreviewRuntime(
         IChunkSource chunks,
@@ -52,9 +54,11 @@ internal sealed class AuthoringWorldPreviewRuntime
                 return AuthoringWorldRefreshResult.None;
             }
 
-            ClearResidentWorld();
+            ClearAuthoringWorld(_authoringWidthCells, _authoringHeightCells);
             _hasAuthoritativeWorld = false;
             _lastContentFingerprint = 0;
+            _authoringWidthCells = 0;
+            _authoringHeightCells = 0;
             Snapshot = new AuthoringWorldPreviewSnapshot(
                 ++_snapshotVersion,
                 HasWorld: false,
@@ -75,7 +79,9 @@ internal sealed class AuthoringWorldPreviewRuntime
             return AuthoringWorldRefreshResult.Reused;
         }
 
-        ClearResidentWorld();
+        ClearAuthoringWorld(
+            _hasAuthoritativeWorld ? _authoringWidthCells : worldDescriptor.WidthCells,
+            _hasAuthoritativeWorld ? _authoringHeightCells : worldDescriptor.HeightCells);
         for (int i = 0; i < providers.Count; i++)
         {
             ProviderEntry entry = providers[i];
@@ -90,6 +96,8 @@ internal sealed class AuthoringWorldPreviewRuntime
 
         _lastContentFingerprint = fingerprint;
         _hasAuthoritativeWorld = true;
+        _authoringWidthCells = worldDescriptor.WidthCells;
+        _authoringHeightCells = worldDescriptor.HeightCells;
         Snapshot = new AuthoringWorldPreviewSnapshot(
             ++_snapshotVersion,
             HasWorld: true,
@@ -204,20 +212,14 @@ internal sealed class AuthoringWorldPreviewRuntime
         return hash;
     }
 
-    private void ClearResidentWorld()
+    private void ClearAuthoringWorld(int widthCells, int heightCells)
     {
-        ReadOnlySpan<Chunk> resident = _chunks.ResidentChunks;
-        for (int i = 0; i < resident.Length; i++)
+        if (widthCells <= 0 || heightCells <= 0)
         {
-            ChunkCoord coord = resident[i].Coord;
-            int minX = coord.X * EngineConstants.ChunkSize;
-            int minY = coord.Y * EngineConstants.ChunkSize;
-            _ = _simulationEdit.ClearRect(
-                minX,
-                minY,
-                minX + EngineConstants.ChunkSize - 1,
-                minY + EngineConstants.ChunkSize - 1);
+            return;
         }
+
+        _ = _simulationEdit.ClearRect(0, 0, widthCells - 1, heightCells - 1);
     }
 
     private static ulong Mix(ulong hash, ulong value)

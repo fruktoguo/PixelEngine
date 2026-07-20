@@ -115,6 +115,28 @@ public sealed class TemperatureFieldTests
     }
 
     /// <summary>
+    /// 验证与 active 温度块无邻接关系的 resident border chunk 保持冻结，且不执行材质相变。
+    /// </summary>
+    [Fact]
+    public void TemperaturePassesKeepUnrelatedInactiveResidentChunksFrozen()
+    {
+        TestChunkSource source = CreateNeighborhood(new ChunkCoord(0, 0), out Chunk center);
+        _ = source.InactiveChunks.Add(center.Coord);
+        Set(center, 30, 30, Ice);
+        center.SetCurrentDirty(new DirtyRect(30, 30, 30, 30));
+        MaterialTable materials = CreateMaterials();
+        TemperatureField field = new(storageKind: TemperatureStorageKind.Float32);
+        field.AddHeat(30, 30, 20);
+
+        field.ConductStep(source, materials.Hot);
+        field.ApplyPhaseTransitions(source, materials, CellFlags.Parity);
+
+        Assert.Equal(20, field.GetTemperature(30, 30));
+        Assert.Equal(Ice, Get(center, 30, 30));
+        Assert.True(center.WorkingDirty.IsEmpty);
+    }
+
+    /// <summary>
     /// 验证 RigidOwned cell 发生阈值相变时会退出刚体占用并通知物理 damage sink。
     /// </summary>
     [Fact]
@@ -515,6 +537,13 @@ public sealed class TemperatureFieldTests
         }
 
         public ReadOnlySpan<Chunk> ResidentChunks => _resident;
+
+        public HashSet<ChunkCoord> InactiveChunks { get; } = [];
+
+        public bool IsSimulationActive(ChunkCoord coord)
+        {
+            return !InactiveChunks.Contains(coord);
+        }
 
         public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
         {

@@ -167,6 +167,11 @@ public sealed class CheckerboardScheduler
         int awakeCount = 0;
         foreach (Chunk chunk in residentChunks)
         {
+            if (!chunks.IsSimulationActive(chunk.Coord))
+            {
+                continue;
+            }
+
             // sleeping 或本帧无 current dirty 的 chunk 不进调度，保持零 CA 迭代。
             if (chunk.State != ChunkState.Awake || chunk.CurrentDirty.IsEmpty)
             {

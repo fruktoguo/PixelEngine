@@ -298,7 +298,7 @@ public sealed class TemperatureField
             return;
         }
 
-        int chunkCount = CaptureConductChunks(chunks.ResidentChunks);
+        int chunkCount = CaptureConductChunks(chunks);
         int rowCount = chunkCount * BlockSize;
         if (rowCount != 0)
         {
@@ -321,6 +321,11 @@ public sealed class TemperatureField
                     jobs.ParallelRange(rowCount, MinConductRowsPerJob, ConductRowsJob, this);
                     LastConductStepWorkerCount = CountWorkerHits(jobs.WorkerCount);
                 }
+
+                for (int i = 0; i < chunkCount; i++)
+                {
+                    _conductBlocks[i].Swap();
+                }
             }
             finally
             {
@@ -333,20 +338,18 @@ public sealed class TemperatureField
             LastConductStepWorkerCount = 0;
         }
 
-        // 传导写入 scratch，帧末 ping-pong 交换后再向环境冷却并剔除近零 block。
-        foreach (TemperatureBlock block in _blocks.Values)
-        {
-            block.Swap();
-        }
-
-        CoolTowardAmbientAndPrune();
+        // 只有本次参与传导的 block 已完成 ping-pong 交换；inactive block 保持冻结。
+        CoolTowardAmbientAndPrune(chunks);
     }
 
-    private void CoolTowardAmbientAndPrune()
+    private void CoolTowardAmbientAndPrune(IChunkSource chunks)
     {
-        foreach (TemperatureBlock block in _blocks.Values)
+        foreach ((ChunkCoord coord, TemperatureBlock block) in _blocks)
         {
-            block.CoolTowardAmbient(AmbientTemperatureCelsius, AmbientCoolingPerStep, AmbientTemperatureEpsilon);
+            if (chunks.IsSimulationActive(coord))
+            {
+                block.CoolTowardAmbient(AmbientTemperatureCelsius, AmbientCoolingPerStep, AmbientTemperatureEpsilon);
+            }
         }
 
         PruneAmbientBlocks();
@@ -413,6 +416,11 @@ public sealed class TemperatureField
         MaterialHotTable hot = materials.Hot;
         foreach (Chunk chunk in chunks.ResidentChunks)
         {
+            if (!chunks.IsSimulationActive(chunk.Coord))
+            {
+                continue;
+            }
+
             int baseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
             int baseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;
             // 有温度 block 或 chunk 无 current dirty 时扫全 chunk，否则只扫 CA dirty 区。
@@ -517,7 +525,7 @@ public sealed class TemperatureField
         }
     }
 
-    private int CaptureConductChunks(ReadOnlySpan<Chunk> residentChunks)
+    private int CaptureConductChunks(IChunkSource chunks)
     {
         if (_blocks.Count == 0)
         {
@@ -525,11 +533,15 @@ public sealed class TemperatureField
             return 0;
         }
 
+        ReadOnlySpan<Chunk> residentChunks = chunks.ResidentChunks;
         EnsureConductCapacity(residentChunks.Length);
         _conductActiveCoords.Clear();
         foreach (ChunkCoord coord in _blocks.Keys)
         {
-            _ = _conductActiveCoords.Add(coord);
+            if (chunks.IsSimulationActive(coord))
+            {
+                _ = _conductActiveCoords.Add(coord);
+            }
         }
 
         int count = 0;

@@ -3,6 +3,7 @@ using PixelEngine.Editor.Shell;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.UI;
+using PixelEngine.World;
 using Xunit;
 
 namespace PixelEngine.Hosting.Tests;
@@ -13,6 +14,58 @@ namespace PixelEngine.Hosting.Tests;
 /// </summary>
 public sealed class EditorShellSceneMaterializationTests
 {
+    /// <summary>
+    /// 验证 Editor 先物化项目脚本 Behaviour，再解析 .scene 声明的程序化世界生成器。
+    /// </summary>
+    [Fact]
+    public void EditorSessionRegistersSceneScriptsBeforeAttachingDeclaredProceduralWorld()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            FindRepositoryRoot(),
+            "apps",
+            "PixelEngine.Editor.Shell",
+            "EditorProjectSession.cs"));
+        int openStart = source.IndexOf(
+            "public static EditorProjectSession Open",
+            StringComparison.Ordinal);
+        int runTickStart = source.IndexOf(
+            "public void RunOneTick",
+            openStart,
+            StringComparison.Ordinal);
+        string open = source[openStart..runTickStart];
+
+        int content = open.IndexOf("AttachContent(engine);", StringComparison.Ordinal);
+        int scene = open.IndexOf("LoadSceneModel(project, sceneRelativePath);", StringComparison.Ordinal);
+        int scripts = open.IndexOf("RegisterInitialProjectScriptAssembly", StringComparison.Ordinal);
+        int projection = open.IndexOf("ProjectAuthoringScene(engine, sceneModel);", StringComparison.Ordinal);
+        int world = open.IndexOf("AttachWorld(engine);", StringComparison.Ordinal);
+
+        Assert.True(content >= 0 && content < scene);
+        Assert.True(scene < scripts);
+        Assert.True(scripts < projection);
+        Assert.True(projection < world);
+    }
+
+    /// <summary>
+    /// 验证 Editor 流送配置覆盖 720x480 authoring 画布最远 chunk，而非只覆盖运行视口。
+    /// </summary>
+    [Fact]
+    public void EditorStreamingResidencyCoversDefaultAuthoringCanvas()
+    {
+        WorldStreamingConfig config = EditorProjectSession.CreateEditorWorldStreamingConfig();
+        WorldCamera camera = new(
+            focusX: 0,
+            focusY: 208,
+            viewportCellsX: 640,
+            viewportCellsY: 360);
+        ActivationPolicy policy = new();
+        ChunkRect active = policy.ComputeActive(camera, config);
+        ChunkRect border = policy.ComputeBorder(active, config);
+
+        Assert.True(border.Contains(new ChunkCoord(0, 0)));
+        Assert.True(border.Contains(new ChunkCoord(11, 7)));
+    }
+
     /// <summary>
     /// 验证 EditorShell fallback 材质查询不会退化为仅返回 Name/Density/IsSolid 的窄摘要。
     /// </summary>
@@ -107,6 +160,22 @@ public sealed class EditorShellSceneMaterializationTests
         Assert.Equal((byte)12, crystal.Hardness);
         Assert.Equal((ushort)48, crystal.MaxIntegrity);
         Assert.Equal((byte)1, crystal.MineYield);
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "PixelEngine.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("无法定位 PixelEngine 仓库根目录。");
     }
 
     /// <summary>

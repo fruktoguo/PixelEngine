@@ -6,7 +6,7 @@ namespace PixelEngine.World;
 /// <summary>
 /// World 子系统 façade，串联相机、激活区、驻留规划、内存预算与流式装卸。
 /// </summary>
-public sealed class WorldManager
+public sealed class WorldManager : IChunkSource
 {
     private readonly ActivationPolicy _activationPolicy;
     private readonly ResidencyPlanner _residencyPlanner;
@@ -89,6 +89,29 @@ public sealed class WorldManager
     }
 
     /// <summary>
+    /// 返回指定驻留 chunk 是否属于当前模拟 active 区；border 与 cached chunk 返回 false。
+    /// </summary>
+    /// <param name="coord">目标 chunk 坐标。</param>
+    /// <returns>仅当驻留状态为 <see cref="ChunkResidencyState.Active" /> 时返回 true。</returns>
+    public bool IsSimulationActive(ChunkCoord coord)
+    {
+        return Residency.TryGetInfo(coord, out ChunkResidencyInfo info) &&
+            info.State == ChunkResidencyState.Active;
+    }
+
+    ReadOnlySpan<Chunk> IChunkSource.ResidentChunks => Chunks.ResidentChunks;
+
+    bool IChunkSource.TryGetChunk(ChunkCoord coord, out Chunk chunk)
+    {
+        return Chunks.TryGetChunk(coord, out chunk);
+    }
+
+    bool IChunkSource.ResolveNeighborhood(ChunkCoord center, out ChunkNeighborhood neighborhood)
+    {
+        return Chunks.ResolveNeighborhood(center, out neighborhood);
+    }
+
+    /// <summary>
     /// 计算当前相机视口覆盖的 chunk 矩形。
     /// </summary>
     public ChunkRect ComputeVisibleChunks()
@@ -114,6 +137,7 @@ public sealed class WorldManager
     public void ApplyResidency(long frame)
     {
         _ = Streamer.ApplyPrepared(frame);
+        CapturePendingBoundaryPromotions();
         ChunkRect active = _activationPolicy.ComputeActive(Camera, Config);
         ChunkRect border = _activationPolicy.ComputeBorder(active, Config);
         active = IncludePromotedActiveCoords(active, border);
@@ -122,6 +146,21 @@ public sealed class WorldManager
         PruneInactivePromotions();
         ResidencyPlan plan = _residencyPlanner.Plan(active, border, Residency, MemoryBudget);
         Streamer.SubmitPlan(plan);
+    }
+
+    // CA/temperature 在 active 边缘写入 border 后会留下 dirty/KeepAlive 工作。
+    // 必须在 ClassifyResidents 清理 sleeping border 之前提升这些 chunk，见 docs §5.5、§5.8。
+    private void CapturePendingBoundaryPromotions()
+    {
+        foreach (Chunk chunk in Chunks.ResidentChunks)
+        {
+            if (Residency.TryGetInfo(chunk.Coord, out ChunkResidencyInfo info) &&
+                info.State == ChunkResidencyState.Border &&
+                HasPendingSimulationWork(chunk))
+            {
+                _ = _promotedActiveCoords.Add(chunk.Coord);
+            }
+        }
     }
 
     /// <summary>
