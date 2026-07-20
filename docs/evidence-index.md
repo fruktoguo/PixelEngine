@@ -75,5 +75,6 @@
 | `ci-002-local-remediation-20260711` | `CI-002`, `TEST-003` | `complete_remote_windows_build_test_disassembly_benchmark_guard` | `1148ca87` | `github-actions-29166221230-attempt-1` | [CI-002 Windows hosted remediation](evidence-2026-07-11-ci-002-local-remediation.md) | `94833a82…a2394ff` |
 | `auto-001-editor-automation-api-20260717` | `AUTO-001` | `complete` | `23b03b54` | `local-20260717-auto001-clean-23b03b54` | [AUTO-001 external Editor automation API](evidence-2026-07-17-auto-001-editor-automation-api.md) | `4bc786c2…59dfc00` |
 | `test-002-behavior-coverage-20260717` | `TEST-002` | `complete_local_behavior_coverage_gate` | `e95a49c6` | `local-20260717-test002-final-e95a49c6` | [TEST-002 behavior coverage gate](evidence-2026-07-17-test-002-behavior-coverage.md) | `64ae656b…80a00dc` |
+| `demo-006-infinite-sandbox-20260720` | `DEMO-006` | `complete` | `34973b16` | `local-20260720-demo006-final-34973b16` | [DEMO-006 deterministic streaming infinite sandbox](evidence-2026-07-20-demo-006-infinite-sandbox.md) | `e4fd9856…3cd935a` |
 
 完整硬件、命令、报告路径、SHA256、状态和备注以 JSON 为准；此表使用短 hash 仅便于人工浏览。当前索引中的历史条目保留“可追溯但未完成”的状态，不能据此把 `CI-*`、`PERF-*`、`DEMO-*`、`EDITOR-*` 或 `UI-*` 的阻塞任务改成 `[x]`。

@@ -154,12 +154,13 @@
   - 优先级：P2。
   - 验收：Play 中修改 Behaviour 源码，Roslyn+ALC 重载成功；场景、世界和公开字段状态按契约保留；编译错误可见且修复后恢复；旧 ALC 可回收。
 
-- [~] `DEMO-006` 将默认 Showcase Demo 改为确定性流式无限沙盒，并移除胜利条件。
+- [x] `DEMO-006` 将默认 Showcase Demo 改为确定性流式无限沙盒，并移除胜利条件。
   - 优先级：P0。
   - 依赖：`BASE-007`、`BASE-010`、`BASE-015`。
   - 设计来源：`docs/PixelEngine-核心目标与产品定位.md` §7；`docs/PixelEngine-架构与需求设计.md` §3.4、§11；`plan/07-world-streaming-serialization.md` §2026-07-20；`plan/13-demo-game.md` §1、§3.1、§3.4；`plan/18-hosting-runtime.md` §2026-07-20。
   - 验收：默认入口为 `scenes/infinite-sandbox.scene`，由场景声明 `PixelEngine.Demo.PlayableWorldDirector` 流式生成器；缺失 chunk 以全局坐标和 seed 独立、确定性生成，正负坐标无关卡边界，跨 chunk 连续；地貌可辨识为山脉、山地、盆地 / 湖泊、土层和洞穴，原点附近有确定性安全出生区；流送只保留 active + border / 缓存预算内 chunk，已修改 chunk 卸载后从 region store 恢复且不被生成器覆盖；Demo 只使用公开 API；相机无边界钳制；默认场景没有 GoalTrigger / MissionDirector / 胜利结果流，HUD 改为沙盒探索信息；World、Hosting、Demo 定向测试覆盖负坐标、确定性、接缝、生成 / 存档优先、内存上限、出生安全与无胜利 UI；Release build、真实窗口截图、CLI 运行态检查和最终 Demo 产物通过。
   - 提交节点：一，canonical task、产品目标、架构与详细设计；二，缺失 chunk 初始化公开 API、流式 procedural Hosting 装配与 World/Hosting 测试；三，Demo 自然地形、无边界相机、沙盒 UI / 启动入口与 Demo 测试；四，真实窗口 / CLI 证据、最终输出与 canonical 完成状态。每个节点按 `AGENTS.md §6` 中文提交。
+  - 完成证据：`docs/evidence-2026-07-20-demo-006-infinite-sandbox.md`（Evidence Index: `demo-006-infinite-sandbox-20260720`）；Release build 0 warning / 0 error，Simulation 207/207、World 46/46、Demo 156 passed / 1 native GL skipped、Hosting 976 passed / 7 环境条件 skipped；公共 Editor CLI Play/Pause/Step/Stop/Exit、Scene/Game 双重 SHA256 截图、负坐标 runtime 检视、最终 RmlUi 玩家包 1080x720 截图与 exit 0 均通过。
 
 ## 对外文档
 
