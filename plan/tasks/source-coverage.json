@@ -115,7 +115,7 @@
       "expected": { "done": 49, "open": 13, "active": 0, "blocked": 23 },
       "checkboxSha256": "5d7c7957be041540763542dcc0915d6d21dd5cdc4399338a4bb2df4f2ad3b3aa",
       "completedCapabilityIds": ["BASE-017", "SCOPE-001", "SCOPE-003"],
-      "followUpTaskIds": ["CI-003", "EVID-003", "PERF-012", "REL-001", "REL-002", "REL-003", "REL-004", "REL-005", "OPT-002", "OPT-004", "EDITOR-010"]
+      "followUpTaskIds": ["CI-003", "EVID-003", "PERF-012", "REL-001", "REL-002", "REL-003", "REL-004", "REL-005", "REL-006", "OPT-002", "OPT-004", "EDITOR-010"]
     },
     {
       "path": "plan/16-performance-hardening.md",
@@ -143,7 +143,7 @@
       "expected": { "done": 77, "open": 3, "active": 0, "blocked": 9 },
       "checkboxSha256": "d720faa86838f1c13e068e8ec6b6ba26e790a0a92759c6da16c3e79b8918ccc8",
       "completedCapabilityIds": ["BASE-013"],
-      "followUpTaskIds": ["AUTO-001", "EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "UI-002", "UI-004", "DEMO-005", "DOC-001", "DOC-002", "REL-001"]
+      "followUpTaskIds": ["AUTO-001", "EDITOR-001", "EDITOR-002", "EDITOR-003", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "UI-002", "UI-004", "DEMO-005", "DOC-001", "DOC-002", "REL-001", "REL-006"]
     },
     {
       "path": "plan/20-interactive-html-ui.md",
@@ -167,8 +167,8 @@
     },
     {
       "id": "C",
-      "name": "候选版本冻结",
-      "taskIds": ["REL-001"]
+      "name": "本机安装交付与候选版本冻结",
+      "taskIds": ["REL-006", "REL-001"]
     },
     {
       "id": "D",

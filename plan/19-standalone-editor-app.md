@@ -1,5 +1,11 @@
 # Plan 19 — Unity-like Editor 独立应用（PixelEngine.Editor.Shell）
 
+## 用户可见产品身份与安装入口（REL-006）
+
+`PixelEngine.Editor.Shell` 是源码目录、项目边界和 C# namespace 的内部架构名，不再暴露为用户产品名。Windows Editor 的 assembly/product/file description、发布 EXE、窗口基础标题、开始菜单、桌面快捷方式和 Add/Remove Programs 项统一显示 `PixelEngine`，用户入口固定为 `PixelEngine.exe`；自动化、测试和最终输出清单必须引用该入口，禁止再发布并列的 `PixelEngine.Editor.Shell.exe` 兼容副本，以免形成两个可启动身份。
+
+Editor 的首选手动测试入口是 `PixelEngine-Setup-<version>-win-x64.msi`。安装器只携带自包含 Editor runtime，不携带 Demo 玩家包或工程内容；用户可在标准 InstallDir 向导中改变安装位置，安装后从开始菜单或桌面启动。源码 checkout 的 `dotnet run --project apps/PixelEngine.Editor.Shell` 仍作为开发入口，不与安装产品名耦合。
+
 ## 编辑器产品化修复（2026-07-11）
 
 真实实例工程走查确认，M13 的自动化结构闭合并不等于产品交互已经正确。当前实现把 Editor 当前场景与 Project StartScene 混为一体，导致浏览测试场景会改写受版本控制的启动配置；所有主要转场缺少统一 dirty guard；Recent 早于 Session 成功写入且 scripted probe 污染真实用户目录；Project Window 只扫描 Content，却把 Script 创建到不参与项目 ScriptSource 编译的路径；Asset 查询还会在 Inspector 帧循环中递归扫盘、解析全库并重写 manifest。上述均为确定性实现缺陷，不得继续归类为“只缺人工 reviewer”。

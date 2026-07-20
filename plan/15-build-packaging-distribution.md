@@ -59,6 +59,14 @@
 **开发者快速输出边界**：仓库根 `一键构建.bat` 经 `tools/run-build-one-click.ps1` 调用 `tools/update-final-output-fast.ps1`，只执行 authoritative native build、Editor publish 与 Demo R2R publish/package，并在两份入口都存在后原子替换根 `最终输出/`。该模式显式跳过 test、产品 probe、verifier、自动化 SDK/CLI 与正式 checksum，允许从当前开发工作树快速得到 `编辑器/PixelEngine.Editor.Shell.exe` 和 `游戏Demo/PixelEngine Demo.exe`；必须写 `_快速构建/manifest.json` 且 `verified/testsRun/probesRun/verifierRun` 全为 `false`，不得引用为正式 evidence。完整发布仍只能由 `tools/update-final-output.ps1` 生成并覆盖快速目录。
 
 **EDITOR-010 脚本开发 SDK 边界**：本机正式编辑器包在 `编辑器/ScriptReferenceAssemblies/` 提供脱离源码树的 standalone IDE 引用层。manifest 分别登记 `editorScriptReferenceAssembliesPath`、primary assembly 清单/策略与 managed dependency 清单/策略；primary 集固定为 Hosting、Scripting 及其 11 个 PixelEngine 运行时依赖，每项必须同时有 managed DLL 和 XML IntelliSense 文档。打包器还从 editor publish 复制可经 managed PE metadata 识别的第三方 dependency DLL，但明确排除 `PixelEngine.Editor*` 与 native；verifier 要求该目录精确匹配 manifest、全部进入根级 `SHA256SUMS`、绝不含 PDB，并在默认无符号发行中继续拒绝 SDK 边界之外的 `.pdb` / `.xml`。
+
+### Editor Windows 安装交付合同（REL-006）
+
+Windows 本机开发交付新增独立 Editor MSI，不把玩家包、Demo 或 automation SDK 混进安装目录。构建入口必须先完成 authoritative win-x64 native build，再发布 `apps/PixelEngine.Editor.Shell` 的自包含 CoreCLR + ReadyToRun payload；目标机器不依赖源码 checkout、仓库相对路径或预装 .NET。MSI 编译器固定为仓库声明的 WiX 4 MSBuild SDK，restore 到 NuGet cache 后直接参与项目构建，不修改系统级 PATH，也不要求使用 WiX 5+ 的额外二进制 EULA。
+
+安装范围为当前 Windows 用户，默认目录是 `%LocalAppData%\Programs\PixelEngine`，InstallDir 页面必须允许用户选择任意有写权限的绝对目录。安装完成后同时创建当前用户开始菜单和桌面 `PixelEngine` 快捷方式，目标与工作目录都绑定安装目录中的 `PixelEngine.exe`；Add/Remove Programs 项使用同一产品图标，并支持同 ProductCode 修复、稳定 UpgradeCode 下的后续 MajorUpgrade，以及完整卸载安装 payload、快捷方式和安装登记。安装器不得读取或删除用户工程、Recent Projects、Editor preferences 与项目外内容。
+
+本地 installer 验收必须使用含空格和非 ASCII 字符的隔离目录真实执行 `msiexec`，核对 MSI ProductName/Manufacturer/Version/INSTALLFOLDER、安装 payload、PE 产品资源、开始菜单/桌面快捷方式与 HKCU uninstall 登记，随后启动安装后的 Editor scripted probe 并卸载，证明安装目录、快捷方式和登记无残留。未签名本机 MSI 是手动测试入口，不替代确定性 package、Authenticode、tag-triggered GitHub Release 或外部机器信誉证据。
 - [x] build-player 产品名契约已落地：`-ProductName` 只影响玩家可见启动器和包名，内部 `AssemblyName` 默认保持 `PixelEngine.Demo`，避免带空格 assembly 破坏 restore 或 apphost 载荷。
 - [x] build-player dev-audit 分流已落地：`-DevLayout` 允许保留 pdb/xml，但仍检查结构存在性和 player-only 断言；Release 无符号构建走完整发行审计。
 - [x] 内容资产打包已落地：`content/` 是单一真相源，`materials.json`、`reactions.json`、`weapons.json`、场景、纹理、音频进入包根 `content/`，不复制到 `app/content/`。

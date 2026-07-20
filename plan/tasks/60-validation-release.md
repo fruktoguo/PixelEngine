@@ -88,6 +88,13 @@
   - 优先级：P1。
   - 验收：R2R 只携带动态 Box2D，AOT 静态链入且拒绝动态 Box2D；RmlUi native provenance/hash/NOTICE 正确；AOT 和 native 不可用时 ManagedFallback 可运行；inactive Ultralight 不得混入包。
 
+- [~] `REL-006` 交付可选择安装目录的 Windows PixelEngine Editor 安装包，并统一用户可见产品身份。
+  - 优先级：P1。
+  - 依赖：`BASE-013`、`BASE-017`。
+  - 设计来源：`plan/15-build-packaging-distribution.md` §Editor Windows 安装交付合同；`plan/19-standalone-editor-app.md` §用户可见产品身份与安装入口。
+  - 验收：透明 SVG 品牌源与多尺寸 ICO 同源；Editor 的产品名、文件描述、窗口/快捷方式和用户入口统一为 `PixelEngine`，发布入口为 `PixelEngine.exe`，内部源码目录与 namespace 可继续保留 `PixelEngine.Editor.Shell`；固定工具链从 native build 和 win-x64 自包含 R2R publish 生成单一 MSI，安装向导允许自定义目录，创建当前用户开始菜单与桌面快捷方式，并登记可升级、可修复、可卸载的 Add/Remove Programs 项；构建脚本与 verifier 拒绝缺入口、缺图标、非自包含 payload、错误 MSI 元数据或旧 `*.Shell.exe` 用户入口；在含空格和非 ASCII 的隔离目录完成真实静默安装、Editor 启动 probe、快捷方式/卸载登记核对与卸载零残留，并把安装包及 SHA256 manifest 写入 `最终输出/安装器`。本机未签名 MSI 只用于开发测试，不冒充 `REL-002`/`REL-003` 的签名、确定性或 GitHub Release 证据。
+  - 提交节点：一，canonical task 与 plan/15、plan/19 安装/命名合同；二，SVG/ICO、Editor 产品身份及所有本机最终输出入口迁移；三，MSI 工程、构建/verifier、自动化测试、真实安装/启动/卸载证据与 canonical 完成状态。每个节点按 `AGENTS.md §6` 单独中文提交。
+
 ## 本次文档迁移
 
 - [x] `PLAN-001` 建立 canonical task 目录、迁移旧 checkbox、更新入口与开发规范，并用自动校验保证覆盖完整。
