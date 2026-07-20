@@ -37,6 +37,7 @@
 | `ci-matrix-preflight-20260702` | `CI-003` | `preflight_contract_only` | `85b770a3` | 未记录 | [CI matrix](benchmark-reports/2026-07-02-ci-matrix-evidence.md) | `3c206f61…8a465` |
 | `performance-target-preflight-20260702` | `PERF-008`–`PERF-012` | `preflight_contract_only` | `655d4204` | 未记录 | [target performance](benchmark-reports/2026-07-02-performance-target-evidence.md) | `5f30ad2c…23c237f` |
 | `win-x64-publish-20260702` | `BASE-017`, `REL-001`, `REL-005` | `local_validation_only` | `fbcafc7c` | 未记录 | [win-x64 publish](release-reports/2026-07-02-win-x64-publish.md) | `014bbfc5…80843` |
+| `rel-006-windows-installer-20260720` | `REL-006` | `complete_local_unsigned_windows_installer_lifecycle` | `d12ade9d` | 未记录 | [REL-006 Windows installer](evidence-2026-07-20-rel-006-windows-installer.md) | `11daa991…350418` |
 | `demo-window-longrun-20260702` | `BASE-010`, `BASE-015`, `EVID-002`, `PERF-008` | `process_smoke_only` | `2b5e6d5d` | 未记录 | [demo longrun](runtime-reports/2026-07-02-demo-window-longrun.md) | `995b1c29…f270d2` |
 | `demo-window-smoke-20260702` | `BASE-010`, `BASE-013`, `BASE-015` | `local_window_smoke` | `7313d82b` | 未记录 | [demo smoke](runtime-reports/2026-07-02-demo-window-smoke.md) | `ffc03334…ec444` |
 | `demo-scripted-window-20260702` | `BASE-010`, `BASE-015`, `DEMO-001`–`DEMO-005` | `scripted_probe_only` | `99b886bf` | 未记录 | [scripted window](runtime-reports/2026-07-02-demo-scripted-window.md) | `f4b94515…0ad75c` |
