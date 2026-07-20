@@ -248,6 +248,106 @@ if ($manifest.checksumFile -ne 'SHA256SUMS') {
   throw "manifest checksumFile 不匹配：$($manifest.checksumFile)"
 }
 
+$installerPackageRelative = $null
+$installerManifestRelative = $null
+$installerVerificationRelative = $null
+$installerChecksumRelative = $null
+$installerProperty = $manifest.PSObject.Properties['installer']
+if ($manifest.rid -eq 'win-x64') {
+  if ($null -eq $installerProperty -or $null -eq $installerProperty.Value) {
+    throw 'win-x64 正式输出 manifest 缺少 Windows 安装器节点。'
+  }
+
+  $installerNode = $installerProperty.Value
+  $installerPackageRelative = [string]$installerNode.package
+  $installerManifestRelative = [string]$installerNode.manifest
+  $installerVerificationRelative = [string]$installerNode.verification
+  $installerChecksumRelative = [string]$installerNode.checksum
+  if ($installerPackageRelative -notmatch '^安装器/PixelEngine-Setup-(?<version>\d+\.\d+\.\d+)-win-x64\.msi$' -or
+      $installerManifestRelative -ne '安装器/manifest.json' -or
+      $installerVerificationRelative -ne '安装器/verification.json' -or
+      $installerChecksumRelative -ne '安装器/SHA256SUMS' -or
+      [string]$installerNode.version -ne $Matches.version -or
+      $installerNode.signed -ne $false) {
+    throw '正式输出 Windows 安装器路径、版本或签名状态不符合合同。'
+  }
+
+  $installerPackagePath = Resolve-OutputPath $installerPackageRelative 'Windows installer package'
+  $installerManifestPath = Resolve-OutputPath $installerManifestRelative 'Windows installer manifest'
+  $installerVerificationPath = Resolve-OutputPath $installerVerificationRelative 'Windows installer verification'
+  $installerChecksumPath = Resolve-OutputPath $installerChecksumRelative 'Windows installer checksum'
+  Assert-FileExists $installerPackagePath 'Windows installer package'
+  Assert-FileExists $installerManifestPath 'Windows installer manifest'
+  Assert-FileExists $installerVerificationPath 'Windows installer verification'
+  Assert-FileExists $installerChecksumPath 'Windows installer checksum'
+
+  $windowsInstallerManifest = Get-Content -Raw -LiteralPath $installerManifestPath | ConvertFrom-Json
+  $windowsInstallerVerification = Get-Content -Raw -LiteralPath $installerVerificationPath | ConvertFrom-Json
+  $installerSha256 = (Get-FileHash -LiteralPath $installerPackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($windowsInstallerManifest.schema -ne 'pixelengine.windows-installer/v1' -or
+      $windowsInstallerManifest.gitCommit -ne $manifest.gitCommit -or
+      $windowsInstallerManifest.sourceTrackedWorktreeClean -ne $true -or
+      $windowsInstallerManifest.productName -ne 'PixelEngine' -or
+      $windowsInstallerManifest.version -ne [string]$installerNode.version -or
+      $windowsInstallerManifest.rid -ne 'win-x64' -or
+      $windowsInstallerManifest.editorExecutable -ne 'PixelEngine.exe' -or
+      $windowsInstallerManifest.editorSelfContained -ne $true -or
+      $windowsInstallerManifest.editorReadyToRun -ne $true -or
+      $windowsInstallerManifest.installerType -ne 'msi' -or
+      $windowsInstallerManifest.installerToolchain -ne 'WixToolset.Sdk/4.0.6' -or
+      $windowsInstallerManifest.installerFile -ne [IO.Path]::GetFileName($installerPackageRelative) -or
+      $windowsInstallerManifest.installerSha256 -ne $installerSha256 -or
+      $windowsInstallerManifest.signed -ne $false -or
+      $windowsInstallerManifest.verificationReport -ne 'verification.json') {
+    throw 'Windows 安装器 manifest 身份、自包含/R2R 合同或 MSI SHA256 不匹配。'
+  }
+  if ($windowsInstallerVerification.schema -ne 'pixelengine.windows-installer-verify/v1' -or
+      $windowsInstallerVerification.ok -ne $true -or
+      $windowsInstallerVerification.productName -ne 'PixelEngine' -or
+      $windowsInstallerVerification.productVersion -ne [string]$installerNode.version -or
+      $windowsInstallerVerification.manufacturer -ne 'PixelEngine' -or
+      $windowsInstallerVerification.installDirectory -ne 'INSTALLFOLDER' -or
+      $windowsInstallerVerification.installDirectoryDefault -ne 'PixelEngine' -or
+      $windowsInstallerVerification.installDirectoryPersisted -ne $true -or
+      $windowsInstallerVerification.perUser -ne $true -or
+      [int]$windowsInstallerVerification.fileCount -lt 1 -or
+      [int]$windowsInstallerVerification.shortcutCount -ne 2 -or
+      $windowsInstallerVerification.embeddedCabinet -ne $true -or
+      $windowsInstallerVerification.sha256 -ne $installerSha256) {
+    throw 'Windows 安装器静态验证报告不符合产品、目录、快捷方式或 payload 合同。'
+  }
+
+  $installerChecksumEntries = [Collections.Generic.Dictionary[string,string]]::new([StringComparer]::OrdinalIgnoreCase)
+  foreach ($line in (Get-Content -LiteralPath $installerChecksumPath)) {
+    if ([string]::IsNullOrWhiteSpace($line)) {
+      continue
+    }
+    if ($line -notmatch '^(?<hash>[a-fA-F0-9]{64})\s{2}(?<path>[^/\\]+)$' -or
+        -not $installerChecksumEntries.TryAdd($Matches.path, $Matches.hash.ToLowerInvariant())) {
+      throw "Windows 安装器 SHA256SUMS 行非法或重复：$line"
+    }
+  }
+  $expectedInstallerChecksumFiles = @(
+    [IO.Path]::GetFileName($installerPackageRelative),
+    'manifest.json',
+    'verification.json'
+  )
+  if ($installerChecksumEntries.Count -ne $expectedInstallerChecksumFiles.Count) {
+    throw "Windows 安装器 SHA256SUMS 文件数不匹配：$($installerChecksumEntries.Count)"
+  }
+  foreach ($fileName in $expectedInstallerChecksumFiles) {
+    $nestedFilePath = Join-Path (Split-Path -Parent $installerChecksumPath) $fileName
+    $actualNestedHash = (Get-FileHash -LiteralPath $nestedFilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if (-not $installerChecksumEntries.ContainsKey($fileName) -or
+        $installerChecksumEntries[$fileName] -ne $actualNestedHash) {
+      throw "Windows 安装器嵌套 SHA256 不匹配：$fileName"
+    }
+  }
+}
+elseif ($null -ne $installerProperty -and $null -ne $installerProperty.Value) {
+  throw "当前 RID 不支持 Windows MSI，但 manifest 声明了安装器：$($manifest.rid)"
+}
+
 $requiredScriptReferenceAssemblies = @(
   'PixelEngine.Audio',
   'PixelEngine.Content',
@@ -1351,6 +1451,12 @@ Assert-ChecksumContains $relativePaths $manifestRelative 'manifest'
 Assert-ChecksumContains $relativePaths 'README.txt' 'README'
 Assert-ChecksumContains $relativePaths ([string]$manifest.editorExecutable) '编辑器入口'
 Assert-ChecksumContains $relativePaths ([string]$manifest.demoExecutable) 'Demo 入口'
+if ($null -ne $installerPackageRelative) {
+  Assert-ChecksumContains $relativePaths $installerPackageRelative 'Windows installer package'
+  Assert-ChecksumContains $relativePaths $installerManifestRelative 'Windows installer manifest'
+  Assert-ChecksumContains $relativePaths $installerVerificationRelative 'Windows installer verification'
+  Assert-ChecksumContains $relativePaths $installerChecksumRelative 'Windows installer checksum'
+}
 Assert-ChecksumContains $relativePaths ([string]$editorGameViewValidation.report) '编辑器 Game View presentation report'
 Assert-ChecksumContains $relativePaths $automationCliRelative 'automation CLI'
 Assert-ChecksumContains $relativePaths $automationProtocolPackageRelative 'automation Protocol nupkg'

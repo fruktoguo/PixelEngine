@@ -95,6 +95,7 @@ $demoPackageRoot = Join-Path $stagingRoot 'demo-package'
 $nextRoot = Join-Path $stagingRoot 'next-final-output'
 $finalEditorDir = Join-Path $nextRoot '编辑器'
 $finalDemoDir = Join-Path $nextRoot '游戏Demo'
+$finalInstallerDir = Join-Path $nextRoot '安装器'
 $fastRecordDir = Join-Path $nextRoot '_快速构建'
 
 $pwsh = (Get-Command pwsh.exe -ErrorAction Stop).Source
@@ -102,11 +103,12 @@ $dotnet = (Get-Command dotnet.exe -ErrorAction Stop).Source
 $nativeBuildScript = Join-Path $PSScriptRoot 'build-native.ps1'
 $demoPublishScript = Join-Path $PSScriptRoot 'publish-r2r.ps1'
 $packageScript = Join-Path $PSScriptRoot 'package.ps1'
+$installerBuildScript = Join-Path $PSScriptRoot 'build-windows-installer.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
 $editorExe = Join-Path $finalEditorDir 'PixelEngine.exe'
 $demoExe = Join-Path $finalDemoDir 'PixelEngine Demo.exe'
 
-foreach ($requiredFile in @($nativeBuildScript, $demoPublishScript, $packageScript, $editorProject)) {
+foreach ($requiredFile in @($nativeBuildScript, $demoPublishScript, $packageScript, $installerBuildScript, $editorProject)) {
   if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
     throw "快速输出缺少必需文件：$requiredFile"
   }
@@ -143,6 +145,17 @@ try {
     '-o', $editorPublish
   )
   Copy-Directory $editorPublish $finalEditorDir
+
+  $installerManifest = $null
+  if ($Rid -eq 'win-x64') {
+    Invoke-Checked 'windows-installer' $pwsh @(
+      '-NoLogo', '-NoProfile', '-File', $installerBuildScript,
+      '-Configuration', $Configuration,
+      '-SkipNativeBuild',
+      '-OutputRoot', $finalInstallerDir
+    )
+    $installerManifest = Get-Content -Raw -LiteralPath (Join-Path $finalInstallerDir 'manifest.json') | ConvertFrom-Json
+  }
 
   Invoke-Checked 'demo-publish' $pwsh @(
     '-NoLogo', '-NoProfile', '-File', $demoPublishScript,
@@ -193,10 +206,26 @@ try {
     verifierRun = $false
     editorExecutable = '编辑器/PixelEngine.exe'
     demoExecutable = '游戏Demo/PixelEngine Demo.exe'
+    installer = if ($null -eq $installerManifest) {
+      $null
+    } else {
+      [ordered]@{
+        package = "安装器/$($installerManifest.installerFile)"
+        manifest = '安装器/manifest.json'
+        verification = '安装器/verification.json'
+        checksum = '安装器/SHA256SUMS'
+        signed = $false
+      }
+    }
   }
   $manifest | ConvertTo-Json -Depth 4 |
     Set-Content -LiteralPath (Join-Path $fastRecordDir 'manifest.json') -Encoding UTF8
 
+  $installerReadmeLine = if ($null -eq $installerManifest) {
+    '- Windows 安装器：当前 RID 不提供 MSI'
+  } else {
+    "- Windows 安装器：安装器\$($installerManifest.installerFile)"
+  }
   @"
 PixelEngine 开发者快速输出
 
@@ -205,6 +234,7 @@ PixelEngine 开发者快速输出
 
 - 编辑器：编辑器\PixelEngine.exe
 - 可玩游戏：游戏Demo\PixelEngine Demo.exe
+$installerReadmeLine
 - 快速构建身份：_快速构建\manifest.json
 
 需要完整验证版时，请双击“一键更新最终输出.bat”。
@@ -216,6 +246,9 @@ PixelEngine 开发者快速输出
   Write-Host "快速输出已更新：$outputRootFull"
   Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.exe')"
   Write-Host "游戏入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
+  if ($null -ne $installerManifest) {
+    Write-Host "Windows 安装器：$(Join-Path $outputRootFull "安装器/$($installerManifest.installerFile)")"
+  }
   Write-Host '测试 / probe / verifier：全部跳过'
 }
 finally {

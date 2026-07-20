@@ -510,6 +510,47 @@ public sealed class HostingProjectDisciplineTests
     }
 
     /// <summary>
+    /// 验证 Windows 安装器使用固定 WiX 工具链、自包含 R2R payload，并覆盖自定义路径安装、启动与卸载零残留。
+    /// </summary>
+    [Fact]
+    public void WindowsInstallerPinsToolchainAndVerifiesCustomPathLifecycle()
+    {
+        string root = FindRepositoryRoot();
+        XDocument setupProject = XDocument.Load(Path.Combine(root, "installer", "PixelEngine.Setup", "PixelEngine.Setup.wixproj"));
+        XDocument package = XDocument.Load(Path.Combine(root, "installer", "PixelEngine.Setup", "Package.wxs"));
+        string build = File.ReadAllText(Path.Combine(root, "tools", "build-windows-installer.ps1"));
+        string verify = File.ReadAllText(Path.Combine(root, "tools", "verify-windows-installer.ps1"));
+        string installTest = File.ReadAllText(Path.Combine(root, "tools", "test-windows-installer.ps1"));
+        string fullOutput = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+        string fastOutput = File.ReadAllText(Path.Combine(root, "tools", "update-final-output-fast.ps1"));
+
+        Assert.Equal("WixToolset.Sdk/4.0.6", setupProject.Root?.Attribute("Sdk")?.Value);
+        Assert.Equal("WixToolset.UI.wixext", setupProject.Descendants("PackageReference").Single().Attribute("Include")?.Value);
+        Assert.Contains(package.Descendants(), element => element.Name.LocalName == "Package" && element.Attribute("Scope")?.Value == "perUser");
+        Assert.Contains(package.Descendants(), element => element.Name.LocalName == "WixUI" && element.Attribute("InstallDirectory")?.Value == "INSTALLFOLDER");
+        Assert.Contains(package.Descendants(), element => element.Name.LocalName == "RegistrySearch" && element.Attribute("Name")?.Value == "InstallFolder");
+        Assert.Equal(2, package.Descendants().Count(element => element.Name.LocalName == "Shortcut"));
+        Assert.Contains("--self-contained', 'true'", build, StringComparison.Ordinal);
+        Assert.Contains("-p:PublishReadyToRun=true", build, StringComparison.Ordinal);
+        Assert.Contains("coreclr.dll", build, StringComparison.Ordinal);
+        Assert.Contains("PixelEngine.Editor.Shell.exe", build, StringComparison.Ordinal);
+        Assert.Contains("WixToolset.Sdk/4.0.6", build, StringComparison.Ordinal);
+        Assert.Contains("installDirectoryPersisted = $true", verify, StringComparison.Ordinal);
+        Assert.Contains("AppSearch", verify, StringComparison.Ordinal);
+        Assert.Contains("RegLocator", verify, StringComparison.Ordinal);
+        Assert.Contains("INSTALLFOLDER=`\"$CustomInstallRoot`\"", installTest, StringComparison.Ordinal);
+        Assert.Contains("customPathContainsNonAscii", installTest, StringComparison.Ordinal);
+        Assert.Contains("editorLaunchVerified", installTest, StringComparison.Ordinal);
+        Assert.Contains("productRegistrationRemoved", installTest, StringComparison.Ordinal);
+        Assert.Contains("installDirectoryRemoved", installTest, StringComparison.Ordinal);
+        Assert.Contains("build-windows-installer.ps1", fullOutput, StringComparison.Ordinal);
+        Assert.Contains("build-windows-installer.ps1", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("$finalInstallerDir = Join-Path $nextRoot '安装器'", fullOutput, StringComparison.Ordinal);
+        Assert.Contains("$finalInstallerDir = Join-Path $nextRoot '安装器'", fastOutput, StringComparison.Ordinal);
+        Assert.Contains("installer = if ($null -eq $installerManifest)", fullOutput, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// 验证本机正式输出提供独立审计入口，可在不重新打包的情况下校验 manifest、入口和 SHA256SUMS。
     /// </summary>
     [Fact]
@@ -601,6 +642,35 @@ public sealed class HostingProjectDisciplineTests
             ProcessResult missing = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
             Assert.NotEqual(0, missing.ExitCode);
             Assert.Contains("SHA256SUMS 登记了不存在的文件", missing.CombinedOutput, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (Directory.Exists(outputRoot))
+            {
+                Directory.Delete(outputRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>验证攻击者即使重写根 checksum，也不能用被修改的 MSI 绕过安装器自身 manifest。</summary>
+    [Fact]
+    public void FinalOutputVerifierRejectsInstallerPayloadDriftBehindRootChecksum()
+    {
+        string root = FindRepositoryRoot();
+        string outputRoot = Path.Combine(Path.GetTempPath(), "pixelengine-final-output-" + Guid.NewGuid().ToString("N"));
+        string verifier = Path.Combine(root, "tools", "verify-final-output.ps1");
+        try
+        {
+            WriteMinimalFinalOutput(outputRoot, ReadCurrentGitHead(root));
+            File.AppendAllText(
+                Path.Combine(outputRoot, "安装器", "PixelEngine-Setup-0.1.0-win-x64.msi"),
+                "tampered");
+            WriteFinalOutputChecksums(outputRoot);
+
+            ProcessResult result = RunPowerShellScriptRaw(root, verifier, "-OutputRoot", outputRoot);
+
+            Assert.NotEqual(0, result.ExitCode);
+            Assert.Contains("Windows 安装器 manifest 身份、自包含/R2R 合同或 MSI SHA256 不匹配", result.CombinedOutput, StringComparison.Ordinal);
         }
         finally
         {
@@ -3664,6 +3734,61 @@ public sealed class HostingProjectDisciplineTests
                 runtimeUiBackend = "RmlUi",
                 windowMode = "Windowed",
             }));
+        const string installerFileName = "PixelEngine-Setup-0.1.0-win-x64.msi";
+        const string installerPackageRelative = "安装器/PixelEngine-Setup-0.1.0-win-x64.msi";
+        WriteTextFile(outputRoot, installerPackageRelative, "fixture msi payload");
+        string installerPackagePath = Path.Combine(outputRoot, installerPackageRelative.Replace('/', Path.DirectorySeparatorChar));
+        string installerSha256 = Sha256Hex(installerPackagePath);
+        WriteTextFile(
+            outputRoot,
+            "安装器/verification.json",
+            JsonSerializer.Serialize(new
+            {
+                schema = "pixelengine.windows-installer-verify/v1",
+                ok = true,
+                productName = "PixelEngine",
+                productVersion = "0.1.0",
+                manufacturer = "PixelEngine",
+                upgradeCode = "{6FCA8784-80DC-4E02-B8F4-93B5677C1E87}",
+                installDirectory = "INSTALLFOLDER",
+                installDirectoryDefault = "PixelEngine",
+                installDirectoryPersisted = true,
+                perUser = true,
+                fileCount = 276,
+                shortcutCount = 2,
+                embeddedCabinet = true,
+                sha256 = installerSha256,
+            }));
+        WriteTextFile(
+            outputRoot,
+            "安装器/manifest.json",
+            JsonSerializer.Serialize(new
+            {
+                schema = "pixelengine.windows-installer/v1",
+                gitCommit,
+                sourceTrackedWorktreeClean = true,
+                productName = "PixelEngine",
+                version = "0.1.0",
+                rid = "win-x64",
+                editorExecutable = "PixelEngine.exe",
+                editorSelfContained = true,
+                editorReadyToRun = true,
+                installerType = "msi",
+                installerToolchain = "WixToolset.Sdk/4.0.6",
+                installerFile = installerFileName,
+                installerSha256,
+                payloadFileCount = 276,
+                signed = false,
+                verificationReport = "verification.json",
+            }));
+        string installerRoot = Path.Combine(outputRoot, "安装器");
+        File.WriteAllLines(
+            Path.Combine(installerRoot, "SHA256SUMS"),
+            [
+                $"{Sha256Hex(installerPackagePath)}  {installerFileName}",
+                $"{Sha256Hex(Path.Combine(installerRoot, "manifest.json"))}  manifest.json",
+                $"{Sha256Hex(Path.Combine(installerRoot, "verification.json"))}  verification.json",
+            ]);
         WriteTextFile(
             outputRoot,
             "_验证记录/manifest.json",
@@ -3693,6 +3818,15 @@ public sealed class HostingProjectDisciplineTests
                 },
                 editorExecutable = "编辑器/PixelEngine.exe",
                 demoExecutable = "游戏Demo/PixelEngine Demo.exe",
+                installer = new
+                {
+                    package = installerPackageRelative,
+                    manifest = "安装器/manifest.json",
+                    verification = "安装器/verification.json",
+                    checksum = "安装器/SHA256SUMS",
+                    version = "0.1.0",
+                    signed = false,
+                },
                 automation = new
                 {
                     cliExecutable = "自动化/CLI/pixelengine-editor.exe",
@@ -3842,7 +3976,10 @@ public sealed class HostingProjectDisciplineTests
         string[] files =
         [
             .. Directory.EnumerateFiles(outputRoot, "*", SearchOption.AllDirectories)
-                .Where(static path => !string.Equals(Path.GetFileName(path), "SHA256SUMS", StringComparison.OrdinalIgnoreCase))
+                .Where(path => !string.Equals(
+                    Path.GetFullPath(path),
+                    Path.GetFullPath(Path.Combine(outputRoot, "SHA256SUMS")),
+                    StringComparison.OrdinalIgnoreCase))
                 .Order(StringComparer.OrdinalIgnoreCase),
         ];
         string[] lines =

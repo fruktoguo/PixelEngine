@@ -1,0 +1,20 @@
+<Project Sdk="WixToolset.Sdk/4.0.6">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <DebugType>none</DebugType>
+    <InstallerPlatform>x64</InstallerPlatform>
+    <Cultures>en-US</Cultures>
+    <ProductVersion Condition="'$(ProductVersion)' == ''">0.1.0</ProductVersion>
+    <ProductIcon>$(MSBuildProjectDirectory)\..\..\assets\branding\PixelEngine.ico</ProductIcon>
+    <LicenseRtf>$(MSBuildProjectDirectory)\License.rtf</LicenseRtf>
+    <OutputName>PixelEngine-Setup-$(ProductVersion)-win-x64</OutputName>
+    <!-- ICE91 is inapplicable to an explicitly per-user package; ICE60 flags two versioned language-neutral runtime assets. -->
+    <SuppressIces>ICE60;ICE91</SuppressIces>
+    <DefineConstants>$(DefineConstants);ProductVersion=$(ProductVersion);ProductIcon=$(ProductIcon);LicenseRtf=$(LicenseRtf)</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.UI.wixext" />
+    <Compile Include="$(GeneratedPayloadWxs)" Condition="'$(GeneratedPayloadWxs)' != ''" />
+  </ItemGroup>
+</Project>

@@ -85,6 +85,7 @@ $editorPublish = Join-Path $stagingRoot 'editor-publish'
 $automationCliPublish = Join-Path $stagingRoot 'automation-cli-publish'
 $physicalInputHelperPublish = Join-Path $stagingRoot 'physical-input-helper-publish'
 $automationSdkPackages = Join-Path $stagingRoot 'automation-sdk-packages'
+$installerOutput = Join-Path $stagingRoot 'windows-installer'
 $editorBuildOutput = Join-Path $stagingRoot 'editor-probe-build'
 # 故意在中文路径中构建并运行 Player，覆盖 Windows native fopen/UTF-8 路径边界；
 # 正式目录“最终输出/游戏Demo”不能由纯 ASCII staging probe 冒充。
@@ -350,6 +351,7 @@ $pwsh = (Get-Command pwsh -ErrorAction Stop).Source
 $gitCommit = (& git -C $repoRoot rev-parse HEAD).Trim()
 
 $nativeBuildScript = Join-Path $repoRoot 'tools/build-native.ps1'
+$installerBuildScript = Join-Path $repoRoot 'tools/build-windows-installer.ps1'
 $editorProject = Join-Path $repoRoot 'apps/PixelEngine.Editor.Shell/PixelEngine.Editor.Shell.csproj'
 $automationCliProject = Join-Path $repoRoot 'tools/PixelEngine.Editor.Cli/PixelEngine.Editor.Cli.csproj'
 $physicalInputHelperProject = Join-Path $repoRoot 'tools/PixelEngine.Tools.PhysicalInput/PixelEngine.Tools.PhysicalInput.Interop.csproj'
@@ -396,7 +398,13 @@ $nativeBuildResult = Invoke-ProcessChecked `
 $editorPublishResult = Invoke-ProcessChecked `
   -Name 'editor-publish' `
   -FilePath $dotnet `
-  -Arguments @('publish', $editorProject, '-c', $Configuration, '-r', $Rid, '--self-contained', 'false', '-o', $editorPublish) `
+  -Arguments @(
+    'publish', $editorProject,
+    '-c', $Configuration,
+    '-r', $Rid,
+    '--self-contained', 'false',
+    '-o', $editorPublish
+  ) `
   -WorkingDirectory $repoRoot `
   -StdoutPath (Join-Path $logRoot 'editor-publish.stdout.log') `
   -StderrPath (Join-Path $logRoot 'editor-publish.stderr.log')
@@ -686,8 +694,33 @@ if ($ui004PhysicalInputReport.schema -ne 'pixelengine.ui004-physical-input/v1' -
   throw "UI-004 物理输入 probe 报告身份或结果不匹配：$ui004PhysicalInputReportPath"
 }
 
+$installerManifest = $null
+if ($Rid -eq 'win-x64') {
+  $installerBuildResult = Invoke-ProcessChecked `
+    -Name 'windows-installer' `
+    -FilePath $pwsh `
+    -Arguments @(
+      '-NoProfile', '-File', $installerBuildScript,
+      '-Configuration', $Configuration,
+      '-SkipNativeBuild',
+      '-OutputRoot', $installerOutput
+    ) `
+    -WorkingDirectory $repoRoot `
+    -StdoutPath (Join-Path $logRoot 'windows-installer.stdout.log') `
+    -StderrPath (Join-Path $logRoot 'windows-installer.stderr.log')
+  $installerManifest = Get-Content -Raw -LiteralPath (Join-Path $installerOutput 'manifest.json') | ConvertFrom-Json
+  if ($installerManifest.gitCommit -ne $gitCommit -or
+      $installerManifest.sourceTrackedWorktreeClean -ne $true -or
+      $installerManifest.editorSelfContained -ne $true -or
+      $installerManifest.editorReadyToRun -ne $true -or
+      $installerManifest.signed -ne $false) {
+    throw 'Windows 安装器 manifest 与正式输出来源或发行合同不一致。'
+  }
+}
+
 $finalEditorDir = Join-Path $nextRoot '编辑器'
 $finalDemoDir = Join-Path $nextRoot '游戏Demo'
+$finalInstallerDir = Join-Path $nextRoot '安装器'
 $finalAutomationDir = Join-Path $nextRoot '自动化'
 $finalAutomationCliDir = Join-Path $finalAutomationDir 'CLI'
 $finalAutomationSdkDir = Join-Path $finalAutomationDir 'SDK'
@@ -706,6 +739,9 @@ New-Item -ItemType Directory -Force -Path `
   $finalValidationDir | Out-Null
 Copy-Directory $editorPublish $finalEditorDir
 Copy-Directory $demoPlayerDir $finalDemoDir
+if ($null -ne $installerManifest) {
+  Copy-Directory $installerOutput $finalInstallerDir
+}
 Copy-Directory $automationCliPublish $finalAutomationCliDir
 Copy-Item -LiteralPath $automationProtocolPackage.FullName -Destination $finalAutomationSdkDir -Force
 Copy-Item -LiteralPath $automationClientPackage.FullName -Destination $finalAutomationSdkDir -Force
@@ -761,6 +797,18 @@ $manifest = [ordered]@{
   editorScriptReferenceManagedDependencies = $scriptReferenceManagedDependencies
   editorExecutable = '编辑器/PixelEngine.exe'
   demoExecutable = '游戏Demo/PixelEngine Demo.exe'
+  installer = if ($null -eq $installerManifest) {
+    $null
+  } else {
+    [ordered]@{
+      package = "安装器/$($installerManifest.installerFile)"
+      manifest = '安装器/manifest.json'
+      verification = '安装器/verification.json'
+      checksum = '安装器/SHA256SUMS'
+      version = [string]$installerManifest.version
+      signed = $false
+    }
+  }
   automation = [ordered]@{
     cliExecutable = $automationCliRelative
     cliDeveloperMetadataPolicy = if ($IncludeEditorSymbols.IsPresent) { 'included-for-diagnostics' } else { 'runtime-pdb-and-xml-pruned' }
@@ -841,6 +889,11 @@ $manifest = [ordered]@{
 Copy-Item -LiteralPath $demoBuildResultPath -Destination (Join-Path $finalValidationDir 'demo-build-result.json') -Force
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $finalValidationDir 'manifest.json') -Encoding UTF8
 
+$installerReadmeLine = if ($null -eq $installerManifest) {
+  '- Windows 安装器：当前 RID 不提供 MSI'
+} else {
+  "- Windows 安装器：安装器\$($installerManifest.installerFile)"
+}
 @"
 PixelEngine 正式输出
 
@@ -848,6 +901,7 @@ PixelEngine 正式输出
 默认编辑器运行目录会清理 .pdb/.xml 开发元数据；需要诊断符号时请显式使用 -IncludeEditorSymbols 重新生成。编辑器\ScriptReferenceAssemblies 是独立脚本工程的产品 SDK 引用目录，固定保留 PixelEngine managed DLL、XML IntelliSense 文档及所需第三方 managed dependency DLL，但不包含 PixelEngine.Editor、native DLL 或 PDB。
 
 - 编辑器：编辑器\PixelEngine.exe
+$installerReadmeLine
 - 脚本开发 SDK：编辑器\ScriptReferenceAssemblies\
 - 游戏 Demo：游戏Demo\PixelEngine Demo.exe
 - 自动化 CLI：自动化\CLI\pixelengine-editor.exe
@@ -875,6 +929,9 @@ Replace-FinalOutput $nextRoot $outputRootFull
 
 Write-Host "正式输出已更新：$outputRootFull"
 Write-Host "编辑器入口：$(Join-Path $outputRootFull '编辑器/PixelEngine.exe')"
+if ($null -ne $installerManifest) {
+  Write-Host "Windows 安装器：$(Join-Path $outputRootFull "安装器/$($installerManifest.installerFile)")"
+}
 Write-Host "脚本开发 SDK：$(Join-Path $outputRootFull '编辑器/ScriptReferenceAssemblies')"
 Write-Host "Demo 入口：$(Join-Path $outputRootFull '游戏Demo/PixelEngine Demo.exe')"
 Write-Host "自动化 CLI：$(Join-Path $outputRootFull $automationCliRelative)"
