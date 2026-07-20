@@ -93,6 +93,92 @@ public sealed class WorldStreamerTests
     }
 
     /// <summary>
+    /// 验证缺失 chunk 只在首次装载时生成；修改落盘后重入优先恢复存档，不再次覆盖生成结果。
+    /// </summary>
+    [Fact]
+    public void MissingChunkInitializerRunsOnceAndPersistedEditWinsOnReload()
+    {
+        ResidentChunkMap chunks = new();
+        ResidencyTable residency = new();
+        ChunkMemoryBudget budget = Budget();
+        TemperatureField temperature = new();
+        MemoryChunkStore store = new();
+        RecordingChunkInitializer initializer = new(material: 1, temperature: (Half)18f);
+        WorldStreamer streamer = new(
+            chunks,
+            residency,
+            budget,
+            temperature,
+            store,
+            IdentityRemap(),
+            chunkInitializer: initializer);
+        ChunkCoord coord = new(-3, 2);
+
+        streamer.SubmitPlan(new ResidencyPlan([coord], [], []));
+        Assert.Equal(1, streamer.ProcessIoOnce());
+        Assert.Equal(1, streamer.ApplyPrepared(frame: 1));
+
+        Assert.Equal(1, initializer.CallCount);
+        Assert.Equal(-3, initializer.LastChunkX);
+        Assert.Equal(2, initializer.LastChunkY);
+        Assert.Equal(-192L, initializer.LastOriginX);
+        Assert.Equal(128L, initializer.LastOriginY);
+        Assert.True(chunks.TryGetChunk(coord, out Chunk generated));
+        Assert.Equal(1, generated.Material[0]);
+        Assert.Equal(18f, temperature.GetTemperature(-192, 128));
+
+        generated.MaterialBuffer[0] = 0;
+        streamer.SubmitPlan(new ResidencyPlan(
+            [],
+            [coord],
+            [new ResidencyStateChange(coord, ChunkResidencyState.Detached)]));
+        Assert.Equal(1, streamer.ProcessIoOnce());
+        Assert.Equal(1, streamer.ApplyPrepared(frame: 2));
+        Assert.True(store.Exists(coord));
+
+        streamer.SubmitPlan(new ResidencyPlan([coord], [], []));
+        Assert.Equal(1, streamer.ProcessIoOnce());
+        Assert.Equal(1, streamer.ApplyPrepared(frame: 3));
+
+        Assert.Equal(1, initializer.CallCount);
+        Assert.True(chunks.TryGetChunk(coord, out Chunk reloaded));
+        Assert.Equal(0, reloaded.Material[0]);
+    }
+
+    /// <summary>
+    /// 验证磁盘已有 chunk 时绝不调用缺失 chunk 初始化器。
+    /// </summary>
+    [Fact]
+    public void StoredChunkBypassesMissingChunkInitializer()
+    {
+        ResidentChunkMap chunks = new();
+        ResidencyTable residency = new();
+        ChunkMemoryBudget budget = Budget();
+        TemperatureField temperature = new();
+        MemoryChunkStore store = new();
+        ChunkCoord coord = new(4, -5);
+        WriteStoredChunk(store, coord, savedMaterial: 1, temp: (Half)27f, damage: 0);
+        RecordingChunkInitializer initializer = new(material: 2, temperature: (Half)99f);
+        WorldStreamer streamer = new(
+            chunks,
+            residency,
+            budget,
+            temperature,
+            store,
+            IdentityRemap(),
+            chunkInitializer: initializer);
+
+        streamer.SubmitPlan(new ResidencyPlan([coord], [], []));
+        _ = streamer.ProcessIoOnce();
+        _ = streamer.ApplyPrepared(frame: 1);
+
+        Assert.Equal(0, initializer.CallCount);
+        Assert.True(chunks.TryGetChunk(coord, out Chunk loaded));
+        Assert.Equal(1, loaded.Material[0]);
+        Assert.Equal(27f, temperature.GetTemperature(256, -320));
+    }
+
+    /// <summary>
     /// 验证 WorldManager façade 会按相机 active/border 计算提交装载请求。
     /// </summary>
     [Fact]
@@ -491,6 +577,32 @@ public sealed class WorldStreamerTests
         public void Delete(ChunkCoord coord)
         {
             _ = _blobs.Remove(coord);
+        }
+    }
+
+    private sealed class RecordingChunkInitializer(ushort material, Half temperature) : IWorldChunkInitializer
+    {
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public int LastChunkX { get; private set; }
+
+        public int LastChunkY { get; private set; }
+
+        public long LastOriginX { get; private set; }
+
+        public long LastOriginY { get; private set; }
+
+        public void Initialize(in WorldChunkInitializationContext context)
+        {
+            _ = Interlocked.Increment(ref _callCount);
+            LastChunkX = context.ChunkX;
+            LastChunkY = context.ChunkY;
+            LastOriginX = context.OriginCellX;
+            LastOriginY = context.OriginCellY;
+            context.MaterialCells[0] = material;
+            context.TemperatureCells[0] = temperature;
         }
     }
 

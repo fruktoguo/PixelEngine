@@ -1360,7 +1360,7 @@ internal sealed class EditorProjectSession : IDisposable
             RegisterFallbackEditorMaterials(engine);
         }
 
-        if (engine.AttachCurrentSceneWorld(DefaultParticleCapacity) is null)
+        if (engine.AttachCurrentSceneWorld(DefaultParticleCapacity) is null && !engine.IsSimulationWorldAttached)
         {
             _ = engine.AttachResidentSimulationWorld(
                 DefaultEditorWorldWidth,

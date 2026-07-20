@@ -131,12 +131,12 @@ public static class DemoProgram
             int particleCapacity = options.ParticleFrameProbe
                 ? Math.Max(DemoParticleCapacityDefault, options.ParticleProbeCount)
                 : DemoParticleCapacityDefault;
-            object? worldLoad = engine.AttachCurrentSceneWorld(particleCapacity);
+            var worldLoad = engine.AttachCurrentSceneWorld(particleCapacity);
             if (worldLoad is not null)
             {
                 Console.WriteLine("世界存档已加载。");
             }
-            else
+            else if (!engine.IsSimulationWorldAttached)
             {
                 _ = engine.AttachResidentSimulationWorld(DemoWorldWidthCells, DemoWorldHeightCells, particleCapacity);
             }

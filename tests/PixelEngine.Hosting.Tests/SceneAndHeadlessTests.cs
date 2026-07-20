@@ -831,6 +831,72 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证流式 procedural scene 会同步生成完整 initial active/border，支持负坐标并接入 WorldManager。
+    /// </summary>
+    [Fact]
+    public void AttachCurrentSceneWorldBuildsStreamingProceduralWorldAcrossNegativeCoordinates()
+    {
+        string worldRoot = Path.Combine(
+            Path.GetTempPath(),
+            "PixelEngine.Hosting.StreamingProcedural",
+            Guid.NewGuid().ToString("N"));
+        try
+        {
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+            RecordingStreamingWorldGenerator generator = new();
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(2)
+                .AddScene(new SceneDescriptor("stream-world", SceneSourceKind.Procedural, "stream-test"))
+                .WithStartScene("stream-world")
+                .Build();
+            engine.Context.RegisterService(materials);
+            engine.RegisterStreamingProceduralWorldGenerator("stream-test", generator);
+
+            WorldLoadResult? result = engine.AttachCurrentSceneWorld(
+                particleCapacity: 8,
+                streamingConfig: new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 0,
+                    BorderRingWidth = 1,
+                    MaxStreamOpsPerFrame = 128,
+                },
+                proceduralWorldRoot: worldRoot);
+
+            Assert.Null(result);
+            Assert.True(engine.IsSimulationWorldAttached);
+            WorldManager world = engine.Context.GetService<WorldManager>();
+            Assert.Equal(-32, world.Camera.FocusX);
+            Assert.Equal(32, world.Camera.FocusY);
+            ChunkRect active = world.ComputeVisibleChunks().Expand(world.Config.ActivationMarginChunks);
+            Assert.Equal(active.Expand(world.Config.BorderRingWidth).Count, world.Chunks.Count);
+            Assert.Equal(0, world.Streamer.PendingRequestCount);
+            Assert.Equal(0, world.Streamer.PendingCompletedCount);
+            Assert.Contains((-1, 0), generator.GeneratedCoords);
+            Assert.Contains((0, 0), generator.GeneratedCoords);
+            Assert.Equal(99UL, engine.Context.GetService<SimulationKernel>().WorldSeed);
+            Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(-64, 0));
+            Assert.Equal(14f, engine.Context.GetService<TemperatureField>().GetTemperature(-64, 0));
+        }
+        finally
+        {
+            if (Directory.Exists(worldRoot))
+            {
+                Directory.Delete(worldRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证无限 descriptor 拒绝可逃逸持久化根的键。
+    /// </summary>
+    [Fact]
+    public void InfiniteProceduralDescriptorRejectsUnsafePersistenceKey()
+    {
+        _ = Assert.Throws<ArgumentException>(() =>
+            ProceduralWorldDescriptor.CreateInfinite(1, 0, 0, "../outside"));
+    }
+
+    /// <summary>
     /// 验证 Engine world 快照可恢复 resident chunks、温度与游戏 tick。
     /// </summary>
     [Fact]
@@ -1395,6 +1461,44 @@ public sealed class SceneAndHeadlessTests
             MaterialId stone = context.Materials.Resolve("stone");
             context.Edit.PaintCell(4, 5, stone.Value);
             context.Edit.SetTemperature(4, 5, 32.5f);
+        }
+    }
+
+    private sealed class RecordingStreamingWorldGenerator : IStreamingProceduralWorldGenerator
+    {
+        private readonly Lock _gate = new();
+        private readonly HashSet<(int X, int Y)> _generatedCoords = [];
+
+        public (int X, int Y)[] GeneratedCoords
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _generatedCoords];
+                }
+            }
+        }
+
+        public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
+        {
+            Assert.Equal("stream-test", request.Key);
+            return ProceduralWorldDescriptor.CreateInfinite(
+                worldSeed: 99,
+                initialFocusX: -32,
+                initialFocusY: 32,
+                persistenceKey: "stream-test-v1");
+        }
+
+        public void PopulateChunk(in ProceduralChunkBuildContext context)
+        {
+            MaterialId stone = context.Materials.Resolve("stone");
+            context.MaterialCells[0] = stone.Value;
+            context.TemperatureCells[0] = (Half)14f;
+            lock (_gate)
+            {
+                _ = _generatedCoords.Add((context.ChunkX, context.ChunkY));
+            }
         }
     }
 

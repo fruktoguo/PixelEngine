@@ -19,6 +19,7 @@ public sealed class WorldStreamer
     private readonly MaterialRemap _materialRemap;
     private readonly ChunkCodec _chunkCodec;
     private readonly ChunkPool _chunkPool;
+    private readonly IWorldChunkInitializer? _chunkInitializer;
     private readonly StreamingRequestQueue _requests;
     private readonly CompletedChunkQueue _completed;
     private readonly PreparationBatch _preparationBatch;
@@ -43,7 +44,8 @@ public sealed class WorldStreamer
         ChunkCodec? chunkCodec = null,
         ChunkPool? chunkPool = null,
         StreamingRequestQueue? requests = null,
-        CompletedChunkQueue? completed = null)
+        CompletedChunkQueue? completed = null,
+        IWorldChunkInitializer? chunkInitializer = null)
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(residency);
@@ -60,6 +62,7 @@ public sealed class WorldStreamer
         _materialRemap = materialRemap;
         _chunkCodec = chunkCodec ?? new ChunkCodec();
         _chunkPool = chunkPool ?? new ChunkPool();
+        _chunkInitializer = chunkInitializer;
         _requests = requests ?? new StreamingRequestQueue();
         _completed = completed ?? new CompletedChunkQueue();
         _preparationBatch = new PreparationBatch(this);
@@ -392,18 +395,25 @@ public sealed class WorldStreamer
     {
         Chunk chunk = _chunkPool.Rent(coord);
         Half[] temperature = ArrayPool<Half>.Shared.Rent(TemperatureField.BlockArea);
+        Span<Half> temperatureCells = temperature.AsSpan(0, TemperatureField.BlockArea);
+        temperatureCells.Clear();
         PooledByteBufferWriter buffer = RentIoWriter();
         buffer.Clear();
         try
         {
-            // 磁盘缺失时保留 pool 租出的空 chunk，由生成器或后续输入填充。
             if (_chunkStore.TryRead(coord, buffer))
             {
                 _chunkCodec.Decode(
                     buffer.WrittenSpan,
-                    new SerializedChunkSnapshot(coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperature.AsSpan(0, TemperatureField.BlockArea)),
+                    new SerializedChunkSnapshot(coord, chunk.MaterialBuffer, chunk.FlagsBuffer, chunk.LifetimeBuffer, chunk.DamageBuffer, temperatureCells),
                     CurrentParityBit);
                 _materialRemap.RemapInPlace(chunk.MaterialBuffer, chunk.DamageBuffer);
+            }
+            else if (_chunkInitializer is not null)
+            {
+                // 缺失存档才生成；一旦区块卸载入盘，重入永远走上面的权威存档分支。
+                WorldChunkInitializationContext context = new(chunk, temperatureCells);
+                _chunkInitializer.Initialize(in context);
             }
 
             chunk.SetCurrentDirty(DirtyRect.Full);

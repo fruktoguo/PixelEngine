@@ -21,7 +21,8 @@ public sealed class WorldManager
         MaterialTable materials,
         string worldPath,
         ushort fallbackMaterialId,
-        WorldStreamingConfig? config = null)
+        WorldStreamingConfig? config = null,
+        IWorldChunkInitializer? chunkInitializer = null)
     {
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(temperature);
@@ -45,7 +46,8 @@ public sealed class WorldManager
             MemoryBudget,
             temperature,
             new RegionFileStore(worldPath),
-            identityRemap);
+            identityRemap,
+            chunkInitializer: chunkInitializer);
     }
 
     /// <summary>
