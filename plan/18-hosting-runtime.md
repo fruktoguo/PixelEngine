@@ -7,6 +7,12 @@
 > 产品依据：`../docs/PixelEngine-核心目标与产品定位.md`。本文件是 Hosting / runtime 状态账本，负责 Engine Core 运行时编排、Unity-like Editor 所需中性运行时 API、Web-first 透明 HTML UI Runtime 装配，以及 Showcase Demo Game 的公开运行入口。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 外部证据债、人工验收、硬件/native/发行/真实窗口阻塞。本文不再使用进行中状态，所有部分完成事项拆成已完成子项与未完成/阻塞子项。
 
+## 2026-07-20 无限程序化世界装配合同（DEMO-006）
+
+`IProceduralWorldGenerator` 的有限 resident world 合同保持兼容；无限场景由独立 `IStreamingProceduralWorldGenerator` 标识，并通过 `ProceduralWorldDescriptor.CreateInfinite` 声明 seed、初始相机焦点与稳定 persistence key。Hosting 为它创建 `WorldManager`、公开缺失 chunk initializer adapter、Simulation 与 World phase driver，首次同步泵入 initial active + border 区后再进入脚本循环。默认持久目录位于可写的 LocalApplicationData，而不是 ContentRoot / 安装目录；宿主和测试可显式传入 root。
+
+同 seed 的 chunk 生成只依赖 `ChunkCoord` 与材质查询快照，必须支持负坐标且跨边界连续。`AttachCurrentSceneWorld` 对 procedural 已成功装配但没有 `WorldLoadResult` 的情形不得误判成“没有 world”并重复挂载 resident fallback；调用方以已注册 `SimulationPhaseDriver` / 明确装配状态区分。
+
 ---
 
 ## 1. 当前产品职责

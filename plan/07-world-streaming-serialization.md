@@ -7,6 +7,12 @@
 > 范围：chunk 驻留与流式装卸、世界常驻内存管理、持久化 / 存档。权威依据：`../docs/PixelEngine-架构与需求设计.md`（下称架构文档）§3.4、§5.1、§11、§12.2、§6.3；不变式见 `../AGENTS.md §1`（重点 #4 跨界写入恒在 halo 内、#8 material 字符串键入盘）；技术栈以 `00-conventions-and-techstack.md` 为准。
 > 状态约定：`- [x]` 已有源码、测试、工具、报告或 plan 证据；`- [ ]` 未完成目标；`- [!]` 阻塞、证据债、人工验收或外部环境限制。
 
+## 2026-07-20 程序化流式世界补充设计（DEMO-006）
+
+`WorldStreamer` 增加公开、可选的缺失 chunk 初始化合同：后台 load 先读取 `IChunkStore`，命中时按既有 codec/remap 恢复；仅在磁盘确实不存在该坐标时，才把 pool 租出的已清空 chunk 与温度块交给线程安全的 `IWorldChunkInitializer`。初始化器必须是全局坐标 / seed 的纯函数，不访问 live `ResidentChunkMap`，允许由同一持久 `JobSystem` 并行执行。生成 chunk 与读档 chunk 都只在相位 2 的 `ApplyPrepared` 屏障后进入 live world，继续遵守 active + border ring、dirty rect、32px halo 与内存预算不变式。
+
+程序化世界的修改持久化采用“存档优先”语义：首次进入坐标时生成，卸载时写 region store，重入后读取存档而不重新生成。初始化失败不得发布半个 chunk；pool chunk、温度数组与队列状态必须按现有异常安全路径归还。缺失存档的温度块必须先清零，禁止把 `ArrayPool` 旧数据带入新世界。
+
 ---
 
 ## 1. 目标与范围

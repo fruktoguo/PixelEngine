@@ -101,7 +101,7 @@
       "expected": { "done": 42, "open": 0, "active": 0, "blocked": 22 },
       "checkboxSha256": "8640831734c4f676c8158b1d187fcc15836e9f6c9c98d174be95cde8fb468edc",
       "completedCapabilityIds": ["BASE-015", "SCOPE-006"],
-      "followUpTaskIds": ["DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "UI-001", "PERF-007", "PERF-008"]
+      "followUpTaskIds": ["DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DEMO-006", "UI-001", "PERF-007", "PERF-008"]
     },
     {
       "path": "plan/14-testing-benchmarking.md",
@@ -173,7 +173,7 @@
     {
       "id": "D",
       "name": "M15 产品与目标环境证据",
-      "taskIds": ["AUTO-001", "PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "UI-004", "TEST-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DOC-001", "CI-003", "REL-004", "REL-005"]
+      "taskIds": ["AUTO-001", "PERF-008", "PERF-009", "PERF-010", "PERF-012", "EVID-002", "EDITOR-004", "EDITOR-005", "EDITOR-006", "EDITOR-007", "EDITOR-008", "EDITOR-009", "EDITOR-010", "EDITOR-001", "EDITOR-002", "EDITOR-003", "UI-001", "UI-002", "UI-003", "UI-004", "TEST-003", "DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DEMO-006", "DOC-001", "CI-003", "REL-004", "REL-005"]
     },
     {
       "id": "E",

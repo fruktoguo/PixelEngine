@@ -146,13 +146,20 @@
   - 优先级：P1。
   - 验收：impact/fire/splash/explosion/shatter/sizzle/corrosion 可辨识；空间定位合理；高密度事件不爆音；长跑无 source/buffer 泄漏。
 
-- [!] `DEMO-004` 完成独立玩家包的主菜单→设置→开始→完整右出口路线→胜负→重开/退出闭环。阻塞：依赖 `REL-001` 当前 HEAD 玩家包和 reviewer。
+- [!] `DEMO-004` 完成独立玩家包的主菜单→设置→开始→无限沙盒探索→死亡重生/重开/退出闭环。阻塞：依赖 `REL-001` 当前 HEAD 玩家包和 reviewer。
   - 优先级：P1。
-  - 验收：不启动 Editor；七个 UI screen 全部可用；正式 `lava-mine.scene` 可完成/失败；重开恢复任务、武器、刚体和 UI 基线。
+  - 验收：不启动 Editor；产品 UI screen 全部可用；默认 `playable-world` 可持续向正负方向探索且不存在终点 / 胜利结算；死亡重生与重开恢复世界、武器、刚体和 UI 基线。
 
 - [!] `DEMO-005` 完成开发态真实窗口脚本热重载验收。阻塞：需要真实编辑器、外部代码编辑器和 reviewer。
   - 优先级：P2。
   - 验收：Play 中修改 Behaviour 源码，Roslyn+ALC 重载成功；场景、世界和公开字段状态按契约保留；编译错误可见且修复后恢复；旧 ALC 可回收。
+
+- [~] `DEMO-006` 将默认 Showcase Demo 改为确定性流式无限沙盒，并移除胜利条件。
+  - 优先级：P0。
+  - 依赖：`BASE-007`、`BASE-010`、`BASE-015`。
+  - 设计来源：`docs/PixelEngine-核心目标与产品定位.md` §7；`docs/PixelEngine-架构与需求设计.md` §3.4、§11；`plan/07-world-streaming-serialization.md` §2026-07-20；`plan/13-demo-game.md` §1、§3.1、§3.4；`plan/18-hosting-runtime.md` §2026-07-20。
+  - 验收：默认入口为 `playable-world`；缺失 chunk 以全局坐标和 seed 独立、确定性生成，正负坐标无关卡边界，跨 chunk 连续；地貌可辨识为山脉、山地、盆地 / 湖泊、土层和洞穴，原点附近有确定性安全出生区；流送只保留 active + border / 缓存预算内 chunk，已修改 chunk 卸载后从 region store 恢复且不被生成器覆盖；Demo 只使用公开 API；相机无边界钳制；默认场景没有 GoalTrigger / MissionDirector / 胜利结果流，HUD 改为沙盒探索信息；World、Hosting、Demo 定向测试覆盖负坐标、确定性、接缝、生成 / 存档优先、内存上限、出生安全与无胜利 UI；Release build、真实窗口截图、CLI 运行态检查和最终 Demo 产物通过。
+  - 提交节点：一，canonical task、产品目标、架构与详细设计；二，缺失 chunk 初始化公开 API、流式 procedural Hosting 装配与 World/Hosting 测试；三，Demo 自然地形、无边界相机、沙盒 UI / 启动入口与 Demo 测试；四，真实窗口 / CLI 证据、最终输出与 canonical 完成状态。每个节点按 `AGENTS.md §6` 中文提交。
 
 ## 对外文档
 

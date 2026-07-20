@@ -12,7 +12,7 @@
 
 ### 1.1 项目定位
 
-本项目是一个自研 2D 像素游戏引擎，其 **WORLD（世界模拟）层对标 Noita（Nolla Games 的 "Falling Everything" 引擎）**。引擎必须复刻 Noita 的世界技术核心：每个屏幕像素都是一个被独立模拟、且可参与碰撞的物质单元（material cell），具体包括 falling-sand 细胞自动机（cellular automata, CA）、自由粒子（free particles）、像素级精确碰撞（pixel-perfect collision）、细胞生命周期（cell lifecycle）、以及材质反应（material reactions）。产品交付物由四个面组成：可复用引擎内核、面向资深 Unity 用户的 Unity-like Editor、面向玩家的 Web-first 透明 HTML UI Runtime，以及 Showcase Demo Game。Showcase Demo Game 不以堆叠内容量取胜，而是用完整且聚焦的可玩闭环证明射击/爆炸地形破坏、切割后刚体物理、透明 HTML UI、性能/手感和公开 API dogfood。
+本项目是一个自研 2D 像素游戏引擎，其 **WORLD（世界模拟）层对标 Noita（Nolla Games 的 "Falling Everything" 引擎）**。引擎必须复刻 Noita 的世界技术核心：每个屏幕像素都是一个被独立模拟、且可参与碰撞的物质单元（material cell），具体包括 falling-sand 细胞自动机（cellular automata, CA）、自由粒子（free particles）、像素级精确碰撞（pixel-perfect collision）、细胞生命周期（cell lifecycle）、以及材质反应（material reactions）。产品交付物由四个面组成：可复用引擎内核、面向资深 Unity 用户的 Unity-like Editor、面向玩家的 Web-first 透明 HTML UI Runtime，以及 Showcase Demo Game。Showcase Demo Game 不以堆叠手工关卡取胜，而是用可向正负方向持续流送的程序化无限沙盒证明射击/爆炸地形破坏、切割后刚体物理、透明 HTML UI、性能/手感和公开 API dogfood。
 
 **明确不在范围内**的是 Noita 的法杖 / 法术系统（wand/spell system）。我们只做「世界」这一半，不做 roguelite 的构筑玩法。这一点对架构很关键：它意味着我们不需要为成千上万种 modifier 的运行时组合做开放式脚本架构，可以把材质 / 反应做成相对收敛的数据驱动表。
 
@@ -30,7 +30,7 @@
 
 第五，**自由粒子与网格的双向转换**。冲击 / 爆炸把 cell 抛为带速度的飞行粒子，粒子落定后重新沉积为 cell（「跳进血泊溅起血花再落下」的连续感）。
 
-我们**不追求**的对标维度：bit 级可复现的实时模拟（Noita 实时 sim 本身就是非确定性的，见 §6）、真实 Navier-Stokes 流体（Noita 是 fake pressure，我们也是）、以及世界生成的 Herringbone Wang tile 程序化布局（属于内容生成，不是世界 sim 技术核心，Demo 用简化方案即可）。
+我们**不追求**的对标维度：bit 级可复现的实时模拟（Noita 实时 sim 本身就是非确定性的，见 §6）、真实 Navier-Stokes 流体（Noita 是 fake pressure，我们也是）、以及特定的 Herringbone Wang tile 世界生成算法。Demo 使用基于全局坐标与 seed 的确定性多尺度噪声按 chunk 生成自然地形；生成结果无需 bit 级复现实时 CA 演化，但同 seed 的初始 chunk 必须可复现且跨 chunk 连续。
 
 ### 1.3 硬性需求
 
