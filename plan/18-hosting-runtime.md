@@ -13,6 +13,8 @@
 
 同 seed 的 chunk 生成只依赖 `ChunkCoord` 与材质查询快照，必须支持负坐标且跨边界连续。`AttachCurrentSceneWorld` 对 procedural 已成功装配但没有 `WorldLoadResult` 的情形不得误判成“没有 world”并重复挂载 resident fallback；调用方以已注册 `SimulationPhaseDriver` / 明确装配状态区分。
 
+`.scene` 可通过互斥于 `initialSaveDirectory` 的 `proceduralWorldGenerator` 字段声明流式生成器。Hosting 先查询显式注册表，再从该场景已物化的 Behaviour 中发现实现 `IStreamingProceduralWorldGenerator` 的同键实例；因此独立 Editor 无需反向引用 Demo 程序集，也能在动态脚本加载后装配和运行该世界。默认 Demo 场景 `scenes/infinite-sandbox.scene` 使用此路径。
+
 ---
 
 ## 1. 当前产品职责

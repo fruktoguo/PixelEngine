@@ -208,14 +208,14 @@ public sealed class DemoUiContentTests
 
         // Assert：验证预期结果
         Assert.Contains("生命", gui.Context.Texts);
-        Assert.Contains("胜利", gui.Context.Texts);
+        Assert.Contains("场景状态", gui.Context.Texts);
     }
 
     /// <summary>
-    /// 验证默认横向熔岩闯关的 Web-first HUD / 结算文案不会误导成旧水晶或水位任务线。
+    /// 验证默认 Web-first 产品文案描述无限沙盒，并移除右出口与胜利路线。
     /// </summary>
     [Fact]
-    public void DemoDefaultHudAndResultTextDescribesSideScrollingGoalNotLegacyMission()
+    public void DemoDefaultHudAndResultTextDescribesInfiniteSandboxWithoutVictoryGoal()
     {
         // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
@@ -227,20 +227,20 @@ public sealed class DemoUiContentTests
         defaultLoopText = [.. mainText, .. defaultLoopText];
 
         // Assert：验证预期结果
-        Assert.Contains("横向逃生：左起点到右出口。", defaultLoopText);
-        Assert.Contains("跳过熔岩坑，拆除路障。", defaultLoopText);
-        Assert.Contains("出口进度就是到右侧出口的距离。", defaultLoopText);
-        Assert.Contains("熔岩只在坑内，接触会受伤。", defaultLoopText);
-        Assert.Contains("目标：左起点到右出口，拆路障，避熔岩坑", defaultLoopText);
-        Assert.Contains("出口进度表示到右侧出口的距离", defaultLoopText);
-        Assert.Contains("出口进度", defaultLoopText);
-        Assert.Contains("路线余量", defaultLoopText);
-        Assert.Contains("熔岩接触危险", defaultLoopText);
-        Assert.Contains("抵达右侧出口 / 挑战失败", defaultLoopText);
-        Assert.Contains("胜利：进入右侧出口触发区。", defaultLoopText);
-        Assert.Contains("失败：生命耗尽或路线中断。", defaultLoopText);
-        Assert.Contains("路线评分", defaultLoopText);
-        Assert.Contains("失败原因记录", defaultLoopText);
+        Assert.Contains("PixelEngine 无限沙盒", defaultLoopText);
+        Assert.Contains("世界会随探索持续生成。", defaultLoopText);
+        Assert.Contains("翻越山脉，进入盆地与洞穴。", defaultLoopText);
+        Assert.Contains("没有终点，也没有胜利条件。", defaultLoopText);
+        Assert.Contains("开放世界：山脉、盆地与洞穴持续生成", defaultLoopText);
+        Assert.Contains("没有终点，向左或向右自由探索", defaultLoopText);
+        Assert.Contains("探索距离", defaultLoopText);
+        Assert.Contains("东西方位", defaultLoopText);
+        Assert.Contains("地下深度", defaultLoopText);
+        Assert.Contains("山地海拔", defaultLoopText);
+        Assert.Contains("无限沙盒没有终点与胜利条件。", defaultLoopText);
+        Assert.Contains("死亡后可回到安全出生区继续探索。", defaultLoopText);
+        Assert.DoesNotContain(defaultLoopText, text => text.Contains("右侧出口", StringComparison.Ordinal));
+        Assert.DoesNotContain(defaultLoopText, text => text.StartsWith("胜利：", StringComparison.Ordinal));
         Assert.DoesNotContain("可选任务时间", defaultLoopText);
         Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
         Assert.DoesNotContain("水晶", defaultLoopText);
@@ -275,10 +275,10 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证背包与对话屏幕绑定默认六武器目录和横向熔岩闯关提示，不退回静态占位文案。
+    /// 验证背包与对话屏幕绑定默认六武器目录和无限沙盒提示，不退回固定出口路线。
     /// </summary>
     [Fact]
-    public void DemoInventoryAndDialogTextMatchesDefaultWeaponCatalogAndRoute()
+    public void DemoInventoryAndDialogTextMatchesDefaultWeaponCatalogAndSandbox()
     {
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         WeaponCatalog catalog = LoadDefaultWeaponCatalog();
@@ -293,9 +293,10 @@ public sealed class DemoUiContentTests
         }
 
         Assert.Contains(inventoryText, text => text.Contains("开路与触发坍塌", StringComparison.Ordinal));
-        Assert.Contains(inventoryText, text => text.Contains("临时搭桥", StringComparison.Ordinal));
-        Assert.Contains("出口在右侧高台，先越过熔岩坑。", dialogText);
-        Assert.Contains("用 Grenade / Bomb 拆障碍，Builder 可补桥。", dialogText);
+        Assert.Contains(inventoryText, text => text.Contains("改变局部地形", StringComparison.Ordinal));
+        Assert.Contains("山脊、湖盆和洞穴由同一个世界 seed 延展。", dialogText);
+        Assert.Contains("走过的地形会保留挖掘、爆破与建造结果。", dialogText);
+        Assert.DoesNotContain(dialogText, text => text.Contains("出口", StringComparison.Ordinal));
         Assert.DoesNotContain("手枪", inventoryText);
         Assert.DoesNotContain("激光炮", inventoryText);
         Assert.DoesNotContain("手榴弹", inventoryText);
@@ -389,15 +390,15 @@ public sealed class DemoUiContentTests
         int eventCount = host.DrainEvents(events);
 
         // Assert：验证预期结果
-        Assert.Contains("PixelEngine 熔岩矿洞", gui.Context.Texts);
+        Assert.Contains("PixelEngine 无限沙盒", gui.Context.Texts);
         Assert.Contains("设置", gui.Context.Texts);
         Assert.Contains("背包", gui.Context.Texts);
-        Assert.Contains("矿工通讯", gui.Context.Texts);
+        Assert.Contains("勘探记录", gui.Context.Texts);
         Assert.Contains("HUD", gui.Context.Texts);
         Assert.Contains("运行诊断", gui.Context.Texts);
         Assert.Contains("暂停", gui.Context.Texts);
-        Assert.Contains("结算", gui.Context.Texts);
-        Assert.Contains("开始游戏", gui.Context.Buttons);
+        Assert.Contains("会话状态", gui.Context.Texts);
+        Assert.Contains("进入世界", gui.Context.Buttons);
         Assert.Contains("继续", gui.Context.Buttons);
         Assert.Contains("重开", gui.Context.Buttons);
         Assert.Contains("返回", gui.Context.Buttons);
@@ -430,7 +431,7 @@ public sealed class DemoUiContentTests
         _ = host.ShowScreen(dialog.ScreenId, manifest.ResolveDocumentSource(GameUiDemoController.DialogScreen));
         host.Composite(default);
 
-        Assert.Contains("矿工通讯", gui.Context.Texts);
+        Assert.Contains("勘探记录", gui.Context.Texts);
         Assert.Contains("继续", gui.Context.Buttons);
         Assert.Contains(4f, gui.Context.VerticalSpacings);
     }
@@ -570,6 +571,10 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.time");
         AssertHudPathWritten(ui, "hud.hazard");
         AssertHudPathWritten(ui, "hud.score");
+        AssertHudPathWritten(ui, "hud.distance");
+        AssertHudPathWritten(ui, "hud.longitude");
+        AssertHudPathWritten(ui, "hud.depth");
+        AssertHudPathWritten(ui, "hud.elevation");
         AssertHudPathWritten(ui, "hud.fps");
         AssertHudPathWritten(ui, "hud.frame_p99");
         AssertHudPathWritten(ui, "hud.frame_low1");
@@ -578,6 +583,7 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.lights");
         AssertHudPathWritten(ui, "hud.bodies");
         AssertHudPathWritten(ui, "hud.fx");
+        Assert.DoesNotContain(GameUiDemoController.ResultScreen, ui.PushedScreens);
     }
 
     /// <summary>
@@ -1956,6 +1962,10 @@ public sealed class DemoUiContentTests
             "hud.time",
             "hud.hazard",
             "hud.score",
+            "hud.distance",
+            "hud.longitude",
+            "hud.depth",
+            "hud.elevation",
             "hud.fps",
             "hud.frame_p99",
             "hud.frame_low1",

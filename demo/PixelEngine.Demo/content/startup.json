@@ -1,4 +1,4 @@
 {
-  "startScene": "scenes/lava-mine.scene",
+  "startScene": "scenes/infinite-sandbox.scene",
   "runtimeUiBackend": "RmlUi"
 }

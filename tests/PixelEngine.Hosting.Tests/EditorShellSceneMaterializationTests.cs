@@ -207,6 +207,31 @@ public sealed class EditorShellSceneMaterializationTests
     }
 
     /// <summary>
+    /// 验证 Editor authoring 模型不会在加载、替换或保存时丢失流式程序化世界生成器键。
+    /// </summary>
+    [Fact]
+    public void EditorSceneModelRoundTripsProceduralWorldGeneratorThroughReplace()
+    {
+        EditorSceneModel loaded = EditorSceneModel.FromDocument(new EngineSceneDocument
+        {
+            FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+            Name = "infinite-world",
+            ProceduralWorldGenerator = "Game.InfiniteWorldDirector",
+            Entities = [],
+        });
+        Assert.Equal("Game.InfiniteWorldDirector", loaded.ToDocument().ProceduralWorldGenerator);
+
+        EditorSceneModel active = EditorSceneModel.Empty("active");
+        active.ReplaceWith(loaded, markDirty: false);
+
+        EngineSceneDocument roundTrip = active.ToDocument();
+        Assert.Equal("infinite-world", roundTrip.Name);
+        Assert.Equal("Game.InfiniteWorldDirector", roundTrip.ProceduralWorldGenerator);
+        Assert.Null(roundTrip.InitialSaveDirectory);
+        Assert.False(active.IsDirty);
+    }
+
+    /// <summary>
     /// 验证复制 Web Canvas 时保留 manifest/scaler 但清除 copied primary，避免一次快捷复制制造非法双 primary。
     /// </summary>
     [Fact]

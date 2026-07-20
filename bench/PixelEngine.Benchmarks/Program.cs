@@ -25,4 +25,4 @@ if (string.Equals(
     config = config.AddDiagnoser(new EventPipeProfiler());
 }
 
-BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+BenchmarkSwitcher.FromAssembly(typeof(PixelEngine.Benchmarks.InfiniteTerrainChunkGenerationBenchmarks).Assembly).Run(args, config);

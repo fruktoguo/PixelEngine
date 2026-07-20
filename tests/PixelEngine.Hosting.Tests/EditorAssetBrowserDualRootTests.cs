@@ -543,7 +543,7 @@ public sealed class EditorAssetBrowserDualRootTests
         AssetBrowserItem telemetryScreen = Find("Content/ui/screens/telemetry.xhtml");
         AssetBrowserItem font = Find("Content/ui/fonts/NotoSansSC-VF.ttf");
         AssetBrowserItem materialMap = Find("Content/maps/ai-cavern-material-map.png");
-        AssetBrowserItem mainScene = Find("Content/scenes/lava-mine.scene");
+        AssetBrowserItem mainScene = Find("Content/scenes/infinite-sandbox.scene");
         AssetBrowserItem cameraProbe = Find("Content/scenes/lava-mine-camera-probe.scene");
         AssetBrowserItem script = Find("ScriptSource/LevelDirector.cs");
 
@@ -552,7 +552,7 @@ public sealed class EditorAssetBrowserDualRootTests
         Assert.Equal("材质反应规则", reactions.Descriptor?.TypeLabel);
         Assert.Contains("反应规则：9", reactions.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("启动场景", startup.Descriptor?.Purpose, StringComparison.Ordinal);
-        Assert.Contains("scenes/lava-mine.scene", startup.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("scenes/infinite-sandbox.scene", startup.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("武器", weapons.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("武器目录：6", weapons.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("Cue", cues.Descriptor?.Purpose, StringComparison.Ordinal);
@@ -578,7 +578,7 @@ public sealed class EditorAssetBrowserDualRootTests
         currentScene = "scenes/lava-mine-camera-probe.scene";
         Assert.Equal(AssetBrowserBadge.Startup, source.GetContextBadges(mainScene.Path));
         Assert.Equal(AssetBrowserBadge.Current, source.GetContextBadges(cameraProbe.Path));
-        Assert.Equal("scenes/lava-mine.scene", project.StartScene);
+        Assert.Equal("scenes/infinite-sandbox.scene", project.StartScene);
 
         AssetBrowserItem Find(string path)
         {

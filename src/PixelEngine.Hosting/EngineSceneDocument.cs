@@ -25,6 +25,11 @@ public sealed class EngineSceneDocument
     public string? InitialSaveDirectory { get; init; }
 
     /// <summary>
+    /// 可选流式程序化世界生成器键；与 <see cref="InitialSaveDirectory" /> 互斥。
+    /// </summary>
+    public string? ProceduralWorldGenerator { get; init; }
+
+    /// <summary>
     /// 脚本实体数组。
     /// </summary>
     public EngineSceneEntityDocument[]? Entities { get; init; }

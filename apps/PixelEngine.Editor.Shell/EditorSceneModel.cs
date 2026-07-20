@@ -24,6 +24,11 @@ internal sealed class EditorSceneModel
     /// </summary>
     public string? InitialSaveDirectory { get; private set; }
 
+    /// <summary>
+    /// 可选流式程序化世界生成器键；原样随场景 authoring 往返。
+    /// </summary>
+    public string? ProceduralWorldGenerator { get; private set; }
+
     public int? SelectedStableId { get; private set; }
 
     public bool IsDirty { get; private set; }
@@ -58,6 +63,7 @@ internal sealed class EditorSceneModel
         EditorSceneModel model = new(document.Name ?? "main")
         {
             InitialSaveDirectory = document.InitialSaveDirectory,
+            ProceduralWorldGenerator = document.ProceduralWorldGenerator,
         };
         EngineSceneEntityDocument[] entities = document.Entities ?? [];
         for (int i = 0; i < entities.Length; i++)
@@ -145,6 +151,7 @@ internal sealed class EditorSceneModel
             FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
             Name = Name,
             InitialSaveDirectory = InitialSaveDirectory,
+            ProceduralWorldGenerator = ProceduralWorldGenerator,
             Entities = entities,
         };
     }
@@ -621,6 +628,7 @@ internal sealed class EditorSceneModel
         _nextStableId = 1;
         Name = source.Name;
         InitialSaveDirectory = source.InitialSaveDirectory;
+        ProceduralWorldGenerator = source.ProceduralWorldGenerator;
         foreach (EditorGameObject gameObject in source.EnumerateDepthFirst())
         {
             AddLoaded(gameObject.CloneShallow());

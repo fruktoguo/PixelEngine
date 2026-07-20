@@ -222,7 +222,7 @@ public sealed class Engine : IDisposable
         ThrowIfShutdown();
         return Context.Options.Headless
             ? new RuntimeControlResult(false, "headless 模式没有窗口，不能打开 Editor。")
-            : new RuntimeControlResult(false, "内嵌 Demo Editor 已迁移到独立编辑器；请启动 PixelEngine。");
+            : new RuntimeControlResult(false, "内嵌 Demo Editor 已迁移到独立编辑器壳；请启动 PixelEngine。");
     }
 
     /// <summary>
@@ -1275,7 +1275,6 @@ public sealed class Engine : IDisposable
     /// <param name="particleCapacity">自由粒子池容量，必须能容纳存档中的在飞粒子。</param>
     /// <param name="fallbackMaterialId">存档材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
     /// <param name="streamingConfig">可选世界流式配置。</param>
-    /// <param name="proceduralWorldRoot">无限程序化世界持久化根目录；为空时使用 LocalApplicationData。</param>
     /// <returns>读档结果。</returns>
     public WorldLoadResult AttachWorldFromSaveDirectory(
         string savePath,
@@ -1342,6 +1341,7 @@ public sealed class Engine : IDisposable
     /// <param name="particleCapacity">自由粒子池容量，必须能容纳存档中的在飞粒子。</param>
     /// <param name="fallbackMaterialId">存档材质名在当前材质表中缺失时使用的 fallback 材质 id。</param>
     /// <param name="streamingConfig">可选世界流式配置。</param>
+    /// <param name="proceduralWorldRoot">无限程序化世界持久化根目录；为空时使用 LocalApplicationData。</param>
     /// <returns>装配了存档世界时返回读档结果；当前场景没有存档来源时返回 null。</returns>
     public WorldLoadResult? AttachCurrentSceneWorld(
         int particleCapacity = 32768,
@@ -1360,10 +1360,12 @@ public sealed class Engine : IDisposable
                 fallbackMaterialId,
                 streamingConfig),
             SceneSourceKind.SceneFile => AttachSceneFileInitialWorld(
+                scene,
                 scene.ResolvedSource ?? throw new InvalidOperationException(".scene 场景缺少解析后的文件路径。"),
                 particleCapacity,
                 fallbackMaterialId,
-                streamingConfig),
+                streamingConfig,
+                proceduralWorldRoot),
             SceneSourceKind.Procedural => AttachCurrentProceduralSceneWorld(
                 scene,
                 particleCapacity,
@@ -2567,19 +2569,32 @@ public sealed class Engine : IDisposable
     }
 
     private WorldLoadResult? AttachSceneFileInitialWorld(
+        Scene scene,
         string scenePath,
         int particleCapacity,
         ushort fallbackMaterialId,
-        WorldStreamingConfig? streamingConfig)
+        WorldStreamingConfig? streamingConfig,
+        string? proceduralWorldRoot)
     {
         EngineSceneDocument document = EngineSceneDocumentLoader.LoadDocument(scenePath);
-        if (string.IsNullOrWhiteSpace(document.InitialSaveDirectory))
+        if (!string.IsNullOrWhiteSpace(document.InitialSaveDirectory))
         {
-            return null;
+            string savePath = ResolveSceneRelativePath(scenePath, document.InitialSaveDirectory);
+            return AttachWorldFromSaveDirectory(savePath, particleCapacity, fallbackMaterialId, streamingConfig);
         }
 
-        string savePath = ResolveSceneRelativePath(scenePath, document.InitialSaveDirectory);
-        return AttachWorldFromSaveDirectory(savePath, particleCapacity, fallbackMaterialId, streamingConfig);
+        if (!string.IsNullOrWhiteSpace(document.ProceduralWorldGenerator))
+        {
+            _ = AttachProceduralSceneWorld(
+                scene,
+                particleCapacity,
+                fallbackMaterialId,
+                streamingConfig,
+                proceduralWorldRoot,
+                document.ProceduralWorldGenerator);
+        }
+
+        return null;
     }
 
     private WorldLoadResult? AttachCurrentProceduralSceneWorld(
@@ -2603,9 +2618,11 @@ public sealed class Engine : IDisposable
         int particleCapacity,
         ushort fallbackMaterialId,
         WorldStreamingConfig? streamingConfig,
-        string? proceduralWorldRoot)
+        string? proceduralWorldRoot,
+        string? generatorKeyOverride = null)
     {
-        if (scene.Descriptor.SourceKind != SceneSourceKind.Procedural)
+        if (scene.Descriptor.SourceKind != SceneSourceKind.Procedural &&
+            (scene.Descriptor.SourceKind != SceneSourceKind.SceneFile || string.IsNullOrWhiteSpace(generatorKeyOverride)))
         {
             return false;
         }
@@ -2616,8 +2633,9 @@ public sealed class Engine : IDisposable
         }
 
         ResetRestartSnapshot();
-        string key = scene.ResolvedSource ??
-            throw new InvalidOperationException("Procedural 场景缺少生成器键。");
+        string key = string.IsNullOrWhiteSpace(generatorKeyOverride)
+            ? scene.ResolvedSource ?? throw new InvalidOperationException("Procedural 场景缺少生成器键。")
+            : generatorKeyOverride.Trim();
         if (!TryResolveProceduralWorldGenerator(scene, key, out ProceduralWorldGeneratorRegistry.Registration registration))
         {
             throw new InvalidOperationException($"未注册程序化世界生成器：{key}。");

@@ -127,7 +127,7 @@ public sealed class PlayerControllerIntegrationTests
             gui.Drawn);
         Assert.Contains("swatch:weapon-current:FFE8D06A:14", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:Pistol  180/180:", StringComparison.Ordinal));
-        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 → 右侧出口", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:旧关卡 出口路线", StringComparison.Ordinal));
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:旧任务诊断 采集 0/3", StringComparison.Ordinal));
         Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text-colored:目标 水晶", StringComparison.Ordinal));
         Assert.Contains("text:射击 0", gui.Drawn);
@@ -177,7 +177,7 @@ public sealed class PlayerControllerIntegrationTests
         engine.Context.GetService<IScriptRuntime>().DrawGui(gui);
 
         Assert.Contains("next:340,12,288,176,FirstUseEver", gui.Drawn);
-        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:目标 → 右侧出口", StringComparison.Ordinal));
+        Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:无限沙盒 · 自由探索", StringComparison.Ordinal));
         Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal));
         Assert.DoesNotContain("text:材质", gui.Drawn);
     }
@@ -1096,6 +1096,34 @@ public sealed class PlayerControllerIntegrationTests
         CameraSnapshot clampedSnapshot = camera.Snapshot();
         Assert.Equal(0f, clampedSnapshot.OriginWorldX, precision: 3);
         Assert.Equal(0f, clampedSnapshot.OriginWorldY, precision: 3);
+    }
+
+    /// <summary>
+    /// 验证无限沙盒相机关闭边界夹取后可跟随玩家越过负坐标与旧关卡边界。
+    /// </summary>
+    [Fact]
+    public void CameraFollowWithoutBoundsTracksNegativeWorldCoordinates()
+    {
+        using Engine engine = CreateManualScriptEngine(out _, out CellGrid grid, out ScriptCameraApi camera, out ScriptScene scene);
+        Entity entity = scene.CreateEntity();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = -48f;
+        player.SpawnY = 24f;
+        CameraFollow follow = entity.AddComponent<CameraFollow>();
+        follow.ClampToBounds = false;
+        follow.Zoom = 2f;
+        follow.Damping = 240f;
+        follow.LookaheadX = 0f;
+        follow.LookaheadY = 0f;
+        follow.MinX = 0f;
+        follow.MaxX = 64f;
+        FillFloor(grid, material: 1, y: 42, x0: -96, x1: 32, rigidOwned: false);
+
+        engine.RunHeadlessTicks(4);
+
+        Assert.True(camera.CenterX < 0f, $"无边界相机应进入负坐标，actual={camera.CenterX}");
+        Assert.InRange(camera.CenterX, player.CenterX - 1f, player.CenterX + 1f);
+        Assert.Equal(MathF.Truncate(camera.Snapshot().OriginWorldX), camera.Snapshot().OriginWorldX);
     }
 
     /// <summary>
@@ -2686,6 +2714,7 @@ public sealed class PlayerControllerIntegrationTests
         // Act：执行被测操作
         engine.RunHeadlessTicks(3);
 
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
         PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(engine);
         // Assert：验证不变式与预期结果
         Assert.Equal(3, projectile.ImpactRadius);
@@ -2708,6 +2737,14 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(10f, explosive.TerrainEffectScale);
         Assert.Equal(720, explosive.EffectiveRadius);
         Assert.Equal(3_200f, explosive.EffectiveForce);
+        CameraFollow camera = FindBehaviour<CameraFollow>(engine);
+        Assert.False(camera.ClampToBounds);
+        _ = FindBehaviour<MaterialBrush>(engine);
+        PlayerController player = FindBehaviour<PlayerController>(engine);
+        Assert.Equal(PlayableCavernWorldGenerator.PlayerSpawnX, player.SpawnX);
+        Assert.Equal(PlayableCavernWorldGenerator.PlayerSpawnY, player.SpawnY);
+        Assert.Equal(0, CountBehaviours<GoalTrigger>(scene));
+        Assert.Equal(0, CountBehaviours<MissionDirector>(scene));
     }
 
     /// <summary>

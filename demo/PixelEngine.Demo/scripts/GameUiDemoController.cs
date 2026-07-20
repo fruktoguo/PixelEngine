@@ -30,6 +30,10 @@ public sealed class GameUiDemoController : Behaviour
         "hud.time",
         "hud.hazard",
         "hud.score",
+        "hud.distance",
+        "hud.longitude",
+        "hud.depth",
+        "hud.elevation",
     ];
 
     private static readonly string[] TelemetryModelPaths =
@@ -99,6 +103,10 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudTimePath = Path("hud.time");
     private static readonly UiPathId HudHazardPath = Path("hud.hazard");
     private static readonly UiPathId HudScorePath = Path("hud.score");
+    private static readonly UiPathId HudDistancePath = Path("hud.distance");
+    private static readonly UiPathId HudLongitudePath = Path("hud.longitude");
+    private static readonly UiPathId HudDepthPath = Path("hud.depth");
+    private static readonly UiPathId HudElevationPath = Path("hud.elevation");
     private static readonly UiPathId HudFpsPath = Path("hud.fps");
     private static readonly UiPathId HudFrameP99Path = Path("hud.frame_p99");
     private static readonly UiPathId HudFrameLow1Path = Path("hud.frame_low1");
@@ -134,6 +142,7 @@ public sealed class GameUiDemoController : Behaviour
     private string _modalScreenId = string.Empty;
     private MissionState _lastMissionState = MissionState.Playing;
     private bool _lastGoalReached;
+    private bool _objectiveSearchCompleted;
     private long _lastEscapeFrame = -1;
 
     /// <summary>
@@ -289,6 +298,7 @@ public sealed class GameUiDemoController : Behaviour
         _modalScreenId = string.Empty;
         _lastMissionState = MissionState.Playing;
         _lastGoalReached = false;
+        _objectiveSearchCompleted = false;
         _lastEscapeFrame = -1;
         LastAction = default;
     }
@@ -419,6 +429,10 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudTimePath, 1.0);
         SetHudValue(HudHazardPath, 0.0);
         SetHudValue(HudScorePath, 0.0);
+        SetHudValue(HudDistancePath, 0.0);
+        SetHudValue(HudLongitudePath, 0.5);
+        SetHudValue(HudDepthPath, 0.0);
+        SetHudValue(HudElevationPath, 0.0);
         SetTelemetryValue(HudWeaponPath, 0.0);
         SetTelemetryValue(HudOverheatedPath, 0.0);
         SetTelemetryValue(HudMaterialSlotPath, 0.0);
@@ -444,7 +458,7 @@ public sealed class GameUiDemoController : Behaviour
             return;
         }
 
-        // HUD 刷新流水线：解析引用 → 健康/武器/工具/任务/诊断
+        // HUD 刷新流水线：解析引用 → 健康/武器/工具/沙盒探索/诊断
         ResolveHudSources();
         PublishHealth();
         PublishWeapon();
@@ -549,6 +563,8 @@ public sealed class GameUiDemoController : Behaviour
         {
             _goal = sceneGoal;
         }
+
+        _objectiveSearchCompleted = true;
     }
 
     private bool HasAllHudSources()
@@ -559,7 +575,7 @@ public sealed class GameUiDemoController : Behaviour
             _brush is not null &&
             _explosive is not null &&
             _projectile is not null &&
-            (_mission is not null || _goal is not null);
+            (_mission is not null || _goal is not null || _objectiveSearchCompleted);
     }
 
     private void PublishHealth()
@@ -628,6 +644,12 @@ public sealed class GameUiDemoController : Behaviour
     private void PublishMission()
     {
         MissionDirector? mission = _mission;
+        if (mission is null && _goal is null)
+        {
+            PublishSandboxExploration();
+            return;
+        }
+
         if (mission is null)
         {
             double goalProgress = PublishGoal();
@@ -642,6 +664,23 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudHazardPath, HazardRatio(mission.InitialLavaSurfaceY, mission.LavaSurfaceY));
         SetHudValue(HudScorePath, Ratio(mission.Score, 10000.0));
         PublishResultState(mission);
+    }
+
+    private void PublishSandboxExploration()
+    {
+        double x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnX;
+        double y = _player?.CenterY ?? PlayableCavernWorldGenerator.PlayerSpawnY;
+        double distance = Math.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnX);
+        SetHudValue(HudDistancePath, Ratio(distance, 4_096.0));
+        SetHudValue(HudLongitudePath, Math.Clamp(0.5 + ((x - PlayableCavernWorldGenerator.PlayerSpawnX) / 8_192.0), 0.0, 1.0));
+        SetHudValue(HudDepthPath, Ratio(Math.Max(0.0, y - PlayableCavernWorldGenerator.SafeSurfaceY), 2_048.0));
+        SetHudValue(HudElevationPath, Ratio(Math.Max(0.0, PlayableCavernWorldGenerator.SafeSurfaceY - y), 512.0));
+        SetHudValue(HudCrystalsPath, 0.0);
+        SetHudValue(HudTimePath, 1.0);
+        SetHudValue(HudHazardPath, 0.0);
+        SetHudValue(HudScorePath, 0.0);
+        _lastGoalReached = false;
+        _lastMissionState = MissionState.Playing;
     }
 
     private double PublishGoal()

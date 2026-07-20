@@ -116,6 +116,12 @@ public static class EngineSceneDocumentLoader
             throw new NotSupportedException($"不支持的 .scene 格式版本：{document.FormatVersion}。");
         }
 
+        if (!string.IsNullOrWhiteSpace(document.InitialSaveDirectory) &&
+            !string.IsNullOrWhiteSpace(document.ProceduralWorldGenerator))
+        {
+            throw new InvalidOperationException(".scene 的 InitialSaveDirectory 与 ProceduralWorldGenerator 不能同时设置。");
+        }
+
         ValidateSceneGraph(document);
         ValidateCanvasRules(document, isPrefab);
     }
@@ -176,6 +182,7 @@ public static class EngineSceneDocumentLoader
             FormatVersion = CurrentFormatVersion,
             Name = document.Name,
             InitialSaveDirectory = document.InitialSaveDirectory,
+            ProceduralWorldGenerator = document.ProceduralWorldGenerator,
             Entities = normalizedEntities,
         };
     }

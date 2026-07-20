@@ -114,7 +114,7 @@ public static class DemoProgram
 
         EngineProject project = BuildProject(options);
         using Engine engine = BuildEngine(options, project);
-        engine.RegisterProceduralWorldGenerator(PlayableCavernWorldGenerator.Key, new PlayableCavernWorldGenerator());
+        engine.RegisterStreamingProceduralWorldGenerator(PlayableCavernWorldGenerator.Key, new PlayableCavernWorldGenerator());
 
         // Scene 物化会立即解析 Behaviour，因此程序集必须先于任何 world/scene 挂载完成注册。
         RegisterPackagedScriptAssemblies(engine, options, RuntimeFeature.IsDynamicCodeSupported);
@@ -131,7 +131,7 @@ public static class DemoProgram
             int particleCapacity = options.ParticleFrameProbe
                 ? Math.Max(DemoParticleCapacityDefault, options.ParticleProbeCount)
                 : DemoParticleCapacityDefault;
-            var worldLoad = engine.AttachCurrentSceneWorld(particleCapacity);
+            object? worldLoad = engine.AttachCurrentSceneWorld(particleCapacity);
             if (worldLoad is not null)
             {
                 Console.WriteLine("世界存档已加载。");

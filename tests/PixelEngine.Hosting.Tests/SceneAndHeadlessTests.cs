@@ -897,6 +897,72 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证可编辑 .scene 文件可声明流式程序化世界，同时保留 SceneFile authoring 来源。
+    /// </summary>
+    [Fact]
+    public void SceneFileCanAttachDeclaredStreamingProceduralWorld()
+    {
+        string temp = Path.Combine(Path.GetTempPath(), "PixelEngine.Hosting.SceneStreaming", Guid.NewGuid().ToString("N"));
+        try
+        {
+            string scenePath = Path.Combine(temp, "content", "scenes", "infinite.scene");
+            EngineSceneDocumentLoader.SaveDocument(new EngineSceneDocument
+            {
+                FormatVersion = EngineSceneDocumentLoader.CurrentFormatVersion,
+                Name = "infinite",
+                ProceduralWorldGenerator = "auto-stream",
+                Entities =
+                [
+                    new EngineSceneEntityDocument
+                    {
+                        StableId = 1,
+                        Name = "Streaming Director",
+                        Behaviours =
+                        [
+                            new EngineSceneBehaviourDocument
+                            {
+                                TypeName = typeof(StreamingProceduralEntryBehaviour).FullName,
+                            },
+                        ],
+                    },
+                ],
+            }, scenePath);
+            MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+            using Engine engine = new EngineBuilder()
+                .WithWorkerCount(2)
+                .WithContentRoot(Path.Combine(temp, "content"))
+                .AddScene(new SceneDescriptor("infinite", SceneSourceKind.SceneFile, scenePath))
+                .WithStartScene("infinite")
+                .Build();
+            engine.Context.RegisterService(materials);
+            engine.RegisterScriptAssembly(typeof(StreamingProceduralEntryBehaviour).Assembly);
+
+            WorldLoadResult? result = engine.AttachCurrentSceneWorld(
+                particleCapacity: 8,
+                streamingConfig: new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 0,
+                    BorderRingWidth = 1,
+                    MaxStreamOpsPerFrame = 128,
+                },
+                proceduralWorldRoot: Path.Combine(temp, "worlds"));
+
+            Assert.Null(result);
+            Assert.True(engine.IsSimulationWorldAttached);
+            Assert.Equal(SceneSourceKind.SceneFile, engine.CurrentScene!.Descriptor.SourceKind);
+            Assert.True(engine.Context.TryGetService(out WorldManager _));
+            Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(-64, 0));
+        }
+        finally
+        {
+            if (Directory.Exists(temp))
+            {
+                Directory.Delete(temp, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证 Engine world 快照可恢复 resident chunks、温度与游戏 tick。
     /// </summary>
     [Fact]
@@ -1441,6 +1507,25 @@ public sealed class SceneAndHeadlessTests
     /// </summary>
     public sealed class ProceduralEntryBehaviour : Behaviour
     {
+    }
+
+    /// <summary>
+    /// 测试 .scene 内声明且可由 Editor 动态脚本自动发现的流式世界入口。
+    /// </summary>
+    public sealed class StreamingProceduralEntryBehaviour : Behaviour, IStreamingProceduralWorldGenerator
+    {
+        /// <inheritdoc />
+        public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
+        {
+            Assert.Equal("auto-stream", request.Key);
+            return ProceduralWorldDescriptor.CreateInfinite(101, -32, 32, "auto-stream-v1");
+        }
+
+        /// <inheritdoc />
+        public void PopulateChunk(in ProceduralChunkBuildContext context)
+        {
+            context.MaterialCells[0] = context.Materials.Resolve("stone").Value;
+        }
     }
 
     private sealed class TestProceduralWorldGenerator : IProceduralWorldGenerator

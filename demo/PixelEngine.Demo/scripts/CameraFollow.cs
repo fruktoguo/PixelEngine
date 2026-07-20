@@ -58,6 +58,11 @@ public sealed class CameraFollow : Behaviour
     public bool SnapOriginToCellGrid { get; set; } = true;
 
     /// <summary>
+    /// 是否把相机中心限制在 Min/Max 边界；无限世界应关闭。
+    /// </summary>
+    public bool ClampToBounds { get; set; } = true;
+
+    /// <summary>
     /// 关卡左边界。
     /// </summary>
     public float MinX { get; set; } = 0f;
@@ -138,15 +143,25 @@ public sealed class CameraFollow : Behaviour
         RectF viewport = Context.Camera.Viewport;
         float halfWidth = viewport.Width / (2f * MathF.Max(Zoom, 0.001f));
         float halfHeight = viewport.Height / (2f * MathF.Max(Zoom, 0.001f));
-        float clampedX = ClampWithFallback(x, MinX + halfWidth, MaxX - halfWidth);
-        float clampedY = ClampWithFallback(y, MinY + halfHeight, MaxY - halfHeight);
-        if (SnapOriginToCellGrid && IsIntegerZoom(Zoom))
+        float cameraX = x;
+        float cameraY = y;
+        if (ClampToBounds)
         {
-            clampedX = SnapCenterToIntegerOrigin(clampedX, halfWidth, MinX, MaxX);
-            clampedY = SnapCenterToIntegerOrigin(clampedY, halfHeight, MinY, MaxY);
+            cameraX = ClampWithFallback(cameraX, MinX + halfWidth, MaxX - halfWidth);
+            cameraY = ClampWithFallback(cameraY, MinY + halfHeight, MaxY - halfHeight);
+            if (SnapOriginToCellGrid && IsIntegerZoom(Zoom))
+            {
+                cameraX = SnapCenterToIntegerOrigin(cameraX, halfWidth, MinX, MaxX);
+                cameraY = SnapCenterToIntegerOrigin(cameraY, halfHeight, MinY, MaxY);
+            }
+        }
+        else if (SnapOriginToCellGrid && IsIntegerZoom(Zoom))
+        {
+            cameraX = MathF.Round(cameraX - halfWidth) + halfWidth;
+            cameraY = MathF.Round(cameraY - halfHeight) + halfHeight;
         }
 
-        Context.Camera.SetCenter(clampedX, clampedY);
+        Context.Camera.SetCenter(cameraX, cameraY);
     }
 
     private void ApplyMouseWheelZoom()

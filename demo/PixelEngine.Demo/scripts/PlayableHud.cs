@@ -26,6 +26,7 @@ public sealed class PlayableHud : Behaviour
     private readonly float[] _frameGraphSamples = new float[GraphSampleCapacity];
     private readonly GuiTextBuffer _text = new(512);
     private PlayerHealth? _health;
+    private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
     private WeaponController? _weapons;
     private MissionDirector? _mission;
@@ -83,7 +84,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         DrawHealth(gui);
-        DrawGoal(gui);
+        DrawExploration(gui);
         DrawWeapon(gui);
         _ = _text.Clear()
             .Append("射击 ")
@@ -190,6 +191,7 @@ public sealed class PlayableHud : Behaviour
     private void ResolveComponents()
     {
         _health = Entity.TryGetComponent(out PlayerHealth health) ? health : null;
+        _player = Entity.TryGetComponent(out PlayerController player) ? player : null;
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
         _goal = Entity.TryGetComponent(out GoalTrigger localGoal) ? localGoal : _goal;
@@ -281,14 +283,26 @@ public sealed class PlayableHud : Behaviour
         gui.TextColored(_text.WrittenSpan, stateColor);
     }
 
-    private void DrawGoal(IGuiContext gui)
+    private void DrawExploration(IGuiContext gui)
     {
-        uint color = _goal?.Reached == true ? 0xFF_80_F0_80 : 0xFF_E8_D0_6A;
-        gui.TextColored(
-            _goal?.Reached == true
-                ? "目标 已抵达右侧出口"
-                : "目标 → 右侧出口",
-            color);
+        if (_mission is not null || _goal is not null)
+        {
+            uint legacyColor = _goal?.Reached == true ? 0xFF_80_F0_80 : 0xFF_E8_D0_6A;
+            gui.TextColored(_goal?.Reached == true ? "旧关卡 已抵达出口" : "旧关卡 出口路线", legacyColor);
+            return;
+        }
+
+        gui.TextColored("无限沙盒 · 自由探索", 0xFF_E8_D0_6A);
+        float x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnX;
+        float y = _player?.CenterY ?? PlayableCavernWorldGenerator.PlayerSpawnY;
+        _ = _text.Clear()
+            .Append("坐标 X ")
+            .Append(x, "0")
+            .Append("  Y ")
+            .Append(y, "0")
+            .Append("  距出生点 ")
+            .Append(MathF.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnX), "0");
+        gui.Text(_text.WrittenSpan);
     }
 
     private void DrawMaterialLegend(IGuiContext gui)

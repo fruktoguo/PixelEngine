@@ -7,7 +7,7 @@
   "vSync": true,
   "iconPath": null,
   "version": "0.1.0",
-  "startupScene": "scenes/lava-mine.scene",
+  "startupScene": "scenes/infinite-sandbox.scene",
   "inputDefaults": {
     "enableKeyboardMouse": true,
     "enableGamepad": true

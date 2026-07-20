@@ -157,7 +157,7 @@ public readonly record struct ProceduralWorldDescriptor(
         for (int i = 0; i < persistenceKey.Length; i++)
         {
             char character = persistenceKey[i];
-            bool valid = character is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-' or '_' or '.';
+            bool valid = character is (>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '_' or '.';
             if (!valid)
             {
                 throw new ArgumentException("无限世界 persistence key 只允许 ASCII 字母、数字、点、短横线与下划线。", nameof(PersistenceKey));

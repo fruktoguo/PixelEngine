@@ -1,3 +1,4 @@
+using PixelEngine.Hosting;
 using PixelEngine.Scripting;
 
 namespace PixelEngine.Demo;
@@ -5,20 +6,56 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// 可玩程序化 Demo 的脚本入口，装配玩家、相机、射击工具与简洁 HUD。
 /// </summary>
-public sealed class PlayableWorldDirector : Behaviour
+public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorldGenerator, IAuthoringWorldPreviewProvider
 {
+    private static readonly PlayableCavernWorldGenerator WorldGenerator = new();
     private bool _entitiesBuilt;
     private bool _entityBuildSystemRegistered;
 
     /// <summary>
     /// 玩家出生点 X 坐标。
     /// </summary>
-    public float PlayerSpawnX { get; set; } = 72f;
+    public float PlayerSpawnX { get; set; } = PlayableCavernWorldGenerator.PlayerSpawnX;
 
     /// <summary>
     /// 玩家出生点 Y 坐标。
     /// </summary>
-    public float PlayerSpawnY { get; set; } = 172f;
+    public float PlayerSpawnY { get; set; } = PlayableCavernWorldGenerator.PlayerSpawnY;
+
+    /// <inheritdoc />
+    public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
+    {
+        return WorldGenerator.Describe(in request);
+    }
+
+    /// <inheritdoc />
+    public void PopulateChunk(in ProceduralChunkBuildContext context)
+    {
+        WorldGenerator.PopulateChunk(in context);
+    }
+
+    /// <inheritdoc />
+    public AuthoringWorldPreviewDescriptor DescribeAuthoringWorld()
+    {
+        return new AuthoringWorldPreviewDescriptor(720, 480, PlayableCavernWorldGenerator.Seed);
+    }
+
+    /// <inheritdoc />
+    public void PopulateAuthoringWorld(in AuthoringWorldPreviewContext context)
+    {
+        AuthoringWorldPreviewDescriptor descriptor = DescribeAuthoringWorld().Validate();
+        if (context.WidthCells != descriptor.WidthCells || context.HeightCells != descriptor.HeightCells)
+        {
+            throw new InvalidOperationException("无限沙盒 authoring preview 尺寸与描述不一致。");
+        }
+
+        PlayableCavernWorldGenerator.PopulateAuthoringWorld(in context);
+    }
+
+    /// <inheritdoc />
+    public void AdoptAuthoringWorld()
+    {
+    }
 
     /// <inheritdoc />
     protected override void OnStart()
@@ -74,10 +111,7 @@ public sealed class PlayableWorldDirector : Behaviour
         health.AcidDamagePerSecond = 35f;
 
         CameraFollow camera = playerEntity.AddComponent<CameraFollow>();
-        camera.MinX = 0f;
-        camera.MinY = 0f;
-        camera.MaxX = 1536f;
-        camera.MaxY = 384f;
+        camera.ClampToBounds = false;
         camera.Zoom = 2f;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
@@ -97,6 +131,7 @@ public sealed class PlayableWorldDirector : Behaviour
         ExplosiveTool explosive = playerEntity.AddComponent<ExplosiveTool>();
         explosive.TerrainEffectScale = 10f;
 
+        _ = playerEntity.AddComponent<MaterialBrush>();
         _ = playerEntity.AddComponent<WeaponController>();
 
         _ = playerEntity.AddComponent<PlayerVisual>();

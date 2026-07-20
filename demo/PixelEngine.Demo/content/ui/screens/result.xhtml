@@ -17,15 +17,15 @@
   </head>
   <body>
     <div id="result_panel">
-      <p id="result_title">结算</p>
-      <p id="result_state">抵达右侧出口 / 挑战失败</p>
-      <p id="result_win_hint">胜利：进入右侧出口触发区。</p>
-      <p id="result_loss_hint">失败：生命耗尽或路线中断。</p>
-      <progress id="result_won" path="result.won" value="0.0" text="胜利"><div class="meter_label">胜利</div></progress>
-      <progress id="result_crystals" path="result.crystals" value="0.0" text="出口进度"><div class="meter_label">出口进度</div></progress>
-      <progress id="result_time" path="result.time" value="0.0" text="路线余量"><div class="meter_label">路线余量</div></progress>
-      <progress id="result_score" path="result.score" value="0.0" text="路线评分"><div class="meter_label">路线评分</div></progress>
-      <progress id="result_reason" path="result.reason" value="0.0" text="失败原因记录"><div class="meter_label">失败原因记录</div></progress>
+      <p id="result_title">会话状态</p>
+      <p id="result_state">继续探索或重新开始</p>
+      <p id="result_win_hint">无限沙盒没有终点与胜利条件。</p>
+      <p id="result_loss_hint">死亡后可回到安全出生区继续探索。</p>
+      <progress id="result_won" path="result.won" value="0.0" text="场景状态"><div class="meter_label">场景状态</div></progress>
+      <progress id="result_crystals" path="result.crystals" value="0.0" text="探索记录"><div class="meter_label">探索记录</div></progress>
+      <progress id="result_time" path="result.time" value="0.0" text="会话时间"><div class="meter_label">会话时间</div></progress>
+      <progress id="result_score" path="result.score" value="0.0" text="世界改造"><div class="meter_label">世界改造</div></progress>
+      <progress id="result_reason" path="result.reason" value="0.0" text="重生状态"><div class="meter_label">重生状态</div></progress>
       <button id="result_restart" data-event-click="restart_game">重开</button>
       <button id="result_quit" data-event-click="quit_game">退出</button>
     </div>

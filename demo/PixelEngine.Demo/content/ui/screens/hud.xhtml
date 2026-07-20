@@ -18,13 +18,15 @@
       #hud_cooldown fill { background-color: #4f86bd; }
       #hud_heat fill, #hud_hazard fill { background-color: #d05a49; }
       #hud_reload fill { background-color: #7b6cb2; }
-      #hud_crystals fill { background-color: #d7aa48; }
-      #hud_time fill { background-color: #4b83b8; }
-      #hud_score fill { background-color: #4a9b7b; }
+      #hud_distance fill { background-color: #d7aa48; }
+      #hud_longitude fill { background-color: #4b83b8; }
+      #hud_depth fill { background-color: #8b6cb0; }
+      #hud_elevation fill { background-color: #4a9b7b; }
       button { width: 126px; height: 32px; color: #dfe8f1; text-align: center; background-color: rgba(18, 35, 51, 232); border-width: 1px; border-color: #45637e; }
       button:hover { color: #ffffff; background-color: #315b7e; border-color: #75a0c5; }
       #hud_pause { position: absolute; left: 16px; top: 166px; }
       #hud_telemetry { position: absolute; left: 154px; top: 166px; }
+      #legacy_route_models { display: none; }
     </style>
   </head>
   <body>
@@ -37,14 +39,20 @@
       <progress id="hud_reload" path="hud.reload" value="0.0" text="换弹"><div class="meter_label">换弹</div></progress>
     </div>
     <div id="objective_panel">
-      <p id="hud_title">目标：左起点到右出口，拆路障，避熔岩坑</p>
-      <p id="hud_route">出口进度表示到右侧出口的距离</p>
-      <progress id="hud_crystals" path="hud.crystals" value="0.0" text="出口进度"><div class="meter_label">出口进度</div></progress>
-      <progress id="hud_time" path="hud.time" value="1.0" text="路线余量"><div class="meter_label">路线余量</div></progress>
-      <progress id="hud_hazard" path="hud.hazard" value="0.0" text="熔岩接触危险"><div class="meter_label">熔岩接触危险</div></progress>
-      <progress id="hud_score" path="hud.score" value="0.0" text="路线评分"><div class="meter_label">路线评分</div></progress>
+      <p id="hud_title">开放世界：山脉、盆地与洞穴持续生成</p>
+      <p id="hud_route">没有终点，向左或向右自由探索</p>
+      <progress id="hud_distance" path="hud.distance" value="0.0" text="探索距离"><div class="meter_label">探索距离</div></progress>
+      <progress id="hud_longitude" path="hud.longitude" value="0.5" text="东西方位"><div class="meter_label">东西方位</div></progress>
+      <progress id="hud_depth" path="hud.depth" value="0.0" text="地下深度"><div class="meter_label">地下深度</div></progress>
+      <progress id="hud_elevation" path="hud.elevation" value="0.0" text="山地海拔"><div class="meter_label">山地海拔</div></progress>
     </div>
     <button id="hud_pause" data-event-click="pause_game">暂停</button>
     <button id="hud_telemetry" data-event-click="toggle_telemetry">诊断</button>
+    <div id="legacy_route_models">
+      <progress path="hud.crystals" value="0.0"></progress>
+      <progress path="hud.time" value="0.0"></progress>
+      <progress path="hud.hazard" value="0.0"></progress>
+      <progress path="hud.score" value="0.0"></progress>
+    </div>
   </body>
 </rml>

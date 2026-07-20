@@ -45,26 +45,26 @@ public sealed class DemoStartupOptionsTests
 
         Assert.False(options.Headless);
         Assert.True(options.HotReloadEnabled);
-        Assert.Equal("scenes/lava-mine.scene", options.Scene);
+        Assert.Equal("scenes/infinite-sandbox.scene", options.Scene);
         Assert.Equal("playable-world", DemoStartupOptions.DefaultSceneName);
     }
 
     /// <summary>
-    /// 验证默认项目模型进入玩家包声明的 lava-mine 场景文件。
+    /// 验证默认项目模型进入承载流式生成器的无限沙盒场景文件。
     /// </summary>
     [Fact]
-    public void DefaultProjectUsesPackagedLavaMineScene()
+    public void DefaultProjectUsesInfiniteSandboxScene()
     {
         DemoStartupOptions options = DemoStartupOptions.Parse([]);
 
         EngineProject project = DemoProgram.BuildProject(options);
         SceneDescriptor scene = project.Scenes[0];
 
-        Assert.Equal("lava-mine", project.StartScene);
+        Assert.Equal("infinite-sandbox", project.StartScene);
         Assert.Equal(SceneSourceKind.SceneFile, scene.SourceKind);
         Assert.False(string.IsNullOrEmpty(scene.Source));
         string source = scene.Source;
-        Assert.EndsWith("content/scenes/lava-mine.scene", source.Replace('\\', '/'), StringComparison.Ordinal);
+        Assert.EndsWith("content/scenes/infinite-sandbox.scene", source.Replace('\\', '/'), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -266,66 +266,157 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
-    /// 验证默认可玩程序化场景生成横向熔岩闯关路线，不再自动回到旧洞穴材质图。
+    /// 验证默认程序化入口装配可向负坐标延伸的无限自然地形，并保持安全出生区与确定性地貌。
     /// </summary>
     [Fact]
-    public void DefaultPlayableWorldBuildsSideScrollingLavaRoute()
+    public void DefaultPlayableWorldBuildsDeterministicInfiniteNaturalTerrain()
     {
-        // Arrange：准备输入与初始状态
         string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
-        DemoStartupOptions options = DemoStartupOptions.Parse([
-            "--headless",
-            "--no-hot-reload",
-            "--content",
-            contentRoot,
-            "--scene",
-            DemoStartupOptions.DefaultSceneName,
-        ]);
-        EngineProject project = DemoProgram.BuildProject(options);
-        using Engine engine = DemoProgram.BuildEngine(options, project);
-        Assert.False(engine.Context.Options.EnableGameUi);
-        PlayableCavernWorldGenerator generator = new();
-        engine.RegisterProceduralWorldGenerator(
-            PlayableCavernWorldGenerator.Key,
-            generator);
-        EngineContentPackage package = engine.LoadContentPackage();
-        // Assert：验证预期结果
-        Assert.True(package.MaterialCount > 0);
-        WorldLoadResult? worldLoad = engine.AttachCurrentSceneWorld();
-        Assert.Null(worldLoad);
-
-        MaterialTable materials = engine.Context.GetService<MaterialTable>();
-        CellGrid grid = engine.Context.GetService<CellGrid>();
-        ProceduralWorldDescriptor descriptor = generator.Describe(default);
-        Assert.True(materials.TryGetId("metal", out ushort metal));
-        Assert.True(materials.TryGetId("wood", out ushort wood));
-        Assert.True(materials.TryGetId("stone", out ushort stone));
-        Assert.True(materials.TryGetId("sand", out ushort sand));
-        Assert.True(materials.TryGetId("lava", out ushort lava));
-
-        int metalCells = 0;
-        int woodCells = 0;
-        int stoneCells = 0;
-        int lavaCells = 0;
-        int floorY = descriptor.HeightCells - 96;
-        for (int y = 0; y < descriptor.HeightCells; y++)
+        string worldRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.Demo.InfiniteTerrain", Guid.NewGuid().ToString("N"));
+        try
         {
-            for (int x = 0; x < descriptor.WidthCells; x++)
+            DemoStartupOptions options = DemoStartupOptions.Parse([
+                "--headless",
+                "--no-hot-reload",
+                "--content",
+                contentRoot,
+                "--scene",
+                DemoStartupOptions.DefaultSceneName,
+            ]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+            Assert.False(engine.Context.Options.EnableGameUi);
+            PlayableCavernWorldGenerator generator = new();
+            engine.RegisterStreamingProceduralWorldGenerator(PlayableCavernWorldGenerator.Key, generator);
+            EngineContentPackage package = engine.LoadContentPackage();
+            Assert.True(package.MaterialCount > 0);
+
+            WorldLoadResult? worldLoad = engine.AttachCurrentSceneWorld(proceduralWorldRoot: worldRoot);
+            Assert.Null(worldLoad);
+            Assert.True(engine.IsSimulationWorldAttached);
+
+            MaterialTable materials = engine.Context.GetService<MaterialTable>();
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            WorldManager world = engine.Context.GetService<WorldManager>();
+            ProceduralWorldDescriptor descriptor = generator.Describe(default);
+            Assert.Equal(ProceduralWorldExtent.Infinite, descriptor.Extent);
+            Assert.Equal(PlayableCavernWorldGenerator.PersistenceKey, descriptor.PersistenceKey);
+            Assert.True(world.Chunks.TryGetChunk(new ChunkCoord(-1, 0), out _));
+            Assert.True(world.Chunks.TryGetChunk(new ChunkCoord(0, 0), out _));
+
+            Assert.True(materials.TryGetId("empty", out ushort empty));
+            Assert.True(materials.TryGetId("stone", out ushort stone));
+            Assert.True(materials.TryGetId("dirt", out ushort dirt));
+            Assert.True(materials.TryGetId("sand", out ushort sand));
+            Assert.Equal(empty, grid.MaterialAt(0, PlayableCavernWorldGenerator.SafeSurfaceY - 1));
+            Assert.Contains(
+                grid.MaterialAt(0, PlayableCavernWorldGenerator.SafeSurfaceY),
+                new[] { stone, dirt, sand });
+            Assert.False(PlayableCavernWorldGenerator.IsCaveAt(
+                0,
+                PlayableCavernWorldGenerator.SafeSurfaceY + 48,
+                PlayableCavernWorldGenerator.SafeSurfaceY));
+
+            int minimumSurface = int.MaxValue;
+            int maximumSurface = int.MinValue;
+            int caveSamples = 0;
+            for (long x = -32_768; x <= 32_768; x += 64)
             {
-                ushort material = grid.MaterialAt(x, y);
-                metalCells += material == metal ? 1 : 0;
-                woodCells += material == wood ? 1 : 0;
-                stoneCells += material == stone ? 1 : 0;
-                lavaCells += material == lava ? 1 : 0;
+                int surface = PlayableCavernWorldGenerator.SurfaceYAt(x);
+                Assert.Equal(surface, PlayableCavernWorldGenerator.SurfaceYAt(x));
+                minimumSurface = Math.Min(minimumSurface, surface);
+                maximumSurface = Math.Max(maximumSurface, surface);
+                for (long y = surface + 24; y <= surface + 280; y += 16)
+                {
+                    caveSamples += PlayableCavernWorldGenerator.IsCaveAt(x, y, surface) ? 1 : 0;
+                }
+            }
+
+            Assert.True(minimumSurface < 145, $"应出现高山地表，minY={minimumSurface}");
+            Assert.True(maximumSurface > 265, $"应出现深盆地地表，maxY={maximumSurface}");
+            Assert.True(maximumSurface - minimumSurface > 130, $"地貌高差不足，min={minimumSurface}, max={maximumSurface}");
+            Assert.True(caveSamples > 40, $"应在深层形成可辨识洞穴，samples={caveSamples}");
+        }
+        finally
+        {
+            if (Directory.Exists(worldRoot))
+            {
+                Directory.Delete(worldRoot, recursive: true);
             }
         }
+    }
 
-        Assert.True(lavaCells > 600, $"横向路线应包含多个中段 lava 坑，actual={lavaCells}");
-        Assert.True(metalCells > 300, $"横向路线应包含 metal 可拆跳台/障碍，actual={metalCells}");
-        Assert.True(woodCells > 300, $"横向路线应包含 wood 可拆桥梁/障碍，actual={woodCells}");
-        Assert.True(stoneCells > 1_000, $"横向路线应包含 stone 主地形和障碍，actual={stoneCells}");
-        Assert.Equal(sand, grid.MaterialAt(72, floorY - 8));
-        Assert.Equal(lava, grid.MaterialAt(210, floorY + 4));
+    /// <summary>
+    /// 验证默认无限沙盒跨正负远距离流送时内存有界，且原点修改经卸载 / 重入持久保留。
+    /// </summary>
+    [Fact]
+    public void InfiniteSandboxStreamsBothDirectionsWithinBudgetAndPersistsEdits()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        string worldRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.Demo.StreamingPersistence", Guid.NewGuid().ToString("N"));
+        try
+        {
+            DemoStartupOptions options = DemoStartupOptions.Parse([
+                "--headless",
+                "--no-hot-reload",
+                "--content",
+                contentRoot,
+                "--scene",
+                DemoStartupOptions.DefaultSceneName,
+            ]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+            engine.RegisterStreamingProceduralWorldGenerator(
+                PlayableCavernWorldGenerator.Key,
+                new PlayableCavernWorldGenerator());
+            _ = engine.LoadContentPackage();
+            int chunkBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes;
+            long capBytes = chunkBytes * 200L;
+            _ = engine.AttachCurrentSceneWorld(
+                streamingConfig: new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 1,
+                    BorderRingWidth = 1,
+                    ResidentMemoryCapBytes = capBytes,
+                    EvictionTargetBytes = chunkBytes * 192L,
+                    MaxStreamOpsPerFrame = 512,
+                },
+                proceduralWorldRoot: worldRoot);
+
+            WorldManager world = engine.Context.GetService<WorldManager>();
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            IMaterialQuery materials = engine.Context.GetService<IMaterialQuery>();
+            ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+            int editedY = PlayableCavernWorldGenerator.SafeSurfaceY;
+            Assert.NotEqual(materials.Resolve("empty").Value, grid.MaterialAt(0, editedY));
+            edit.PaintCell(0, editedY, materials.Resolve("empty").Value);
+
+            long frame = 1;
+            long[] focusX = [-8_192, 8_192, 0];
+            foreach (long focus in focusX)
+            {
+                world.UpdateCamera(focus, PlayableCavernWorldGenerator.SafeSurfaceY - 16);
+                for (int iteration = 0; iteration < 4; iteration++)
+                {
+                    world.ApplyResidency(frame++);
+                    _ = world.Streamer.ProcessIoOnce(engine.Context.Jobs);
+                }
+
+                world.ApplyResidency(frame++);
+                Assert.InRange(world.MemoryBudget.ResidentBytes, 0, capBytes);
+                Assert.True(world.Chunks.Contains(world.Camera.FocusChunk));
+            }
+
+            Assert.Equal(materials.Resolve("empty").Value, grid.MaterialAt(0, editedY));
+            Assert.InRange(world.MemoryBudget.ResidentBytes, 0, capBytes);
+        }
+        finally
+        {
+            if (Directory.Exists(worldRoot))
+            {
+                Directory.Delete(worldRoot, recursive: true);
+            }
+        }
     }
 
     /// <summary>

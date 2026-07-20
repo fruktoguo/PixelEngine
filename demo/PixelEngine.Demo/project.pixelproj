@@ -3,8 +3,12 @@
   "name": "PixelEngine Demo",
   "contentRoot": "content",
   "scriptSourceDir": "scripts",
-  "startScene": "scenes/lava-mine.scene",
+  "startScene": "scenes/infinite-sandbox.scene",
   "scenes": [
+    {
+      "name": "Infinite Sandbox",
+      "path": "scenes/infinite-sandbox.scene"
+    },
     {
       "name": "Lava Mine",
       "path": "scenes/lava-mine.scene"
