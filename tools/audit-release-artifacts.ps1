@@ -3,7 +3,7 @@ param(
   [string]$PackageRoot,
   [string]$ProductName,
   [string]$AssemblyName,
-  [string]$RequiredScene = 'scenes/lava-mine.scene',
+  [string]$RequiredScene = 'scenes/infinite-sandbox.scene',
   [string]$ActiveRids,
   [switch]$DevLayout,
   [switch]$SkipPublishContentAudit,

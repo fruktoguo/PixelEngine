@@ -592,7 +592,7 @@ $demoBuildResult = Invoke-ProcessChecked `
     '-Configuration', $Configuration,
     '-Output', $demoBuildOutput,
     '-ProductName', 'PixelEngine Demo',
-    '-StartScene', 'scenes/lava-mine.scene',
+    '-StartScene', 'scenes/infinite-sandbox.scene',
     '-WindowWidth', '1080',
     '-WindowHeight', '720',
     '-WindowMode', $expectedDemoWindowMode,

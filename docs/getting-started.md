@@ -87,7 +87,7 @@ pwsh -NoProfile -File tools/build-player.ps1 `
   -Output artifacts/demo-player `
   -ContentRoot demo/PixelEngine.Demo/content `
   -ProductName "PixelEngine Demo" `
-  -StartScene scenes/lava-mine.scene
+  -StartScene scenes/infinite-sandbox.scene
 
 & "artifacts/demo-player/player/PixelEngine Demo.exe"
 ```

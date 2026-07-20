@@ -289,8 +289,11 @@ public sealed class HostingProjectDisciplineTests
         // Arrange：准备输入与初始状态
         string root = FindRepositoryRoot();
         string finalOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output.ps1"));
+        string fastOutputScript = File.ReadAllText(Path.Combine(root, "tools", "update-final-output-fast.ps1"));
         string buildPlayerPs1 = File.ReadAllText(Path.Combine(root, "tools", "build-player.ps1"));
         string buildPlayerSh = File.ReadAllText(Path.Combine(root, "tools", "build-player.sh"));
+        string auditPs1 = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.ps1"));
+        string auditSh = File.ReadAllText(Path.Combine(root, "tools", "audit-release-artifacts.sh"));
 
         // Assert：验证预期结果
         Assert.Contains("[string]$DemoRuntimeUiBackend = 'RmlUi'", finalOutputScript, StringComparison.Ordinal);
@@ -301,6 +304,14 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("'game_ui_probe ' 'active' $expectedDemoRuntimeUiBackendActive", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'fallback' $expectedDemoRuntimeUiBackendFallback.ToString()", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'-WindowMode', $expectedDemoWindowMode", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'-StartScene', 'scenes/infinite-sandbox.scene'", finalOutputScript, StringComparison.Ordinal);
+        Assert.Contains("'-StartScene', 'scenes/infinite-sandbox.scene'", fastOutputScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("'-StartScene', 'scenes/lava-mine.scene'", finalOutputScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("'-StartScene', 'scenes/lava-mine.scene'", fastOutputScript, StringComparison.Ordinal);
+        Assert.Contains("[string]$StartScene = 'scenes/infinite-sandbox.scene'", buildPlayerPs1, StringComparison.Ordinal);
+        Assert.Contains("start_scene=\"scenes/infinite-sandbox.scene\"", buildPlayerSh, StringComparison.Ordinal);
+        Assert.Contains("[string]$RequiredScene = 'scenes/infinite-sandbox.scene'", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("required_scene=\"scenes/infinite-sandbox.scene\"", auditSh, StringComparison.Ordinal);
         Assert.Contains("'player_window_probe ' 'applied' 'True'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("$demoBuildOutput = Join-Path $stagingRoot '游戏Demo构建'", finalOutputScript, StringComparison.Ordinal);
         Assert.Contains("'game_ui_probe ' 'content_path_non_ascii' 'True'", finalOutputScript, StringComparison.Ordinal);

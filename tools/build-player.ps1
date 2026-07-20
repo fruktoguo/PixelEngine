@@ -20,7 +20,7 @@ param(
   [string]$IconPath,
   [string]$ApplicationIcon,
   [switch]$IncludeSymbols,
-  [string]$StartScene = 'scenes/playable-world.scene',
+  [string]$StartScene = 'scenes/infinite-sandbox.scene',
   [int]$WindowWidth = 1280,
   [int]$WindowHeight = 720,
   [ValidateSet('Windowed', 'MaximizedWindow', 'BorderlessFullscreen')]

@@ -174,7 +174,7 @@ try {
     '-OutputRoot', $demoPackageRoot,
     '-PlayerOutputDir', $finalDemoDir,
     '-ProductName', 'PixelEngine Demo',
-    '-StartScene', 'scenes/lava-mine.scene',
+    '-StartScene', 'scenes/infinite-sandbox.scene',
     '-WindowWidth', '1080',
     '-WindowHeight', '720',
     '-WindowMode', 'Windowed',
