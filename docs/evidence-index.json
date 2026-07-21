@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
-  "generatedAt": "2026-07-20",
-  "generatedFromCommit": "34973b16a7384846766c166297d3b84e9d596ab1",
+  "generatedAt": "2026-07-22",
+  "generatedFromCommit": "614d65d1dc5692df2ad7822239a3618dd8d7ff31",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -327,16 +327,16 @@
     },
     {
       "entryId": "scope-decisions-20260710",
-      "taskIds": ["SCOPE-001", "SCOPE-002", "SCOPE-003", "SCOPE-004", "SCOPE-005", "SCOPE-006"],
+      "taskIds": ["SCOPE-001", "SCOPE-002", "SCOPE-003", "SCOPE-004", "SCOPE-005", "SCOPE-006", "SCOPE-007", "SCOPE-008"],
       "evidenceState": "decision_record",
-      "commit": "464f40a397ca3bf279d541fcfef9e0629628e1f4",
+      "commit": "1698db2983c8652616c81601369140581370e74e",
       "runSessionId": null,
       "runIdentityStatus": "not_recorded_in_source_report",
       "hardware": "产品范围决策；不绑定硬件或运行 session",
-      "command": "git show 464f40a397ca3bf279d541fcfef9e0629628e1f4:plan/tasks/20-scope-decisions.md",
+      "command": "git show 1698db2983c8652616c81601369140581370e74e:plan/tasks/20-scope-decisions.md",
       "reportPath": "plan/tasks/20-scope-decisions.md",
-      "sha256": "9745c77424cd1c5557238db92f48babad8de11ab3f323c57f986d794c4a87472",
-      "notes": "稳定范围决策记录；不把 scope 决策伪装成目标硬件、CI 或人工体验证据。"
+      "sha256": "e5fca71df412f258f127a5eab5ac185ec05d0fb3a6e30c668508bc2982293eb3",
+      "notes": "稳定范围决策记录；SCOPE-007 记录原创 Roguelite 阶段，SCOPE-008 记录用户于 2026-07-22 明确调整为 Noita 高保真复刻、同时保持 Engine 通用与 Demo-only 内容边界；不把 scope 决策伪装成目标硬件、CI 或人工体验证据。"
     },
     {
       "entryId": "task-catalog-20260710",
@@ -961,6 +961,19 @@
       "reportPath": "docs/evidence-2026-07-20-demo-006-infinite-sandbox.md",
       "sha256": "e4fd9856cb48bf8998cae622b53a3f77679a714991880ec57156c2d5e3cd935a",
       "notes": "The default Demo is a deterministic streaming infinite sandbox with natural mountains, basins, lakes, layered terrain and caves, bidirectional bounded residency, store-before-generation persistence, unclamped camera and no default victory components. Public Editor CLI Play and verified Scene/Game captures pass with zero warnings/errors; final packaged RmlUi player starts infinite-sandbox.scene and exits 0. Fast-output verified=false is retained honestly and is not used to claim signed or deterministic release completion."
+    },
+    {
+      "entryId": "demo-007-noita-campaign-foundation-20260722",
+      "taskIds": ["DEMO-007"],
+      "evidenceState": "complete",
+      "commit": "614d65d1dc5692df2ad7822239a3618dd8d7ff31",
+      "runSessionId": "local-20260722-demo007-final-614d65d1",
+      "runIdentityStatus": "captured_clean_commit_bound_build_and_live_editor_player_runs",
+      "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; PowerShell 7.6.3; .NET SDK 10.0.108; win-x64; real Win32 dpi=144 (150%)",
+      "command": "detached clean 614d65d1 solution Release build and Scripting/Demo/Hosting full tests; authenticated pixelengine-editor public CLI Campaign death/RunSummary/new-seed restart and InfiniteSandbox same-seed respawn with verified artifacts; tools/update-final-output-fast.ps1 win-x64 Release RmlUi; independently verify 186 package checksums and MSI database; run clean and promoted-root packaged PixelEngine Demo.exe for 1080x720 RmlUi framebuffer/window/UI probes",
+      "reportPath": "docs/evidence-2026-07-22-demo-007-noita-campaign-foundation.md",
+      "sha256": "a77ef1e028aa73af1d1dee0d00d43250f6958cbf650a2e613fb882e5449f7263",
+      "notes": "Campaign and InfiniteSandbox now have isolated lifecycle semantics: Campaign permanent death reaches RunSummary then atomically rebuilds a new seed and all script/runtime state, while Sandbox respawns in the same world without a modal. Eight Noita main-path biome names and seven Holy Mountain anchors are deterministic and bounded; all terrain destruction feeds topology dirty regions, disconnected fragments are bounded rigid/free-particle conversions, input has one owner, and HUD exposes mode/seed/biome/depth/equipment/material identity. Clean build and full tests pass; real Editor sessions have zero Console warnings/errors; promoted packaged Player uses active RmlUi with no fallback or stderr. Fast-output verified=false remains honest and is not used to claim the separate full release verifier."
     }
   ]
 }
