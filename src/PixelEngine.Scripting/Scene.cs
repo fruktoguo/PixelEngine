@@ -118,9 +118,9 @@ public sealed class Scene
         where T : class, IComponent, new()
     {
         ValidateEntity(entity);
-        ComponentBucket<T> bucket = GetOrCreateBucket<T>();
+        IComponentBucket bucket = GetOrCreateBucket<T>();
         T component = new();
-        bucket.Add(entity, component);
+        bucket.AddObject(entity, component);
         return component;
     }
 
@@ -374,7 +374,8 @@ public sealed class Scene
     internal void RestorePlaySessionSnapshot(ScriptPlaySessionSnapshot snapshot)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        // Play Session 快照恢复：先删多余实体，再补缺失 id，最后对齐 Behaviour 集合与序列化状态。
+        // Play Session 快照恢复：保留 Scene/Entity 容器与非 Behaviour authoring 组件，
+        // 但强制重新实例化全部 Behaviour，避免未持久化的私有运行态跨 run 泄漏。
         HashSet<int> savedEntityIds = [.. snapshot.EntityIds];
         Entity[] currentEntities = [.. _entities.Values];
         for (int i = 0; i < currentEntities.Length; i++)
@@ -397,38 +398,16 @@ public sealed class Scene
         for (int recordIndex = 0; recordIndex < records.Length; recordIndex++)
         {
             ScriptBehaviourRecord current = records[recordIndex];
-            if (!ContainsSnapshotBehaviour(snapshot, current.Entity.Id, current.Behaviour.GetType()))
-            {
-                RemoveComponent(current.Entity, current.Behaviour.GetType());
-            }
+            RemoveComponent(current.Entity, current.Behaviour.GetType());
         }
 
         for (int snapshotIndex = 0; snapshotIndex < snapshot.Behaviours.Length; snapshotIndex++)
         {
             ScriptPlaySessionBehaviourSnapshot saved = snapshot.Behaviours[snapshotIndex];
             Entity entity = _entities[saved.EntityId];
-            if (!TryGetComponent(entity, saved.BehaviourType, out IComponent component))
-            {
-                component = AddComponent(entity, saved.BehaviourType);
-            }
-
-            if (component is Behaviour behaviour)
-            {
-                saved.State.Restore(behaviour);
-            }
+            IComponent component = AddComponent(entity, saved.BehaviourType);
+            saved.State.Restore((Behaviour)component);
         }
-    }
-
-    private bool TryGetComponent(Entity entity, Type componentType, out IComponent component)
-    {
-        ValidateEntity(entity);
-        if (_buckets.TryGetValue(componentType, out IComponentBucket? bucket))
-        {
-            return bucket.TryGetObject(entity.Id, out component);
-        }
-
-        component = null!;
-        return false;
     }
 
     private Entity CreateEntityWithId(int id)
@@ -488,20 +467,6 @@ public sealed class Scene
         }
     }
 
-    private static bool ContainsSnapshotBehaviour(ScriptPlaySessionSnapshot snapshot, int entityId, Type behaviourType)
-    {
-        for (int i = 0; i < snapshot.Behaviours.Length; i++)
-        {
-            ScriptPlaySessionBehaviourSnapshot saved = snapshot.Behaviours[i];
-            if (saved.EntityId == entityId && saved.BehaviourType == behaviourType)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     private void ValidateEntity(Entity entity)
     {
         ArgumentNullException.ThrowIfNull(entity);
@@ -511,13 +476,13 @@ public sealed class Scene
         }
     }
 
-    private ComponentBucket<T> GetOrCreateBucket<T>()
+    private IComponentBucket GetOrCreateBucket<T>()
         where T : class, IComponent
     {
         Type type = typeof(T);
         if (_buckets.TryGetValue(type, out IComponentBucket? bucket))
         {
-            return (ComponentBucket<T>)bucket;
+            return bucket;
         }
 
         ComponentBucket<T> created = new();

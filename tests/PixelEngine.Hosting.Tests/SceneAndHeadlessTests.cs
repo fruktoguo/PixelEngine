@@ -947,18 +947,27 @@ public sealed class SceneAndHeadlessTests
             Assert.Equal(RuntimeRestartStatus.Succeeded, context.Runtime.Capture().RestartStatus);
             Assert.Equal(202UL, engine.Context.GetService<SimulationKernel>().WorldSeed);
             Assert.Equal(202UL, context.Runtime.Capture().WorldSeed);
-            Assert.Equal(7, script.Score);
+            Assert.True(scriptScene.TryGetFirstComponent(out SnapshotCounterBehaviour? restartedScript));
+            Assert.True(scriptScene.TryGetFirstComponent(out RestartableCharacterBehaviour? restartedCharacter));
+            Assert.True(scriptScene.TryGetFirstComponent(out DeferredProceduralRestartBehaviour? restartedRequester));
+            Assert.NotSame(script, restartedScript);
+            Assert.NotSame(character, restartedCharacter);
+            Assert.NotSame(restartRequester, restartedRequester);
+            Assert.Equal(99, script.Score);
+            Assert.Equal(7, restartedScript.Score);
             Assert.Equal(0, particles.ActiveCount);
             Assert.Equal(2, context.Cells.GetMaterial(0, 0).Value);
             Assert.Equal(2f, engine.Context.GetService<TemperatureField>().GetTemperature(0, 0));
             Assert.Equal(0, engine.Context.GetService<WorldManager>().Streamer.PendingRequestCount);
             Assert.False(character.HasLiveHandle);
+            Assert.False(restartedCharacter.HasLiveHandle);
+            Assert.Equal(1, restartedCharacter.StartCount);
 
             _ = engine.RunOneTick();
             Assert.Equal(2, context.Cells.GetMaterial(0, 0).Value);
-            Assert.Equal(2, character.StartCount);
-            Assert.True(character.HasLiveHandle);
-            Assert.False(character.Faulted);
+            Assert.Equal(2, restartedCharacter.StartCount);
+            Assert.True(restartedCharacter.HasLiveHandle);
+            Assert.False(restartedCharacter.Faulted);
             Assert.Equal(0, scriptScene.ScriptExceptionCount);
             Assert.Equal(2, generator.DescribedSeeds.Length);
             Assert.Contains(101UL, generator.DescribedSeeds);
@@ -1207,7 +1216,10 @@ public sealed class SceneAndHeadlessTests
         // Assert：验证预期结果
         Assert.True(save.Success, save.Message);
         Assert.True(restore.Success, restore.Message);
-        Assert.Equal(7, script.Score);
+        Assert.True(scriptScene.TryGetFirstComponent(out SnapshotCounterBehaviour? restoredScript));
+        Assert.NotSame(script, restoredScript);
+        Assert.Equal(99, script.Score);
+        Assert.Equal(7, restoredScript.Score);
     }
 
     /// <summary>
@@ -1280,16 +1292,24 @@ public sealed class SceneAndHeadlessTests
         script.Score = 99;
         engine.EnterEditMode();
         RuntimeControlResult firstRestart = runtime.RequestRestartCurrentScene();
+        _ = engine.RunOneTick();
+        Assert.True(scriptScene.TryGetFirstComponent(out SnapshotCounterBehaviour? firstRestoredScript));
+        Assert.NotSame(script, firstRestoredScript);
         edit.PaintCell(4, 5, 1);
-        script.Score = 55;
+        firstRestoredScript.Score = 55;
         RuntimeControlResult secondRestart = runtime.RequestRestartCurrentScene();
+        _ = engine.RunOneTick();
+        Assert.True(scriptScene.TryGetFirstComponent(out SnapshotCounterBehaviour? secondRestoredScript));
 
         // Assert：验证不变式与预期结果
         Assert.True(firstRestart.Success, firstRestart.Message);
         Assert.True(secondRestart.Success, secondRestart.Message);
         Assert.Equal(EngineExecutionMode.Play, engine.Mode);
         Assert.Equal(0, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
-        Assert.Equal(7, script.Score);
+        Assert.NotSame(firstRestoredScript, secondRestoredScript);
+        Assert.Equal(99, script.Score);
+        Assert.Equal(55, firstRestoredScript.Score);
+        Assert.Equal(7, secondRestoredScript.Score);
     }
 
     /// <summary>

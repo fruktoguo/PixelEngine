@@ -771,6 +771,10 @@ public sealed class DemoUiContentTests
             Assert.Equal(default, controller.MainScreen);
             Assert.Equal(default, controller.HudScreenHandle);
 
+            Assert.True(scene.TryGetFirstComponent(out GameUiDemoController? restoredController));
+            Assert.NotSame(controller, restoredController);
+            controller = restoredController;
+
             EditorPlaySessionResult secondEnter = play.EnterPlayTemporary();
             engine.RunHeadlessTicks(1);
 

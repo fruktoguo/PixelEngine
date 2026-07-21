@@ -189,6 +189,7 @@ public sealed class CampaignRunDirectorTests
 
             originalHealth.ApplyExternalDamage(originalHealth.MaxHealth * 2f);
             Assert.Equal(CampaignRunState.Dead, originalRun.State);
+            Assert.Equal(1, originalHealth.DamageEventCount);
             _ = engine.RunOneTick(1.0 / 60.0);
             Assert.Equal(CampaignRunState.RunSummary, originalRun.State);
             Assert.Equal(0, originalHealth.RespawnCount);
@@ -210,14 +211,16 @@ public sealed class CampaignRunDirectorTests
             Assert.Same(originalScene, replacementScene);
             Assert.True(replacementScene.TryGetFirstComponent(out CampaignRunDirector? replacementRun));
             Assert.True(replacementScene.TryGetFirstComponent(out PlayerHealth? replacementHealth));
-            Assert.Same(originalRun, replacementRun);
-            Assert.Same(originalHealth, replacementHealth);
+            Assert.NotSame(originalRun, replacementRun);
+            Assert.NotSame(originalHealth, replacementHealth);
             Assert.Equal(nextSeed, engine.Context.GetService<SimulationKernel>().WorldSeed);
             Assert.Equal(nextSeed, replacementRun.RunSeed);
             Assert.Contains(
                 replacementRun.State,
                 new[] { CampaignRunState.StartingRun, CampaignRunState.Exploring });
             Assert.Equal(replacementHealth.MaxHealth, replacementHealth.Health);
+            Assert.Equal(0, replacementHealth.DamageEventCount);
+            Assert.Equal(0, replacementHealth.RespawnCount);
             Assert.Equal(0, engine.Context.GetService<ParticleSystem>().ActiveCount);
         }
         finally

@@ -59,6 +59,29 @@ public sealed class SmokeTests
     }
 
     /// <summary>
+    /// 验证 Play Session 恢复会重建 Behaviour，且运行时类型 bucket 仍可接受后续泛型添加。
+    /// </summary>
+    [Fact]
+    public void PlaySessionRestoreRecreatesBehaviourAndPreservesGenericBucketInterop()
+    {
+        Scene scene = new();
+        Entity originalEntity = scene.CreateEntity();
+        TestComponent original = originalEntity.AddComponent<TestComponent>();
+        original.Value = 7;
+        ScriptPlaySessionSnapshot snapshot = scene.CapturePlaySessionSnapshot();
+        original.Value = 99;
+
+        scene.RestorePlaySessionSnapshot(snapshot);
+
+        Assert.True(originalEntity.TryGetComponent(out TestComponent restored));
+        Assert.NotSame(original, restored);
+        Assert.Equal(7, restored.Value);
+        Entity addedEntity = scene.CreateEntity();
+        TestComponent added = addedEntity.AddComponent<TestComponent>();
+        Assert.Same(added, AssertComponent<TestComponent>(addedEntity));
+    }
+
+    /// <summary>
     /// 验证 Behaviour 生命周期由 Scene 按相位 1 语义派发。
     /// </summary>
     [Fact]
@@ -201,6 +224,13 @@ public sealed class SmokeTests
     private sealed class TestComponent : Behaviour
     {
         public int Value { get; set; }
+    }
+
+    private static TComponent AssertComponent<TComponent>(Entity entity)
+        where TComponent : class, IComponent
+    {
+        Assert.True(entity.TryGetComponent(out TComponent component));
+        return component;
     }
 
     private sealed class DynamicComponent : Behaviour

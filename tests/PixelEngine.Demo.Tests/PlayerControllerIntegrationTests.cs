@@ -270,8 +270,9 @@ public sealed class PlayerControllerIntegrationTests
 
         RecordingGuiContext restartGui = new(clickedButtons: ["重开"]);
         runtime.DrawGui(restartGui);
+        engine.RunHeadlessTicks(1);
 
-        Assert.Contains(restartGui.Drawn, line => line.StartsWith("text:已重开当前关卡", StringComparison.Ordinal));
+        Assert.Contains(restartGui.Drawn, line => line.StartsWith("text:已请求在相位安全点重开当前关卡", StringComparison.Ordinal));
         Assert.True(runtimeControl.Capture().IsPlaying);
 
     }

@@ -42,7 +42,6 @@ public sealed class Engine : IDisposable
     private int _renderFrameSampleCount;
     private double _renderFrameSampleSumMs;
     private bool _restartSnapshotCaptured;
-    private bool _executingPhases;
     private bool _disposed;
 
     internal Engine(EngineContext context, EnginePhasePipeline phases, EngineLifecycle lifecycle)
@@ -235,27 +234,23 @@ public sealed class Engine : IDisposable
     internal RuntimeControlResult RequestRestartCurrentSceneAtSafePoint()
     {
         ThrowIfShutdown();
-        return !_executingPhases
-            ? RecordRuntimeRestartResult(RestartCurrentScene())
-            : !_restartSnapshotCaptured || _restartSnapshotStore is null
-                ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "重开关卡快照尚未捕获。"))
-                : QueueRuntimeRestart(new PendingRuntimeRestart(RuntimeRestartKind.CurrentScene, 0));
+        return !_restartSnapshotCaptured || _restartSnapshotStore is null
+            ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "重开关卡快照尚未捕获。"))
+            : QueueRuntimeRestart(new PendingRuntimeRestart(RuntimeRestartKind.CurrentScene, 0));
     }
 
     internal RuntimeControlResult RequestRestartCurrentProceduralWorldAtSafePoint(ulong worldSeed)
     {
         ThrowIfShutdown();
-        return !_executingPhases
-            ? RecordRuntimeRestartResult(RestartCurrentProceduralWorld(worldSeed))
-            : !_restartSnapshotCaptured || _restartSnapshotStore is null
-                ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "重开关卡快照尚未捕获。"))
-                : _streamingProceduralAttachment is null
-                    ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "当前场景不是已装配的流式程序化世界。"))
-                    : !Context.TryGetService(out WorldManager _) ||
-                        !Context.TryGetService(out SimulationKernel _) ||
-                        !Context.TryGetService(out ParticleSystem _)
-                        ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "当前程序化场景缺少 World/Simulation 运行服务。"))
-                        : QueueRuntimeRestart(new PendingRuntimeRestart(RuntimeRestartKind.ProceduralWorld, worldSeed));
+        return !_restartSnapshotCaptured || _restartSnapshotStore is null
+            ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "重开关卡快照尚未捕获。"))
+            : _streamingProceduralAttachment is null
+                ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "当前场景不是已装配的流式程序化世界。"))
+                : !Context.TryGetService(out WorldManager _) ||
+                    !Context.TryGetService(out SimulationKernel _) ||
+                    !Context.TryGetService(out ParticleSystem _)
+                    ? RecordRuntimeRestartResult(new RuntimeControlResult(false, "当前程序化场景缺少 World/Simulation 运行服务。"))
+                    : QueueRuntimeRestart(new PendingRuntimeRestart(RuntimeRestartKind.ProceduralWorld, worldSeed));
     }
 
     /// <summary>
@@ -288,7 +283,7 @@ public sealed class Engine : IDisposable
     }
 
     /// <summary>
-    /// 以指定 seed 原子重建当前流式程序化 world，并恢复首次脚本 tick 捕获的脚本基线。
+    /// 以指定 seed 原子重建当前流式程序化 world，重新实例化 Behaviour，并恢复首次脚本 tick 捕获的持久脚本基线。
     /// </summary>
     /// <param name="worldSeed">新程序化世界的权威 seed。</param>
     /// <returns>重建结果；场景类型或运行基线不满足时返回失败。</returns>
@@ -3248,15 +3243,7 @@ public sealed class Engine : IDisposable
             }
 
             // 相位 1-11：按 EnginePhasePipeline 顺序执行各子系统 tick。
-            _executingPhases = true;
-            try
-            {
-                Phases.Execute(this, timing);
-            }
-            finally
-            {
-                _executingPhases = false;
-            }
+            Phases.Execute(this, timing);
 
             bool restartedAtSafePoint = ApplyPendingRuntimeRestart();
             Context.Counters.SimHz = Context.Clock.SimHz;
