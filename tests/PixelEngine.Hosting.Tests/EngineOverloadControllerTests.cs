@@ -403,7 +403,7 @@ public sealed class EngineOverloadControllerTests
     }
 
     /// <summary>
-    /// 验证脚本运行时控制 API 真实驱动 Engine Play/Edit 模式与关闭请求。
+    /// 验证脚本运行时控制 API 真实驱动 Engine Play/Pause 模式与关闭请求。
     /// </summary>
     [Fact]
     public void ScriptRuntimeControlApiControlsEngineModeAndShutdownRequest()
@@ -421,7 +421,7 @@ public sealed class EngineOverloadControllerTests
         Assert.False(initial.IsShutdownRequested);
 
         api.PauseSimulation();
-        Assert.Equal(EngineExecutionMode.Edit, engine.Mode);
+        Assert.Equal(EngineExecutionMode.Paused, engine.Mode);
         Assert.False(api.Capture().IsPlaying);
 
         api.ResumeSimulation();

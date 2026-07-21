@@ -30,11 +30,11 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
     }
 
     /// <summary>
-    /// 切换到 Edit 模式，暂停 sim/physics 推进但保留渲染与 GUI。
+    /// 切换到 Paused 模式，暂停 sim/physics 推进但保留当前 Play session、渲染与 GUI。
     /// </summary>
     public void PauseSimulation()
     {
-        _engine.EnterEditMode();
+        _engine.EnterPauseMode();
     }
 
     /// <summary>
