@@ -1,6 +1,6 @@
 {
   "schema": "pixelengine.task-source-coverage/v2",
-  "snapshotCommit": "179efc3a90f95fbf5222cc1ac55e63b6841c0022",
+  "snapshotCommit": "4ccbe5777f32dae44f7c9614f723a29eeee43751",
   "countsIncludeIndentedCheckboxes": true,
   "mappingSemantics": "completed capability bundles plus related follow-up tasks; not one-to-one checkbox ownership",
   "legacyCheckboxTotal": 1692,
@@ -99,7 +99,7 @@
     {
       "path": "plan/13-demo-game.md",
       "expected": { "done": 42, "open": 0, "active": 0, "blocked": 22 },
-      "checkboxSha256": "8640831734c4f676c8158b1d187fcc15836e9f6c9c98d174be95cde8fb468edc",
+      "checkboxSha256": "69fe12d2f3cbc492c510776322072064cd005347ee42cd4b2266a4639e022bbc",
       "completedCapabilityIds": ["BASE-015", "SCOPE-006", "SCOPE-007", "SCOPE-008"],
       "followUpTaskIds": ["DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DEMO-006", "DEMO-007", "DEMO-008", "DEMO-009", "DEMO-010", "DEMO-011", "DEMO-012", "DEMO-013", "UI-001", "PERF-007", "PERF-008"]
     },
