@@ -265,7 +265,7 @@ public sealed class DemoUiContentTests
 
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
-        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context");
+        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context_divider");
         XElement telemetry = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_telemetry");
         Assert.Equal("toggle_telemetry", (string?)telemetry.Attribute("data-event-click"));
 
@@ -1492,7 +1492,7 @@ public sealed class DemoUiContentTests
             Assert.Equal(PlayerInputMode.Combat, inputMode.Mode);
             Assert.Equal("战斗 / Combat", GetUiText(ui, "hud.input_mode_text"));
             Assert.Equal("Shot", GetUiText(ui, "hud.equipment_text"));
-            Assert.Equal("stone", GetUiText(ui, "hud.material_name"));
+            Assert.Equal("石 / Stone", GetUiText(ui, "hud.material_name"));
             Assert.Equal("石：可破坏固体，破碎后成为砂砾", GetUiText(ui, "hud.material_detail"));
 
             input.Update([Key.B], [], mouseX: 10f, mouseY: 10f, wheelY: 0f);
@@ -1500,7 +1500,7 @@ public sealed class DemoUiContentTests
 
             Assert.Equal(PlayerInputMode.MaterialBrush, inputMode.Mode);
             Assert.Equal("材质刷 / Material Brush", GetUiText(ui, "hud.input_mode_text"));
-            Assert.Equal("sand", GetUiText(ui, "hud.equipment_text"));
+            Assert.Equal("沙 / Sand", GetUiText(ui, "hud.equipment_text"));
         }
         finally
         {

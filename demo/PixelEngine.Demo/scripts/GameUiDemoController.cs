@@ -811,8 +811,7 @@ public sealed class GameUiDemoController : Behaviour
             return;
         }
 
-        string materialName = string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName;
-        SetScreenText(HudScreenHandle, HudMaterialNamePath, materialName);
+        SetScreenText(HudScreenHandle, HudMaterialNamePath, ResolveMaterialDisplayName(in material));
         SetScreenText(HudScreenHandle, HudMaterialDetailPath, ResolveMaterialPurpose(in material));
         _publishedCursorMaterial = materialId;
     }
@@ -825,7 +824,7 @@ public sealed class GameUiDemoController : Behaviour
             if (material.IsValid)
             {
                 MaterialInfo info = Context.Materials.GetInfo(material);
-                return string.IsNullOrWhiteSpace(info.DisplayName) ? info.Name : info.DisplayName;
+                return ResolveMaterialDisplayName(in info);
             }
 
             return _brush.SelectedMaterialName;
@@ -908,6 +907,35 @@ public sealed class GameUiDemoController : Behaviour
                 "液体：会流动并参与材质反应",
             _ when material.Density == 0 => "可穿行的空区域",
             _ => "可移动材质：受重力或扩散规则影响",
+        };
+    }
+
+    private static string ResolveMaterialDisplayName(in MaterialInfo material)
+    {
+        return material.Name switch
+        {
+            "empty" => "空气 / Air",
+            "sand" => "沙 / Sand",
+            "dirt" => "土 / Dirt",
+            "ash" => "灰烬 / Ash",
+            "water" => "水 / Water",
+            "oil" => "油 / Oil",
+            "acid" => "酸 / Acid",
+            "lava" => "熔岩 / Lava",
+            "molten_metal" => "熔融金属 / Molten Metal",
+            "steam" => "蒸汽 / Steam",
+            "smoke" => "烟 / Smoke",
+            "acid_gas" => "酸雾 / Acid Gas",
+            "fire" => "火焰 / Fire",
+            "stone" => "石 / Stone",
+            "wood" => "木 / Wood",
+            "ice" => "冰 / Ice",
+            "metal" => "金属 / Metal",
+            "glass" => "玻璃 / Glass",
+            "gravel" => "砂砾 / Gravel",
+            "crystal" => "晶体 / Crystal",
+            "boundary_stone" => "边界石 / Boundary Stone",
+            _ => string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName,
         };
     }
 
