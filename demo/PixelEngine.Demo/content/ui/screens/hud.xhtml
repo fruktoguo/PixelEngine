@@ -1,32 +1,28 @@
-<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v5" style="left: 14px; top: 14px; width: 316px; height: 308px">
+<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v6" style="left: 14px; top: 14px; width: 352px; height: 370px">
   <head>
     <style>
       body { margin: 0px; font-family: "Noto Sans SC"; color: #e8edf2; background-color: transparent; }
-      #status_panel { position: absolute; left: 16px; top: 16px; width: 286px; height: 218px; padding: 14px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #40546a; }
-      #objective_panel { position: absolute; left: 650px; top: 16px; width: 356px; height: 212px; padding: 14px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #6d5935; }
-      #status_title { position: absolute; left: 14px; top: 10px; color: #f5f7fa; font-size: 15px; }
-      #hud_title { position: absolute; left: 14px; top: 12px; color: #f1c264; font-size: 13px; }
-      #hud_route { position: absolute; left: 14px; top: 36px; }
-      #hud_region { position: absolute; left: 14px; top: 52px; }
-      #hud_seed_label { position: absolute; left: 14px; top: 70px; }
-      #hud_seed { position: absolute; left: 54px; top: 70px; }
-      #hud_depth_label { position: absolute; left: 14px; top: 86px; }
-      #hud_depth_value { position: absolute; left: 76px; top: 86px; }
+      #status_panel { position: absolute; left: 16px; top: 16px; width: 312px; height: 288px; padding: 12px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #40546a; }
+      #hud_title, #hud_route, #hud_region, #hud_seed_label, #hud_seed, #hud_depth_label, #hud_depth_value { position: absolute; margin: 0px; }
+      #hud_title { left: 12px; top: 10px; color: #f1c264; font-size: 13px; }
+      #hud_route { left: 12px; top: 28px; }
+      #hud_region { left: 12px; top: 44px; color: #e8edf2; }
+      #hud_seed_label { left: 12px; top: 60px; }
+      #hud_seed { left: 50px; top: 60px; }
+      #hud_depth_label { left: 12px; top: 76px; }
+      #hud_depth_value { left: 74px; top: 76px; }
       #hud_route, #hud_region, #hud_seed_label, #hud_seed, #hud_depth_label, #hud_depth_value { color: #9facbb; font-size: 11px; }
+      #run_divider { position: absolute; left: 12px; top: 94px; width: 288px; height: 1px; background-color: #3d4f62; }
       progress { position: relative; display: block; height: 13px; margin-top: 3px; background-color: #18232f; border-width: 1px; border-color: #34495e; }
       progress fill { background-color: #d2a642; }
       progress .meter_label { position: absolute; left: 6px; top: -1px; height: 13px; line-height: 13px; color: #f1f5f9; font-size: 10px; }
-      #status_panel progress { position: absolute; left: 14px; width: 270px; margin-top: 0px; }
-      #objective_panel progress { position: absolute; left: 14px; width: 340px; margin-top: 0px; }
-      #hud_health { top: 34px; }
-      #hud_levitation { top: 52px; }
-      #hud_ammo { top: 70px; }
-      #hud_cooldown { top: 88px; }
-      #hud_heat { top: 106px; }
-      #hud_reload { top: 124px; }
-      #hud_distance { top: 110px; }
-      #hud_depth { top: 134px; }
-      #hud_longitude { top: 158px; }
+      #status_panel progress { position: absolute; left: 12px; width: 288px; margin-top: 0px; }
+      #hud_health { top: 104px; }
+      #hud_levitation { top: 123px; }
+      #hud_ammo { top: 142px; }
+      #hud_cooldown { top: 161px; }
+      #hud_heat { top: 180px; }
+      #hud_reload { top: 199px; }
       #hud_health fill { background-color: #3ca66f; }
       #hud_levitation fill { background-color: #d3c55a; }
       #hud_ammo fill { background-color: #d3a341; }
@@ -37,24 +33,31 @@
       #hud_longitude fill { background-color: #4b83b8; }
       #hud_depth fill { background-color: #8b6cb0; }
       #hud_elevation fill { background-color: #4a9b7b; }
-      #hud_context_divider { position: absolute; left: 14px; top: 144px; width: 270px; height: 1px; background-color: #2f4153; }
-      .context_label { position: absolute; left: 14px; color: #7f92a5; font-size: 11px; }
-      #hud_mode_label, #hud_input_mode { top: 150px; }
-      #hud_equipment_label, #hud_equipment { top: 166px; }
-      #hud_material_label, #hud_material_name { top: 182px; }
-      #hud_input_mode, #hud_equipment, #hud_material_name { position: absolute; left: 52px; color: #d7dee6; font-size: 11px; }
+      #hud_context_divider { position: absolute; left: 12px; top: 220px; width: 288px; height: 1px; background-color: #2f4153; }
+      .context_label { position: absolute; left: 12px; color: #7f92a5; font-size: 11px; }
+      #hud_mode_label, #hud_input_mode { top: 228px; }
+      #hud_equipment_label, #hud_equipment { top: 244px; }
+      #hud_material_label, #hud_material_name { top: 260px; }
+      #hud_input_mode, #hud_equipment, #hud_material_name { position: absolute; left: 50px; color: #d7dee6; font-size: 11px; }
       #hud_material_name { color: #f1c264; }
-      #hud_material_detail { position: absolute; left: 14px; top: 198px; width: 270px; color: #aeb9c4; font-size: 10px; line-height: 12px; white-space: normal; }
+      #hud_material_detail { display: none; }
       button { width: 126px; height: 32px; color: #dfe8f1; text-align: center; background-color: rgba(18, 35, 51, 232); border-width: 1px; border-color: #45637e; }
       button:hover { color: #ffffff; background-color: #315b7e; border-color: #75a0c5; }
-      #hud_pause { position: absolute; left: 16px; top: 270px; }
-      #hud_telemetry { position: absolute; left: 154px; top: 270px; }
+      #hud_pause { position: absolute; left: 16px; top: 326px; width: 156px; }
+      #hud_telemetry { position: absolute; left: 180px; top: 326px; width: 156px; }
       #legacy_route_models { display: none; }
     </style>
   </head>
   <body>
     <div id="status_panel">
-      <div id="status_title" class="text_line">生存状态</div>
+      <span id="hud_title" path="hud.mode_text">战役 / Campaign</span>
+      <span id="hud_route" path="hud.run_state_text">探索 / Exploring</span>
+      <span id="hud_region" path="hud.region_text">Mines</span>
+      <span id="hud_seed_label">Seed</span>
+      <span id="hud_seed" path="hud.seed_text">0000000000000000</span>
+      <span id="hud_depth_label">深度 cell</span>
+      <span id="hud_depth_value" path="hud.depth_cells">0</span>
+      <div id="run_divider"></div>
       <progress id="hud_health" path="hud.health" value="1.0" text="生命"><div class="meter_label">生命</div></progress>
       <progress id="hud_levitation" path="hud.levitation" value="1.0" text="悬浮"><div class="meter_label">悬浮</div></progress>
       <progress id="hud_ammo" path="hud.ammo" value="0.0" text="弹药"><div class="meter_label">弹药</div></progress>
@@ -67,18 +70,6 @@
       <span id="hud_material_label" class="context_label">准星</span><span id="hud_material_name" path="hud.material_name">空气 / Air</span>
       <span id="hud_material_detail" path="hud.material_detail">可穿行的空区域</span>
     </div>
-    <div id="objective_panel">
-      <span id="hud_title" path="hud.mode_text">战役 / Campaign</span>
-      <span id="hud_route" path="hud.run_state_text">探索 / Exploring</span>
-      <span id="hud_region" path="hud.region_text">Mines</span>
-      <span id="hud_seed_label">Seed</span>
-      <span id="hud_seed" path="hud.seed_text">0000000000000000</span>
-      <span id="hud_depth_label">深度 cell</span>
-      <span id="hud_depth_value" path="hud.depth_cells">0</span>
-      <progress id="hud_distance" path="hud.distance" value="0.0" text="探索距离"><div class="meter_label">探索距离</div></progress>
-      <progress id="hud_depth" path="hud.depth" value="0.0" text="地下深度"><div class="meter_label">地下深度</div></progress>
-      <progress id="hud_longitude" path="hud.longitude" value="0.5" text="东西方位"><div class="meter_label">东西方位</div></progress>
-    </div>
     <button id="hud_pause" data-event-click="pause_game">暂停</button>
     <button id="hud_telemetry" data-event-click="toggle_telemetry">诊断</button>
     <div id="legacy_route_models">
@@ -87,6 +78,9 @@
       <progress path="hud.hazard" value="0.0"></progress>
       <progress path="hud.score" value="0.0"></progress>
       <progress path="hud.elevation" value="0.0"></progress>
+      <progress id="hud_distance" path="hud.distance" value="0.0"></progress>
+      <progress id="hud_depth" path="hud.depth" value="0.0"></progress>
+      <progress id="hud_longitude" path="hud.longitude" value="0.5"></progress>
     </div>
   </body>
 </rml>

@@ -125,7 +125,7 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
-            "demo.webfirst.hud/v5",
+            "demo.webfirst.hud/v6",
             GameUiDemoController.HudModelPathNames.ToArray(),
             ["pause_game", "toggle_telemetry"]);
         AssertScreenContract(
@@ -253,10 +253,10 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证正常产品态使用独立菜单简报与 HUD 信息区，缩放标尺只存在于按需诊断屏而不混入主循环。
+    /// 验证正常产品态使用单一紧凑 HUD，运行信息不会因第二个越界面板折回原点而重叠。
     /// </summary>
     [Fact]
-    public void DemoMenuAndHudUseSeparateProductLayoutRegionsWithoutScalerCalibrationCopy()
+    public void DemoMenuAndHudUseCompactProductLayoutWithoutOverlappingObjectivePanel()
     {
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         string mainPath = manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath;
@@ -269,8 +269,14 @@ public sealed class DemoUiContentTests
         XElement start = Assert.Single(main.Descendants(), element => (string?)element.Attribute("id") == "start_game");
         Assert.Equal("start_game", (string?)start.Attribute("data-event-click"));
 
-        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
-        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
+        XElement statusPanel = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
+        Assert.DoesNotContain(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
+        foreach (string id in new[] { "hud_title", "hud_route", "hud_region", "hud_health", "hud_levitation", "hud_context_divider" })
+        {
+            _ = Assert.Single(statusPanel.Descendants(), element => (string?)element.Attribute("id") == id);
+        }
+
+        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "run_divider");
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context_divider");
         XElement telemetry = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_telemetry");
         Assert.Equal("toggle_telemetry", (string?)telemetry.Attribute("data-event-click"));
