@@ -448,6 +448,42 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证一个脚本帧内的大量 cell/world 写命令只发布一个合并区域事件，供派生拓扑有界失效。
+    /// </summary>
+    [Fact]
+    public void WorldMutationsPublishOneMergedRegionPerScriptFrame()
+    {
+        Fixture fixture = Fixture.Create();
+        WorldMutationEvent received = default;
+        int receivedCount = 0;
+        using IDisposable subscription = fixture.ScriptEvents.Subscribe<WorldMutationEvent>(item =>
+        {
+            received = item;
+            receivedCount++;
+        });
+
+        fixture.Context.Cells.Paint(6, 6, radius: 1, new MaterialId(0));
+        fixture.Context.World.DamageCircle(15f, 15f, radius: 3, damage: 80f, falloff: false);
+        for (int i = 0; i < 32; i++)
+        {
+            fixture.Context.World.DamageBeam(12f, 12f + i, 1f, 0f, length: 5, damagePerCell: 80f);
+        }
+
+        fixture.Context.World.AddHeat(20f, 20f, radius: 2, deltaCelsius: 16f);
+        fixture.Context.ClearFrameTransientRequests();
+        fixture.ScriptEvents.DrainEvents();
+
+        Assert.Equal(1, receivedCount);
+        Assert.Equal(5, received.MinX);
+        Assert.Equal(5, received.MinY);
+        Assert.Equal(23, received.MaxXExclusive);
+        Assert.Equal(45, received.MaxYExclusive);
+        Assert.Equal(
+            WorldMutationKind.CellRemoval | WorldMutationKind.Damage | WorldMutationKind.Heat,
+            received.Kinds);
+    }
+
+    /// <summary>
     /// 验证脚本热量命令延迟到 cell 安全相位落地，并标记对应区域 dirty。
     /// </summary>
     [Fact]

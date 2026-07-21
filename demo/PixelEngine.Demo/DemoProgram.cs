@@ -51,6 +51,7 @@ public static class DemoProgram
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayableWorldDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerController))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerHealth))]
+    [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerInputModeController))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(PlayerVisual))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(RisingHazardDirector))]
     [DynamicDependency(DynamicallyAccessedMemberTypes.All, typeof(SparkEmitter))]

@@ -31,7 +31,7 @@ public sealed class SilkInputPhaseDriver(
     private readonly int _logicalViewportWidth = logicalViewportWidth;
     private readonly int _logicalViewportHeight = logicalViewportHeight;
     private readonly IGameplayViewportInputMapper? _gameplayViewportMapper = gameplayViewportMapper;
-    private readonly ScriptKey[] _keyBuffer = new ScriptKey[20];
+    private readonly ScriptKey[] _keyBuffer = new ScriptKey[22];
     private readonly ScriptMouseButton[] _mouseBuffer = new ScriptMouseButton[3];
     private float _lastWheelY;
 
@@ -96,6 +96,7 @@ public sealed class SilkInputPhaseDriver(
         AddIfDown(keyboard, SilkKey.W, ScriptKey.W, destination, ref count);
         AddIfDown(keyboard, SilkKey.S, ScriptKey.S, destination, ref count);
         AddIfDown(keyboard, SilkKey.R, ScriptKey.R, destination, ref count);
+        AddIfDown(keyboard, SilkKey.B, ScriptKey.B, destination, ref count);
         AddIfDown(keyboard, SilkKey.Left, ScriptKey.Left, destination, ref count);
         AddIfDown(keyboard, SilkKey.Right, ScriptKey.Right, destination, ref count);
         AddIfDown(keyboard, SilkKey.Up, ScriptKey.Up, destination, ref count);

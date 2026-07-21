@@ -26,6 +26,10 @@ public sealed class GameUiDemoController : Behaviour
         "hud.region_text",
         "hud.run_state_text",
         "hud.depth_cells",
+        "hud.input_mode_text",
+        "hud.equipment_text",
+        "hud.material_name",
+        "hud.material_detail",
         "hud.health",
         "hud.ammo",
         "hud.cooldown",
@@ -116,6 +120,10 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudRegionTextPath = Path("hud.region_text");
     private static readonly UiPathId HudRunStateTextPath = Path("hud.run_state_text");
     private static readonly UiPathId HudDepthCellsPath = Path("hud.depth_cells");
+    private static readonly UiPathId HudInputModeTextPath = Path("hud.input_mode_text");
+    private static readonly UiPathId HudEquipmentTextPath = Path("hud.equipment_text");
+    private static readonly UiPathId HudMaterialNamePath = Path("hud.material_name");
+    private static readonly UiPathId HudMaterialDetailPath = Path("hud.material_detail");
     private static readonly UiPathId HudHealthPath = Path("hud.health");
     private static readonly UiPathId HudWeaponPath = Path("hud.weapon");
     private static readonly UiPathId HudAmmoPath = Path("hud.ammo");
@@ -163,6 +171,7 @@ public sealed class GameUiDemoController : Behaviour
     private PlayerController? _player;
     private WeaponController? _weapons;
     private MaterialBrush? _brush;
+    private PlayerInputModeController? _inputMode;
     private ExplosiveTool? _explosive;
     private PlayableProjectileTool? _projectile;
     private MissionDirector? _mission;
@@ -186,6 +195,9 @@ public sealed class GameUiDemoController : Behaviour
     private int _publishedHudState = -1;
     private int _publishedHudRegion = -1;
     private ulong _publishedHudSeed = ulong.MaxValue;
+    private int _publishedInputMode = -1;
+    private int _publishedCursorMaterial = int.MinValue;
+    private string _publishedEquipmentText = string.Empty;
 
     /// <summary>
     /// 当前主菜单屏幕句柄。
@@ -358,6 +370,7 @@ public sealed class GameUiDemoController : Behaviour
         _player = null;
         _weapons = null;
         _brush = null;
+        _inputMode = null;
         _explosive = null;
         _projectile = null;
         _mission = null;
@@ -531,6 +544,10 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudDepthPath, 0.0);
         SetHudValue(HudElevationPath, 0.0);
         SetScreenValue(HudScreenHandle, HudDepthCellsPath, new UiValue(0L));
+        SetScreenText(HudScreenHandle, HudInputModeTextPath, "战斗 / Combat");
+        SetScreenText(HudScreenHandle, HudEquipmentTextPath, "未装备 / None");
+        SetScreenText(HudScreenHandle, HudMaterialNamePath, "空气 / Air");
+        SetScreenText(HudScreenHandle, HudMaterialDetailPath, "可穿行的空区域");
         SetTelemetryValue(HudWeaponPath, 0.0);
         SetTelemetryValue(HudOverheatedPath, 0.0);
         SetTelemetryValue(HudMaterialSlotPath, 0.0);
@@ -561,6 +578,7 @@ public sealed class GameUiDemoController : Behaviour
         PublishHealth();
         PublishWeapon();
         PublishTools();
+        PublishContextReadout();
         PublishMission();
         PublishDiagnostics();
     }
@@ -590,6 +608,11 @@ public sealed class GameUiDemoController : Behaviour
         if (_brush is null && Entity.TryGetComponent(out MaterialBrush brush))
         {
             _brush = brush;
+        }
+
+        if (_inputMode is null && Entity.TryGetComponent(out PlayerInputModeController inputMode))
+        {
+            _inputMode = inputMode;
         }
 
         if (_explosive is null && Entity.TryGetComponent(out ExplosiveTool explosive))
@@ -640,6 +663,11 @@ public sealed class GameUiDemoController : Behaviour
         if (_brush is null && Context.Scene.TryGetFirstComponent(out MaterialBrush? sceneBrush))
         {
             _brush = sceneBrush;
+        }
+
+        if (_inputMode is null && Context.Scene.TryGetFirstComponent(out PlayerInputModeController? sceneInputMode))
+        {
+            _inputMode = sceneInputMode;
         }
 
         if (_explosive is null && Context.Scene.TryGetFirstComponent(out ExplosiveTool? sceneExplosive))
@@ -742,6 +770,145 @@ public sealed class GameUiDemoController : Behaviour
         double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
         SetTelemetryValue(HudCollapseIslandsPath, Ratio(_projectile.CollapsedFloatingIslands, 10.0));
         SetTelemetryValue(HudCollapseScanPath, Ratio(_projectile.LastCollapseSolidCandidates, scanCapacity));
+    }
+
+    private void PublishContextReadout()
+    {
+        PlayerInputMode inputMode = _inputMode?.Mode ??
+            (_brush?.InputEnabled == true ? PlayerInputMode.MaterialBrush : PlayerInputMode.Combat);
+        int inputModeValue = (int)inputMode;
+        if (_publishedInputMode != inputModeValue)
+        {
+            SetScreenText(
+                HudScreenHandle,
+                HudInputModeTextPath,
+                inputMode == PlayerInputMode.MaterialBrush ? "材质刷 / Material Brush" : "战斗 / Combat");
+            _publishedInputMode = inputModeValue;
+        }
+
+        string equipment = ResolveEquipmentText(inputMode);
+        if (!string.Equals(_publishedEquipmentText, equipment, StringComparison.Ordinal))
+        {
+            SetScreenText(HudScreenHandle, HudEquipmentTextPath, equipment);
+            _publishedEquipmentText = equipment;
+        }
+
+        if (!TrySampleCursorMaterial(out MaterialInfo material))
+        {
+            if (_publishedCursorMaterial != -1)
+            {
+                SetScreenText(HudScreenHandle, HudMaterialNamePath, "未加载区域 / Unloaded");
+                SetScreenText(HudScreenHandle, HudMaterialDetailPath, "该世界区域尚未驻留");
+                _publishedCursorMaterial = -1;
+            }
+
+            return;
+        }
+
+        int materialId = material.Id.Value;
+        if (_publishedCursorMaterial == materialId)
+        {
+            return;
+        }
+
+        string materialName = string.IsNullOrWhiteSpace(material.DisplayName) ? material.Name : material.DisplayName;
+        SetScreenText(HudScreenHandle, HudMaterialNamePath, materialName);
+        SetScreenText(HudScreenHandle, HudMaterialDetailPath, ResolveMaterialPurpose(in material));
+        _publishedCursorMaterial = materialId;
+    }
+
+    private string ResolveEquipmentText(PlayerInputMode inputMode)
+    {
+        if (inputMode == PlayerInputMode.MaterialBrush && _brush is not null)
+        {
+            MaterialId material = Context.Materials.Resolve(_brush.SelectedMaterialName);
+            if (material.IsValid)
+            {
+                MaterialInfo info = Context.Materials.GetInfo(material);
+                return string.IsNullOrWhiteSpace(info.DisplayName) ? info.Name : info.DisplayName;
+            }
+
+            return _brush.SelectedMaterialName;
+        }
+
+        if (_weapons?.Catalog is not { Weapons.Length: > 0 } catalog)
+        {
+            return "未装备 / None";
+        }
+
+        int selected = Math.Clamp(_weapons.SelectedIndex, 0, catalog.Weapons.Length - 1);
+        WeaponDefinition weapon = catalog.Weapons[selected];
+        return string.IsNullOrWhiteSpace(weapon.DisplayName) ? weapon.Id : weapon.DisplayName;
+    }
+
+    private bool TrySampleCursorMaterial(out MaterialInfo material)
+    {
+        material = default;
+        try
+        {
+            (float mouseX, float mouseY) = Context.Input.MousePixel;
+            Point2F world = Context.Camera.ScreenToWorld(mouseX, mouseY);
+            if (!float.IsFinite(world.X) || !float.IsFinite(world.Y))
+            {
+                return false;
+            }
+
+            CellView cell = Context.Cells.Sample((int)MathF.Floor(world.X), (int)MathF.Floor(world.Y));
+            if (!cell.Material.IsValid)
+            {
+                return false;
+            }
+
+            material = Context.Materials.GetInfo(cell.Material);
+            return true;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
+        }
+        catch (NotSupportedException)
+        {
+            return false;
+        }
+    }
+
+    private static string ResolveMaterialPurpose(in MaterialInfo material)
+    {
+        return material.Name switch
+        {
+            "empty" => "空气：可穿行的空区域",
+            "sand" => "沙：会下落，可受热熔成玻璃",
+            "dirt" => "土：会下落并堆积的地形粉末",
+            "ash" => "灰烬：轻质、易扩散的残留粉末",
+            "water" => "水：灭火和冷却，可结冰或沸腾",
+            "oil" => "油：可燃液体，受热后会点燃",
+            "acid" => "酸：会腐蚀结构并伤害生物",
+            "lava" => "熔岩：高温危险液体，冷却后成石",
+            "molten_metal" => "熔融金属：高温液体，冷却后成金属",
+            "steam" => "蒸汽：向上运动并逐渐扩散",
+            "smoke" => "烟：轻质气体，会逐渐消散",
+            "acid_gas" => "酸雾：会扩散的腐蚀性危险气体",
+            "fire" => "火焰：传播热量并点燃可燃物",
+            "stone" => "石：可破坏固体，破碎后成为砂砾",
+            "wood" => "木：可破坏、可燃的结构材料",
+            "ice" => "冰：可破坏固体，受热后融成水",
+            "metal" => "金属：高耐久、强导热，可被熔化",
+            "glass" => "玻璃：透明固体，可被冲击破坏",
+            "gravel" => "砂砾：会下落的可移动碎石",
+            "crystal" => "晶体：破坏后可获得的资源",
+            "boundary_stone" => "边界石：不可破坏的世界边界",
+            _ when string.Equals(material.LegendCategory, "Hazard", StringComparison.Ordinal) =>
+                "危险材质：接触或靠近时需要规避",
+            _ when material.MineYield > 0 => "资源材质：破坏后可以采集",
+            _ when material.IsDestructible => "可破坏结构材质",
+            _ when material.IsSolid => "固体结构材质",
+            _ when string.Equals(material.LegendCategory, "Gas", StringComparison.Ordinal) =>
+                "气体：会扩散并参与材质反应",
+            _ when string.Equals(material.LegendCategory, "Liquid", StringComparison.Ordinal) =>
+                "液体：会流动并参与材质反应",
+            _ when material.Density == 0 => "可穿行的空区域",
+            _ => "可移动材质：受重力或扩散规则影响",
+        };
     }
 
     private void PublishMission()
@@ -1382,6 +1549,9 @@ public sealed class GameUiDemoController : Behaviour
         _publishedHudState = -1;
         _publishedHudRegion = -1;
         _publishedHudSeed = ulong.MaxValue;
+        _publishedInputMode = -1;
+        _publishedCursorMaterial = int.MinValue;
+        _publishedEquipmentText = string.Empty;
     }
 
     private IRuntimeControlApi? TryResolveRuntime()

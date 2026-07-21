@@ -98,6 +98,50 @@ public readonly record struct ScriptAssetReference(ScriptAssetKind AssetType, st
 public readonly record struct CellView(MaterialId Material, byte Flags, byte Lifetime, byte Integrity = 0);
 
 /// <summary>
+/// 脚本安全相位提交的世界区域修改类别；可组合，用于让玩法层有界重建派生拓扑或导航状态。
+/// </summary>
+[Flags]
+public enum WorldMutationKind : byte
+{
+    /// <summary>没有修改。</summary>
+    None = 0,
+
+    /// <summary>直接 cell 写入、清除或画刷修改。</summary>
+    CellWrite = 1 << 0,
+
+    /// <summary>直接清除 cell 或用 Empty 画刷移除区域。</summary>
+    CellRemoval = 1 << 1,
+
+    /// <summary>结构伤害、光束或爆炸修改。</summary>
+    Damage = 1 << 2,
+
+    /// <summary>可能引发相变或结构失效的温度修改。</summary>
+    Heat = 1 << 3,
+}
+
+/// <summary>
+/// 一个脚本帧内合并后的世界修改区域；边界采用左闭右开世界 cell 坐标。
+/// </summary>
+/// <param name="MinX">最小 X，包含。</param>
+/// <param name="MinY">最小 Y，包含。</param>
+/// <param name="MaxXExclusive">最大 X，不包含。</param>
+/// <param name="MaxYExclusive">最大 Y，不包含。</param>
+/// <param name="Kinds">该区域内合并后的修改类别。</param>
+public readonly record struct WorldMutationEvent(
+    int MinX,
+    int MinY,
+    int MaxXExclusive,
+    int MaxYExclusive,
+    WorldMutationKind Kinds)
+{
+    /// <summary>区域宽度。</summary>
+    public int Width => Math.Max(0, MaxXExclusive - MinX);
+
+    /// <summary>区域高度。</summary>
+    public int Height => Math.Max(0, MaxYExclusive - MinY);
+}
+
+/// <summary>
 /// 脚本可见的材质属性摘要。
 /// </summary>
 /// <param name="Id">材质句柄。</param>
@@ -540,6 +584,11 @@ public enum Key
     /// R 键。
     /// </summary>
     R,
+
+    /// <summary>
+    /// B 键。
+    /// </summary>
+    B,
 
     /// <summary>
     /// 左方向键。

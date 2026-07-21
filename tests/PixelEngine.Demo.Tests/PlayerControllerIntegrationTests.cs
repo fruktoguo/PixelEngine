@@ -807,9 +807,9 @@ public sealed class PlayerControllerIntegrationTests
 
         Assert.Equal(72, tool.Radius);
         Assert.Equal(320f, tool.Force);
-        Assert.Equal(10f, tool.TerrainEffectScale);
-        Assert.Equal(720, tool.EffectiveRadius);
-        Assert.Equal(3_200f, tool.EffectiveForce);
+        Assert.Equal(1f, tool.TerrainEffectScale);
+        Assert.Equal(72, tool.EffectiveRadius);
+        Assert.Equal(320f, tool.EffectiveForce);
     }
 
     /// <summary>
@@ -1024,6 +1024,67 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(1);
 
         Assert.Equal((ushort)0, grid.MaterialAt(12, 15));
+    }
+
+    /// <summary>
+    /// 验证战斗与材质笔刷模式会原子转移全部玩法输入所有权，数字键不会同时切换武器与材质。
+    /// </summary>
+    [Fact]
+    public void PlayerInputModeControllerExclusivelyTransfersCombatAndBrushInput()
+    {
+        using Engine engine = CreateManualScriptEngine(
+            out ScriptInputApi input,
+            out _,
+            out _,
+            out ScriptScene scene,
+            DemoContentMaterials(),
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        _ = entity.AddComponent<PlayerController>();
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        ExplosiveTool explosive = entity.AddComponent<ExplosiveTool>();
+        MaterialBrush brush = entity.AddComponent<MaterialBrush>();
+        WeaponController weapons = entity.AddComponent<WeaponController>();
+        PlayerInputModeController inputMode = entity.AddComponent<PlayerInputModeController>();
+
+        engine.RunHeadlessTicks(2);
+
+        Assert.Equal(PlayerInputMode.Combat, inputMode.Mode);
+        Assert.False(brush.InputEnabled);
+        Assert.True(weapons.InputEnabled);
+        Assert.False(projectile.InputEnabled);
+        Assert.True(explosive.InputEnabled);
+        Assert.Equal("pistol", weapons.SelectedWeaponId);
+
+        input.Update([Key.B], [], mouseX: 20f, mouseY: 10f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 20f, mouseY: 10f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(PlayerInputMode.MaterialBrush, inputMode.Mode);
+        Assert.True(brush.InputEnabled);
+        Assert.False(weapons.InputEnabled);
+        Assert.False(projectile.InputEnabled);
+        Assert.False(explosive.InputEnabled);
+
+        input.Update([Key.Digit2], [], mouseX: 20f, mouseY: 10f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, brush.SelectedIndex);
+        Assert.Equal("water", brush.SelectedMaterialName);
+        Assert.Equal("pistol", weapons.SelectedWeaponId);
+
+        input.Update([], [], mouseX: 20f, mouseY: 10f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([Key.B], [], mouseX: 20f, mouseY: 10f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(PlayerInputMode.Combat, inputMode.Mode);
+        Assert.False(brush.InputEnabled);
+        Assert.True(weapons.InputEnabled);
+        Assert.False(projectile.InputEnabled);
+        Assert.True(explosive.InputEnabled);
     }
 
     /// <summary>
@@ -2042,8 +2103,8 @@ public sealed class PlayerControllerIntegrationTests
             Assert.Equal((ushort)0, grid.MaterialAt(36, 34));
             Assert.Equal((ushort)0, grid.MaterialAt(33, 31));
             Assert.Equal((ushort)0, grid.MaterialAt(33, 37));
-            Assert.Equal((ushort)0, grid.MaterialAt(55, 34));
-            Assert.Equal((ushort)0, grid.MaterialAt(36, 52));
+            Assert.Equal(stone, grid.MaterialAt(55, 34));
+            Assert.Equal(stone, grid.MaterialAt(36, 52));
 
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
@@ -2102,6 +2163,7 @@ public sealed class PlayerControllerIntegrationTests
             player.SpawnY = 30f;
             PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
             projectile.InputEnabled = false;
+            projectile.TrackWorldMutations = false;
             WeaponController weapons = entity.AddComponent<WeaponController>();
             TemperatureField temperature = engine.Context.GetService<TemperatureField>();
             ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
@@ -2140,10 +2202,11 @@ public sealed class PlayerControllerIntegrationTests
             Assert.Equal(fire, particles.ActiveReadOnly[0].Material);
 
             FillRect(grid, stone, minX: 34, minY: 32, maxX: 36, maxY: 36);
+            int stoneBeforeExcavator = CountMaterial(grid, stone, minX: 34, minY: 32, maxX: 36, maxY: 36);
             input.Update([Key.Digit5], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
             Assert.Equal(WeaponKind.Excavator, weapons.LastDispatchedKind);
-            Assert.Equal(0, grid.GetMaterial(35, 34));
+            Assert.True(CountMaterial(grid, stone, minX: 34, minY: 32, maxX: 36, maxY: 36) < stoneBeforeExcavator);
 
             int stoneBeforeBuilder = CountMaterial(grid, stone, minX: 0, minY: 0, maxX: 95, maxY: 63);
             input.Update([Key.Digit6], [MouseButton.Left], mouseX: 70f, mouseY: 50f, wheelY: 0f);
@@ -2174,10 +2237,10 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(0, secondary.PrimaryFireCount);
         Assert.Equal(WeaponKind.Grenade, secondary.LastDispatchedKind);
         Assert.Equal(3, secondary.RemainingAmmo);
-        Assert.Equal(30, primary.Radius);
-        Assert.Equal(300f, primary.BlastForce);
-        Assert.Equal(30, secondary.Radius);
-        Assert.Equal(300f, secondary.BlastForce);
+        Assert.Equal(3, primary.Radius);
+        Assert.Equal(30f, primary.BlastForce);
+        Assert.Equal(3, secondary.Radius);
+        Assert.Equal(30f, secondary.BlastForce);
         Assert.True(
             secondary.DeltaX > primary.DeltaX * 1.25f,
             $"右键蓄力手雷应比左键普通投掷更快，primary={primary.DeltaX:0.000}, secondary={secondary.DeltaX:0.000}");
@@ -2237,6 +2300,7 @@ public sealed class PlayerControllerIntegrationTests
 
             Assert.Equal(0, TransientParticleBurst.ActiveCount(scene));
             Assert.Equal(0, particles.ActiveCount);
+            Assert.True(projectile.WorldMutationEventsReceived > 0);
         }
         finally
         {
@@ -2765,22 +2829,22 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(9f, projectile.ImpactForce);
         Assert.Equal(36f, projectile.ImpactDamage);
         Assert.False(projectile.UseExplosionDamage);
-        Assert.Equal(36, projectile.CollapseScanRadius);
-        Assert.Equal(2, projectile.CollapseScanRetryFrames);
-        Assert.Equal(18, projectile.FallbackOverhangRadius);
-        Assert.Equal(48, projectile.MaxCollapseRegionSize);
-        Assert.Equal(512, projectile.MaxCollapsePixels);
-        Assert.Equal(1, projectile.MaxCollapsedIslandsPerShot);
-        Assert.Equal(72, projectile.PlayerSupportProtectionRadius);
+        Assert.Equal(48, projectile.CollapseScanRadius);
+        Assert.Equal(6, projectile.CollapseScanRetryFrames);
+        Assert.Equal(24, projectile.FallbackOverhangRadius);
+        Assert.Equal(96, projectile.MaxCollapseRegionSize);
+        Assert.Equal(8_192, projectile.MaxCollapsePixels);
+        Assert.Equal(8, projectile.MaxCollapsedIslandsPerShot);
+        Assert.Equal(0, projectile.PlayerSupportProtectionRadius);
         Assert.False(projectile.AllowOverhangFallbackCollapse);
         Assert.False(projectile.AllowImpactFallbackCollapse);
 
         ExplosiveTool explosive = FindBehaviour<ExplosiveTool>(engine);
         Assert.Equal(72, explosive.Radius);
         Assert.Equal(320f, explosive.Force);
-        Assert.Equal(10f, explosive.TerrainEffectScale);
-        Assert.Equal(720, explosive.EffectiveRadius);
-        Assert.Equal(3_200f, explosive.EffectiveForce);
+        Assert.Equal(1f, explosive.TerrainEffectScale);
+        Assert.Equal(72, explosive.EffectiveRadius);
+        Assert.Equal(320f, explosive.EffectiveForce);
         CameraFollow camera = FindBehaviour<CameraFollow>(engine);
         Assert.False(camera.ClampToBounds);
         _ = FindBehaviour<MaterialBrush>(engine);
@@ -2838,8 +2902,8 @@ public sealed class PlayerControllerIntegrationTests
         input.Update([Key.Digit6], [], mouseX: 0, mouseY: 0, wheelY: 0);
         engine.RunHeadlessTicks(1);
         Assert.Equal("builder", weapons.SelectedWeaponId);
-        Assert.Equal(10f, weapons.TerrainEffectScale);
-        Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
+        Assert.Equal(1f, weapons.TerrainEffectScale);
+        Assert.Equal(1f, weapons.GrenadeTerrainEffectScale);
     }
 
     /// <summary>

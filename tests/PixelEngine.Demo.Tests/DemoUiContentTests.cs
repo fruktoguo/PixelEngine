@@ -125,7 +125,7 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
-            "demo.webfirst.hud/v3",
+            "demo.webfirst.hud/v4",
             GameUiDemoController.HudModelPathNames.ToArray(),
             ["pause_game", "toggle_telemetry"]);
         AssertScreenContract(
@@ -265,6 +265,7 @@ public sealed class DemoUiContentTests
 
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
+        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context");
         XElement telemetry = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_telemetry");
         Assert.Equal("toggle_telemetry", (string?)telemetry.Attribute("data-event-click"));
 
@@ -1456,6 +1457,58 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
+    /// 验证 HUD 会显示唯一输入模式、当前装备和准星下材质的用途说明。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerPublishesInputEquipmentAndCursorMaterialText()
+    {
+        string contentRoot = CreateTemporaryWeaponContent(
+                                 /*lang=json,strict*/
+                                 """
+            {
+              "weapons": [
+                { "id": "shot", "displayName": "Shot", "kind": "singleShot", "damage": 12, "radius": 1, "falloff": "none", "impulse": 1, "cooldownSeconds": 0, "ammoMax": 5, "tracerDuration": 0.01, "muzzleCue": "ui_click", "impactCue": "explosion", "hudColor": "#FFFFFFFF" }
+              ]
+            }
+            """);
+        try
+        {
+            using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            Assert.True(engine.Context.GetService<MaterialTable>().TryGetId("stone", out ushort stone));
+            FillRect(grid, stone, minX: 10, minY: 10, maxX: 11, maxY: 11);
+
+            Entity entity = scene.CreateEntity();
+            _ = entity.AddComponent<Transform>();
+            _ = entity.AddComponent<PlayerController>();
+            _ = entity.AddComponent<MaterialBrush>();
+            _ = entity.AddComponent<WeaponController>();
+            PlayerInputModeController inputMode = entity.AddComponent<PlayerInputModeController>();
+            StartGameplay(entity.AddComponent<GameUiDemoController>(), ui);
+
+            input.Update([], [], mouseX: 10f, mouseY: 10f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(PlayerInputMode.Combat, inputMode.Mode);
+            Assert.Equal("战斗 / Combat", GetUiText(ui, "hud.input_mode_text"));
+            Assert.Equal("Shot", GetUiText(ui, "hud.equipment_text"));
+            Assert.Equal("stone", GetUiText(ui, "hud.material_name"));
+            Assert.Equal("石：可破坏固体，破碎后成为砂砾", GetUiText(ui, "hud.material_detail"));
+
+            input.Update([Key.B], [], mouseX: 10f, mouseY: 10f, wheelY: 0f);
+            engine.RunHeadlessTicks(1);
+
+            Assert.Equal(PlayerInputMode.MaterialBrush, inputMode.Mode);
+            Assert.Equal("材质刷 / Material Brush", GetUiText(ui, "hud.input_mode_text"));
+            Assert.Equal("sand", GetUiText(ui, "hud.equipment_text"));
+        }
+        finally
+        {
+            Directory.Delete(contentRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证 Web-first HUD 会同步 PlayableProjectileTool 的射击与坍塌扫描状态。
     /// </summary>
     [Fact]
@@ -1499,6 +1552,8 @@ public sealed class DemoUiContentTests
 
             input.Update([], [MouseButton.Left], mouseX: 36f, mouseY: 34f, wheelY: 0f);
             engine.RunHeadlessTicks(1);
+            input.Update([], [], mouseX: 36f, mouseY: 34f, wheelY: 0f);
+            engine.RunHeadlessTicks(3);
 
             int scanRadius = Math.Clamp(projectile.CollapseScanRadius, 4, 320);
             double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
@@ -1988,6 +2043,13 @@ public sealed class DemoUiContentTests
         return value.AsDouble();
     }
 
+    private static string GetUiText(FakeGameUiService ui, string path)
+    {
+        Assert.True(ui.Values.TryGetValue(GameUiDemoController.Path(path), out ScriptUiValue value), $"UI path 未写入值：{path}");
+        Assert.Equal(Scripting.UiValueKind.StringHandle, value.Kind);
+        return ui.ResolveString(value.AsStringHandle());
+    }
+
     private static string[] HudPaths()
     {
         return [
@@ -2289,6 +2351,19 @@ public sealed class DemoUiContentTests
             ScriptUiStringHandle handle = new(_strings.Count + 1);
             _strings.Add(value, handle);
             return handle;
+        }
+
+        public string ResolveString(ScriptUiStringHandle handle)
+        {
+            foreach ((string value, ScriptUiStringHandle candidate) in _strings)
+            {
+                if (candidate == handle)
+                {
+                    return value;
+                }
+            }
+
+            throw new KeyNotFoundException($"未知 UI string handle：{handle.Value}。");
         }
 
         public void SetValue(ScriptUiScreenHandle screen, ScriptUiPathId path, in ScriptUiValue value)

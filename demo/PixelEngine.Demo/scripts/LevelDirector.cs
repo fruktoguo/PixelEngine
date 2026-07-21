@@ -304,23 +304,25 @@ public sealed class LevelDirector : Behaviour, IAuthoringWorldPreviewProvider
         brush.InputEnabled = false;
 
         ExplosiveTool explosive = playerEntity.AddComponent<ExplosiveTool>();
-        explosive.TerrainEffectScale = 10f;
+        explosive.TerrainEffectScale = 1f;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 3;
         projectile.ImpactForce = 9f;
         projectile.ImpactDamage = 36f;
         projectile.UseExplosionDamage = false;
-        projectile.CollapseScanRadius = 36;
-        projectile.CollapseScanRetryFrames = 2;
-        projectile.FallbackOverhangRadius = 18;
-        projectile.MaxCollapseRegionSize = 48;
-        projectile.MaxCollapsePixels = 512;
-        projectile.MaxCollapsedIslandsPerShot = 1;
-        projectile.PlayerSupportProtectionRadius = 72;
+        projectile.CollapseScanRadius = 48;
+        projectile.CollapseScanRetryFrames = 6;
+        projectile.FallbackOverhangRadius = 24;
+        projectile.MaxCollapseRegionSize = 96;
+        projectile.MaxCollapsePixels = 8_192;
+        projectile.MaxCollapsedIslandsPerShot = 8;
+        projectile.PlayerSupportProtectionRadius = 0;
         projectile.InputEnabled = false;
 
         _ = playerEntity.AddComponent<WeaponController>();
+        PlayerInputModeController inputMode = playerEntity.AddComponent<PlayerInputModeController>();
+        inputMode.AllowMaterialBrush = false;
 
         if (BuildGoalTrigger)
         {

@@ -254,11 +254,11 @@ public sealed class LavaMineSceneTests
         Assert.True(woodCells > 200, $"横向路线应包含 wood 可拆路障 / 桥梁，actual={woodCells}。");
         Assert.True(metalCells > 200, $"横向路线应包含 metal 可拆路障 / 桥梁，actual={metalCells}。");
         Assert.True(stoneCells > 100, $"横向路线应包含 stone 可拆矮障碍，actual={stoneCells}。");
-        Assert.Equal(10f, weapons.TerrainEffectScale);
-        Assert.Equal(10f, weapons.GrenadeTerrainEffectScale);
-        Assert.Equal(10f, explosive.TerrainEffectScale);
-        Assert.Equal(720, explosive.EffectiveRadius);
-        Assert.Equal(3_200f, explosive.EffectiveForce);
+        Assert.Equal(1f, weapons.TerrainEffectScale);
+        Assert.Equal(1f, weapons.GrenadeTerrainEffectScale);
+        Assert.Equal(1f, explosive.TerrainEffectScale);
+        Assert.Equal(72, explosive.EffectiveRadius);
+        Assert.Equal(320f, explosive.EffectiveForce);
     }
 
     /// <summary>
@@ -273,9 +273,11 @@ public sealed class LavaMineSceneTests
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
-        brush.InputEnabled = true;
-        FindBehaviour<PlayableProjectileTool>(scene).InputEnabled = false;
-        FindBehaviour<WeaponController>(scene).InputEnabled = false;
+        PlayerInputModeController inputMode = FindBehaviour<PlayerInputModeController>(scene);
+        inputMode.AllowMaterialBrush = true;
+        Assert.True(inputMode.TrySelectMode(PlayerInputMode.MaterialBrush));
+        Assert.True(brush.InputEnabled);
+        FindBehaviour<PlayableProjectileTool>(scene).TrackWorldMutations = false;
         CameraFollow follow = FindBehaviour<CameraFollow>(scene);
         follow.Damping = 0f;
         follow.LookaheadX = 0f;
@@ -318,9 +320,11 @@ public sealed class LavaMineSceneTests
 
         ScriptScene scene = engine.Context.GetService<ScriptScene>();
         MaterialBrush brush = FindBehaviour<MaterialBrush>(scene);
-        brush.InputEnabled = true;
-        FindBehaviour<PlayableProjectileTool>(scene).InputEnabled = false;
-        FindBehaviour<WeaponController>(scene).InputEnabled = false;
+        PlayerInputModeController inputMode = FindBehaviour<PlayerInputModeController>(scene);
+        inputMode.AllowMaterialBrush = true;
+        Assert.True(inputMode.TrySelectMode(PlayerInputMode.MaterialBrush));
+        Assert.True(brush.InputEnabled);
+        FindBehaviour<PlayableProjectileTool>(scene).TrackWorldMutations = false;
         CameraFollow follow = FindBehaviour<CameraFollow>(scene);
         follow.Damping = 0f;
         follow.LookaheadX = 0f;
@@ -448,6 +452,8 @@ public sealed class LavaMineSceneTests
         ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        PlayableProjectileTool topology = FindBehaviour<PlayableProjectileTool>(engine.Context.GetService<ScriptScene>());
+        topology.TrackWorldMutations = false;
         // Assert：验证预期结果
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("acid", out ushort acid));
@@ -456,8 +462,17 @@ public sealed class LavaMineSceneTests
         FillRect(edit, wood, minX: 48, minY: 56, maxX: 88, maxY: 64);
         engine.RunHeadlessTicks(1);
         int beforeBodies = physics.PhysicsWorld.ActiveBodyCount;
-        _ = physics.CreateBodyFromRegion(48, 56, 40, 8);
+        int woodBeforeBody = CountMaterial(grid, wood, 48, 56, 88, 64);
+        Assert.True(
+            woodBeforeBody > 0,
+            $"刚体化前 wood 不应被拓扑扫描提前移除，mutations={topology.WorldMutationEventsReceived}, pendingRadius={topology.PendingCollapseScanRadius}, reason={topology.LastCollapseSkipReason}。");
         int ownedBefore = CountRigidOwned(grid, 48, 56, 88, 64);
+        if (ownedBefore == 0)
+        {
+            _ = physics.CreateBodyFromRegion(48, 56, 40, 8);
+            ownedBefore = CountRigidOwned(grid, 48, 56, 88, 64);
+        }
+
         Assert.True(ownedBefore > 0);
 
         FillRect(edit, acid, minX: 66, minY: 54, maxX: 70, maxY: 58);
@@ -496,6 +511,8 @@ public sealed class LavaMineSceneTests
         MaterialTable materials = engine.Context.GetService<MaterialTable>();
         TemperatureField temperature = engine.Context.GetService<TemperatureField>();
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
+        PlayableProjectileTool topology = FindBehaviour<PlayableProjectileTool>(engine.Context.GetService<ScriptScene>());
+        topology.TrackWorldMutations = false;
         // Assert：验证预期结果
         Assert.True(materials.TryGetId("wood", out ushort wood));
         Assert.True(materials.TryGetId("metal", out ushort metal));
@@ -510,9 +527,20 @@ public sealed class LavaMineSceneTests
         FillRect(edit, stone, minX: 318, minY: 108, maxX: 362, maxY: 114);
         engine.RunHeadlessTicks(1);
 
-        int parentBodyKey = physics.CreateBodyFromRegion(326, 76, 28, 28);
+        int structureBeforeBody =
+            CountMaterial(grid, wood, 330, 76, 350, 96) +
+            CountMaterial(grid, metal, 326, 96, 354, 104);
+        Assert.True(
+            structureBeforeBody > 0,
+            $"刚体化前 wood/metal 不应被拓扑扫描提前移除，mutations={topology.WorldMutationEventsReceived}, pendingRadius={topology.PendingCollapseScanRadius}, reason={topology.LastCollapseSkipReason}。");
         int ownedMetalBefore = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
-        Assert.True(parentBodyKey >= 0);
+        if (ownedMetalBefore == 0)
+        {
+            int parentBodyKey = physics.CreateBodyFromRegion(326, 76, 28, 28);
+            Assert.True(parentBodyKey >= 0);
+            ownedMetalBefore = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);
+        }
+
         Assert.True(ownedMetalBefore > 0, $"测试结构的 metal 梁应先由刚体 stamp 占用，actual={ownedMetalBefore}。");
         engine.RunHeadlessTicks(1);
         ownedMetalBefore = CountRigidOwnedMaterial(grid, metal, minX: 326, minY: 96, maxX: 354, maxY: 104);

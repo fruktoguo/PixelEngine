@@ -14,6 +14,7 @@ namespace PixelEngine.Scripting;
 public sealed class ScriptSimulationContext : IScriptContext, IDisposable
 {
     private readonly ScriptCommandQueue _commands = new();
+    private readonly WorldMutationAccumulator _worldMutations = new();
     private readonly CellFacade _cells;
     private readonly WorldEffectsFacade _world;
     private readonly MaterialFacade _materials;
@@ -74,8 +75,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ArgumentNullException.ThrowIfNull(materials);
 
         // 读路径直连 Grid；写路径统一入队，由 Hosting 按相位 Flush 到 Simulation 后端。
-        _cells = new CellFacade(_commands, grid);
-        _world = new WorldEffectsFacade(_commands, hasPhysics: physics is not null);
+        _cells = new CellFacade(_commands, grid, _worldMutations);
+        _world = new WorldEffectsFacade(_commands, _worldMutations, hasPhysics: physics is not null);
         _materials = new MaterialFacade(materials);
         _particles = new ParticleFacade(_commands);
         _solids = new SolidFacade(grid);
@@ -225,6 +226,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     /// <inheritdoc />
     public void ClearFrameTransientRequests()
     {
+        _worldMutations.Flush(EventBackend);
         if (OverlayBackend is ScriptOverlayApi overlay)
         {
             overlay.Clear();
@@ -241,6 +243,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     {
         ThrowIfDisposed();
         _commands.Clear();
+        _worldMutations.Reset();
         _bodies?.Reset();
         _character.Reset();
         ClearFrameTransientRequests();
@@ -572,7 +575,10 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 
-    private sealed class CellFacade(ScriptCommandQueue commands, CellGrid grid) : IWorldCellAccess
+    private sealed class CellFacade(
+        ScriptCommandQueue commands,
+        CellGrid grid,
+        WorldMutationAccumulator mutations) : IWorldCellAccess
     {
         public MaterialId GetMaterial(int x, int y)
         {
@@ -605,15 +611,29 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public void SetCell(int x, int y, MaterialId material)
         {
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.SetCell(x, y, material));
+            mutations.Include(
+                x,
+                y,
+                x + 1,
+                y + 1,
+                material.Value == 0 ? WorldMutationKind.CellRemoval : WorldMutationKind.CellWrite);
         }
 
         public void Paint(int x, int y, int radius, MaterialId material)
         {
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.Paint(x, y, radius, material));
+            mutations.IncludeCircle(
+                x,
+                y,
+                radius,
+                material.Value == 0 ? WorldMutationKind.CellRemoval : WorldMutationKind.CellWrite);
         }
     }
 
-    private sealed class WorldEffectsFacade(ScriptCommandQueue commands, bool hasPhysics) : IWorldEffects
+    private sealed class WorldEffectsFacade(
+        ScriptCommandQueue commands,
+        WorldMutationAccumulator mutations,
+        bool hasPhysics) : IWorldEffects
     {
         private const float ExplosionDamageScale = 16f;
 
@@ -628,6 +648,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             int centerX = (int)MathF.Floor(x);
             int centerY = (int)MathF.Floor(y);
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(damage), falloff, kind));
+            mutations.IncludeCircle(centerX, centerY, radius, WorldMutationKind.Damage);
         }
 
         public void DamageBeam(float x, float y, float dx, float dy, int length, float damagePerCell, DamageKind kind = DamageKind.Beam)
@@ -648,6 +669,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             int startX = (int)MathF.Floor(x);
             int startY = (int)MathF.Floor(y);
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageBeam(startX, startY, dx, dy, length, ToDamageUShort(damagePerCell), kind));
+            mutations.IncludeBeam(startX, startY, dx, dy, length, WorldMutationKind.Damage);
         }
 
         public void AddHeat(float x, float y, int radius, float deltaCelsius)
@@ -659,6 +681,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             int centerX = (int)MathF.Floor(x);
             int centerY = (int)MathF.Floor(y);
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.AddHeat(centerX, centerY, radius, deltaCelsius));
+            mutations.IncludeCircle(centerX, centerY, radius, WorldMutationKind.Heat);
         }
 
         public void Explode(float x, float y, int radius, float force)
@@ -672,6 +695,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             int centerY = (int)MathF.Floor(y);
             // 爆炸拆成 cell 破坏、粒子抛射、可选径向冲量三路命令，分别在不同安全相位 Flush。
             commands.Enqueue(ScriptCommandTarget.CellWrite, ScriptCommand.DamageCircle(centerX, centerY, radius, ToDamageUShort(force * ExplosionDamageScale), falloff: true, DamageKind.Impact));
+            mutations.IncludeCircle(centerX, centerY, radius, WorldMutationKind.Damage);
             float jitter = MathF.Max(1f, force * 0.25f);
             commands.Enqueue(ScriptCommandTarget.Particle, ScriptCommand.Explode(centerX, centerY, radius, force, jitter));
             if (hasPhysics)
@@ -699,6 +723,102 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             {
                 throw new ArgumentOutOfRangeException(name, kind, "未知破坏类型。");
             }
+        }
+    }
+
+    private sealed class WorldMutationAccumulator
+    {
+        private int _minX;
+        private int _minY;
+        private int _maxXExclusive;
+        private int _maxYExclusive;
+        private WorldMutationKind _kinds;
+
+        public void IncludeCircle(int centerX, int centerY, int radius, WorldMutationKind kind)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegative(radius);
+            Include(
+                centerX - radius,
+                centerY - radius,
+                centerX + radius + 1,
+                centerY + radius + 1,
+                kind);
+        }
+
+        public void IncludeBeam(
+            int startX,
+            int startY,
+            float dx,
+            float dy,
+            int length,
+            WorldMutationKind kind)
+        {
+            float directionLength = MathF.Sqrt((dx * dx) + (dy * dy));
+            float endX = startX + (dx / directionLength * length);
+            float endY = startY + (dy / directionLength * length);
+            Include(
+                Math.Min(startX, (int)MathF.Floor(endX)) - 1,
+                Math.Min(startY, (int)MathF.Floor(endY)) - 1,
+                Math.Max(startX, (int)MathF.Ceiling(endX)) + 2,
+                Math.Max(startY, (int)MathF.Ceiling(endY)) + 2,
+                kind);
+        }
+
+        public void Include(
+            int minX,
+            int minY,
+            int maxXExclusive,
+            int maxYExclusive,
+            WorldMutationKind kind)
+        {
+            if (kind == WorldMutationKind.None || maxXExclusive <= minX || maxYExclusive <= minY)
+            {
+                return;
+            }
+
+            if (_kinds == WorldMutationKind.None)
+            {
+                _minX = minX;
+                _minY = minY;
+                _maxXExclusive = maxXExclusive;
+                _maxYExclusive = maxYExclusive;
+                _kinds = kind;
+                return;
+            }
+
+            _minX = Math.Min(_minX, minX);
+            _minY = Math.Min(_minY, minY);
+            _maxXExclusive = Math.Max(_maxXExclusive, maxXExclusive);
+            _maxYExclusive = Math.Max(_maxYExclusive, maxYExclusive);
+            _kinds |= kind;
+        }
+
+        public void Flush(IEventBus? events)
+        {
+            if (_kinds == WorldMutationKind.None)
+            {
+                return;
+            }
+
+            WorldMutationEvent item = new(
+                _minX,
+                _minY,
+                _maxXExclusive,
+                _maxYExclusive,
+                _kinds);
+            if (events is null || events.TryPublish(in item))
+            {
+                Reset();
+            }
+        }
+
+        public void Reset()
+        {
+            _minX = 0;
+            _minY = 0;
+            _maxXExclusive = 0;
+            _maxYExclusive = 0;
+            _kinds = WorldMutationKind.None;
         }
     }
 

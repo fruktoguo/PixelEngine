@@ -21,9 +21,9 @@ public sealed class ExplosiveTool : Behaviour
     public float Force { get; set; } = 320f;
 
     /// <summary>
-    /// 对地形破坏半径与冲量的倍率；正式 Demo 用它把独立中键爆破纳入 10x 地形修改口径。
+    /// 对地形破坏半径与冲量的倍率；1 表示使用内容数据的真实口径。
     /// </summary>
-    public float TerrainEffectScale { get; set; } = 10f;
+    public float TerrainEffectScale { get; set; } = 1f;
 
     /// <summary>
     /// 当前实际提交给 <c>World.Explode</c> 的爆炸半径。
@@ -39,6 +39,11 @@ public sealed class ExplosiveTool : Behaviour
     /// 两次爆破之间的冷却时间，单位秒。
     /// </summary>
     public float CooldownSeconds { get; set; } = 0.35f;
+
+    /// <summary>
+    /// 是否响应中键爆破输入；由玩家输入模式控制器统一仲裁。
+    /// </summary>
+    public bool InputEnabled { get; set; } = true;
 
     /// <summary>
     /// 最近一次爆炸中心 X 坐标。
@@ -62,7 +67,7 @@ public sealed class ExplosiveTool : Behaviour
         _ = _flash.Update(Context, safeDt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         // 中键冷却结束后在鼠标世界坐标触发 Explode 与闪光反馈
-        if (_cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Middle))
+        if (!InputEnabled || _cooldownRemaining > 0f || !Context.Input.WasMousePressed(MouseButton.Middle))
         {
             return;
         }

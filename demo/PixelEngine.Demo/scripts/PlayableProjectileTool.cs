@@ -17,6 +17,7 @@ public sealed class PlayableProjectileTool : Behaviour
     private int _pendingCollapseFrames;
     private int _pendingCollapseX;
     private int _pendingCollapseY;
+    private int _pendingCollapseRadius;
     private int _pendingCollapsePasses;
     private int _pendingCollapseScans;
 
@@ -93,17 +94,17 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 单次射击后最多延迟扫描的帧数；保持较小，避免大窗口坍塌扫描拖住真实游玩输入。
     /// </summary>
-    public int CollapseScanRetryFrames { get; set; } = 3;
+    public int CollapseScanRetryFrames { get; set; } = 6;
 
     /// <summary>
     /// 可自动转换的最大连通块包围盒尺寸，避免误把整片程序化地形转成刚体。
     /// </summary>
-    public int MaxCollapseRegionSize { get; set; } = 64;
+    public int MaxCollapseRegionSize { get; set; } = 96;
 
     /// <summary>
     /// 可自动转换的最大固体像素数，避免把玩家脚下主地形整体提升成刚体导致碰撞丢失。
     /// </summary>
-    public int MaxCollapsePixels { get; set; } = 2_048;
+    public int MaxCollapsePixels { get; set; } = 8_192;
 
     /// <summary>
     /// 可自动转换的最小固体像素数。
@@ -113,7 +114,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <summary>
     /// 单次爆破最多转换的悬空固体岛数量，避免一枪把整片程序化山体误拆成过多刚体。
     /// </summary>
-    public int MaxCollapsedIslandsPerShot { get; set; } = 1;
+    public int MaxCollapsedIslandsPerShot { get; set; } = 8;
 
     /// <summary>
     /// 常规连通块扫描失败时，围绕弹坑把局部悬空边缘提升为刚体的最大半径。
@@ -174,10 +175,37 @@ public sealed class PlayableProjectileTool : Behaviour
     /// </summary>
     public bool InputEnabled { get; set; } = true;
 
+    /// <summary>
+    /// 已接收的脚本世界区域修改事件数量；用于确认所有破坏工具共用同一坍塌入口。
+    /// </summary>
+    public int WorldMutationEventsReceived { get; private set; }
+
+    /// <summary>
+    /// 当前待处理坍塌扫描半径；没有待处理请求时为 0。
+    /// </summary>
+    public int PendingCollapseScanRadius => _pendingCollapseScans > 0 ? _pendingCollapseRadius : 0;
+
+    /// <summary>
+    /// 是否消费脚本世界修改事件并自动安排坍塌扫描；默认开启，隔离物理测试可关闭。
+    /// </summary>
+    public bool TrackWorldMutations
+    {
+        get;
+        set
+        {
+            field = value;
+            if (!value)
+            {
+                CancelPendingCollapseScans();
+            }
+        }
+    } = true;
+
     /// <inheritdoc />
     protected override void OnStart()
     {
         _player = Entity.TryGetComponent(out PlayerController player) ? player : null;
+        _ = Context.Events.Subscribe<WorldMutationEvent>(OnWorldMutation);
     }
 
     /// <inheritdoc />
@@ -272,7 +300,7 @@ public sealed class PlayableProjectileTool : Behaviour
         LastHitY = hitY;
         TracerRemainingSeconds = Math.Clamp(TracerDurationSeconds, 0f, 0.25f);
         ShotsFired++;
-        QueueCollapseScan(hitX, hitY);
+        QueueCollapseScan(hitX, hitY, ImpactRadius);
         _cooldownRemaining = MathF.Max(0f, CooldownSeconds);
         return true;
     }
@@ -318,18 +346,81 @@ public sealed class PlayableProjectileTool : Behaviour
             _pendingCollapseFrames = 0;
             _pendingCollapsePasses = 0;
             _pendingCollapseScans = 0;
+            _pendingCollapseRadius = 0;
             TracerRemainingSeconds = 0f;
             LastCollapseSkipReason = $"collapse_error_{exception.GetType().Name}";
         }
     }
 
-    private void QueueCollapseScan(float hitX, float hitY)
+    private void QueueCollapseScan(float hitX, float hitY, int affectedRadius = 0)
     {
-        _pendingCollapseX = (int)MathF.Round(hitX);
-        _pendingCollapseY = (int)MathF.Round(hitY);
-        _pendingCollapseFrames = 1;
-        _pendingCollapsePasses = Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12);
-        _pendingCollapseScans = Math.Clamp(CollapseScanRetryFrames, 1, 8);
+        int centerX = (int)MathF.Round(hitX);
+        int centerY = (int)MathF.Round(hitY);
+        int radius = Math.Clamp(
+            Math.Max(CollapseScanRadius, Math.Max(0, affectedRadius) + 8),
+            4,
+            320);
+        MergePendingCollapseRegion(centerX, centerY, radius);
+    }
+
+    private void OnWorldMutation(WorldMutationEvent item)
+    {
+        if (!TrackWorldMutations)
+        {
+            return;
+        }
+
+        const WorldMutationKind topologyKinds =
+            WorldMutationKind.CellRemoval |
+            WorldMutationKind.Damage |
+            WorldMutationKind.Heat;
+        if (item.Width == 0 || item.Height == 0 || (item.Kinds & topologyKinds) == 0)
+        {
+            return;
+        }
+
+        WorldMutationEventsReceived++;
+        int centerX = item.MinX + (item.Width / 2);
+        int centerY = item.MinY + (item.Height / 2);
+        int radius = Math.Clamp(
+            Math.Max(CollapseScanRadius, ((Math.Max(item.Width, item.Height) + 1) / 2) + 8),
+            4,
+            320);
+        MergePendingCollapseRegion(centerX, centerY, radius);
+    }
+
+    private void CancelPendingCollapseScans()
+    {
+        _pendingCollapseFrames = 0;
+        _pendingCollapsePasses = 0;
+        _pendingCollapseScans = 0;
+        _pendingCollapseRadius = 0;
+    }
+
+    private void MergePendingCollapseRegion(int centerX, int centerY, int radius)
+    {
+        if (_pendingCollapseScans > 0)
+        {
+            int minX = Math.Min(_pendingCollapseX - _pendingCollapseRadius, centerX - radius);
+            int minY = Math.Min(_pendingCollapseY - _pendingCollapseRadius, centerY - radius);
+            int maxX = Math.Max(_pendingCollapseX + _pendingCollapseRadius, centerX + radius);
+            int maxY = Math.Max(_pendingCollapseY + _pendingCollapseRadius, centerY + radius);
+            centerX = minX + ((maxX - minX) / 2);
+            centerY = minY + ((maxY - minY) / 2);
+            radius = Math.Clamp((Math.Max(maxX - minX, maxY - minY) + 1) / 2, 4, 320);
+        }
+
+        _pendingCollapseX = centerX;
+        _pendingCollapseY = centerY;
+        _pendingCollapseRadius = radius;
+        // 修改命令要到本帧脚本 Update 之后的安全相位才落地；至少延后一整帧再读权威网格。
+        _pendingCollapseFrames = Math.Max(_pendingCollapseFrames, 2);
+        _pendingCollapsePasses = Math.Max(
+            _pendingCollapsePasses,
+            Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12));
+        _pendingCollapseScans = Math.Max(
+            _pendingCollapseScans,
+            Math.Clamp(CollapseScanRetryFrames, 1, 16));
     }
 
     // 延迟帧扫描：爆破后等待 CA 稳定，再把悬空固体岛转为刚体
@@ -347,13 +438,18 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         int perScanConversions = Math.Clamp(_pendingCollapsePasses, 1, 3);
-        int converted = ConvertFloatingSolidIslandsNear(_pendingCollapseX, _pendingCollapseY, perScanConversions);
+        int converted = ConvertFloatingSolidIslandsNear(
+            _pendingCollapseX,
+            _pendingCollapseY,
+            perScanConversions,
+            _pendingCollapseRadius);
         if (converted > 0)
         {
             _pendingCollapsePasses -= converted;
             if (_pendingCollapsePasses <= 0)
             {
                 _pendingCollapseScans = 0;
+                _pendingCollapseRadius = 0;
                 return;
             }
 
@@ -365,13 +461,23 @@ public sealed class PlayableProjectileTool : Behaviour
         if (_pendingCollapsePasses > 0 && _pendingCollapseScans > 0)
         {
             _pendingCollapseFrames = 1;
+            return;
         }
+
+        _pendingCollapseRadius = 0;
     }
 
     // 在弹坑周围做 4-连通 flood fill，筛选真正悬空且尺寸合规的固体岛
-    private int ConvertFloatingSolidIslandsNear(int centerX, int centerY, int maxConversions)
+    private int ConvertFloatingSolidIslandsNear(
+        int centerX,
+        int centerY,
+        int maxConversions,
+        int requestedScanRadius = 0)
     {
-        int radius = Math.Clamp(CollapseScanRadius, 4, 320);
+        int radius = Math.Clamp(
+            requestedScanRadius > 0 ? requestedScanRadius : CollapseScanRadius,
+            4,
+            320);
         int size = (radius * 2) + 1;
         int area = size * size;
         int originX = centerX - radius;
@@ -1204,7 +1310,16 @@ public sealed class PlayableProjectileTool : Behaviour
 
     private bool IsSolid(int x, int y)
     {
-        bool solid = Context.Cells.IsSolid(x, y) && !Context.Cells.IsRigidOwned(x, y);
+        bool solid;
+        try
+        {
+            solid = Context.Cells.IsSolid(x, y) && !Context.Cells.IsRigidOwned(x, y);
+        }
+        catch (InvalidOperationException exception) when (IsUnresidentChunk(exception))
+        {
+            return false;
+        }
+
         if (solid)
         {
             LastCollapseSolidCandidates++;
