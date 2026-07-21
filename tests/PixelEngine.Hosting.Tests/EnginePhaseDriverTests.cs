@@ -972,6 +972,32 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal(EngineRunState.Shutdown, engine.State);
     }
 
+    /// <summary>
+    /// 验证相位内退出会先完成 profiler/frame breakdown，再释放仍登记在 Context 中的 runtime 服务。
+    /// </summary>
+    [Fact]
+    public void PhaseRequestedShutdownPublishesFrameBeforeRuntimeServicesAreDisposed()
+    {
+        string contentRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.Hosting.ShutdownOrder", Guid.NewGuid().ToString("N"));
+        GameUiCanvasRegistry registry = new(
+            contentRoot,
+            static _ => throw new InvalidOperationException("测试不应创建 Canvas host。"));
+        DisposingSubsystem subsystem = new(registry);
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddSubsystem(subsystem)
+            .AddPhaseDriver(new ShutdownPhaseDriver())
+            .Build();
+        engine.Context.RegisterService(registry);
+
+        Exception? exception = Record.Exception(() => engine.RunOneTick());
+
+        Assert.Null(exception);
+        Assert.True(subsystem.ShutdownCalled);
+        Assert.Equal(EngineRunState.Shutdown, engine.State);
+        _ = Assert.Throws<ObjectDisposedException>(() => registry.CaptureInputDiagnostics());
+    }
+
     private static MaterialTable Materials(params (string Name, CellType Type)[] definitions)
     {
         MaterialDef[] materials = new MaterialDef[definitions.Length];
@@ -1001,6 +1027,32 @@ public sealed class EnginePhaseDriverTests
         public void RegisterPhases(EnginePhasePipeline phases)
         {
             phases.Register(EnginePhase.CaSimulation, _ => events.Add("driver"));
+        }
+    }
+
+    private sealed class ShutdownPhaseDriver : IEnginePhaseDriver
+    {
+        public void RegisterPhases(EnginePhasePipeline phases)
+        {
+            phases.Register(EnginePhase.WorldStreaming, static context => context.Engine.RequestShutdown());
+        }
+    }
+
+    private sealed class DisposingSubsystem(GameUiCanvasRegistry registry) : IEngineSubsystem
+    {
+        public string Name => "disposing-game-ui";
+
+        public bool ShutdownCalled { get; private set; }
+
+        public void Initialize(EngineContext context)
+        {
+            _ = context;
+        }
+
+        public void Shutdown()
+        {
+            registry.Dispose();
+            ShutdownCalled = true;
         }
     }
 

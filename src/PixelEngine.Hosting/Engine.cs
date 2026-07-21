@@ -3223,6 +3223,7 @@ public sealed class Engine : IDisposable
         State = EngineRunState.Running;
         FrameProfiler profiler = Context.Profiler;
         bool noGcRegionStarted = TryBeginNoGcRegion();
+        bool shutdownAfterFrame = false;
         profiler.BeginFrame();
         FrameTiming timing;
         try
@@ -3254,16 +3255,18 @@ public sealed class Engine : IDisposable
             {
                 TryCaptureRestartSnapshot(timing);
             }
-            if (IsShutdownRequested)
-            {
-                Shutdown();
-            }
+            shutdownAfterFrame = IsShutdownRequested;
         }
         finally
         {
             profiler.EndFrame();
             PublishFrameBreakdown(profiler);
             EndNoGcRegionIfStarted(noGcRegionStarted);
+        }
+
+        if (shutdownAfterFrame)
+        {
+            Shutdown();
         }
 
         return timing;
