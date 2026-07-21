@@ -170,7 +170,7 @@
   - 提交节点：历史节点一至三已完成 `SCOPE-007`、mode/run/content 合同、八区拓扑与流式生成；转向节点新增 `SCOPE-008`、Noita parity 设计和 canonical 更新；随后完成 terrain topology/input/material HUD 正确性、Campaign/Sandbox UI 与死亡/重开产品流，最后取得自动化、真实窗口证据、最终输出并把本任务改为 `[x]`。每个节点按 `AGENTS.md §6` 中文提交。
   - 完成证据：`docs/evidence-2026-07-22-demo-007-noita-campaign-foundation.md`（Evidence Index: `demo-007-noita-campaign-foundation-20260722`）；clean Release build 0 warning / 0 error，Scripting 99/99、Demo 175 passed / 1 native GL skipped、Hosting 980 passed / 7 环境条件 skipped；公共 Editor CLI 完成 Campaign 永久死亡→RunSummary→新 seed 原子换局与 Sandbox 同 seed 重生，三张 1280x720 artifact 双重 SHA256 校验、Console 0 warning / 0 error；正式 RmlUi Player 1080x720、3 Canvas、无 fallback、stderr 0、包内 186/186 checksum 与 MSI verifier 均通过。
 
-- [ ] `DEMO-008` 复现 Noita 八个主路径 biome、程序化遭遇点、侧区、秘密连接和跨区捷径。
+- [~] `DEMO-008` 复现 Noita 八个主路径 biome、程序化遭遇点、侧区、秘密连接和跨区捷径。
   - 优先级：P0。
   - 依赖：`DEMO-007`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §3；`plan/13-demo-game.md` §3.17。
