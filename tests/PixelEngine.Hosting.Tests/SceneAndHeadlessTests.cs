@@ -1313,6 +1313,42 @@ public sealed class SceneAndHeadlessTests
     }
 
     /// <summary>
+    /// 验证退出 Play 会取消尚未消费的重开请求，并清除不能跨 session 继承的 restart outcome。
+    /// </summary>
+    [Fact]
+    public void ExitingPlaySessionCancelsQueuedRestartAndClearsOutcome()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty), ("stone", CellType.Solid));
+        Scripting.Scene scriptScene = new();
+        _ = scriptScene.CreateEntity().AddComponent<SnapshotCounterBehaviour>();
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .Build();
+        engine.Context.RegisterService(materials);
+        engine.Context.RegisterService(scriptScene);
+        _ = engine.AttachResidentSimulationWorld(128, 128, particleCapacity: 8);
+        _ = engine.AttachScriptingFromServices();
+        engine.EnterEditMode();
+        EngineEditorPlaySessionService session = new(engine);
+        Assert.True(session.EnterPlayCurrent().Succeeded);
+        _ = engine.RunOneTick();
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        edit.PaintCell(4, 5, 1);
+        IRuntimeControlApi runtime = engine.Context.GetService<IRuntimeControlApi>();
+
+        RuntimeControlResult queued = runtime.RequestRestartCurrentScene();
+        EditorPlaySessionResult exited = session.ExitPlay();
+        Assert.True(session.EnterPlayCurrent().Succeeded);
+        _ = engine.RunOneTick();
+
+        Assert.True(queued.Success, queued.Message);
+        Assert.True(exited.Succeeded, exited.Message);
+        Assert.Equal(RuntimeRestartStatus.None, runtime.Capture().RestartStatus);
+        Assert.Null(runtime.Capture().RestartMessage);
+        Assert.Equal(1, engine.Context.GetService<CellGrid>().GetMaterial(4, 5));
+    }
+
+    /// <summary>
     /// 验证 Hosting 能从 save directory 物化 live World/Simulation 后端，并恢复自由粒子快照。
     /// </summary>
     [Fact]

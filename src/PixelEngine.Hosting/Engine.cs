@@ -1829,6 +1829,10 @@ public sealed class Engine : IDisposable
     {
         ThrowIfShutdown();
         _attachedScriptRuntime?.EndPlaySession();
+        // restart outcome 只描述当前 Play session；退出后不能让新 session 误走 world-replacement 恢复分支。
+        _pendingRuntimeRestart = null;
+        LastRuntimeRestartStatus = RuntimeRestartStatus.None;
+        LastRuntimeRestartMessage = null;
     }
 
     internal ScriptPlaySessionSnapshot? CaptureScriptPlaySessionSnapshot()
