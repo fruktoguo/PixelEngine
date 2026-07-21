@@ -87,7 +87,7 @@ internal static class CellTopologyChangeClassifier
 /// 并发写、相位边界排空的固体拓扑区域累加器。
 /// </summary>
 /// <remarks>
-/// <see cref="TryDrain"/> 必须在 CA job barrier 之后、没有并发 writer 的相位边界调用。
+/// <c>TryDrain</c> 必须在 CA job barrier 之后、没有并发 writer 的相位边界调用。
 /// </remarks>
 public sealed class CellTopologyChangeAccumulator : ICellTopologyChangeSink
 {

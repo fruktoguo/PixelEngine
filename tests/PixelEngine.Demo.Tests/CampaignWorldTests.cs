@@ -6,7 +6,7 @@ using Xunit;
 namespace PixelEngine.Demo.Tests;
 
 /// <summary>
-/// 原创 Roguelite 战役配置与无限纵深地形契约测试。
+/// Noita 复刻战役配置与无限纵深地形契约测试。
 /// 不变式：配置严格校验、八区七节点拓扑连续、chunk 只由全局坐标与 run seed 决定。
 /// </summary>
 public sealed class CampaignWorldTests
@@ -15,7 +15,7 @@ public sealed class CampaignWorldTests
     private const int TemperatureSize = 16;
 
     /// <summary>
-    /// 验证正式 campaign.json 只能经公开 Config API 加载，并完整声明八个原创区域及全部有效材质键。
+    /// 验证正式 campaign.json 只能经公开 Config API 加载，并按 canonical 顺序声明 Noita 八个 biome。
     /// </summary>
     [Fact]
     public void CampaignConfigLoadsEightValidatedRegionsThroughPublicConfigApi()
@@ -30,16 +30,42 @@ public sealed class CampaignWorldTests
         Assert.Equal(
             CampaignConfig.RequiredRegionCount,
             config.Regions.Select(static region => region.Id).Distinct(StringComparer.Ordinal).Count());
-        Assert.True(materials.Resolve(config.ForgeShellMaterial).IsValid);
-        Assert.True(materials.Resolve(config.ForgePlatformMaterial).IsValid);
+        Assert.Equal(
+            ["mines", "coal-pits", "snowy-depths", "hiisi-base", "underground-jungle", "the-vault", "temple-of-the-art", "the-laboratory"],
+            config.Regions.Select(static region => region.Id));
+        Assert.Equal(
+            ["Mines", "Coal Pits", "Snowy Depths", "Hiisi Base", "Underground Jungle", "The Vault", "Temple of the Art", "The Laboratory"],
+            config.Regions.Select(static region => region.DisplayName));
+        Assert.True(materials.Resolve(config.HolyMountainShellMaterial).IsValid);
+        Assert.True(materials.Resolve(config.HolyMountainPlatformMaterial).IsValid);
 
-        foreach (CampaignRegionDefinition region in config.Regions)
+        string[] legacyIds =
+        [
+            "shattered-lode",
+            "ember-fungal-reach",
+            "frostfall-chasm",
+            "ironworks-bastion",
+            "rootsea-wilds",
+            "reactive-vault",
+            "null-temple",
+            "origin-crucible",
+        ];
+        for (int i = 0; i < config.Regions.Length; i++)
         {
+            CampaignRegionDefinition region = config.Regions[i];
             Assert.False(string.IsNullOrWhiteSpace(region.DisplayName));
+            Assert.Equal([legacyIds[i]], region.LegacyIds);
+            Assert.True(config.TryResolveRegionIndex(region.Id, out int canonicalIndex));
+            Assert.Equal(i, canonicalIndex);
+            Assert.True(config.TryResolveRegionIndex(legacyIds[i], out int legacyIndex));
+            Assert.Equal(i, legacyIndex);
             Assert.True(materials.Resolve(region.RockMaterial).IsValid, $"区域 {region.Id} 缺少岩层材质。");
             Assert.True(materials.Resolve(region.LooseMaterial).IsValid, $"区域 {region.Id} 缺少松散材质。");
             Assert.True(materials.Resolve(region.HazardMaterial).IsValid, $"区域 {region.Id} 缺少危险材质。");
         }
+
+        Assert.False(config.TryResolveRegionIndex("unknown-biome", out int missingIndex));
+        Assert.Equal(-1, missingIndex);
 
         AssertEquivalent(config, CampaignConfig.BuiltinDefault);
         PlayableCavernWorldGenerator generator = new();
@@ -54,6 +80,59 @@ public sealed class CampaignWorldTests
             WorldSeedOverride: 42,
             Config: configApi);
         Assert.Equal(42UL, generator.Describe(in overrideRequest).WorldSeed);
+    }
+
+    /// <summary>
+    /// 验证转向前 v1 配置会升级为 canonical biome/Holy Mountain 合同，旧 id 只作为读取 alias 保留。
+    /// </summary>
+    [Fact]
+    public void CampaignConfigMigratesLegacyV1RegionAndForgeIdentifiers()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.CampaignConfig", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(tempRoot);
+        try
+        {
+            JsonObject legacy = ParseObject(File.ReadAllText(Path.Combine(ContentRoot(), "campaign.json")));
+            legacy["schemaVersion"] = 1;
+            MoveProperty(legacy, "holyMountainHeightCells", "forgeHeightCells");
+            MoveProperty(legacy, "holyMountainHalfWidthCells", "forgeHalfWidthCells");
+            MoveProperty(legacy, "holyMountainShellMaterial", "forgeShellMaterial");
+            MoveProperty(legacy, "holyMountainPlatformMaterial", "forgePlatformMaterial");
+
+            string[] legacyIds =
+            [
+                "shattered-lode",
+                "ember-fungal-reach",
+                "frostfall-chasm",
+                "ironworks-bastion",
+                "rootsea-wilds",
+                "reactive-vault",
+                "null-temple",
+                "origin-crucible",
+            ];
+            JsonArray regions = Assert.IsType<JsonArray>(legacy["regions"]);
+            for (int i = 0; i < regions.Count; i++)
+            {
+                JsonObject region = Assert.IsType<JsonObject>(regions[i]);
+                region["id"] = legacyIds[i];
+                region["displayName"] = $"legacy-{i}";
+                _ = region.Remove("legacyIds");
+            }
+
+            File.WriteAllText(Path.Combine(tempRoot, "campaign.json"), legacy.ToJsonString());
+            CampaignConfig migrated = CampaignConfig.Load(new EngineScriptConfigApi(tempRoot));
+
+            AssertEquivalent(migrated, CampaignConfig.BuiltinDefault);
+            for (int i = 0; i < legacyIds.Length; i++)
+            {
+                Assert.True(migrated.TryResolveRegionIndex(legacyIds[i], out int resolved));
+                Assert.Equal(i, resolved);
+            }
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
     }
 
     /// <summary>
@@ -96,17 +175,17 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
-    /// 验证八个纵深区域由一条逐 cell 连续的主通道连接，七个 Still Forge 具备房间、边界和平台实体地形。
+    /// 验证八个纵深区域由一条逐 cell 连续的主通道连接，七个 Holy Mountain 具备房间、边界和平台实体地形。
     /// </summary>
     [Fact]
-    public void CampaignTopologyConnectsEightRegionsThroughSevenStillForges()
+    public void CampaignTopologyConnectsEightRegionsThroughSevenHolyMountains()
     {
         CampaignConfig config = LoadConfig();
         IMaterialQuery materials = LoadMaterials();
         TerrainProbe probe = new(materials, config, config.InitialRunSeed);
         ushort empty = ResolveRequired(materials, "empty");
-        ushort forgeShell = ResolveRequired(materials, config.ForgeShellMaterial);
-        ushort forgePlatform = ResolveRequired(materials, config.ForgePlatformMaterial);
+        ushort holyMountainShell = ResolveRequired(materials, config.HolyMountainShellMaterial);
+        ushort holyMountainPlatform = ResolveRequired(materials, config.HolyMountainPlatformMaterial);
 
         long campaignBottom = RegionStart(config, CampaignConfig.RequiredRegionCount - 1) + config.RegionHeightCells;
         for (long worldY = config.SurfaceY; worldY <= campaignBottom; worldY += 31)
@@ -149,19 +228,19 @@ public sealed class CampaignWorldTests
                 continue;
             }
 
-            long forgeStart = ForgeStart(config, regionIndex);
-            long roomY = forgeStart + 32;
+            long holyMountainStart = HolyMountainStart(config, regionIndex);
+            long roomY = holyMountainStart + 32;
             long roomCenterX = PlayableCavernWorldGenerator.MainPathCenterX(roomY, config, config.InitialRunSeed);
-            CampaignDepthLocation forgeLocation = config.ResolveLocation(roomY);
-            Assert.Equal(CampaignDepthKind.StillForge, forgeLocation.Kind);
-            Assert.Equal(regionIndex, forgeLocation.ForgeIndex);
+            CampaignDepthLocation holyMountainLocation = config.ResolveLocation(roomY);
+            Assert.Equal(CampaignDepthKind.HolyMountain, holyMountainLocation.Kind);
+            Assert.Equal(regionIndex, holyMountainLocation.HolyMountainIndex);
             Assert.Equal(empty, probe.MaterialAt(roomCenterX, roomY));
-            Assert.Equal(forgeShell, probe.MaterialAt(roomCenterX + config.ForgeHalfWidthCells, roomY));
+            Assert.Equal(holyMountainShell, probe.MaterialAt(roomCenterX + config.HolyMountainHalfWidthCells, roomY));
 
-            long platformY = forgeStart + 62;
+            long platformY = holyMountainStart + 62;
             long platformCenterX = PlayableCavernWorldGenerator.MainPathCenterX(platformY, config, config.InitialRunSeed);
             long platformX = platformCenterX + config.MainPathHalfWidthCells + 24;
-            Assert.Equal(forgePlatform, probe.MaterialAt(platformX, platformY));
+            Assert.Equal(holyMountainPlatform, probe.MaterialAt(platformX, platformY));
             Assert.Equal(20f, probe.TemperatureAt(platformCenterX, platformY));
         }
 
@@ -264,13 +343,13 @@ public sealed class CampaignWorldTests
         Assert.Equal(expected.SurfaceY, actual.SurfaceY);
         Assert.Equal(expected.CampaignStartDepthCells, actual.CampaignStartDepthCells);
         Assert.Equal(expected.RegionHeightCells, actual.RegionHeightCells);
-        Assert.Equal(expected.ForgeHeightCells, actual.ForgeHeightCells);
+        Assert.Equal(expected.HolyMountainHeightCells, actual.HolyMountainHeightCells);
         Assert.Equal(expected.MainPathHalfWidthCells, actual.MainPathHalfWidthCells);
         Assert.Equal(expected.MainPathEntranceX, actual.MainPathEntranceX);
         Assert.Equal(expected.MainPathWanderCells, actual.MainPathWanderCells);
-        Assert.Equal(expected.ForgeHalfWidthCells, actual.ForgeHalfWidthCells);
-        Assert.Equal(expected.ForgeShellMaterial, actual.ForgeShellMaterial);
-        Assert.Equal(expected.ForgePlatformMaterial, actual.ForgePlatformMaterial);
+        Assert.Equal(expected.HolyMountainHalfWidthCells, actual.HolyMountainHalfWidthCells);
+        Assert.Equal(expected.HolyMountainShellMaterial, actual.HolyMountainShellMaterial);
+        Assert.Equal(expected.HolyMountainPlatformMaterial, actual.HolyMountainPlatformMaterial);
         Assert.Equal(expected.Regions.Length, actual.Regions.Length);
         for (int i = 0; i < expected.Regions.Length; i++)
         {
@@ -278,6 +357,7 @@ public sealed class CampaignWorldTests
             CampaignRegionDefinition expectedRegion = expected.Regions[i];
             Assert.Equal(expectedRegion.Id, actualRegion.Id);
             Assert.Equal(expectedRegion.DisplayName, actualRegion.DisplayName);
+            Assert.Equal(expectedRegion.LegacyIds, actualRegion.LegacyIds);
             Assert.Equal(expectedRegion.RockMaterial, actualRegion.RockMaterial);
             Assert.Equal(expectedRegion.LooseMaterial, actualRegion.LooseMaterial);
             Assert.Equal(expectedRegion.HazardMaterial, actualRegion.HazardMaterial);
@@ -290,12 +370,20 @@ public sealed class CampaignWorldTests
     {
         return config.SurfaceY +
             config.CampaignStartDepthCells +
-            ((long)regionIndex * (config.RegionHeightCells + config.ForgeHeightCells));
+            ((long)regionIndex * (config.RegionHeightCells + config.HolyMountainHeightCells));
     }
 
-    private static long ForgeStart(CampaignConfig config, int forgeIndex)
+    private static long HolyMountainStart(CampaignConfig config, int holyMountainIndex)
     {
-        return RegionStart(config, forgeIndex) + config.RegionHeightCells;
+        return RegionStart(config, holyMountainIndex) + config.RegionHeightCells;
+    }
+
+    private static void MoveProperty(JsonObject source, string oldName, string newName)
+    {
+        JsonNode? value = source[oldName]?.DeepClone();
+        Assert.NotNull(value);
+        source[newName] = value;
+        Assert.True(source.Remove(oldName));
     }
 
     private static ushort ResolveRequired(IMaterialQuery materials, string name)

@@ -4,7 +4,7 @@ using PixelEngine.Scripting;
 namespace PixelEngine.Demo;
 
 /// <summary>
-/// 基于全局坐标的确定性流式战役地形生成器；生成自然地表、八个纵深区域、七个 Still Forge 与无限侧区。
+/// 基于全局坐标的确定性流式战役地形生成器；生成自然地表、八个主路径 biome、七个 Holy Mountain 与无限侧区。
 /// </summary>
 public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGenerator
 {
@@ -298,22 +298,22 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 : row.Palette.Empty;
         }
 
-        if (row.Location.Kind == CampaignDepthKind.StillForge)
+        if (row.Location.Kind == CampaignDepthKind.HolyMountain)
         {
             long distanceX = Math.Abs(worldX - row.PathCenterX);
             int shell = 8;
-            if (distanceX <= row.Config.ForgeHalfWidthCells + shell)
+            if (distanceX <= row.Config.HolyMountainHalfWidthCells + shell)
             {
                 bool passage = distanceX <= row.Config.MainPathHalfWidthCells + 4;
                 bool cap = row.Location.LocalDepthCells < shell ||
-                    row.Location.LocalDepthCells >= row.Config.ForgeHeightCells - shell;
-                bool wall = distanceX >= row.Config.ForgeHalfWidthCells;
+                    row.Location.LocalDepthCells >= row.Config.HolyMountainHeightCells - shell;
+                bool wall = distanceX >= row.Config.HolyMountainHalfWidthCells;
                 bool platform = row.Location.LocalDepthCells is >= 60 and <= 64 &&
                     distanceX > row.Config.MainPathHalfWidthCells + 20;
                 return wall || (cap && !passage)
-                    ? row.Palette.ForgeShell
+                    ? row.Palette.HolyMountainShell
                     : platform
-                        ? row.Palette.ForgePlatform
+                        ? row.Palette.HolyMountainPlatform
                         : row.Palette.Empty;
             }
         }
@@ -376,7 +376,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             long sampleWorldY = originCellY + (temperatureY * cellScale) + (cellScale / 2);
             CampaignDepthLocation location = config.ResolveLocation(sampleWorldY);
             int regionIndex = Math.Clamp(location.RegionIndex, 0, CampaignConfig.RequiredRegionCount - 1);
-            float temperature = location.Kind == CampaignDepthKind.StillForge
+            float temperature = location.Kind == CampaignDepthKind.HolyMountain
                 ? 20f
                 : config.Regions[regionIndex].BaseTemperature;
             for (int temperatureX = 0; temperatureX < temperatureSizeCells; temperatureX++)
@@ -511,8 +511,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             ResolveRequired(materials, "ice"),
             ResolveRequired(materials, "gravel"),
             ResolveRequired(materials, "crystal"),
-            ResolveRequired(materials, config.ForgeShellMaterial),
-            ResolveRequired(materials, config.ForgePlatformMaterial));
+            ResolveRequired(materials, config.HolyMountainShellMaterial),
+            ResolveRequired(materials, config.HolyMountainPlatformMaterial));
     }
 
     private static void ResolveRegionMaterials(
@@ -731,6 +731,6 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort Ice,
         ushort Gravel,
         ushort Crystal,
-        ushort ForgeShell,
-        ushort ForgePlatform);
+        ushort HolyMountainShell,
+        ushort HolyMountainPlatform);
 }

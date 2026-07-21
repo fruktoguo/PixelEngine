@@ -1,21 +1,22 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "defaultMode": "campaign",
   "initialRunSeed": 5785252250990625352,
   "surfaceY": 224,
   "campaignStartDepthCells": 0,
   "regionHeightCells": 512,
-  "forgeHeightCells": 128,
+  "holyMountainHeightCells": 128,
   "mainPathHalfWidthCells": 22,
   "mainPathEntranceX": 96,
   "mainPathWanderCells": 176,
-  "forgeHalfWidthCells": 176,
-  "forgeShellMaterial": "boundary_stone",
-  "forgePlatformMaterial": "metal",
+  "holyMountainHalfWidthCells": 176,
+  "holyMountainShellMaterial": "boundary_stone",
+  "holyMountainPlatformMaterial": "metal",
   "regions": [
     {
-      "id": "shattered-lode",
-      "displayName": "碎脉矿层 / Shattered Lode",
+      "id": "mines",
+      "displayName": "Mines",
+      "legacyIds": ["shattered-lode"],
       "rockMaterial": "stone",
       "looseMaterial": "gravel",
       "hazardMaterial": "water",
@@ -23,8 +24,9 @@
       "baseTemperature": 12
     },
     {
-      "id": "ember-fungal-reach",
-      "displayName": "余烬菌谷 / Ember Fungal Reach",
+      "id": "coal-pits",
+      "displayName": "Coal Pits",
+      "legacyIds": ["ember-fungal-reach"],
       "rockMaterial": "dirt",
       "looseMaterial": "oil",
       "hazardMaterial": "fire",
@@ -32,8 +34,9 @@
       "baseTemperature": 58
     },
     {
-      "id": "frostfall-chasm",
-      "displayName": "霜降深谷 / Frostfall Chasm",
+      "id": "snowy-depths",
+      "displayName": "Snowy Depths",
+      "legacyIds": ["frostfall-chasm"],
       "rockMaterial": "ice",
       "looseMaterial": "gravel",
       "hazardMaterial": "water",
@@ -41,8 +44,9 @@
       "baseTemperature": 0
     },
     {
-      "id": "ironworks-bastion",
-      "displayName": "铸炉堡垒 / Ironworks Bastion",
+      "id": "hiisi-base",
+      "displayName": "Hiisi Base",
+      "legacyIds": ["ironworks-bastion"],
       "rockMaterial": "metal",
       "looseMaterial": "stone",
       "hazardMaterial": "lava",
@@ -50,8 +54,9 @@
       "baseTemperature": 82
     },
     {
-      "id": "rootsea-wilds",
-      "displayName": "根海雨林 / Rootsea Wilds",
+      "id": "underground-jungle",
+      "displayName": "Underground Jungle",
+      "legacyIds": ["rootsea-wilds"],
       "rockMaterial": "dirt",
       "looseMaterial": "wood",
       "hazardMaterial": "acid",
@@ -59,8 +64,9 @@
       "baseTemperature": 24
     },
     {
-      "id": "reactive-vault",
-      "displayName": "反应穹库 / Reactive Vault",
+      "id": "the-vault",
+      "displayName": "The Vault",
+      "legacyIds": ["reactive-vault"],
       "rockMaterial": "glass",
       "looseMaterial": "metal",
       "hazardMaterial": "acid",
@@ -68,8 +74,9 @@
       "baseTemperature": 42
     },
     {
-      "id": "null-temple",
-      "displayName": "失序神殿 / Null Temple",
+      "id": "temple-of-the-art",
+      "displayName": "Temple of the Art",
+      "legacyIds": ["null-temple"],
       "rockMaterial": "boundary_stone",
       "looseMaterial": "stone",
       "hazardMaterial": "smoke",
@@ -77,8 +84,9 @@
       "baseTemperature": 16
     },
     {
-      "id": "origin-crucible",
-      "displayName": "源核实验庭 / Origin Crucible",
+      "id": "the-laboratory",
+      "displayName": "The Laboratory",
+      "legacyIds": ["origin-crucible"],
       "rockMaterial": "metal",
       "looseMaterial": "crystal",
       "hazardMaterial": "lava",

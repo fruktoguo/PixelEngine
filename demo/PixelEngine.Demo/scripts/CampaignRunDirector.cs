@@ -16,7 +16,7 @@ public enum DemoGameMode : byte
 }
 
 /// <summary>
-/// 原创战役的一轮运行状态。
+/// Noita 复刻战役的一轮运行状态。
 /// </summary>
 public enum CampaignRunState : byte
 {
@@ -29,11 +29,17 @@ public enum CampaignRunState : byte
     /// <summary>在普通区域探索。</summary>
     Exploring,
 
-    /// <summary>位于层间 Still Forge。</summary>
-    StillForge,
+    /// <summary>位于层间 Holy Mountain。</summary>
+    HolyMountain,
 
-    /// <summary>进入最终区域。</summary>
-    Finale,
+    /// <summary>转向前脚本使用的 Holy Mountain 等值 alias。</summary>
+    StillForge = HolyMountain,
+
+    /// <summary>进入最终区域 The Laboratory。</summary>
+    Laboratory,
+
+    /// <summary>转向前脚本使用的 The Laboratory 等值 alias。</summary>
+    Finale = Laboratory,
 
     /// <summary>已完成当前纵深路线。</summary>
     Completed,
@@ -97,8 +103,8 @@ public sealed class CampaignRunDirector : Behaviour
     /// <summary>是否已接纳原子新世界重建请求。</summary>
     public bool IsRestartRequested { get; private set; }
 
-    /// <summary>当前区域的原创显示名。</summary>
-    public string CurrentRegionDisplayName => _config?.Regions[CurrentRegionIndex].DisplayName ?? "地表 / Surface";
+    /// <summary>当前区域的 canonical Noita biome 显示名。</summary>
+    public string CurrentRegionDisplayName => _config?.Regions[CurrentRegionIndex].DisplayName ?? "Mines";
 
     /// <summary>当前模式的稳定显示名。</summary>
     public string ModeDisplayName => Mode == DemoGameMode.Campaign ? "战役 / Campaign" : "无限沙盒 / Infinite Sandbox";
@@ -109,8 +115,8 @@ public sealed class CampaignRunDirector : Behaviour
         CampaignRunState.MainMenu => "主菜单 / Main Menu",
         CampaignRunState.StartingRun => "新一轮 / Starting Run",
         CampaignRunState.Exploring => "探索 / Exploring",
-        CampaignRunState.StillForge => "静界锻台 / Still Forge",
-        CampaignRunState.Finale => "终局纵深 / Finale",
+        CampaignRunState.HolyMountain => "Holy Mountain",
+        CampaignRunState.Laboratory => "The Laboratory",
         CampaignRunState.Completed => "完成 / Completed",
         CampaignRunState.Dead => "永久死亡 / Dead",
         CampaignRunState.RunSummary => "本轮结算 / Run Summary",
@@ -326,20 +332,20 @@ public sealed class CampaignRunDirector : Behaviour
 
         long completionDepth =
             config.CampaignStartDepthCells +
-            ((CampaignConfig.RequiredRegionCount - 1L) * (config.RegionHeightCells + config.ForgeHeightCells)) +
+            ((CampaignConfig.RequiredRegionCount - 1L) * (config.RegionHeightCells + config.HolyMountainHeightCells)) +
             config.RegionHeightCells;
         if (depth >= completionDepth)
         {
             WasCompleted = true;
-            ResultReason = "抵达源核纵深 / Route completed";
+            ResultReason = "抵达 The Laboratory 终点 / Route completed";
             State = CampaignRunState.Completed;
             return;
         }
 
-        State = location.Kind == CampaignDepthKind.StillForge
-            ? CampaignRunState.StillForge
+        State = location.Kind == CampaignDepthKind.HolyMountain
+            ? CampaignRunState.HolyMountain
             : CurrentRegionIndex == CampaignConfig.RequiredRegionCount - 1
-                ? CampaignRunState.Finale
+                ? CampaignRunState.Laboratory
                 : CampaignRunState.Exploring;
     }
 
@@ -400,8 +406,8 @@ public sealed class CampaignRunDirector : Behaviour
     {
         return state is CampaignRunState.StartingRun or
             CampaignRunState.Exploring or
-            CampaignRunState.StillForge or
-            CampaignRunState.Finale;
+            CampaignRunState.HolyMountain or
+            CampaignRunState.Laboratory;
     }
 
     private static DemoGameMode ParseMode(string mode)

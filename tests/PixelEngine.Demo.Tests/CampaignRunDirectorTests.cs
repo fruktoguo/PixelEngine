@@ -14,10 +14,10 @@ namespace PixelEngine.Demo.Tests;
 public sealed class CampaignRunDirectorTests
 {
     /// <summary>
-    /// 验证默认战役按主菜单、探索、锻台、终局、完成、结算与新 seed 重建顺序推进。
+    /// 验证默认战役按主菜单、探索、Holy Mountain、The Laboratory、完成、结算与新 seed 重建顺序推进。
     /// </summary>
     [Fact]
-    public void CampaignLifecycleTraversesForgesFinaleSummaryAndRequestsNewSeed()
+    public void CampaignLifecycleTraversesHolyMountainsLaboratorySummaryAndRequestsNewSeed()
     {
         CampaignConfig config = LoadConfig();
         RecordingRuntime runtime = new(config.InitialRunSeed);
@@ -36,21 +36,24 @@ public sealed class CampaignRunDirectorTests
         Assert.Equal(CampaignRunState.Exploring, director.State);
         Assert.Equal(64, director.CurrentDepthCells);
 
-        long firstForgeY = config.SurfaceY + config.CampaignStartDepthCells + config.RegionHeightCells + 16L;
-        director.AdvanceRun(firstForgeY, 1f);
-        Assert.Equal(CampaignRunState.StillForge, director.State);
+        long firstHolyMountainY = config.SurfaceY + config.CampaignStartDepthCells + config.RegionHeightCells + 16L;
+        director.AdvanceRun(firstHolyMountainY, 1f);
+        Assert.Equal(CampaignRunState.HolyMountain, director.State);
+        Assert.Equal("Holy Mountain", director.StateDisplayName);
 
-        long secondRegionY = firstForgeY + config.ForgeHeightCells;
+        long secondRegionY = firstHolyMountainY + config.HolyMountainHeightCells;
         director.AdvanceRun(secondRegionY, 1f);
         Assert.Equal(CampaignRunState.Exploring, director.State);
         Assert.Equal(1, director.CurrentRegionIndex);
 
         long finalRegionY = config.SurfaceY +
             config.CampaignStartDepthCells +
-            ((CampaignConfig.RequiredRegionCount - 1L) * (config.RegionHeightCells + config.ForgeHeightCells)) +
+            ((CampaignConfig.RequiredRegionCount - 1L) * (config.RegionHeightCells + config.HolyMountainHeightCells)) +
             16L;
         director.AdvanceRun(finalRegionY, 1f);
-        Assert.Equal(CampaignRunState.Finale, director.State);
+        Assert.Equal(CampaignRunState.Laboratory, director.State);
+        Assert.Equal("The Laboratory", director.StateDisplayName);
+        Assert.Equal("The Laboratory", director.CurrentRegionDisplayName);
         Assert.Equal(CampaignConfig.RequiredRegionCount - 1, director.CurrentRegionIndex);
 
         long completionY = finalRegionY - 16L + config.RegionHeightCells;
@@ -249,13 +252,13 @@ public sealed class CampaignRunDirectorTests
             SurfaceY = source.SurfaceY,
             CampaignStartDepthCells = source.CampaignStartDepthCells,
             RegionHeightCells = source.RegionHeightCells,
-            ForgeHeightCells = source.ForgeHeightCells,
+            HolyMountainHeightCells = source.HolyMountainHeightCells,
             MainPathHalfWidthCells = source.MainPathHalfWidthCells,
             MainPathEntranceX = source.MainPathEntranceX,
             MainPathWanderCells = source.MainPathWanderCells,
-            ForgeHalfWidthCells = source.ForgeHalfWidthCells,
-            ForgeShellMaterial = source.ForgeShellMaterial,
-            ForgePlatformMaterial = source.ForgePlatformMaterial,
+            HolyMountainHalfWidthCells = source.HolyMountainHalfWidthCells,
+            HolyMountainShellMaterial = source.HolyMountainShellMaterial,
+            HolyMountainPlatformMaterial = source.HolyMountainPlatformMaterial,
             Regions = source.Regions,
         }.Validate();
     }

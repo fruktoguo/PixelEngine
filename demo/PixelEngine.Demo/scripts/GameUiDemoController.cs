@@ -1009,7 +1009,7 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudElevationPath, 0.0);
         SetHudValue(HudCrystalsPath, Ratio(CountVisitedRegions(run.VisitedRegionMask), CampaignConfig.RequiredRegionCount));
         SetHudValue(HudTimePath, Ratio(run.ElapsedSeconds, 3_600.0));
-        SetHudValue(HudHazardPath, run.State is CampaignRunState.Finale or CampaignRunState.Dead ? 1.0 : 0.0);
+        SetHudValue(HudHazardPath, run.State is CampaignRunState.Laboratory or CampaignRunState.Dead ? 1.0 : 0.0);
         SetHudValue(HudScorePath, Ratio(run.DeepestDepthCells, 5_120.0));
         SetScreenValue(HudScreenHandle, HudDepthCellsPath, new UiValue(run.CurrentDepthCells));
         PublishRunText(run);

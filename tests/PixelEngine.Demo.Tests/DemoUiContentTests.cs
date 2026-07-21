@@ -229,9 +229,12 @@ public sealed class DemoUiContentTests
         // Assert：验证预期结果
         Assert.Contains("战役", defaultLoopText);
         Assert.Contains("无限沙盒", defaultLoopText);
-        Assert.Contains("八个区域 · 七座静界锻台", defaultLoopText);
-        Assert.Contains("战役深入源核，沙盒无限延伸", defaultLoopText);
+        Assert.Contains("八个 biome · 七座 Holy Mountain", defaultLoopText);
+        Assert.Contains("Campaign 向下探索，Sandbox 无限延伸", defaultLoopText);
         Assert.Contains("每一轮由独立世界 Seed 生成", defaultLoopText);
+        Assert.Contains("NOITA", defaultLoopText);
+        Assert.Contains("Mines", defaultLoopText);
+        Assert.Contains("A/D 移动 · 按住 W/Space 有限悬浮 · 鼠标施放 · Esc 暂停", defaultLoopText);
         Assert.Contains("战役 / Campaign", defaultLoopText);
         Assert.Contains("探索 / Exploring", defaultLoopText);
         Assert.Contains("Seed", defaultLoopText);
@@ -239,6 +242,9 @@ public sealed class DemoUiContentTests
         Assert.Contains("本轮结束 / Run Ended", defaultLoopText);
         Assert.Contains("永久死亡 / Run ended", defaultLoopText);
         Assert.Contains("开始新轮", defaultLoopText);
+        Assert.DoesNotContain(defaultLoopText, text => text.Contains("Shattered Lode", StringComparison.Ordinal));
+        Assert.DoesNotContain(defaultLoopText, text => text.Contains("Still Forge", StringComparison.Ordinal));
+        Assert.DoesNotContain(defaultLoopText, text => text.Contains("静界锻台", StringComparison.Ordinal));
         Assert.DoesNotContain(defaultLoopText, text => text.Contains("右侧出口", StringComparison.Ordinal));
         Assert.DoesNotContain("可选任务时间", defaultLoopText);
         Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
