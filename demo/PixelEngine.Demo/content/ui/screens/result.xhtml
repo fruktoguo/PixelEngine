@@ -1,10 +1,10 @@
-<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v2" style="left: 326px; top: 70px; width: 400px; height: 490px">
+<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v3" style="left: 326px; top: 70px; width: 400px; height: 490px">
   <head>
     <style>
       body { margin: 0px; font-family: "Noto Sans SC"; color: #f5f8ff; background-color: transparent; }
       #result_panel { position: absolute; left: 326px; top: 70px; width: 368px; height: 458px; padding: 16px; background-color: rgba(9, 12, 18, 242); border-width: 1px; border-color: #596d87; }
-      #result_title { color: #f5c451; font-size: 23px; }
-      #result_state { color: #f8fafc; font-size: 18px; }
+      #result_title { color: #f5c451; font-size: 23px; line-height: 30px; }
+      #result_state { color: #f8fafc; font-size: 18px; line-height: 24px; }
       #result_reason_text, #result_seed_label, #result_seed_text, #result_region_text, #result_depth_label, #result_depth_text, #result_time_label, #result_time_text { color: #b7c3d3; font-size: 12px; }
       progress { position: relative; display: block; width: 286px; height: 14px; margin-top: 4px; background-color: #202b38; border-width: 1px; border-color: #52647c; }
       progress fill { background-color: #d2a642; }
@@ -12,7 +12,8 @@
       #result_won fill { background-color: #42ad72; }
       button { width: 132px; height: 30px; margin-top: 10px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
       button:hover { background-color: #4076a5; }
-      p { margin: 4px 0px; }
+      #result_restart { margin-right: 8px; }
+      p { display: block; margin: 4px 0px; line-height: 18px; }
     </style>
   </head>
   <body>

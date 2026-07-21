@@ -155,7 +155,7 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.ResultScreen,
-            "demo.webfirst.result/v2",
+            "demo.webfirst.result/v3",
             GameUiDemoController.ResultModelPathNames.ToArray(),
             ["restart_game", "quit_game"]);
     }
@@ -638,6 +638,48 @@ public sealed class DemoUiContentTests
         AssertUiPathWritten(ui, "hud.mode_text");
         AssertUiPathWritten(ui, "hud.seed_text");
         AssertUiPathWritten(ui, "hud.run_state_text");
+    }
+
+    /// <summary>
+    /// 验证宿主原子换局后由脚本生命周期推进的 run 会在首个 Update 把误开的主菜单切回 HUD。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerSynchronizesExternallyStartedRunFromMenuToHud()
+    {
+        CampaignConfig config = CampaignConfig.BuiltinDefault;
+        FakeRuntimeControlApi runtime = new();
+        RuntimeControlSnapshot snapshot = runtime.Capture() with { WorldSeed = config.InitialRunSeed };
+        CampaignRunDirector run = new();
+        run.Initialize(config, runtime, in snapshot);
+        GameUiDemoController controller = new();
+        FakeGameUiService ui = new();
+        controller.BindRunDirector(run);
+        controller.StartForService(ui, runtime);
+        ScriptUiScreenHandle main = controller.MainScreen;
+
+        Assert.True(run.StartSelectedRun());
+        controller.SynchronizeRunPresentation();
+
+        Assert.NotEqual(default, main);
+        Assert.Contains(main, ui.HiddenScreens);
+        Assert.Equal(default, controller.MainScreen);
+        Assert.NotEqual(default, controller.HudScreenHandle);
+        Assert.Contains(GameUiDemoController.HudScreen, ui.ShownScreens);
+    }
+
+    /// <summary>
+    /// 验证结算页为两套 UI 后端显式声明纵向文本流，避免标题、原因与 seed 叠压。
+    /// </summary>
+    [Fact]
+    public void DemoResultUsesExplicitBlockTextFlowAndSeparatedActions()
+    {
+        UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
+        string resultPath = manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).FullPath;
+        XDocument result = XDocument.Load(resultPath);
+        string style = Assert.Single(result.Descendants("style")).Value;
+
+        Assert.Contains("p { display: block;", style, StringComparison.Ordinal);
+        Assert.Contains("#result_restart { margin-right: 8px; }", style, StringComparison.Ordinal);
     }
 
     /// <summary>

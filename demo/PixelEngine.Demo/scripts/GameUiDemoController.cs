@@ -266,6 +266,7 @@ public sealed class GameUiDemoController : Behaviour
     protected override void OnUpdate(float dt)
     {
         _ = dt;
+        SynchronizeRunPresentation();
         HandleEscapeShortcut();
         // 每帧聚合玩法数据源并推送到 HUD 绑定路径
         PublishHudState();
@@ -331,6 +332,21 @@ public sealed class GameUiDemoController : Behaviour
         _runDirector = runDirector;
         InvalidateRunModelCache();
         PublishMenuState();
+    }
+
+    /// <summary>
+    /// 将脚本生命周期在外部推进的 run 状态幂等同步到主菜单/HUD 呈现。
+    /// </summary>
+    internal void SynchronizeRunPresentation()
+    {
+        CampaignRunDirector? run = _runDirector;
+        if (_ui is null || run is null || run.State == CampaignRunState.MainMenu)
+        {
+            return;
+        }
+
+        HideMainMenu();
+        ShowHud();
     }
 
     /// <inheritdoc />
