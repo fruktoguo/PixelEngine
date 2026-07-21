@@ -1,8 +1,8 @@
-<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v4" style="left: 14px; top: 14px; width: 316px; height: 288px">
+<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v5" style="left: 14px; top: 14px; width: 316px; height: 308px">
   <head>
     <style>
       body { margin: 0px; font-family: "Noto Sans SC"; color: #e8edf2; background-color: transparent; }
-      #status_panel { position: absolute; left: 16px; top: 16px; width: 286px; height: 198px; padding: 14px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #40546a; }
+      #status_panel { position: absolute; left: 16px; top: 16px; width: 286px; height: 218px; padding: 14px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #40546a; }
       #objective_panel { position: absolute; left: 650px; top: 16px; width: 356px; height: 212px; padding: 14px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #6d5935; }
       #status_title { position: absolute; left: 14px; top: 10px; color: #f5f7fa; font-size: 15px; }
       #hud_title { position: absolute; left: 14px; top: 12px; color: #f1c264; font-size: 13px; }
@@ -19,14 +19,16 @@
       #status_panel progress { position: absolute; left: 14px; width: 270px; margin-top: 0px; }
       #objective_panel progress { position: absolute; left: 14px; width: 340px; margin-top: 0px; }
       #hud_health { top: 34px; }
-      #hud_ammo { top: 52px; }
-      #hud_cooldown { top: 70px; }
-      #hud_heat { top: 88px; }
-      #hud_reload { top: 106px; }
+      #hud_levitation { top: 52px; }
+      #hud_ammo { top: 70px; }
+      #hud_cooldown { top: 88px; }
+      #hud_heat { top: 106px; }
+      #hud_reload { top: 124px; }
       #hud_distance { top: 110px; }
       #hud_depth { top: 134px; }
       #hud_longitude { top: 158px; }
       #hud_health fill { background-color: #3ca66f; }
+      #hud_levitation fill { background-color: #d3c55a; }
       #hud_ammo fill { background-color: #d3a341; }
       #hud_cooldown fill { background-color: #4f86bd; }
       #hud_heat fill, #hud_hazard fill { background-color: #d05a49; }
@@ -35,18 +37,18 @@
       #hud_longitude fill { background-color: #4b83b8; }
       #hud_depth fill { background-color: #8b6cb0; }
       #hud_elevation fill { background-color: #4a9b7b; }
-      #hud_context_divider { position: absolute; left: 14px; top: 126px; width: 270px; height: 1px; background-color: #2f4153; }
+      #hud_context_divider { position: absolute; left: 14px; top: 144px; width: 270px; height: 1px; background-color: #2f4153; }
       .context_label { position: absolute; left: 14px; color: #7f92a5; font-size: 11px; }
-      #hud_mode_label, #hud_input_mode { top: 132px; }
-      #hud_equipment_label, #hud_equipment { top: 148px; }
-      #hud_material_label, #hud_material_name { top: 164px; }
+      #hud_mode_label, #hud_input_mode { top: 150px; }
+      #hud_equipment_label, #hud_equipment { top: 166px; }
+      #hud_material_label, #hud_material_name { top: 182px; }
       #hud_input_mode, #hud_equipment, #hud_material_name { position: absolute; left: 52px; color: #d7dee6; font-size: 11px; }
       #hud_material_name { color: #f1c264; }
-      #hud_material_detail { position: absolute; left: 14px; top: 180px; width: 270px; color: #aeb9c4; font-size: 10px; line-height: 12px; white-space: normal; }
+      #hud_material_detail { position: absolute; left: 14px; top: 198px; width: 270px; color: #aeb9c4; font-size: 10px; line-height: 12px; white-space: normal; }
       button { width: 126px; height: 32px; color: #dfe8f1; text-align: center; background-color: rgba(18, 35, 51, 232); border-width: 1px; border-color: #45637e; }
       button:hover { color: #ffffff; background-color: #315b7e; border-color: #75a0c5; }
-      #hud_pause { position: absolute; left: 16px; top: 252px; }
-      #hud_telemetry { position: absolute; left: 154px; top: 252px; }
+      #hud_pause { position: absolute; left: 16px; top: 270px; }
+      #hud_telemetry { position: absolute; left: 154px; top: 270px; }
       #legacy_route_models { display: none; }
     </style>
   </head>
@@ -54,6 +56,7 @@
     <div id="status_panel">
       <div id="status_title" class="text_line">生存状态</div>
       <progress id="hud_health" path="hud.health" value="1.0" text="生命"><div class="meter_label">生命</div></progress>
+      <progress id="hud_levitation" path="hud.levitation" value="1.0" text="悬浮"><div class="meter_label">悬浮</div></progress>
       <progress id="hud_ammo" path="hud.ammo" value="0.0" text="弹药"><div class="meter_label">弹药</div></progress>
       <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="冷却"><div class="meter_label">冷却</div></progress>
       <progress id="hud_heat" path="hud.heat" value="0.0" text="热量"><div class="meter_label">热量</div></progress>

@@ -55,7 +55,7 @@ public interface ICellTopologyChangeSink
 }
 
 /// <summary>
-/// 将并行 CA worker 产生的逐 cell 拓扑变化合并为单个世界坐标区域。
+/// 将并行 CA worker 产生的同方向逐 cell 拓扑变化合并为世界坐标区域。
 /// </summary>
 /// <param name="MinX">最小 X，包含。</param>
 /// <param name="MinY">最小 Y，包含。</param>
@@ -91,12 +91,15 @@ internal static class CellTopologyChangeClassifier
 /// </remarks>
 public sealed class CellTopologyChangeAccumulator : ICellTopologyChangeSink
 {
-    private int _minX = int.MaxValue;
-    private int _minY = int.MaxValue;
-    private int _maxX = int.MinValue;
-    private int _maxY = int.MinValue;
-    private int _kinds;
-    private int _pending;
+    private int _removedMinX = int.MaxValue;
+    private int _removedMinY = int.MaxValue;
+    private int _removedMaxX = int.MinValue;
+    private int _removedMaxY = int.MinValue;
+    private int _addedMinX = int.MaxValue;
+    private int _addedMinY = int.MaxValue;
+    private int _addedMaxX = int.MinValue;
+    private int _addedMaxY = int.MinValue;
+    private int _pendingKinds;
 
     /// <inheritdoc />
     public void OnCellTopologyChanged(in CellTopologyChangeEvent item)
@@ -106,12 +109,29 @@ public sealed class CellTopologyChangeAccumulator : ICellTopologyChangeSink
             return;
         }
 
-        AtomicMin(ref _minX, item.WorldX);
-        AtomicMin(ref _minY, item.WorldY);
-        AtomicMax(ref _maxX, item.WorldX);
-        AtomicMax(ref _maxY, item.WorldY);
-        _ = Interlocked.Or(ref _kinds, (int)item.Kind);
-        Volatile.Write(ref _pending, 1);
+        if ((item.Kind & CellTopologyChangeKind.SolidRemoved) != 0)
+        {
+            Include(
+                ref _removedMinX,
+                ref _removedMinY,
+                ref _removedMaxX,
+                ref _removedMaxY,
+                item.WorldX,
+                item.WorldY);
+        }
+
+        if ((item.Kind & CellTopologyChangeKind.SolidAdded) != 0)
+        {
+            Include(
+                ref _addedMinX,
+                ref _addedMinY,
+                ref _addedMaxX,
+                ref _addedMaxY,
+                item.WorldX,
+                item.WorldY);
+        }
+
+        _ = Interlocked.Or(ref _pendingKinds, (int)item.Kind);
     }
 
     /// <summary>
@@ -119,23 +139,44 @@ public sealed class CellTopologyChangeAccumulator : ICellTopologyChangeSink
     /// </summary>
     public bool TryDrain(out CellTopologyChangeRegion region)
     {
-        if (Interlocked.Exchange(ref _pending, 0) == 0)
+        CellTopologyChangeKind kinds = (CellTopologyChangeKind)Interlocked.Exchange(ref _pendingKinds, 0);
+        if (kinds == CellTopologyChangeKind.None)
         {
             region = default;
             return false;
         }
 
-        int minX = Volatile.Read(ref _minX);
-        int minY = Volatile.Read(ref _minY);
-        int maxX = Volatile.Read(ref _maxX);
-        int maxY = Volatile.Read(ref _maxY);
-        CellTopologyChangeKind kinds = (CellTopologyChangeKind)Interlocked.Exchange(ref _kinds, 0);
-        Volatile.Write(ref _minX, int.MaxValue);
-        Volatile.Write(ref _minY, int.MaxValue);
-        Volatile.Write(ref _maxX, int.MinValue);
-        Volatile.Write(ref _maxY, int.MinValue);
+        int minX = int.MaxValue;
+        int minY = int.MaxValue;
+        int maxX = int.MinValue;
+        int maxY = int.MinValue;
+        if ((kinds & CellTopologyChangeKind.SolidRemoved) != 0)
+        {
+            MergeDrainedBounds(
+                ref _removedMinX,
+                ref _removedMinY,
+                ref _removedMaxX,
+                ref _removedMaxY,
+                ref minX,
+                ref minY,
+                ref maxX,
+                ref maxY);
+        }
 
-        if (kinds == CellTopologyChangeKind.None || minX > maxX || minY > maxY)
+        if ((kinds & CellTopologyChangeKind.SolidAdded) != 0)
+        {
+            MergeDrainedBounds(
+                ref _addedMinX,
+                ref _addedMinY,
+                ref _addedMaxX,
+                ref _addedMaxY,
+                ref minX,
+                ref minY,
+                ref maxX,
+                ref maxY);
+        }
+
+        if (minX > maxX || minY > maxY)
         {
             region = default;
             return false;
@@ -143,6 +184,124 @@ public sealed class CellTopologyChangeAccumulator : ICellTopologyChangeSink
 
         region = new CellTopologyChangeRegion(minX, minY, maxX, maxY, kinds);
         return true;
+    }
+
+    /// <summary>
+    /// 在 worker barrier 后只排空指定方向的合并区域，避免另一方向的远距变化扩大边界。
+    /// </summary>
+    /// <param name="kind">必须是单个 <see cref="CellTopologyChangeKind.SolidRemoved"/> 或 <see cref="CellTopologyChangeKind.SolidAdded"/>。</param>
+    /// <param name="region">指定方向的精确合并区域。</param>
+    /// <returns>该方向存在待处理变化时返回 true。</returns>
+    public bool TryDrain(CellTopologyChangeKind kind, out CellTopologyChangeRegion region)
+    {
+        if (kind is not CellTopologyChangeKind.SolidRemoved and not CellTopologyChangeKind.SolidAdded)
+        {
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "必须按单个固体拓扑变化方向排空。");
+        }
+
+        int previous = Interlocked.And(ref _pendingKinds, ~(int)kind);
+        if ((previous & (int)kind) == 0)
+        {
+            region = default;
+            return false;
+        }
+
+        int minX;
+        int minY;
+        int maxX;
+        int maxY;
+        if (kind == CellTopologyChangeKind.SolidRemoved)
+        {
+            DrainBounds(
+                ref _removedMinX,
+                ref _removedMinY,
+                ref _removedMaxX,
+                ref _removedMaxY,
+                out minX,
+                out minY,
+                out maxX,
+                out maxY);
+        }
+        else
+        {
+            DrainBounds(
+                ref _addedMinX,
+                ref _addedMinY,
+                ref _addedMaxX,
+                ref _addedMaxY,
+                out minX,
+                out minY,
+                out maxX,
+                out maxY);
+        }
+
+        if (minX > maxX || minY > maxY)
+        {
+            region = default;
+            return false;
+        }
+
+        region = new CellTopologyChangeRegion(minX, minY, maxX, maxY, kind);
+        return true;
+    }
+
+    private static void Include(
+        ref int minX,
+        ref int minY,
+        ref int maxX,
+        ref int maxY,
+        int worldX,
+        int worldY)
+    {
+        AtomicMin(ref minX, worldX);
+        AtomicMin(ref minY, worldY);
+        AtomicMax(ref maxX, worldX);
+        AtomicMax(ref maxY, worldY);
+    }
+
+    private static void MergeDrainedBounds(
+        ref int sourceMinX,
+        ref int sourceMinY,
+        ref int sourceMaxX,
+        ref int sourceMaxY,
+        ref int minX,
+        ref int minY,
+        ref int maxX,
+        ref int maxY)
+    {
+        DrainBounds(
+            ref sourceMinX,
+            ref sourceMinY,
+            ref sourceMaxX,
+            ref sourceMaxY,
+            out int drainedMinX,
+            out int drainedMinY,
+            out int drainedMaxX,
+            out int drainedMaxY);
+        minX = Math.Min(minX, drainedMinX);
+        minY = Math.Min(minY, drainedMinY);
+        maxX = Math.Max(maxX, drainedMaxX);
+        maxY = Math.Max(maxY, drainedMaxY);
+    }
+
+    private static void DrainBounds(
+        ref int sourceMinX,
+        ref int sourceMinY,
+        ref int sourceMaxX,
+        ref int sourceMaxY,
+        out int minX,
+        out int minY,
+        out int maxX,
+        out int maxY)
+    {
+        minX = Volatile.Read(ref sourceMinX);
+        minY = Volatile.Read(ref sourceMinY);
+        maxX = Volatile.Read(ref sourceMaxX);
+        maxY = Volatile.Read(ref sourceMaxY);
+        Volatile.Write(ref sourceMinX, int.MaxValue);
+        Volatile.Write(ref sourceMinY, int.MaxValue);
+        Volatile.Write(ref sourceMaxX, int.MinValue);
+        Volatile.Write(ref sourceMaxY, int.MinValue);
     }
 
     private static void AtomicMin(ref int location, int value)

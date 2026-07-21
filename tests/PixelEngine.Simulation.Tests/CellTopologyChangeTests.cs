@@ -42,6 +42,50 @@ public sealed class CellTopologyChangeTests
     }
 
     /// <summary>
+    /// 验证分方向排空不会让远距新增扩大移除区域，也不会提前消费另一方向。
+    /// </summary>
+    [Fact]
+    public void AccumulatorDrainsDirectionalBoundsIndependently()
+    {
+        CellTopologyChangeAccumulator accumulator = new();
+        CellTopologyChangeEvent removed = new(
+            WorldX: 4,
+            WorldY: 5,
+            Stone,
+            Empty,
+            CellTopologyChangeKind.SolidRemoved);
+        CellTopologyChangeEvent added = new(
+            WorldX: 1000,
+            WorldY: 25,
+            Empty,
+            Stone,
+            CellTopologyChangeKind.SolidAdded);
+
+        accumulator.OnCellTopologyChanged(in removed);
+        accumulator.OnCellTopologyChanged(in added);
+
+        Assert.True(accumulator.TryDrain(
+            CellTopologyChangeKind.SolidRemoved,
+            out CellTopologyChangeRegion removedRegion));
+        Assert.Equal(new CellTopologyChangeRegion(
+            4,
+            5,
+            4,
+            5,
+            CellTopologyChangeKind.SolidRemoved), removedRegion);
+        Assert.True(accumulator.TryDrain(
+            CellTopologyChangeKind.SolidAdded,
+            out CellTopologyChangeRegion addedRegion));
+        Assert.Equal(new CellTopologyChangeRegion(
+            1000,
+            25,
+            1000,
+            25,
+            CellTopologyChangeKind.SolidAdded), addedRegion);
+        Assert.False(accumulator.TryDrain(out _));
+    }
+
+    /// <summary>
     /// 验证启用拓扑通知后的逐 cell 累加热路径保持零托管分配。
     /// </summary>
     [Fact]

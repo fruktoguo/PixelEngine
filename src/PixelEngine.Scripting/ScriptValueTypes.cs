@@ -118,8 +118,14 @@ public enum WorldMutationKind : byte
     /// <summary>可能引发相变或结构失效的温度修改。</summary>
     Heat = 1 << 3,
 
-    /// <summary>权威 Simulation 已确认发生静态 Solid 占用变化。</summary>
-    SolidTopology = 1 << 4,
+    /// <summary>权威 Simulation 已确认静态 Solid 被移除。</summary>
+    SolidTopologyRemoved = 1 << 4,
+
+    /// <summary>权威 Simulation 已确认静态 Solid 被添加。</summary>
+    SolidTopologyAdded = 1 << 5,
+
+    /// <summary>任意方向的静态 Solid 占用变化。</summary>
+    SolidTopology = SolidTopologyRemoved | SolidTopologyAdded,
 }
 
 /// <summary>

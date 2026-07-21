@@ -229,11 +229,6 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
             {
                 _buttons[buttonCount++] = MouseButton.Left;
             }
-
-            if (frame % 40 is 12 or 13)
-            {
-                _keys[keyCount++] = Key.Space;
-            }
         }
 
         if (frame is >= 24 and <= 179)
@@ -241,7 +236,9 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
             _keys[keyCount++] = Key.D;
         }
 
-        if (frame % 56 is 32 or 33 && frame >= 24)
+        bool earlyLevitation = frame is >= 24 and <= 179 && (frame - 24) % 64 is >= 8 and <= 28;
+        bool lateLevitation = frame >= 356 && (frame - 356) % 72 is >= 0 and <= 26;
+        if (earlyLevitation || lateLevitation)
         {
             _keys[keyCount++] = Key.Space;
         }

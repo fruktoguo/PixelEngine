@@ -125,7 +125,7 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
-            "demo.webfirst.hud/v4",
+            "demo.webfirst.hud/v5",
             GameUiDemoController.HudModelPathNames.ToArray(),
             ["pause_game", "toggle_telemetry"]);
         AssertScreenContract(
@@ -555,6 +555,7 @@ public sealed class DemoUiContentTests
         Assert.Equal(default, controller.ModalScreen);
         Assert.Equal(default, controller.MainScreen);
         AssertHudPathWritten(ui, "hud.health");
+        AssertHudPathWritten(ui, "hud.levitation");
         AssertHudPathWritten(ui, "hud.weapon");
         AssertHudPathWritten(ui, "hud.ammo");
         AssertHudPathWritten(ui, "hud.cooldown");
@@ -1194,6 +1195,7 @@ public sealed class DemoUiContentTests
 
             // Assert：验证不变式与预期结果
             Assert.Equal(1.0, GetHudValue(ui, "hud.health"), precision: 3);
+            Assert.Equal(1.0, GetHudValue(ui, "hud.levitation"), precision: 3);
             Assert.Equal(0.0, GetHudValue(ui, "hud.weapon"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.ammo"), precision: 3);
             Assert.Equal(1.0, GetHudValue(ui, "hud.cooldown"), precision: 3);
@@ -2054,6 +2056,7 @@ public sealed class DemoUiContentTests
     {
         return [
             "hud.health",
+            "hud.levitation",
             "hud.weapon",
             "hud.ammo",
             "hud.cooldown",

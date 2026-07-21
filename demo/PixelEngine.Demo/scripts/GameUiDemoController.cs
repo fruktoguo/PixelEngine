@@ -31,6 +31,7 @@ public sealed class GameUiDemoController : Behaviour
         "hud.material_name",
         "hud.material_detail",
         "hud.health",
+        "hud.levitation",
         "hud.ammo",
         "hud.cooldown",
         "hud.heat",
@@ -125,6 +126,7 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId HudMaterialNamePath = Path("hud.material_name");
     private static readonly UiPathId HudMaterialDetailPath = Path("hud.material_detail");
     private static readonly UiPathId HudHealthPath = Path("hud.health");
+    private static readonly UiPathId HudLevitationPath = Path("hud.levitation");
     private static readonly UiPathId HudWeaponPath = Path("hud.weapon");
     private static readonly UiPathId HudAmmoPath = Path("hud.ammo");
     private static readonly UiPathId HudCooldownPath = Path("hud.cooldown");
@@ -531,6 +533,7 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         SetHudValue(HudHealthPath, 1.0);
+        SetHudValue(HudLevitationPath, 1.0);
         SetHudValue(HudAmmoPath, 0.0);
         SetHudValue(HudCooldownPath, 1.0);
         SetHudValue(HudHeatPath, 0.0);
@@ -714,10 +717,13 @@ public sealed class GameUiDemoController : Behaviour
         if (_health is null)
         {
             SetHudValue(HudHealthPath, 1.0);
-            return;
+        }
+        else
+        {
+            SetHudValue(HudHealthPath, Ratio(_health.Health, MathF.Max(1f, _health.MaxHealth)));
         }
 
-        SetHudValue(HudHealthPath, Ratio(_health.Health, MathF.Max(1f, _health.MaxHealth)));
+        SetHudValue(HudLevitationPath, _player?.LevitationFraction ?? 0.0);
     }
 
     private void PublishWeapon()

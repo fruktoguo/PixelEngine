@@ -15,6 +15,7 @@ public sealed class PlayerController : Behaviour
     private float _jumpBufferTimer;
     private float _footstepTimer;
     private float _rigidImpactCooldown;
+    private float _levitationRechargeDelay;
     private Transform? _transform;
     private PlayerHealth? _health;
     private IDisposable? _postPhysicsSubscription;
@@ -90,6 +91,31 @@ public sealed class PlayerController : Behaviour
     public float JumpBufferTime { get; set; } = 0.10f;
 
     /// <summary>
+    /// 满额时可持续悬浮的时间，单位秒。
+    /// </summary>
+    public float LevitationCapacitySeconds { get; set; } = 2.5f;
+
+    /// <summary>
+    /// 悬浮向上的加速度，单位像素/秒平方。
+    /// </summary>
+    public float LevitationAcceleration { get; set; } = 1_450f;
+
+    /// <summary>
+    /// 悬浮最大上升速度，单位像素/秒。
+    /// </summary>
+    public float MaxLevitationRiseSpeed { get; set; } = 190f;
+
+    /// <summary>
+    /// 未悬浮时每秒恢复的悬浮时间，单位秒/秒。
+    /// </summary>
+    public float LevitationRechargePerSecond { get; set; } = 1.75f;
+
+    /// <summary>
+    /// 离地停止悬浮后开始恢复前的等待时间，单位秒。
+    /// </summary>
+    public float LevitationRechargeDelaySeconds { get; set; } = 0.20f;
+
+    /// <summary>
     /// 贴墙滑落最大速度，单位像素/秒。
     /// </summary>
     public float WallSlideSpeed { get; set; } = 70f;
@@ -150,6 +176,30 @@ public sealed class PlayerController : Behaviour
     public CharacterState State { get; private set; }
 
     /// <summary>
+    /// 当前剩余悬浮时间，单位秒。
+    /// </summary>
+    public float LevitationRemainingSeconds { get; private set; }
+
+    /// <summary>
+    /// 当前悬浮燃料比例，范围 0..1。
+    /// </summary>
+    public float LevitationFraction
+    {
+        get
+        {
+            float capacity = NonNegativeFinite(LevitationCapacitySeconds);
+            return capacity <= 0f
+                ? 0f
+                : Math.Clamp(LevitationRemainingSeconds / capacity, 0f, 1f);
+        }
+    }
+
+    /// <summary>
+    /// 本帧是否正在消耗燃料悬浮。
+    /// </summary>
+    public bool IsLevitating { get; private set; }
+
+    /// <summary>
     /// 角色中心 X 坐标。
     /// </summary>
     public float CenterX => State.X + (State.Width * 0.5f);
@@ -171,6 +221,9 @@ public sealed class PlayerController : Behaviour
         _jumpBufferTimer = 0f;
         _footstepTimer = 0f;
         _rigidImpactCooldown = 0f;
+        LevitationRemainingSeconds = NonNegativeFinite(LevitationCapacitySeconds);
+        _levitationRechargeDelay = 0f;
+        IsLevitating = false;
         State = Context.Character.SetPosition(_body, SpawnX, SpawnY);
         SyncTransform();
     }
@@ -192,6 +245,9 @@ public sealed class PlayerController : Behaviour
         _body = default;
         _hasBody = false;
         State = default;
+        LevitationRemainingSeconds = 0f;
+        _levitationRechargeDelay = 0f;
+        IsLevitating = false;
     }
 
     /// <inheritdoc />
@@ -217,6 +273,7 @@ public sealed class PlayerController : Behaviour
         EmitMovementAudio(previousState, State, dt);
         float axis = Context.Input.Axis(Axis.Horizontal);
         bool jumpPressed = Context.Input.WasPressed(Key.Space) || Context.Input.WasPressed(Key.W) || Context.Input.WasPressed(Key.Up);
+        bool levitationHeld = Context.Input.IsDown(Key.Space) || Context.Input.IsDown(Key.W) || Context.Input.IsDown(Key.Up);
 
         if (jumpPressed)
         {
@@ -228,7 +285,7 @@ public sealed class PlayerController : Behaviour
         _coyoteTimer = State.OnGround ? CoyoteTime : MathF.Max(0f, _coyoteTimer - dt);
 
         ApplyHorizontal(axis, dt);
-        ApplyVertical(dt);
+        ApplyVertical(dt, levitationHeld);
         TryConsumeJump();
 
         // 单帧位移钳制，避免高速穿模
@@ -325,9 +382,35 @@ public sealed class PlayerController : Behaviour
         _velocityX = MoveTowards(_velocityX, 0f, AirFriction * dt);
     }
 
-    private void ApplyVertical(float dt)
+    private void ApplyVertical(float dt, bool levitationHeld)
     {
         _velocityY = MathF.Min(MaxFallSpeed, _velocityY + (Gravity * dt));
+        float capacity = NonNegativeFinite(LevitationCapacitySeconds);
+        LevitationRemainingSeconds = Math.Clamp(LevitationRemainingSeconds, 0f, capacity);
+        IsLevitating = levitationHeld && !State.OnGround && LevitationRemainingSeconds > 0f;
+        if (IsLevitating)
+        {
+            float consumed = Math.Min(LevitationRemainingSeconds, dt);
+            LevitationRemainingSeconds -= consumed;
+            _levitationRechargeDelay = NonNegativeFinite(LevitationRechargeDelaySeconds);
+            float acceleration = NonNegativeFinite(LevitationAcceleration);
+            float maxRiseSpeed = NonNegativeFinite(MaxLevitationRiseSpeed);
+            float acceleratedVelocity = MathF.Max(-maxRiseSpeed, _velocityY - (acceleration * consumed));
+            _velocityY = MathF.Min(_velocityY, acceleratedVelocity);
+            IsLevitating = LevitationRemainingSeconds > 0f;
+        }
+        else
+        {
+            _levitationRechargeDelay = State.OnGround
+                ? 0f
+                : MathF.Max(0f, _levitationRechargeDelay - dt);
+            if (_levitationRechargeDelay <= 0f)
+            {
+                float recharge = NonNegativeFinite(LevitationRechargePerSecond) * dt;
+                LevitationRemainingSeconds = MathF.Min(capacity, LevitationRemainingSeconds + recharge);
+            }
+        }
+
         if (!State.OnGround && State.OnWall && _velocityY > WallSlideSpeed)
         {
             _velocityY = WallSlideSpeed;
@@ -603,6 +686,11 @@ public sealed class PlayerController : Behaviour
         return MathF.Abs(target - current) <= maxDelta
             ? target
             : current + (MathF.Sign(target - current) * maxDelta);
+    }
+
+    private static float NonNegativeFinite(float value)
+    {
+        return float.IsFinite(value) ? MathF.Max(0f, value) : 0f;
     }
 
     private static float ClampDisplacement(float value)

@@ -8,15 +8,15 @@ namespace PixelEngine.Hosting.Tests;
 
 /// <summary>
 /// Simulation 固体拓扑变化到脚本世界事件的 Hosting 桥测试。
-/// 不变式：一个 sim tick 最多发布一个合并区域，事件只经公开脚本总线派发。
+/// 不变式：一个 sim tick 每种方向最多发布一个精确合并区域，事件只经公开脚本总线派发。
 /// </summary>
 public sealed class CellTopologyMutationBridgeTests
 {
     /// <summary>
-    /// 验证多个权威 cell 写入会在 Temperature 相位边界合并为单个 SolidTopology 事件。
+    /// 验证多个权威 cell 写入会在 Temperature 相位边界按新增/移除方向分别合并。
     /// </summary>
     [Fact]
-    public void SimulationPhasePublishesOneMergedSolidTopologyMutationPerTick()
+    public void SimulationPhasePublishesPreciseDirectionalSolidTopologyMutationsPerTick()
     {
         MaterialTable materials = new(
         [
@@ -45,7 +45,7 @@ public sealed class CellTopologyMutationBridgeTests
             temperature,
             materials,
             topologyChanges: topologyChanges);
-        EventBus coreEvents = new(capacityPerChannel: 8);
+        EventBus coreEvents = new(capacityPerChannel: 2);
         using ScriptEventBus scriptEvents = new(coreEvents);
         using ScriptSimulationContext scripts = new(
             new PixelEngine.Scripting.Scene(),
@@ -63,22 +63,63 @@ public sealed class CellTopologyMutationBridgeTests
             .WithWorkerCount(1)
             .AddPhaseDriver(driver)
             .Build();
+        WorldMutationEvent pressure = new(
+            MinX: -1,
+            MinY: -1,
+            MaxXExclusive: 0,
+            MaxYExclusive: 0,
+            WorldMutationKind.Damage);
 
         kernel.EditCellAtInputPhase(4, 5, material: 1, persistentFlags: 0);
         kernel.ClearCellAtInputPhase(4, 5);
         kernel.EditCellAtInputPhase(20, 25, material: 1, persistentFlags: 0);
+        Assert.True(scriptEvents.TryPublish(in pressure));
 
         _ = engine.RunOneTick();
         scriptEvents.DrainEvents();
 
-        WorldMutationEvent mutation = Assert.Single(received);
-        Assert.Equal(new WorldMutationEvent(
-            MinX: 4,
-            MinY: 5,
-            MaxXExclusive: 21,
-            MaxYExclusive: 26,
-            WorldMutationKind.SolidTopology), mutation);
+        Assert.Collection(
+            received,
+            item => Assert.Equal(pressure, item),
+            item => Assert.Equal(new WorldMutationEvent(
+                MinX: 4,
+                MinY: 5,
+                MaxXExclusive: 5,
+                MaxYExclusive: 6,
+                WorldMutationKind.SolidTopologyRemoved), item));
         Assert.False(topologyChanges.TryDrain(out _));
+
+        received.Clear();
+        kernel.ClearCellAtInputPhase(20, 25);
+        kernel.EditCellAtInputPhase(22, 27, material: 1, persistentFlags: 0);
+        Assert.True(scriptEvents.TryPublish(in pressure));
+        _ = engine.RunOneTick();
+        scriptEvents.DrainEvents();
+
+        Assert.Collection(
+            received,
+            item => Assert.Equal(pressure, item),
+            item => Assert.Equal(new WorldMutationEvent(
+                MinX: 4,
+                MinY: 5,
+                MaxXExclusive: 23,
+                MaxYExclusive: 28,
+                WorldMutationKind.SolidTopologyAdded), item));
+
+        received.Clear();
+        Assert.True(scriptEvents.TryPublish(in pressure));
+        _ = engine.RunOneTick();
+        scriptEvents.DrainEvents();
+
+        Assert.Collection(
+            received,
+            item => Assert.Equal(pressure, item),
+            item => Assert.Equal(new WorldMutationEvent(
+                MinX: 20,
+                MinY: 25,
+                MaxXExclusive: 21,
+                MaxYExclusive: 26,
+                WorldMutationKind.SolidTopologyRemoved), item));
     }
 
     private static MaterialDef Material(ushort id, string name, CellType type)

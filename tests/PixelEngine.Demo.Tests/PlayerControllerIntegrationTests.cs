@@ -176,7 +176,7 @@ public sealed class PlayerControllerIntegrationTests
         RecordingGuiContext gui = new();
         engine.Context.GetService<IScriptRuntime>().DrawGui(gui);
 
-        Assert.Contains("next:340,12,288,196,FirstUseEver", gui.Drawn);
+        Assert.Contains("next:340,12,288,216,FirstUseEver", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:无限沙盒 · 自由探索", StringComparison.Ordinal));
         Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal));
         Assert.DoesNotContain("text:材质", gui.Drawn);
@@ -1552,6 +1552,48 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 Noita 式有限悬浮会持续抬升玩家、耗尽后停止，并在松开输入后恢复燃料。
+    /// </summary>
+    [Fact]
+    public void PlayerLevitationConsumesFiniteFuelAndRecharges()
+    {
+        using Engine engine = CreatePlayerEngine(out ScriptInputApi input, out CellGrid grid);
+        FillFloor(grid, material: 1, y: 46, x0: 0, x1: 96, rigidOwned: false);
+        engine.RunHeadlessTicks(20);
+        PlayerController player = FindPlayer(engine);
+        Assert.True(player.State.OnGround, $"玩家应先落地，state={Describe(player.State)}");
+        float groundedY = player.State.Y;
+
+        input.Update([Key.Space], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(30);
+
+        Assert.True(player.IsLevitating);
+        Assert.True(player.State.Y < groundedY - 12f, $"持续悬浮应明显上升，groundedY={groundedY}, state={Describe(player.State)}");
+        Assert.InRange(player.LevitationFraction, 0.01f, 0.99f);
+
+        bool exhausted = false;
+        for (int tick = 0; tick < 180; tick++)
+        {
+            engine.RunHeadlessTicks(1);
+            if (player.LevitationRemainingSeconds <= 0.0001f)
+            {
+                exhausted = true;
+                break;
+            }
+        }
+
+        Assert.True(exhausted, $"有限悬浮应在容量内耗尽，remaining={player.LevitationRemainingSeconds:F4}");
+        Assert.Equal(0f, player.LevitationRemainingSeconds, precision: 3);
+        engine.RunHeadlessTicks(1);
+        Assert.False(player.IsLevitating);
+
+        input.Update([], [], mouseX: 0, mouseY: 0, wheelY: 0);
+        engine.RunHeadlessTicks(120);
+
+        Assert.Equal(1f, player.LevitationFraction, precision: 3);
+    }
+
+    /// <summary>
     /// 验证玩家可站在刚体往返 stamp 的 RigidOwned 像素上，不会穿透。
     /// </summary>
     [Fact]
@@ -2327,20 +2369,94 @@ public sealed class PlayerControllerIntegrationTests
         PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
         projectile.InputEnabled = false;
         projectile.TrackWorldMutations = true;
-        engine.RunHeadlessTicks(2);
         ScriptSimulationContext scripts = engine.Context.GetService<ScriptSimulationContext>();
-        WorldMutationEvent mutation = new(
+        WorldMutationEvent added = new(
             MinX: 80,
             MinY: 96,
             MaxXExclusive: 112,
             MaxYExclusive: 120,
-            WorldMutationKind.SolidTopology);
+            WorldMutationKind.SolidTopologyAdded);
+        WorldMutationEvent initializationRemoval = added with
+        {
+            Kinds = WorldMutationKind.SolidTopologyRemoved,
+        };
 
-        Assert.True(scripts.Events.TryPublish(in mutation));
+        Assert.True(scripts.Events.TryPublish(in initializationRemoval));
+        engine.RunHeadlessTicks(2);
+        Assert.Equal(1, projectile.IgnoredInitializationMutationEvents);
+        Assert.Equal(0, projectile.WorldMutationEventsReceived);
+        Assert.Equal(0, projectile.PendingCollapseScanRadius);
+
+        Assert.True(scripts.Events.TryPublish(in added));
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(0, projectile.WorldMutationEventsReceived);
+        Assert.Equal(0, projectile.PendingCollapseScanRadius);
+
+        WorldMutationEvent unverifiedRemoval = added with
+        {
+            Kinds = WorldMutationKind.CellRemoval,
+        };
+
+        Assert.True(scripts.Events.TryPublish(in unverifiedRemoval));
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(0, projectile.WorldMutationEventsReceived);
+        Assert.Equal(0, projectile.PendingCollapseScanRadius);
+
+        WorldMutationEvent removed = added with
+        {
+            Kinds = WorldMutationKind.SolidTopologyRemoved,
+        };
+
+        Assert.True(scripts.Events.TryPublish(in removed));
         engine.RunHeadlessTicks(1);
 
         Assert.Equal(1, projectile.WorldMutationEventsReceived);
         Assert.True(projectile.PendingCollapseScanRadius >= 24);
+    }
+
+    /// <summary>
+    /// 验证微小悬空碎屑被派生为自由粒子后，其清空事件不会反向重启坍塌扫描。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileToolSuppressesDerivedDebrisMutationFeedback()
+    {
+        MaterialTable materials = DemoMaterials();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out CellGrid grid,
+            out _,
+            out ScriptScene scene,
+            materials);
+        FillRect(grid, stone, minX: 40, minY: 24, maxX: 43, maxY: 25);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 8f;
+        player.SpawnY = 32f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.InputEnabled = false;
+        projectile.CollapseScanRadius = 12;
+        engine.RunHeadlessTicks(2);
+        ScriptSimulationContext scripts = engine.Context.GetService<ScriptSimulationContext>();
+        WorldMutationEvent removedSupport = new(
+            MinX: 40,
+            MinY: 25,
+            MaxXExclusive: 43,
+            MaxYExclusive: 26,
+            WorldMutationKind.SolidTopologyRemoved);
+
+        Assert.True(scripts.Events.TryPublish(in removedSupport));
+        engine.RunHeadlessTicks(16);
+
+        Assert.Equal(1, projectile.WorldMutationEventsReceived);
+        Assert.True(
+            projectile.SuppressedDerivedMutationEvents >= 1,
+            $"received={projectile.WorldMutationEventsReceived}, ejected={projectile.EjectedFloatingDebrisPixels}, " +
+            $"pending={projectile.PendingCollapseScanRadius}, kinds={projectile.LastWorldMutationKinds}, reason={projectile.LastCollapseSkipReason}");
+        Assert.Equal(3, projectile.EjectedFloatingDebrisPixels);
+        Assert.Equal(0, projectile.CollapsedFloatingIslands);
+        Assert.Equal(0, projectile.PendingCollapseScanRadius);
     }
 
     /// <summary>

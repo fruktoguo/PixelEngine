@@ -70,7 +70,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         ResolveComponents();
-        float height = ShowDiagnostics ? 324f : 196f;
+        float height = ShowDiagnostics ? 344f : 216f;
         gui.SetNextWindow(X, Y, Width, height, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
@@ -218,19 +218,38 @@ public sealed class PlayableHud : Behaviour
         if (_health is null)
         {
             gui.Text("生命 --");
+        }
+        else
+        {
+            float max = MathF.Max(1f, _health.MaxHealth);
+            float value = Math.Clamp(_health.Health / max, 0f, 1f);
+            _ = _text.Clear()
+                .Append("生命 ")
+                .Append(_health.Health, "0")
+                .Append('/')
+                .Append(max, "0");
+            gui.Text(_text.WrittenSpan);
+            _ = _text.Clear().Append(value, "P0");
+            gui.ProgressBar(value, _text.WrittenSpan);
+        }
+
+        if (_player is null)
+        {
+            gui.Text("悬浮 --");
             return;
         }
 
-        float max = MathF.Max(1f, _health.MaxHealth);
-        float value = Math.Clamp(_health.Health / max, 0f, 1f);
+        float levitationCapacity = float.IsFinite(_player.LevitationCapacitySeconds)
+            ? MathF.Max(0f, _player.LevitationCapacitySeconds)
+            : 0f;
         _ = _text.Clear()
-            .Append("生命 ")
-            .Append(_health.Health, "0")
+            .Append("悬浮 ")
+            .Append(_player.LevitationRemainingSeconds, "0.0")
             .Append('/')
-            .Append(max, "0");
+            .Append(levitationCapacity, "0.0");
         gui.Text(_text.WrittenSpan);
-        _ = _text.Clear().Append(value, "P0");
-        gui.ProgressBar(value, _text.WrittenSpan);
+        _ = _text.Clear().Append(_player.LevitationFraction, "P0");
+        gui.ProgressBar(_player.LevitationFraction, _text.WrittenSpan);
     }
 
     private void DrawWeapon(IGuiContext gui)

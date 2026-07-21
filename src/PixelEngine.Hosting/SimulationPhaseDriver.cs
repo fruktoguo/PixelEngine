@@ -31,8 +31,11 @@ public sealed class SimulationPhaseDriver(
 
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private ScriptSimulationContext? _scriptContext = scriptContext;
-    private WorldMutationEvent _pendingTopologyMutation;
-    private bool _hasPendingTopologyMutation;
+    private WorldMutationEvent _pendingRemovedTopologyMutation;
+    private WorldMutationEvent _pendingAddedTopologyMutation;
+    private bool _hasPendingRemovedTopologyMutation;
+    private bool _hasPendingAddedTopologyMutation;
+    private bool _publishAddedFirst;
 
     /// <summary>
     /// 世界 cell 访问门面。
@@ -73,8 +76,11 @@ public sealed class SimulationPhaseDriver(
         ArgumentNullException.ThrowIfNull(scriptContext);
         // 程序化世界 Populate 可能早于脚本装配；订阅建立前的初始填充不是 gameplay 拓扑事件。
         _ = TopologyChanges.TryDrain(out _);
-        _pendingTopologyMutation = default;
-        _hasPendingTopologyMutation = false;
+        _pendingRemovedTopologyMutation = default;
+        _pendingAddedTopologyMutation = default;
+        _hasPendingRemovedTopologyMutation = false;
+        _hasPendingAddedTopologyMutation = false;
+        _publishAddedFirst = false;
         _scriptContext = scriptContext;
     }
 
@@ -123,38 +129,106 @@ public sealed class SimulationPhaseDriver(
 
     private void PublishTopologyMutation()
     {
-        if (TopologyChanges.TryDrain(out CellTopologyChangeRegion region))
-        {
-            WorldMutationEvent mutation = new(
-                region.MinX,
-                region.MinY,
-                ToExclusive(region.MaxX),
-                ToExclusive(region.MaxY),
-                WorldMutationKind.SolidTopology);
-            _pendingTopologyMutation = _hasPendingTopologyMutation
-                ? Merge(_pendingTopologyMutation, mutation)
-                : mutation;
-            _hasPendingTopologyMutation = true;
-        }
-
-        if (!_hasPendingTopologyMutation)
-        {
-            return;
-        }
+        AccumulateTopologyMutation(
+            CellTopologyChangeKind.SolidRemoved,
+            WorldMutationKind.SolidTopologyRemoved,
+            ref _pendingRemovedTopologyMutation,
+            ref _hasPendingRemovedTopologyMutation);
+        AccumulateTopologyMutation(
+            CellTopologyChangeKind.SolidAdded,
+            WorldMutationKind.SolidTopologyAdded,
+            ref _pendingAddedTopologyMutation,
+            ref _hasPendingAddedTopologyMutation);
 
         ScriptSimulationContext? scripts = _scriptContext;
         if (scripts is null)
         {
-            _pendingTopologyMutation = default;
-            _hasPendingTopologyMutation = false;
+            _pendingRemovedTopologyMutation = default;
+            _pendingAddedTopologyMutation = default;
+            _hasPendingRemovedTopologyMutation = false;
+            _hasPendingAddedTopologyMutation = false;
             return;
         }
 
-        if (scripts.Events.TryPublish(in _pendingTopologyMutation))
+        if (_hasPendingRemovedTopologyMutation && _hasPendingAddedTopologyMutation)
         {
-            _pendingTopologyMutation = default;
-            _hasPendingTopologyMutation = false;
+            bool firstPublished;
+            bool secondPublished;
+            if (_publishAddedFirst)
+            {
+                firstPublished = TryPublishPending(
+                    scripts,
+                    ref _pendingAddedTopologyMutation,
+                    ref _hasPendingAddedTopologyMutation);
+                secondPublished = TryPublishPending(
+                    scripts,
+                    ref _pendingRemovedTopologyMutation,
+                    ref _hasPendingRemovedTopologyMutation);
+            }
+            else
+            {
+                firstPublished = TryPublishPending(
+                    scripts,
+                    ref _pendingRemovedTopologyMutation,
+                    ref _hasPendingRemovedTopologyMutation);
+                secondPublished = TryPublishPending(
+                    scripts,
+                    ref _pendingAddedTopologyMutation,
+                    ref _hasPendingAddedTopologyMutation);
+            }
+
+            if (firstPublished != secondPublished)
+            {
+                _publishAddedFirst = !_publishAddedFirst;
+            }
+
+            return;
         }
+
+        _ = TryPublishPending(
+            scripts,
+            ref _pendingRemovedTopologyMutation,
+            ref _hasPendingRemovedTopologyMutation);
+        _ = TryPublishPending(
+            scripts,
+            ref _pendingAddedTopologyMutation,
+            ref _hasPendingAddedTopologyMutation);
+    }
+
+    private void AccumulateTopologyMutation(
+        CellTopologyChangeKind topologyKind,
+        WorldMutationKind mutationKind,
+        ref WorldMutationEvent pending,
+        ref bool hasPending)
+    {
+        if (!TopologyChanges.TryDrain(topologyKind, out CellTopologyChangeRegion region))
+        {
+            return;
+        }
+
+        WorldMutationEvent mutation = new(
+            region.MinX,
+            region.MinY,
+            ToExclusive(region.MaxX),
+            ToExclusive(region.MaxY),
+            mutationKind);
+        pending = hasPending ? Merge(pending, mutation) : mutation;
+        hasPending = true;
+    }
+
+    private static bool TryPublishPending(
+        ScriptSimulationContext scripts,
+        ref WorldMutationEvent pending,
+        ref bool hasPending)
+    {
+        if (hasPending && scripts.Events.TryPublish(in pending))
+        {
+            pending = default;
+            hasPending = false;
+            return true;
+        }
+
+        return false;
     }
 
     private static int ToExclusive(int inclusive)

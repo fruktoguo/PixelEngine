@@ -391,6 +391,8 @@ public sealed class LavaMineSceneTests
         Assert.True(route.PrimaryFireCount > 0, "脚本路线应经 WeaponController 公开输入触发至少一次主武器。 ");
         Assert.True(route.MaxDestroyedBodies > 0, $"脚本路线应触发真实刚体破坏，destroyed={route.MaxDestroyedBodies}。");
         Assert.True(route.MaxCreatedBodies > 0, $"脚本路线应触发真实刚体重建，created={route.MaxCreatedBodies}。");
+        Assert.InRange(route.CollapsedIslands, 0, 64);
+        Assert.InRange(route.EjectedDebrisPixels, 0, 4_096);
         Assert.Equal(0, route.ScriptExceptionCount);
     }
 
@@ -408,6 +410,7 @@ public sealed class LavaMineSceneTests
         GoalTrigger goal = FindBehaviour<GoalTrigger>(scene);
         PlayerController player = FindBehaviour<PlayerController>(scene);
         WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(scene);
         ScriptInputApi input = engine.Context.GetService<ScriptInputApi>();
         ScriptCameraApi camera = engine.Context.GetService<ScriptCameraApi>();
 
@@ -416,6 +419,7 @@ public sealed class LavaMineSceneTests
         engine.RunHeadlessTicks(2);
         // Assert：验证预期结果
         Assert.True(weapons.PrimaryFireCount > 0, "重开前应先产生一次武器分派，证明重开会恢复武器运行态。");
+        Assert.True(projectile.ShotsFired > 0, "重开前应先经射击后端产生运行态计数。");
 
         player.SpawnX = goal.X + 2f;
         player.SpawnY = goal.Y + 2f;
@@ -431,9 +435,14 @@ public sealed class LavaMineSceneTests
         ScriptScene restartedScene = engine.Context.GetService<ScriptScene>();
         GoalTrigger restartedGoal = FindBehaviour<GoalTrigger>(restartedScene);
         WeaponController restartedWeapons = FindBehaviour<WeaponController>(restartedScene);
+        PlayableProjectileTool restartedProjectile = FindBehaviour<PlayableProjectileTool>(restartedScene);
 
         Assert.False(restartedGoal.Reached);
         Assert.Equal(0, restartedWeapons.PrimaryFireCount);
+        Assert.Equal(0, restartedProjectile.ShotsFired);
+        Assert.Equal(0, restartedProjectile.WorldMutationEventsReceived);
+        Assert.Equal(0, restartedProjectile.CollapsedFloatingIslands);
+        Assert.Equal(0, restartedProjectile.PendingCollapseScanRadius);
         AssertNoFaultedBehaviours(restartedScene);
         Assert.Equal(0, restartedScene.ScriptExceptionCount);
     }
@@ -651,6 +660,7 @@ public sealed class LavaMineSceneTests
         GoalTrigger goal = FindBehaviour<GoalTrigger>(scene);
         PlayerController player = FindBehaviour<PlayerController>(scene);
         WeaponController weapons = FindBehaviour<WeaponController>(scene);
+        PlayableProjectileTool topology = FindBehaviour<PlayableProjectileTool>(scene);
         PhysicsSystem physics = engine.Context.GetService<PhysicsSystem>();
         int maxDestroyedBodies = 0;
         int maxCreatedBodies = 0;
@@ -674,6 +684,12 @@ public sealed class LavaMineSceneTests
             weapons.PrimaryFireCount,
             maxDestroyedBodies,
             maxCreatedBodies,
+            topology.WorldMutationEventsReceived,
+            topology.CollapsedFloatingIslands,
+            topology.EjectedFloatingDebrisPixels,
+            topology.SuppressedDerivedMutationEvents,
+            topology.PendingCollapseScanRadius,
+            topology.LastCollapseSkipReason,
             scene.ScriptExceptionCount);
     }
 
@@ -916,11 +932,21 @@ public sealed class LavaMineSceneTests
         int PrimaryFireCount,
         int MaxDestroyedBodies,
         int MaxCreatedBodies,
+        int WorldMutationEvents,
+        int CollapsedIslands,
+        int EjectedDebrisPixels,
+        int SuppressedDerivedMutations,
+        int PendingCollapseRadius,
+        string LastCollapseReason,
         int ScriptExceptionCount)
     {
         public string Describe()
         {
-            return $"goal={GoalReached}, frames={Frames}, player=({PlayerX:F2},{PlayerY:F2}), goal=({GoalX:F2},{GoalY:F2}), primary={PrimaryFireCount}, destroyed={MaxDestroyedBodies}, created={MaxCreatedBodies}, scriptExceptions={ScriptExceptionCount}";
+            return $"goal={GoalReached}, frames={Frames}, player=({PlayerX:F2},{PlayerY:F2}), goal=({GoalX:F2},{GoalY:F2}), " +
+                $"primary={PrimaryFireCount}, destroyed={MaxDestroyedBodies}, created={MaxCreatedBodies}, " +
+                $"mutations={WorldMutationEvents}, collapsed={CollapsedIslands}, debris={EjectedDebrisPixels}, " +
+                $"suppressed={SuppressedDerivedMutations}, pendingRadius={PendingCollapseRadius}, " +
+                $"collapseReason={LastCollapseReason}, scriptExceptions={ScriptExceptionCount}";
         }
     }
 

@@ -10,6 +10,7 @@ public sealed class PlayableProjectileTool : Behaviour
     private const float FloatingDebrisFallSpeed = 24f;
     private const ushort FloatingDebrisLifetimeTicks = 180;
     private const int MaxFloatingDebrisPixelsPerScan = 256;
+    private const int DerivedMutationSuppressionFrames = 4;
 
     private PlayerController? _player;
     private readonly CollapseScanScratch _collapseScanScratch = new();
@@ -20,6 +21,12 @@ public sealed class PlayableProjectileTool : Behaviour
     private int _pendingCollapseRadius;
     private int _pendingCollapsePasses;
     private int _pendingCollapseScans;
+    private int _derivedMutationSuppressionFrames;
+    private int _derivedMutationMinX;
+    private int _derivedMutationMinY;
+    private int _derivedMutationMaxXExclusive;
+    private int _derivedMutationMaxYExclusive;
+    private bool _worldMutationTrackingArmed;
 
     /// <summary>
     /// 射击最大距离，单位 cell。
@@ -181,6 +188,21 @@ public sealed class PlayableProjectileTool : Behaviour
     public int WorldMutationEventsReceived { get; private set; }
 
     /// <summary>
+    /// 最近一次收到的世界修改类别，供运行态诊断事件来源。
+    /// </summary>
+    public WorldMutationKind LastWorldMutationKinds { get; private set; }
+
+    /// <summary>
+    /// 已识别并忽略的坍塌派生写入反馈事件数。
+    /// </summary>
+    public int SuppressedDerivedMutationEvents { get; private set; }
+
+    /// <summary>
+    /// 订阅建立前已排队、在首次 Update 前交付的场景初始化事件数。
+    /// </summary>
+    public int IgnoredInitializationMutationEvents { get; private set; }
+
+    /// <summary>
     /// 当前待处理坍塌扫描半径；没有待处理请求时为 0。
     /// </summary>
     public int PendingCollapseScanRadius => _pendingCollapseScans > 0 ? _pendingCollapseRadius : 0;
@@ -197,6 +219,7 @@ public sealed class PlayableProjectileTool : Behaviour
             if (!value)
             {
                 CancelPendingCollapseScans();
+                ResetDerivedMutationSuppression();
             }
         }
     } = true;
@@ -204,6 +227,7 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        ResetRuntimeState();
         _player = Entity.TryGetComponent(out PlayerController player) ? player : null;
         _ = Context.Events.Subscribe<WorldMutationEvent>(OnWorldMutation);
     }
@@ -211,7 +235,33 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <inheritdoc />
     protected override void OnDestroy()
     {
+        _worldMutationTrackingArmed = false;
+        CancelPendingCollapseScans();
+        ResetDerivedMutationSuppression();
         _collapseScanScratch.Release();
+    }
+
+    private void ResetRuntimeState()
+    {
+        _cooldownRemaining = 0f;
+        ShotsFired = 0;
+        LastShotStartX = 0f;
+        LastShotStartY = 0f;
+        LastHitX = 0f;
+        LastHitY = 0f;
+        TracerRemainingSeconds = 0f;
+        CollapsedFloatingIslands = 0;
+        EjectedFloatingDebrisPixels = 0;
+        LastCollapsedRegion = default;
+        LastCollapseSkipReason = "none";
+        LastCollapseSolidCandidates = 0;
+        WorldMutationEventsReceived = 0;
+        LastWorldMutationKinds = WorldMutationKind.None;
+        SuppressedDerivedMutationEvents = 0;
+        IgnoredInitializationMutationEvents = 0;
+        _worldMutationTrackingArmed = false;
+        CancelPendingCollapseScans();
+        ResetDerivedMutationSuppression();
     }
 
     internal int CollapseScanScratchCapacity => _collapseScanScratch.Capacity;
@@ -224,6 +274,8 @@ public sealed class PlayableProjectileTool : Behaviour
     /// <inheritdoc />
     protected override void OnUpdate(float dt)
     {
+        // ScriptRuntime 固定先 drain 事件再 Update；到这里时订阅前积压的场景构建事件已经排空。
+        _worldMutationTrackingArmed = true;
         float safeDt = MathF.Max(0f, dt);
         _cooldownRemaining = MathF.Max(0f, _cooldownRemaining - safeDt);
         TracerRemainingSeconds = MathF.Max(0f, TracerRemainingSeconds - safeDt);
@@ -234,6 +286,7 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         ProcessPendingCollapseScanSafely();
+        TickDerivedMutationSuppression();
     }
 
     /// <summary>
@@ -360,7 +413,12 @@ public sealed class PlayableProjectileTool : Behaviour
             Math.Max(CollapseScanRadius, Math.Max(0, affectedRadius) + 8),
             4,
             320);
-        MergePendingCollapseRegion(centerX, centerY, radius);
+        MergePendingCollapseRegion(
+            centerX,
+            centerY,
+            radius,
+            MaxCollapsedIslandsPerShot,
+            CollapseScanRetryFrames);
     }
 
     private void OnWorldMutation(WorldMutationEvent item)
@@ -371,12 +429,23 @@ public sealed class PlayableProjectileTool : Behaviour
         }
 
         const WorldMutationKind topologyKinds =
-            WorldMutationKind.CellRemoval |
             WorldMutationKind.Damage |
-            WorldMutationKind.Heat |
-            WorldMutationKind.SolidTopology;
+            WorldMutationKind.SolidTopologyRemoved;
         if (item.Width == 0 || item.Height == 0 || (item.Kinds & topologyKinds) == 0)
         {
+            return;
+        }
+
+        LastWorldMutationKinds = item.Kinds;
+        if (!_worldMutationTrackingArmed)
+        {
+            IgnoredInitializationMutationEvents++;
+            return;
+        }
+
+        if (IsDerivedMutationFeedback(in item))
+        {
+            SuppressedDerivedMutationEvents++;
             return;
         }
 
@@ -387,7 +456,59 @@ public sealed class PlayableProjectileTool : Behaviour
             Math.Max(CollapseScanRadius, ((Math.Max(item.Width, item.Height) + 1) / 2) + 8),
             4,
             320);
-        MergePendingCollapseRegion(centerX, centerY, radius);
+        MergePendingCollapseRegion(centerX, centerY, radius, requestedPasses: 1, requestedScans: 2);
+    }
+
+    private bool IsDerivedMutationFeedback(in WorldMutationEvent item)
+    {
+        const WorldMutationKind derivedKinds =
+            WorldMutationKind.SolidTopologyRemoved;
+        return _derivedMutationSuppressionFrames > 0 &&
+            (item.Kinds & derivedKinds) != 0 &&
+            (item.Kinds & ~derivedKinds) == 0 &&
+            item.MinX >= _derivedMutationMinX &&
+            item.MinY >= _derivedMutationMinY &&
+            item.MaxXExclusive <= _derivedMutationMaxXExclusive &&
+            item.MaxYExclusive <= _derivedMutationMaxYExclusive;
+    }
+
+    private void RecordDerivedMutation(int worldX, int worldY)
+    {
+        if (_derivedMutationSuppressionFrames <= 0)
+        {
+            _derivedMutationMinX = worldX;
+            _derivedMutationMinY = worldY;
+            _derivedMutationMaxXExclusive = worldX + 1;
+            _derivedMutationMaxYExclusive = worldY + 1;
+        }
+        else
+        {
+            _derivedMutationMinX = Math.Min(_derivedMutationMinX, worldX);
+            _derivedMutationMinY = Math.Min(_derivedMutationMinY, worldY);
+            _derivedMutationMaxXExclusive = Math.Max(_derivedMutationMaxXExclusive, worldX + 1);
+            _derivedMutationMaxYExclusive = Math.Max(_derivedMutationMaxYExclusive, worldY + 1);
+        }
+
+        _derivedMutationSuppressionFrames = DerivedMutationSuppressionFrames;
+    }
+
+    private void TickDerivedMutationSuppression()
+    {
+        if (_derivedMutationSuppressionFrames <= 0 || --_derivedMutationSuppressionFrames != 0)
+        {
+            return;
+        }
+
+        ResetDerivedMutationSuppression();
+    }
+
+    private void ResetDerivedMutationSuppression()
+    {
+        _derivedMutationSuppressionFrames = 0;
+        _derivedMutationMinX = 0;
+        _derivedMutationMinY = 0;
+        _derivedMutationMaxXExclusive = 0;
+        _derivedMutationMaxYExclusive = 0;
     }
 
     private void CancelPendingCollapseScans()
@@ -398,7 +519,12 @@ public sealed class PlayableProjectileTool : Behaviour
         _pendingCollapseRadius = 0;
     }
 
-    private void MergePendingCollapseRegion(int centerX, int centerY, int radius)
+    private void MergePendingCollapseRegion(
+        int centerX,
+        int centerY,
+        int radius,
+        int requestedPasses,
+        int requestedScans)
     {
         if (_pendingCollapseScans > 0)
         {
@@ -418,10 +544,10 @@ public sealed class PlayableProjectileTool : Behaviour
         _pendingCollapseFrames = Math.Max(_pendingCollapseFrames, 2);
         _pendingCollapsePasses = Math.Max(
             _pendingCollapsePasses,
-            Math.Clamp(MaxCollapsedIslandsPerShot, 1, 12));
+            Math.Clamp(requestedPasses, 1, 12));
         _pendingCollapseScans = Math.Max(
             _pendingCollapseScans,
-            Math.Clamp(CollapseScanRetryFrames, 1, 16));
+            Math.Clamp(requestedScans, 1, 16));
     }
 
     // 延迟帧扫描：爆破后等待 CA 稳定，再把悬空固体岛转为刚体
@@ -719,6 +845,7 @@ public sealed class PlayableProjectileTool : Behaviour
                 VelocityY: fallSpeed,
                 cell.Material,
                 FloatingDebrisLifetimeTicks));
+            RecordDerivedMutation(worldX, worldY);
             Context.Cells.SetCell(worldX, worldY, default);
             ejected++;
         }
