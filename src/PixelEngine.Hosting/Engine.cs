@@ -315,7 +315,7 @@ public sealed class Engine : IDisposable
         ProceduralWorldDescriptor descriptor;
         try
         {
-            ProceduralWorldBuildRequest request = new(current.Key, current.Materials, worldSeed);
+            ProceduralWorldBuildRequest request = new(current.Key, current.Materials, worldSeed, current.Config);
             descriptor = current.Generator.Describe(in request).Validate();
             if (descriptor.Extent != ProceduralWorldExtent.Infinite)
             {
@@ -2774,7 +2774,8 @@ public sealed class Engine : IDisposable
 
         MaterialTable materials = Context.GetService<MaterialTable>();
         IMaterialQuery materialQuery = ResolveMaterialQuery(materials);
-        ProceduralWorldBuildRequest request = new(key, materialQuery);
+        IConfigApi config = ResolveConfigApi();
+        ProceduralWorldBuildRequest request = new(key, materialQuery, Config: config);
         if (registration.Streaming is not null)
         {
             ProceduralWorldDescriptor streamingDescriptor = registration.Streaming.Describe(in request).Validate();
@@ -2788,6 +2789,7 @@ public sealed class Engine : IDisposable
                 registration.Streaming,
                 streamingDescriptor,
                 materialQuery,
+                config,
                 materials,
                 particleCapacity,
                 fallbackMaterialId,
@@ -2871,6 +2873,7 @@ public sealed class Engine : IDisposable
         IStreamingProceduralWorldGenerator generator,
         ProceduralWorldDescriptor descriptor,
         IMaterialQuery materialQuery,
+        IConfigApi config,
         MaterialTable materials,
         int particleCapacity,
         ushort fallbackMaterialId,
@@ -2909,6 +2912,7 @@ public sealed class Engine : IDisposable
             key,
             generator,
             materialQuery,
+            config,
             descriptor,
             proceduralWorldRoot);
     }
@@ -3093,6 +3097,7 @@ public sealed class Engine : IDisposable
         string Key,
         IStreamingProceduralWorldGenerator Generator,
         IMaterialQuery Materials,
+        IConfigApi Config,
         ProceduralWorldDescriptor Descriptor,
         string? ProceduralWorldRoot);
 

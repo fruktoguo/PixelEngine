@@ -1656,6 +1656,7 @@ public sealed class SceneAndHeadlessTests
         public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
         {
             Assert.Equal("stream-test", request.Key);
+            Assert.NotNull(request.Config);
             return ProceduralWorldDescriptor.CreateInfinite(
                 worldSeed: 99,
                 initialFocusX: -32,
@@ -1705,6 +1706,7 @@ public sealed class SceneAndHeadlessTests
 
         public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
         {
+            Assert.NotNull(request.Config);
             ulong seed = request.WorldSeedOverride ?? 101UL;
             lock (_gate)
             {

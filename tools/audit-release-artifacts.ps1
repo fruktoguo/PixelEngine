@@ -343,7 +343,7 @@ function Assert-FriendlyPackageLayout([System.IO.FileInfo]$package) {
     $requiredEntries.Add($required)
   }
   if (-not $SkipDemoContentAudit) {
-    foreach ($required in @('content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png')) {
+    foreach ($required in @('content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/campaign.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png')) {
       $requiredEntries.Add($required)
     }
   }
@@ -466,7 +466,7 @@ function Assert-FriendlyExpandedPackageLayout([System.IO.DirectoryInfo]$packageD
     $requiredEntries.Add($required)
   }
   if (-not $SkipDemoContentAudit) {
-    foreach ($required in @('content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png')) {
+    foreach ($required in @('content/materials.json', 'content/reactions.json', 'content/weapons.json', 'content/campaign.json', 'content/textures/17_gravel.png', 'content/textures/18_boundary_stone.png')) {
       $requiredEntries.Add($required)
     }
   }
@@ -573,6 +573,7 @@ function Test-PublishDirectory([string]$rid, [string]$channel) {
     Assert-FileExists (Join-Path $directory 'content/materials.json') '缺少 content/materials.json'
     Assert-FileExists (Join-Path $directory 'content/reactions.json') '缺少 content/reactions.json'
     Assert-FileExists (Join-Path $directory 'content/weapons.json') '缺少 content/weapons.json'
+    Assert-FileExists (Join-Path $directory 'content/campaign.json') '缺少 content/campaign.json'
     Assert-FileExists (Join-Path $directory 'content/textures/17_gravel.png') '缺少 content/textures/17_gravel.png'
     Assert-FileExists (Join-Path $directory 'content/textures/18_boundary_stone.png') '缺少 content/textures/18_boundary_stone.png'
     Assert-FileExists (Join-Path $directory "content/$requiredScenePath") "缺少必需场景 $requiredScenePath"

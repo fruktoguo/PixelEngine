@@ -172,10 +172,12 @@ public readonly record struct ProceduralWorldDescriptor(
 /// <param name="Key">场景描述中的程序化生成器键。</param>
 /// <param name="Materials">材质查询能力。</param>
 /// <param name="WorldSeedOverride">宿主显式请求的新世界 seed；首次装配时为空。</param>
+/// <param name="Config">当前 ContentRoot 的只读配置加载能力；无内容宿主可为空。</param>
 public readonly record struct ProceduralWorldBuildRequest(
     string Key,
     IMaterialQuery Materials,
-    ulong? WorldSeedOverride = null);
+    ulong? WorldSeedOverride = null,
+    IConfigApi? Config = null);
 
 /// <summary>
 /// 程序化世界填充上下文。

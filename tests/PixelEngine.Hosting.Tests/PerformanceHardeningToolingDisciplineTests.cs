@@ -5391,6 +5391,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("package 内 SHA256SUMS 未覆盖文件", auditPs1, StringComparison.Ordinal);
         Assert.Contains("content/materials.json", auditPs1, StringComparison.Ordinal);
         Assert.Contains("content/weapons.json", auditPs1, StringComparison.Ordinal);
+        Assert.Contains("content/campaign.json", auditPs1, StringComparison.Ordinal);
         Assert.Contains("content/textures/17_gravel.png", auditPs1, StringComparison.Ordinal);
         Assert.Contains("content/textures/18_boundary_stone.png", auditPs1, StringComparison.Ordinal);
         Assert.Contains("assert_friendly_package_layout", auditSh, StringComparison.Ordinal);
@@ -5413,6 +5414,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("package 内 SHA256SUMS 未覆盖文件", auditSh, StringComparison.Ordinal);
         Assert.Contains("content/materials.json", auditSh, StringComparison.Ordinal);
         Assert.Contains("content/weapons.json", auditSh, StringComparison.Ordinal);
+        Assert.Contains("content/campaign.json", auditSh, StringComparison.Ordinal);
         Assert.Contains("content/textures/17_gravel.png", auditSh, StringComparison.Ordinal);
         Assert.Contains("content/textures/18_boundary_stone.png", auditSh, StringComparison.Ordinal);
 
@@ -5729,6 +5731,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             _ = WriteTextEvidence(Path.Combine(content, "materials.json"), "{}");
             _ = WriteTextEvidence(Path.Combine(content, "reactions.json"), "{}");
             _ = WriteTextEvidence(Path.Combine(content, "weapons.json"), "{}");
+            _ = WriteTextEvidence(Path.Combine(content, "campaign.json"), "{}");
             _ = WriteTextEvidence(Path.Combine(content, "textures", "17_gravel.png"), "gravel");
             _ = WriteTextEvidence(Path.Combine(content, "textures", "18_boundary_stone.png"), "boundary");
             _ = WriteTextEvidence(Path.Combine(content, "scenes", "lava-mine.scene"), "scene");
@@ -5773,6 +5776,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "PixelEngine Demo.exe")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "app", "PixelEngine.Demo.dll")));
             Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(expandedPackageDir, "content", "campaign.json")));
             JsonNode startup = JsonNode.Parse(
                 File.ReadAllText(Path.Combine(expandedPackageDir, "content", "startup.json")))!;
             Assert.Equal("BorderlessFullscreen", startup["windowMode"]!.GetValue<string>());
@@ -5798,6 +5802,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(playerOutput, "app", "PixelEngine.Demo.dll")));
             Assert.True(File.Exists(Path.Combine(playerOutput, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll")));
             Assert.True(File.Exists(Path.Combine(playerOutput, "content", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(playerOutput, "content", "campaign.json")));
             Assert.True(File.Exists(Path.Combine(playerOutput, "content", "weapons.json")));
             Assert.True(File.Exists(Path.Combine(playerOutput, "content", "scripts", "ExternalProjectBehaviour.cs")));
             Assert.False(File.Exists(Path.Combine(playerOutput, "stale.dll")));
@@ -5823,6 +5828,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.True(File.Exists(Path.Combine(packageDir, "app", "PixelEngine.Demo.runtimeconfig.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "app", "runtimes", "win-x64", "native", "PixelEngine.UI.Native.dll")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "materials.json")));
+            Assert.True(File.Exists(Path.Combine(packageDir, "content", "campaign.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "reactions.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "weapons.json")));
             Assert.True(File.Exists(Path.Combine(packageDir, "content", "textures", "17_gravel.png")));
@@ -5850,6 +5856,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
             Assert.DoesNotContain("_PUBLISH_INTERMEDIATE_README.txt", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/materials.json", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/weapons.json", packageChecksumsText, StringComparison.Ordinal);
+            Assert.Contains("content/campaign.json", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/textures/17_gravel.png", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/textures/18_boundary_stone.png", packageChecksumsText, StringComparison.Ordinal);
             Assert.Contains("content/scripts/ExternalProjectBehaviour.cs", packageChecksumsText, StringComparison.Ordinal);
@@ -8896,6 +8903,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         _ = WriteTextEvidence(Path.Combine(root, "content", "materials.json"), "{}");
         _ = WriteTextEvidence(Path.Combine(root, "content", "reactions.json"), "{}");
         _ = WriteTextEvidence(Path.Combine(root, "content", "weapons.json"), "{}");
+        _ = WriteTextEvidence(Path.Combine(root, "content", "campaign.json"), "{}");
         _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "17_gravel.png"), "gravel");
         _ = WriteTextEvidence(Path.Combine(root, "content", "textures", "18_boundary_stone.png"), "boundary");
         _ = WriteTextEvidence(Path.Combine(root, "content", "scenes", "lava-mine.scene"), "scene");

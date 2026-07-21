@@ -1224,6 +1224,7 @@ public sealed class EditorShellBuildTests
         yield return ("content/materials.json", "{}");
         yield return ("content/reactions.json", "{}");
         yield return ("content/weapons.json", "{}");
+        yield return ("content/campaign.json", "{}");
         yield return ("content/textures/17_gravel.png", "png");
         yield return ("content/textures/18_boundary_stone.png", "png");
         yield return ("content/scenes/lava-mine.scene", "{}");

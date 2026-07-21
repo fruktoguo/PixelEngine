@@ -1,12 +1,11 @@
 using BenchmarkDotNet.Attributes;
 using PixelEngine.Demo;
 using PixelEngine.Hosting;
-using PixelEngine.Scripting;
 
 namespace PixelEngine.Benchmarks;
 
 /// <summary>
-/// 使用 Demo 真实材质目录测量一个 64x64 无限沙盒 chunk 的确定性生成成本。
+/// 使用 Demo 真实材质目录测量一个 64x64 无限战役 chunk 的确定性生成成本。
 /// </summary>
 [MemoryDiagnoser]
 public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
@@ -16,7 +15,7 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
     private readonly ushort[] _materialCells = new ushort[ChunkSize * ChunkSize];
     private readonly Half[] _temperatureCells = new Half[TemperatureSize * TemperatureSize];
     private Engine? _engine;
-    private IMaterialQuery? _materials;
+    private PlayableCavernWorldGenerator? _generator;
 
     /// <summary>
     /// 覆盖西侧盆地、原点安全区和东侧山脉的代表性 chunk。
@@ -43,7 +42,12 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
         EngineProject project = DemoProgram.BuildProject(options);
         _engine = DemoProgram.BuildEngine(options, project);
         EngineContentPackage package = _engine.LoadContentPackage();
-        _materials = package.Materials;
+        _generator = new PlayableCavernWorldGenerator();
+        ProceduralWorldBuildRequest request = new(
+            PlayableCavernWorldGenerator.Key,
+            package.Materials,
+            Config: new EngineScriptConfigApi(options.ContentRoot));
+        _ = _generator.Describe(in request);
     }
 
     /// <summary>
@@ -53,8 +57,7 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
     public int GenerateChunk()
     {
         Array.Clear(_temperatureCells);
-        PlayableCavernWorldGenerator.PopulateChunkForBenchmark(
-            _materials!,
+        _generator!.PopulatePreparedChunkForBenchmark(
             ChunkX,
             chunkY: 3,
             _materialCells,
@@ -70,7 +73,7 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
     {
         _engine?.Dispose();
         _engine = null;
-        _materials = null;
+        _generator = null;
     }
 
     private static string FindRepositoryRoot()

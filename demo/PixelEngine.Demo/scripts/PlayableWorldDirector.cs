@@ -46,7 +46,7 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         AuthoringWorldPreviewDescriptor descriptor = DescribeAuthoringWorld().Validate();
         if (context.WidthCells != descriptor.WidthCells || context.HeightCells != descriptor.HeightCells)
         {
-            throw new InvalidOperationException("无限沙盒 authoring preview 尺寸与描述不一致。");
+            throw new InvalidOperationException("战役 authoring preview 尺寸与描述不一致。");
         }
 
         PlayableCavernWorldGenerator.PopulateAuthoringWorld(in context);
@@ -60,6 +60,8 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
     /// <inheritdoc />
     protected override void OnStart()
     {
+        CampaignConfig config = CampaignConfig.Load(Context.Config);
+        PlayerSpawnY = config.SurfaceY - 32f;
         RegisterEntityBuildSystem();
     }
 
