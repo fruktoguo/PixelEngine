@@ -101,9 +101,9 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.MainMenuScreen,
-            "demo.webfirst.main-menu/v1",
-            [],
-            ["open_dialog", "open_inventory", "open_settings", "start_game"]);
+            "demo.webfirst.main-menu/v2",
+            GameUiDemoController.MenuModelPathNames.ToArray(),
+            ["open_dialog", "open_inventory", "open_settings", "select_campaign", "select_sandbox", "start_game"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.SettingsScreen,
@@ -125,7 +125,7 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
-            "demo.webfirst.hud/v2",
+            "demo.webfirst.hud/v3",
             GameUiDemoController.HudModelPathNames.ToArray(),
             ["pause_game", "toggle_telemetry"]);
         AssertScreenContract(
@@ -155,7 +155,7 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.ResultScreen,
-            "demo.webfirst.result/v1",
+            "demo.webfirst.result/v2",
             GameUiDemoController.ResultModelPathNames.ToArray(),
             ["restart_game", "quit_game"]);
     }
@@ -212,10 +212,10 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证默认 Web-first 产品文案描述无限沙盒，并移除右出口与胜利路线。
+    /// 验证默认 Web-first 产品文案同时声明纵深 Campaign 与无终点 InfiniteSandbox。
     /// </summary>
     [Fact]
-    public void DemoDefaultHudAndResultTextDescribesInfiniteSandboxWithoutVictoryGoal()
+    public void DemoDefaultLoopTextDescribesCampaignAndInfiniteSandboxModes()
     {
         // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
@@ -227,20 +227,19 @@ public sealed class DemoUiContentTests
         defaultLoopText = [.. mainText, .. defaultLoopText];
 
         // Assert：验证预期结果
-        Assert.Contains("PixelEngine 无限沙盒", defaultLoopText);
-        Assert.Contains("世界会随探索持续生成。", defaultLoopText);
-        Assert.Contains("翻越山脉，进入盆地与洞穴。", defaultLoopText);
-        Assert.Contains("没有终点，也没有胜利条件。", defaultLoopText);
-        Assert.Contains("开放世界：山脉、盆地与洞穴持续生成", defaultLoopText);
-        Assert.Contains("没有终点，向左或向右自由探索", defaultLoopText);
-        Assert.Contains("探索距离", defaultLoopText);
-        Assert.Contains("东西方位", defaultLoopText);
-        Assert.Contains("地下深度", defaultLoopText);
-        Assert.Contains("山地海拔", defaultLoopText);
-        Assert.Contains("无限沙盒没有终点与胜利条件。", defaultLoopText);
-        Assert.Contains("死亡后可回到安全出生区继续探索。", defaultLoopText);
+        Assert.Contains("战役", defaultLoopText);
+        Assert.Contains("无限沙盒", defaultLoopText);
+        Assert.Contains("八个区域 · 七座静界锻台", defaultLoopText);
+        Assert.Contains("战役深入源核，沙盒无限延伸", defaultLoopText);
+        Assert.Contains("每一轮由独立世界 Seed 生成", defaultLoopText);
+        Assert.Contains("战役 / Campaign", defaultLoopText);
+        Assert.Contains("探索 / Exploring", defaultLoopText);
+        Assert.Contains("Seed", defaultLoopText);
+        Assert.Contains("深度 cell", defaultLoopText);
+        Assert.Contains("本轮结束 / Run Ended", defaultLoopText);
+        Assert.Contains("永久死亡 / Run ended", defaultLoopText);
+        Assert.Contains("开始新轮", defaultLoopText);
         Assert.DoesNotContain(defaultLoopText, text => text.Contains("右侧出口", StringComparison.Ordinal));
-        Assert.DoesNotContain(defaultLoopText, text => text.StartsWith("胜利：", StringComparison.Ordinal));
         Assert.DoesNotContain("可选任务时间", defaultLoopText);
         Assert.DoesNotContain("上涨熔岩压力", defaultLoopText);
         Assert.DoesNotContain("水晶", defaultLoopText);
@@ -347,10 +346,10 @@ public sealed class DemoUiContentTests
         Assert.Contains("#menu_kicker { top: 20px;", mainStyleSheet, StringComparison.Ordinal);
         Assert.Contains("#main_title { top: 42px;", mainStyleSheet, StringComparison.Ordinal);
         Assert.Contains("#main_hint { top: 84px;", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#briefing_title { position: absolute; left: 36px; top: 130px;", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_route { top: 154px; }", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_goal { top: 174px; }", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_hazard { top: 194px; }", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#briefing_title { position: absolute; left: 36px; top: 224px;", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_route { top: 248px; }", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_goal { top: 268px; }", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_hazard { top: 288px; }", mainStyleSheet, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -390,17 +389,17 @@ public sealed class DemoUiContentTests
         int eventCount = host.DrainEvents(events);
 
         // Assert：验证预期结果
-        Assert.Contains("PixelEngine 无限沙盒", gui.Context.Texts);
+        Assert.Contains("无限沙盒", gui.Context.Buttons);
         Assert.Contains("设置", gui.Context.Texts);
         Assert.Contains("背包", gui.Context.Texts);
         Assert.Contains("勘探记录", gui.Context.Texts);
         Assert.Contains("HUD", gui.Context.Texts);
         Assert.Contains("运行诊断", gui.Context.Texts);
         Assert.Contains("暂停", gui.Context.Texts);
-        Assert.Contains("会话状态", gui.Context.Texts);
-        Assert.Contains("进入世界", gui.Context.Buttons);
+        Assert.Contains("运行结算", gui.Context.Texts);
+        Assert.Contains("开始", gui.Context.Buttons);
         Assert.Contains("继续", gui.Context.Buttons);
-        Assert.Contains("重开", gui.Context.Buttons);
+        Assert.Contains("开始新轮", gui.Context.Buttons);
         Assert.Contains("返回", gui.Context.Buttons);
         Assert.True(eventCount >= 2);
         Assert.Contains(events[..eventCount], e => e.Action == new UI.UiActionId(UiStableId.Hash("open_settings")));
@@ -584,6 +583,47 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.bodies");
         AssertHudPathWritten(ui, "hud.fx");
         Assert.DoesNotContain(GameUiDemoController.ResultScreen, ui.PushedScreens);
+    }
+
+    /// <summary>
+    /// 验证模式选择事件会更新正式 run director 与主菜单模型，并由开始事件切换到 Sandbox HUD。
+    /// </summary>
+    [Fact]
+    public void DemoGameUiControllerSelectsCampaignOrSandboxAndStartsSelectedRun()
+    {
+        CampaignConfig config = CampaignConfig.BuiltinDefault;
+        FakeRuntimeControlApi runtime = new();
+        RuntimeControlSnapshot snapshot = runtime.Capture() with { WorldSeed = config.InitialRunSeed };
+        CampaignRunDirector run = new();
+        run.Initialize(config, runtime, in snapshot);
+        GameUiDemoController controller = new();
+        FakeGameUiService ui = new();
+        controller.BindRunDirector(run);
+
+        controller.StartForService(ui, runtime);
+
+        Assert.Equal(1, runtime.PauseCount);
+        Assert.Equal(1.0, GetUiValue(ui, "menu.campaign_selected"), precision: 3);
+        Assert.Equal(0.0, GetUiValue(ui, "menu.sandbox_selected"), precision: 3);
+
+        ui.Raise(GameUiDemoController.Action("select_sandbox"));
+
+        Assert.Equal(DemoGameMode.InfiniteSandbox, run.Mode);
+        Assert.Equal(0.0, GetUiValue(ui, "menu.campaign_selected"), precision: 3);
+        Assert.Equal(1.0, GetUiValue(ui, "menu.sandbox_selected"), precision: 3);
+        AssertUiPathWritten(ui, "menu.mode_text");
+
+        ui.Raise(GameUiDemoController.Action("start_game"));
+
+        Assert.Equal(CampaignRunState.StartingRun, run.State);
+        Assert.Equal(1, runtime.ResumeCount);
+        Assert.Equal(default, controller.MainScreen);
+        Assert.NotEqual(default, controller.HudScreenHandle);
+        Assert.Contains(GameUiDemoController.MainMenuScreen, ui.ShownScreens);
+        Assert.Contains(GameUiDemoController.HudScreen, ui.ShownScreens);
+        AssertUiPathWritten(ui, "hud.mode_text");
+        AssertUiPathWritten(ui, "hud.seed_text");
+        AssertUiPathWritten(ui, "hud.run_state_text");
     }
 
     /// <summary>
@@ -867,7 +907,7 @@ public sealed class DemoUiContentTests
             """);
         try
         {
-            AssertResultButtonRoutesThroughManagedFallback(contentRoot, "重开", "restart_game", expectRestart: true);
+            AssertResultButtonRoutesThroughManagedFallback(contentRoot, "开始新轮", "restart_game", expectRestart: true);
             AssertResultButtonRoutesThroughManagedFallback(contentRoot, "退出", "quit_game", expectRestart: false);
         }
         finally
@@ -1930,6 +1970,12 @@ public sealed class DemoUiContentTests
         Assert.True(ui.Values.ContainsKey(GameUiDemoController.Path(path)), $"HUD path 未写入值：{path}");
     }
 
+    private static void AssertUiPathWritten(FakeGameUiService ui, string path)
+    {
+        Assert.Contains(GameUiDemoController.Path(path), ui.WrittenPaths);
+        Assert.True(ui.Values.ContainsKey(GameUiDemoController.Path(path)), $"UI path 未写入值：{path}");
+    }
+
     private static double GetHudValue(FakeGameUiService ui, string path)
     {
         return GetUiValue(ui, path);
@@ -2268,8 +2314,10 @@ public sealed class DemoUiContentTests
 
             ReadOnlySpan<string> allowed = screenId switch
             {
+                GameUiDemoController.MainMenuScreen => GameUiDemoController.MenuModelPathNames,
                 GameUiDemoController.HudScreen => GameUiDemoController.HudModelPathNames,
                 GameUiDemoController.TelemetryScreen => GameUiDemoController.TelemetryModelPathNames,
+                GameUiDemoController.ResultScreen => GameUiDemoController.ResultModelPathNames,
                 _ => default,
             };
             if (allowed.IsEmpty)

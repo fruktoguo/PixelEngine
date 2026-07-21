@@ -68,12 +68,15 @@ internal static class ManagedUiLayout
         if (StringEquals(name, "text") || StringEquals(name, "p") || StringEquals(name, "span"))
         {
             string text = ReadText(element);
+            string? path = ReadAttribute(element, "data-model") ?? ReadAttribute(element, "path");
             return new ManagedUiControl
             {
                 Kind = ManagedUiControlKind.Text,
                 Id = ReadId(element, text),
                 Text = text,
                 Element = new UiElementId(UiStableId.Hash(ReadId(element, text))),
+                Path = path is null ? default : UiModelPathName.ToPathId(path),
+                ModelVariableName = path is null ? string.Empty : UiModelPathName.ToVariableName(path),
                 Style = style,
             };
         }

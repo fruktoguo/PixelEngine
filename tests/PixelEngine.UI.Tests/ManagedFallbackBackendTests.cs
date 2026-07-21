@@ -80,6 +80,40 @@ public sealed class ManagedFallbackBackendTests
     }
 
     /// <summary>
+    /// 验证托管回退把文本元素的 path 纳入模型契约，并解析字符串句柄与无分配整数文本。
+    /// </summary>
+    [Fact]
+    public void ManagedFallbackBindsDynamicTextModelPaths()
+    {
+        string path = WriteUi("""
+            <ui title="Hud">
+              <text id="mode" path="hud.mode_text">Fallback mode</text>
+              <text id="depth" path="hud.depth_cells">0</text>
+            </ui>
+            """);
+        FakeGuiHost gui = new();
+        UiStringPool strings = new();
+        using ManagedFallbackBackend backend = new(gui, stringResolver: strings);
+        using GameUiHost host = new(backend);
+        host.Initialize(new UiBackendInitializeInfo(new UiViewport(0, 0, 320, 240, 1f), UiBackendKind.ManagedFallback));
+
+        UiScreenHandle screen = host.ShowScreen(new UiScreenId(12), UiDocumentSource.Asset(path, 12));
+        UiPathId modePath = new(UiStableId.Hash("hud.mode_text"));
+        UiPathId depthPath = new(UiStableId.Hash("hud.depth_cells"));
+        host.SetModelValue(screen, modePath, UiValue.FromStringHandle(strings.Intern("Campaign")));
+        host.SetModelValue(screen, depthPath, new UiValue(2048L));
+
+        host.Composite(default);
+
+        UiPathId[] paths = new UiPathId[4];
+        Assert.Equal(2, host.CopyModelPaths(screen, paths));
+        Assert.Contains(modePath, paths[..2]);
+        Assert.Contains(depthPath, paths[..2]);
+        Assert.Contains("Campaign", gui.Context.Texts);
+        Assert.Contains("2048", gui.Context.Texts);
+    }
+
+    /// <summary>
     /// 验证托管回退每帧重放静态屏幕，模型变更后继续使用同一 runtime surface 路径。
     /// </summary>
     [Fact]

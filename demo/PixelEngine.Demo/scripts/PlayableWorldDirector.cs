@@ -97,6 +97,7 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
 
         Entity playerEntity = Context.Scene.CreateEntity();
         _ = playerEntity.AddComponent<Transform>();
+        _ = playerEntity.AddComponent<CampaignRunDirector>();
         PlayerController player = playerEntity.AddComponent<PlayerController>();
         player.SpawnX = PlayerSpawnX;
         player.SpawnY = PlayerSpawnY;

@@ -15,6 +15,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     private static long s_nextWindowNamespace;
 
     private readonly IManagedFallbackGuiHost _gui;
+    private readonly IUiStringResolver? _stringResolver;
     private readonly ManagedUiDocument?[] _documents;
     private readonly UiScreenStackEntry[] _visibleScreens;
     private readonly string?[] _visibleWindowIds;
@@ -38,9 +39,14 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
     /// </summary>
     /// <param name="gui">要复用的中性 Gui host。</param>
     /// <param name="options">容量配置。</param>
-    public ManagedFallbackBackend(IManagedFallbackGuiHost gui, ManagedFallbackBackendOptions options = default)
+    /// <param name="stringResolver">可选字符串句柄解析器；用于动态文本 model binding。</param>
+    public ManagedFallbackBackend(
+        IManagedFallbackGuiHost gui,
+        ManagedFallbackBackendOptions options = default,
+        IUiStringResolver? stringResolver = null)
     {
         _gui = gui ?? throw new ArgumentNullException(nameof(gui));
+        _stringResolver = stringResolver;
         Options = options.Normalize();
         _documents = new ManagedUiDocument[Options.MaxDocuments];
         _visibleScreens = new UiScreenStackEntry[Options.MaxVisibleScreens];
@@ -650,7 +656,7 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
         switch (control.Kind)
         {
             case ManagedUiControlKind.Text:
-                gui.Text(control.Text);
+                DrawText(gui, control);
                 break;
             case ManagedUiControlKind.Button:
                 bool clicked = style.HasSize
@@ -701,6 +707,50 @@ public sealed class ManagedFallbackBackend : IGameUiBackend, IManagedGuiDrawable
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(control), control.Kind, "未知 Managed UI 控件类型。");
+        }
+    }
+
+    private void DrawText(IGuiDrawContext gui, ManagedUiControl control)
+    {
+        UiValue value = control.Value;
+        switch (value.Kind)
+        {
+            case UiValueKind.StringHandle:
+                if (_stringResolver is not null &&
+                    _stringResolver.TryGetString(value.AsStringHandle(), out string text))
+                {
+                    gui.Text(text);
+                }
+                else
+                {
+                    gui.Text(control.Text);
+                }
+
+                break;
+            case UiValueKind.Int64:
+                Span<char> integerText = stackalloc char[20];
+                if (value.AsInt64().TryFormat(integerText, out int integerLength, provider: CultureInfo.InvariantCulture))
+                {
+                    gui.Text(integerText[..integerLength]);
+                }
+
+                break;
+            case UiValueKind.Double:
+                Span<char> numberText = stackalloc char[32];
+                if (value.AsDouble().TryFormat(numberText, out int numberLength, "G", CultureInfo.InvariantCulture))
+                {
+                    gui.Text(numberText[..numberLength]);
+                }
+
+                break;
+            case UiValueKind.Boolean:
+                gui.Text(value.AsBoolean() ? "true" : "false");
+                break;
+            case UiValueKind.Empty:
+                gui.Text(control.Text);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(control), value.Kind, "未知 UI 文本值类型。");
         }
     }
 

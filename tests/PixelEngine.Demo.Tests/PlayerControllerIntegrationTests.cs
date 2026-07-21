@@ -176,7 +176,7 @@ public sealed class PlayerControllerIntegrationTests
         RecordingGuiContext gui = new();
         engine.Context.GetService<IScriptRuntime>().DrawGui(gui);
 
-        Assert.Contains("next:340,12,288,176,FirstUseEver", gui.Drawn);
+        Assert.Contains("next:340,12,288,196,FirstUseEver", gui.Drawn);
         Assert.Contains(gui.Drawn, line => line.StartsWith("text-colored:无限沙盒 · 自由探索", StringComparison.Ordinal));
         Assert.DoesNotContain(gui.Drawn, line => line.StartsWith("text:FX ", StringComparison.Ordinal));
         Assert.DoesNotContain("text:材质", gui.Drawn);
@@ -641,6 +641,50 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(0f, health.HazardContactFraction);
         Assert.Equal(player.SpawnX, player.State.X, precision: 3);
         Assert.Equal(player.SpawnY, player.State.Y, precision: 3);
+    }
+
+    /// <summary>
+    /// 验证 Campaign 永久死亡由 run director 接管，生命保持为零并进入结算，绝不沿用 Sandbox 原点重生。
+    /// </summary>
+    [Fact]
+    public void CampaignPlayerDeathDoesNotRespawnAndTransitionsToRunSummary()
+    {
+        MaterialTable materials = DemoContentMaterials();
+        Assert.True(materials.TryGetId("lava", out ushort lava));
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out CellGrid grid,
+            out _,
+            out ScriptScene scene,
+            materials,
+            contentRoot: DemoContentRoot());
+        Entity entity = scene.CreateEntity();
+        CampaignRunDirector run = entity.AddComponent<CampaignRunDirector>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 12f;
+        _ = entity.AddComponent<PlayerVisual>();
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+        health.MaxHealth = 20f;
+        health.LavaDamagePerSecond = 2_000f;
+
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(CampaignRunState.MainMenu, run.State);
+        Assert.True(run.StartSelectedRun());
+        FillRect(grid, lava, minX: 12, minY: 12, maxX: 18, maxY: 24);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(CampaignRunState.Dead, run.State);
+        Assert.Equal(0f, health.Health);
+        Assert.Equal(0, health.RespawnCount);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(CampaignRunState.RunSummary, run.State);
+        Assert.Equal(0f, health.Health);
+        Assert.Equal(0, health.RespawnCount);
+        Assert.Equal("永久死亡 / Run ended", run.ResultReason);
     }
 
     /// <summary>

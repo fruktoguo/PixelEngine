@@ -21,6 +21,11 @@ public sealed class GameUiDemoController : Behaviour
 
     private static readonly string[] HudModelPaths =
     [
+        "hud.mode_text",
+        "hud.seed_text",
+        "hud.region_text",
+        "hud.run_state_text",
+        "hud.depth_cells",
         "hud.health",
         "hud.ammo",
         "hud.cooldown",
@@ -34,6 +39,13 @@ public sealed class GameUiDemoController : Behaviour
         "hud.longitude",
         "hud.depth",
         "hud.elevation",
+    ];
+
+    private static readonly string[] MenuModelPaths =
+    [
+        "menu.campaign_selected",
+        "menu.sandbox_selected",
+        "menu.mode_text",
     ];
 
     private static readonly string[] TelemetryModelPaths =
@@ -63,7 +75,15 @@ public sealed class GameUiDemoController : Behaviour
         "result.time",
         "result.score",
         "result.reason",
+        "result.title_text",
+        "result.reason_text",
+        "result.seed_text",
+        "result.region_text",
+        "result.depth_cells",
+        "result.elapsed_seconds",
     ];
+
+    internal static ReadOnlySpan<string> MenuModelPathNames => MenuModelPaths;
 
     internal static ReadOnlySpan<string> HudModelPathNames => HudModelPaths;
 
@@ -72,6 +92,8 @@ public sealed class GameUiDemoController : Behaviour
     internal static ReadOnlySpan<string> ResultModelPathNames => ResultModelPaths;
 
     private static readonly UiActionId StartGameAction = Action("start_game");
+    private static readonly UiActionId SelectCampaignAction = Action("select_campaign");
+    private static readonly UiActionId SelectSandboxAction = Action("select_sandbox");
     private static readonly UiActionId OpenSettingsAction = Action("open_settings");
     private static readonly UiActionId OpenInventoryAction = Action("open_inventory");
     private static readonly UiActionId OpenDialogAction = Action("open_dialog");
@@ -86,6 +108,14 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiActionId ToggleVSyncAction = Action("toggle_vsync");
     private static readonly UiPathId SettingsAudioPath = Path("settings.audio");
     private static readonly UiPathId SettingsVSyncPath = Path("settings.vsync");
+    private static readonly UiPathId MenuCampaignSelectedPath = Path("menu.campaign_selected");
+    private static readonly UiPathId MenuSandboxSelectedPath = Path("menu.sandbox_selected");
+    private static readonly UiPathId MenuModeTextPath = Path("menu.mode_text");
+    private static readonly UiPathId HudModeTextPath = Path("hud.mode_text");
+    private static readonly UiPathId HudSeedTextPath = Path("hud.seed_text");
+    private static readonly UiPathId HudRegionTextPath = Path("hud.region_text");
+    private static readonly UiPathId HudRunStateTextPath = Path("hud.run_state_text");
+    private static readonly UiPathId HudDepthCellsPath = Path("hud.depth_cells");
     private static readonly UiPathId HudHealthPath = Path("hud.health");
     private static readonly UiPathId HudWeaponPath = Path("hud.weapon");
     private static readonly UiPathId HudAmmoPath = Path("hud.ammo");
@@ -120,6 +150,12 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId ResultTimePath = Path("result.time");
     private static readonly UiPathId ResultScorePath = Path("result.score");
     private static readonly UiPathId ResultReasonPath = Path("result.reason");
+    private static readonly UiPathId ResultTitleTextPath = Path("result.title_text");
+    private static readonly UiPathId ResultReasonTextPath = Path("result.reason_text");
+    private static readonly UiPathId ResultSeedTextPath = Path("result.seed_text");
+    private static readonly UiPathId ResultRegionTextPath = Path("result.region_text");
+    private static readonly UiPathId ResultDepthCellsPath = Path("result.depth_cells");
+    private static readonly UiPathId ResultElapsedSecondsPath = Path("result.elapsed_seconds");
 
     private IGameUiService? _ui;
     private IRuntimeControlApi? _runtime;
@@ -132,6 +168,7 @@ public sealed class GameUiDemoController : Behaviour
     private MissionDirector? _mission;
     private RisingHazardDirector? _hazard;
     private GoalTrigger? _goal;
+    private CampaignRunDirector? _runDirector;
     private GoalTrigger? _goalProgressSource;
     private float _goalRouteStartCenterX;
     private bool _subscribed;
@@ -144,6 +181,11 @@ public sealed class GameUiDemoController : Behaviour
     private bool _lastGoalReached;
     private bool _objectiveSearchCompleted;
     private long _lastEscapeFrame = -1;
+    private int _publishedMenuMode = -1;
+    private int _publishedHudMode = -1;
+    private int _publishedHudState = -1;
+    private int _publishedHudRegion = -1;
+    private ulong _publishedHudSeed = ulong.MaxValue;
 
     /// <summary>
     /// 当前主菜单屏幕句柄。
@@ -198,6 +240,11 @@ public sealed class GameUiDemoController : Behaviour
     /// <inheritdoc />
     protected override void OnStart()
     {
+        if (Entity.TryGetComponent(out CampaignRunDirector runDirector))
+        {
+            _runDirector = runDirector;
+        }
+
         StartForService(Context.GameUi, TryResolveRuntime());
     }
 
@@ -216,6 +263,10 @@ public sealed class GameUiDemoController : Behaviour
         _ = gui;
         // 暂停态不执行 OnUpdate；借 GUI 相位继续接收 Esc，且不在这里绘制任何旧式窗口。
         HandleEscapeShortcut();
+        if (_runDirector?.State == CampaignRunState.RunSummary)
+        {
+            PublishCampaignRunState();
+        }
     }
 
     internal void StartForService(IGameUiService ui)
@@ -242,9 +293,30 @@ public sealed class GameUiDemoController : Behaviour
         _ui.UiEventRaised += HandleUiEvent;
         _subscribed = true;
         DiscoverSceneCanvases();
-        // 主菜单与 gameplay HUD 是互斥产品状态；HUD 只在玩家确认开始后进入屏栈。
-        MainScreen = _ui.ShowScreen(MainMenuScreen);
+        // 原子世界重建后的新脚本生命周期直接进入 StartingRun；普通启动停在主菜单。
+        if (_runDirector is not null && _runDirector.State != CampaignRunState.MainMenu)
+        {
+            ShowHud();
+            PublishCampaignRunState();
+        }
+        else
+        {
+            MainScreen = _ui.ShowScreen(MainMenuScreen);
+            if (_runDirector is not null)
+            {
+                PublishMenuState();
+            }
+        }
+
         RefreshSettingsStateFromRuntime();
+    }
+
+    internal void BindRunDirector(CampaignRunDirector runDirector)
+    {
+        ArgumentNullException.ThrowIfNull(runDirector);
+        _runDirector = runDirector;
+        InvalidateRunModelCache();
+        PublishMenuState();
     }
 
     /// <inheritdoc />
@@ -291,6 +363,7 @@ public sealed class GameUiDemoController : Behaviour
         _mission = null;
         _hazard = null;
         _goal = null;
+        _runDirector = null;
         _goalProgressSource = null;
         _goalRouteStartCenterX = 0f;
         _pausedByUi = false;
@@ -300,6 +373,7 @@ public sealed class GameUiDemoController : Behaviour
         _lastGoalReached = false;
         _objectiveSearchCompleted = false;
         _lastEscapeFrame = -1;
+        InvalidateRunModelCache();
         LastAction = default;
     }
 
@@ -336,12 +410,35 @@ public sealed class GameUiDemoController : Behaviour
     {
         LastAction = uiEvent.Action;
         // UI 动作分派：主菜单 / 暂停 / 设置模态 / 运行时控制
+        if (uiEvent.Action == SelectCampaignAction)
+        {
+            _ = _runDirector?.SelectMode(DemoGameMode.Campaign);
+            PublishMenuState();
+            return;
+        }
+
+        if (uiEvent.Action == SelectSandboxAction)
+        {
+            _ = _runDirector?.SelectMode(DemoGameMode.InfiniteSandbox);
+            PublishMenuState();
+            return;
+        }
+
         if (uiEvent.Action == StartGameAction)
         {
+            if (_runDirector is not null && !_runDirector.StartSelectedRun())
+            {
+                return;
+            }
+
             ShowHud();
             if (HudScreenHandle.Value != 0)
             {
                 HideMainMenu();
+                if (_runDirector is not null)
+                {
+                    PublishCampaignRunState();
+                }
             }
 
             return;
@@ -433,6 +530,7 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudLongitudePath, 0.5);
         SetHudValue(HudDepthPath, 0.0);
         SetHudValue(HudElevationPath, 0.0);
+        SetScreenValue(HudScreenHandle, HudDepthCellsPath, new UiValue(0L));
         SetTelemetryValue(HudWeaponPath, 0.0);
         SetTelemetryValue(HudOverheatedPath, 0.0);
         SetTelemetryValue(HudMaterialSlotPath, 0.0);
@@ -469,6 +567,11 @@ public sealed class GameUiDemoController : Behaviour
 
     private void ResolveHudSources()
     {
+        if (_runDirector is null && Entity.TryGetComponent(out CampaignRunDirector runDirector))
+        {
+            _runDirector = runDirector;
+        }
+
         if (_health is null && Entity.TryGetComponent(out PlayerHealth health))
         {
             _health = health;
@@ -643,6 +746,12 @@ public sealed class GameUiDemoController : Behaviour
 
     private void PublishMission()
     {
+        if (_runDirector is not null)
+        {
+            PublishCampaignRunState();
+            return;
+        }
+
         MissionDirector? mission = _mission;
         if (mission is null && _goal is null)
         {
@@ -681,6 +790,110 @@ public sealed class GameUiDemoController : Behaviour
         SetHudValue(HudScorePath, 0.0);
         _lastGoalReached = false;
         _lastMissionState = MissionState.Playing;
+    }
+
+    private void PublishCampaignRunState()
+    {
+        CampaignRunDirector? run = _runDirector;
+        if (run is null || _ui is null || HudScreenHandle.Value == 0)
+        {
+            return;
+        }
+
+        double x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnX;
+        double distance = Math.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnX);
+        SetHudValue(HudDistancePath, Ratio(distance, 4_096.0));
+        SetHudValue(HudLongitudePath, Math.Clamp(0.5 + ((x - PlayableCavernWorldGenerator.PlayerSpawnX) / 8_192.0), 0.0, 1.0));
+        SetHudValue(HudDepthPath, Ratio(run.CurrentDepthCells, 5_120.0));
+        SetHudValue(HudElevationPath, 0.0);
+        SetHudValue(HudCrystalsPath, Ratio(CountVisitedRegions(run.VisitedRegionMask), CampaignConfig.RequiredRegionCount));
+        SetHudValue(HudTimePath, Ratio(run.ElapsedSeconds, 3_600.0));
+        SetHudValue(HudHazardPath, run.State is CampaignRunState.Finale or CampaignRunState.Dead ? 1.0 : 0.0);
+        SetHudValue(HudScorePath, Ratio(run.DeepestDepthCells, 5_120.0));
+        SetScreenValue(HudScreenHandle, HudDepthCellsPath, new UiValue(run.CurrentDepthCells));
+        PublishRunText(run);
+        PublishCampaignResult(run);
+        _lastGoalReached = false;
+        _lastMissionState = MissionState.Playing;
+    }
+
+    private void PublishRunText(CampaignRunDirector run)
+    {
+        int mode = (int)run.Mode;
+        if (_publishedHudMode != mode)
+        {
+            SetScreenText(HudScreenHandle, HudModeTextPath, run.ModeDisplayName);
+            _publishedHudMode = mode;
+        }
+
+        int state = (int)run.State;
+        if (_publishedHudState != state)
+        {
+            SetScreenText(HudScreenHandle, HudRunStateTextPath, run.StateDisplayName);
+            _publishedHudState = state;
+        }
+
+        if (_publishedHudRegion != run.CurrentRegionIndex)
+        {
+            SetScreenText(HudScreenHandle, HudRegionTextPath, run.CurrentRegionDisplayName);
+            _publishedHudRegion = run.CurrentRegionIndex;
+        }
+
+        if (_publishedHudSeed != run.RunSeed)
+        {
+            SetScreenText(HudScreenHandle, HudSeedTextPath, run.RunSeedText);
+            _publishedHudSeed = run.RunSeed;
+        }
+    }
+
+    private void PublishCampaignResult(CampaignRunDirector run)
+    {
+        if (run.State != CampaignRunState.RunSummary)
+        {
+            return;
+        }
+
+        if (!_resultVisible || _modalScreenId != ResultScreen)
+        {
+            _pausedByUi = false;
+            OpenModal(ResultScreen);
+            _resultVisible = ModalScreen.Value != 0 && _modalScreenId == ResultScreen;
+        }
+
+        if (!_resultVisible)
+        {
+            return;
+        }
+
+        SetScreenValue(ModalScreen, ResultWonPath, new UiValue(run.WasCompleted ? 1.0 : 0.0));
+        SetScreenValue(
+            ModalScreen,
+            ResultCrystalsPath,
+            new UiValue(Ratio(CountVisitedRegions(run.VisitedRegionMask), CampaignConfig.RequiredRegionCount)));
+        SetScreenValue(ModalScreen, ResultTimePath, new UiValue(Ratio(run.ElapsedSeconds, 3_600.0)));
+        SetScreenValue(ModalScreen, ResultScorePath, new UiValue(Ratio(run.DeepestDepthCells, 5_120.0)));
+        SetScreenValue(ModalScreen, ResultReasonPath, new UiValue(1.0));
+        SetScreenValue(ModalScreen, ResultDepthCellsPath, new UiValue(run.DeepestDepthCells));
+        SetScreenValue(ModalScreen, ResultElapsedSecondsPath, new UiValue((double)run.ElapsedSeconds));
+        SetScreenText(
+            ModalScreen,
+            ResultTitleTextPath,
+            run.WasCompleted ? "战役完成 / Campaign Complete" : "本轮结束 / Run Ended");
+        SetScreenText(ModalScreen, ResultReasonTextPath, run.ResultReason);
+        SetScreenText(ModalScreen, ResultSeedTextPath, run.RunSeedText);
+        SetScreenText(ModalScreen, ResultRegionTextPath, run.CurrentRegionDisplayName);
+    }
+
+    private static int CountVisitedRegions(byte mask)
+    {
+        int count = 0;
+        while (mask != 0)
+        {
+            count += mask & 1;
+            mask >>= 1;
+        }
+
+        return count;
     }
 
     private double PublishGoal()
@@ -817,6 +1030,17 @@ public sealed class GameUiDemoController : Behaviour
         _ui.SetValue(screen, path, in value);
     }
 
+    private void SetScreenText(UiScreenHandle screen, UiPathId path, string text)
+    {
+        if (_ui is null || screen.Value == 0)
+        {
+            return;
+        }
+
+        UiValue value = UiValue.FromStringHandle(_ui.InternString(text));
+        _ui.SetValue(screen, path, in value);
+    }
+
     private static double Ratio(double value, double max)
     {
         return !double.IsFinite(value) || !double.IsFinite(max) || max <= 0.0
@@ -847,6 +1071,32 @@ public sealed class GameUiDemoController : Behaviour
         MainScreen = default;
     }
 
+    private void PublishMenuState()
+    {
+        CampaignRunDirector? run = _runDirector;
+        if (run is null || MainScreen.Value == 0)
+        {
+            return;
+        }
+
+        int mode = (int)run.Mode;
+        if (_publishedMenuMode == mode)
+        {
+            return;
+        }
+
+        SetScreenValue(
+            MainScreen,
+            MenuCampaignSelectedPath,
+            new UiValue(run.Mode == DemoGameMode.Campaign ? 1.0 : 0.0));
+        SetScreenValue(
+            MainScreen,
+            MenuSandboxSelectedPath,
+            new UiValue(run.Mode == DemoGameMode.InfiniteSandbox ? 1.0 : 0.0));
+        SetScreenText(MainScreen, MenuModeTextPath, run.ModeDisplayName);
+        _publishedMenuMode = mode;
+    }
+
     private void ShowHud()
     {
         if (_ui is null || HudScreenHandle.Value != 0)
@@ -855,6 +1105,7 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         HudScreenHandle = _ui.ShowScreen(HudScreen);
+        InvalidateHudModelCache();
         PublishHudDefaults();
     }
 
@@ -974,6 +1225,36 @@ public sealed class GameUiDemoController : Behaviour
 
     private void RequestRestart()
     {
+        if (_runDirector?.State == CampaignRunState.RunSummary)
+        {
+            ClearRuntimeModalState();
+            RuntimeControlResult result = _runDirector.RequestNextRun();
+            if (!result.Success)
+            {
+                PublishCampaignResult(_runDirector);
+            }
+
+            return;
+        }
+
+        if (_runDirector?.Mode == DemoGameMode.InfiniteSandbox)
+        {
+            _health?.Respawn();
+            if (_health is null)
+            {
+                _player?.Respawn();
+            }
+
+            ResumeGame();
+            return;
+        }
+
+        if (_runDirector?.AbandonRun() == true)
+        {
+            ResumeGame();
+            return;
+        }
+
         ClearRuntimeModalState();
         _lastMissionState = MissionState.Playing;
         _lastGoalReached = false;
@@ -1087,6 +1368,20 @@ public sealed class GameUiDemoController : Behaviour
         _ui.HideScreen(ModalScreen);
         ModalScreen = default;
         _modalScreenId = string.Empty;
+    }
+
+    private void InvalidateRunModelCache()
+    {
+        _publishedMenuMode = -1;
+        InvalidateHudModelCache();
+    }
+
+    private void InvalidateHudModelCache()
+    {
+        _publishedHudMode = -1;
+        _publishedHudState = -1;
+        _publishedHudRegion = -1;
+        _publishedHudSeed = ulong.MaxValue;
     }
 
     private IRuntimeControlApi? TryResolveRuntime()

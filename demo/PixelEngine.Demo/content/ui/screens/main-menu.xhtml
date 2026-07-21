@@ -1,29 +1,37 @@
-<rml title="PixelEngine 主菜单" data-screen="main-menu" data-contract="demo.webfirst.main-menu/v1" style="left: 620px; top: 92px; width: 408px; height: 466px">
+<rml title="PixelEngine 主菜单" data-screen="main-menu" data-contract="demo.webfirst.main-menu/v2" style="left: 620px; top: 72px; width: 408px; height: 520px">
   <head>
     <style>
       body { margin: 0px; font-family: "Noto Sans SC"; color: #e8edf2; background-color: transparent; }
       p { margin: 4px 0px; }
       #menu_scrim { position: absolute; left: 0px; top: 0px; width: 1400px; height: 900px; background-color: rgba(2, 5, 9, 166); }
-      #main_panel { position: absolute; left: 620px; top: 92px; width: 360px; height: 418px; padding: 24px; background-color: rgba(7, 11, 17, 244); border-width: 1px; border-color: #526276; }
-      #panel_accent { position: absolute; left: 0px; top: 0px; width: 5px; height: 466px; background-color: #d39a36; }
+      #main_panel { position: absolute; left: 620px; top: 72px; width: 360px; height: 472px; padding: 24px; background-color: rgba(7, 11, 17, 244); border-width: 1px; border-color: #526276; }
+      #panel_accent { position: absolute; left: 0px; top: 0px; width: 5px; height: 520px; background-color: #d39a36; }
       #menu_kicker, #main_title, #main_hint { position: absolute; left: 24px; margin: 0px; }
       #menu_kicker { top: 20px; color: #d8a64f; font-size: 12px; }
       #main_title { top: 42px; color: #f5f7fa; font-size: 30px; }
       #main_hint { top: 84px; color: #c9d3df; font-size: 15px; }
-      #briefing { position: absolute; left: 24px; top: 122px; width: 328px; height: 104px; padding: 12px; background-color: rgba(17, 25, 36, 236); border-width: 1px; border-color: #35465a; }
-      #briefing_title { position: absolute; left: 36px; top: 130px; color: #f1c264; font-size: 13px; }
+      #mode_campaign, #mode_sandbox { position: absolute; top: 122px; width: 158px; height: 38px; }
+      #mode_campaign { left: 24px; }
+      #mode_sandbox { left: 194px; }
+      #campaign_selected, #sandbox_selected { position: absolute; top: 166px; width: 158px; height: 4px; margin: 0px; background-color: #18232f; border-width: 0px; }
+      #campaign_selected { left: 24px; }
+      #sandbox_selected { left: 194px; }
+      #campaign_selected fill, #sandbox_selected fill { background-color: #d6a13d; }
+      #selected_mode { position: absolute; left: 24px; top: 184px; width: 328px; color: #f1c264; font-size: 12px; }
+      #briefing { position: absolute; left: 24px; top: 216px; width: 328px; height: 78px; padding: 12px; background-color: rgba(17, 25, 36, 236); border-width: 1px; border-color: #35465a; }
+      #briefing_title { position: absolute; left: 36px; top: 224px; color: #f1c264; font-size: 13px; }
       #main_route, #main_goal, #main_hazard { position: absolute; left: 36px; color: #aeb9c7; font-size: 12px; }
-      #main_route { top: 154px; }
-      #main_goal { top: 174px; }
-      #main_hazard { top: 194px; }
+      #main_route { top: 248px; }
+      #main_goal { top: 268px; }
+      #main_hazard { top: 288px; }
       button { height: 34px; color: #e8edf2; text-align: center; background-color: #20364d; border-width: 1px; border-color: #49637d; }
       button:hover { color: #ffffff; background-color: #315675; border-color: #79a0c5; }
-      #start_game { position: absolute; left: 24px; top: 270px; width: 328px; height: 46px; color: #15100a; background-color: #d69a32; border-color: #f0c467; }
+      #start_game { position: absolute; left: 24px; top: 326px; width: 328px; height: 46px; color: #15100a; background-color: #d69a32; border-color: #f0c467; }
       #start_game:hover { background-color: #edb64f; border-color: #ffe09a; }
-      #open_settings { position: absolute; left: 24px; top: 328px; width: 102px; }
-      #open_inventory { position: absolute; left: 137px; top: 328px; width: 102px; }
-      #open_dialog { position: absolute; left: 250px; top: 328px; width: 102px; }
-      #menu_footer { position: absolute; left: 24px; top: 382px; width: 328px; color: #758396; font-size: 11px; }
+      #open_settings { position: absolute; left: 24px; top: 384px; width: 102px; }
+      #open_inventory { position: absolute; left: 137px; top: 384px; width: 102px; }
+      #open_dialog { position: absolute; left: 250px; top: 384px; width: 102px; }
+      #menu_footer { position: absolute; left: 24px; top: 438px; width: 328px; color: #758396; font-size: 11px; }
     </style>
   </head>
   <body>
@@ -31,14 +39,19 @@
     <div id="main_panel">
       <div id="panel_accent"></div>
       <p id="menu_kicker">PIXELENGINE · FALLING SAND EXPEDITION</p>
-      <p id="main_title">PixelEngine 无限沙盒</p>
-      <p id="main_hint">世界会随探索持续生成。</p>
+      <p id="main_title">PixelEngine</p>
+      <p id="main_hint">选择运行模式</p>
+      <button id="mode_campaign" data-event-click="select_campaign">战役</button>
+      <button id="mode_sandbox" data-event-click="select_sandbox">无限沙盒</button>
+      <progress id="campaign_selected" path="menu.campaign_selected" value="1.0"></progress>
+      <progress id="sandbox_selected" path="menu.sandbox_selected" value="0.0"></progress>
+      <p id="selected_mode" path="menu.mode_text">战役 / Campaign</p>
       <div id="briefing"></div>
-      <p id="briefing_title">开放探索</p>
-      <p id="main_route">翻越山脉，进入盆地与洞穴。</p>
-      <p id="main_goal">没有终点，也没有胜利条件。</p>
-      <p id="main_hazard">深层矿脉与熔岩会自然出现。</p>
-      <button id="start_game" data-event-click="start_game">进入世界</button>
+      <p id="briefing_title">纵深路线</p>
+      <p id="main_route">八个区域 · 七座静界锻台</p>
+      <p id="main_goal">战役深入源核，沙盒无限延伸</p>
+      <p id="main_hazard">每一轮由独立世界 Seed 生成</p>
+      <button id="start_game" data-event-click="start_game">开始</button>
       <button id="open_settings" data-event-click="open_settings">设置</button>
       <button id="open_inventory" data-event-click="open_inventory">背包</button>
       <button id="open_dialog" data-event-click="open_dialog">对话</button>

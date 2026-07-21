@@ -563,7 +563,7 @@ public sealed class EditorAssetBrowserDualRootTests
         Assert.Contains("10 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("Web-first", uiScreen.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("id=main-menu", uiScreen.PreviewSummary, StringComparison.Ordinal);
-        Assert.Contains("demo.webfirst.main-menu/v1", uiScreen.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("demo.webfirst.main-menu/v2", uiScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("id=telemetry", telemetryScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Equal("字体", font.Descriptor?.TypeLabel);
         Assert.Contains("初始世界材质图", materialMap.Descriptor?.Purpose, StringComparison.Ordinal);

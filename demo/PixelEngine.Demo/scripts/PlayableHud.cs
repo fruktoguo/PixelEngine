@@ -29,6 +29,7 @@ public sealed class PlayableHud : Behaviour
     private PlayerController? _player;
     private PlayableProjectileTool? _projectile;
     private WeaponController? _weapons;
+    private CampaignRunDirector? _runDirector;
     private MissionDirector? _mission;
     private GoalTrigger? _goal;
     private int _frameGraphIndex;
@@ -69,7 +70,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         ResolveComponents();
-        float height = ShowDiagnostics ? 304f : 176f;
+        float height = ShowDiagnostics ? 324f : 196f;
         gui.SetNextWindow(X, Y, Width, height, GuiCondition.FirstUseEver);
         GuiWindowFlags flags = GuiWindowFlags.NoResize |
             GuiWindowFlags.NoMove |
@@ -194,6 +195,7 @@ public sealed class PlayableHud : Behaviour
         _player = Entity.TryGetComponent(out PlayerController player) ? player : null;
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
+        _runDirector = Entity.TryGetComponent(out CampaignRunDirector runDirector) ? runDirector : null;
         _goal = Entity.TryGetComponent(out GoalTrigger localGoal) ? localGoal : _goal;
         if (_mission is null && Entity.TryGetComponent(out MissionDirector mission))
         {
@@ -285,6 +287,22 @@ public sealed class PlayableHud : Behaviour
 
     private void DrawExploration(IGuiContext gui)
     {
+        if (_runDirector is not null)
+        {
+            gui.TextColored(_runDirector.ModeDisplayName, 0xFF_E8_D0_6A);
+            _ = _text.Clear()
+                .Append(_runDirector.StateDisplayName)
+                .Append("  Seed ")
+                .Append(_runDirector.RunSeedText);
+            gui.Text(_text.WrittenSpan);
+            _ = _text.Clear()
+                .Append(_runDirector.CurrentRegionDisplayName)
+                .Append("  深度 ")
+                .Append(_runDirector.CurrentDepthCells);
+            gui.Text(_text.WrittenSpan);
+            return;
+        }
+
         if (_mission is not null || _goal is not null)
         {
             uint legacyColor = _goal?.Reached == true ? 0xFF_80_F0_80 : 0xFF_E8_D0_6A;

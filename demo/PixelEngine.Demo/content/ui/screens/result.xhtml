@@ -1,11 +1,11 @@
-<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v1" style="left: 326px; top: 70px; width: 380px; height: 330px">
+<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v2" style="left: 326px; top: 70px; width: 400px; height: 490px">
   <head>
     <style>
       body { margin: 0px; font-family: "Noto Sans SC"; color: #f5f8ff; background-color: transparent; }
-      #result_panel { position: absolute; left: 326px; top: 70px; width: 348px; height: 298px; padding: 16px; background-color: rgba(9, 12, 18, 242); border-width: 1px; border-color: #596d87; }
+      #result_panel { position: absolute; left: 326px; top: 70px; width: 368px; height: 458px; padding: 16px; background-color: rgba(9, 12, 18, 242); border-width: 1px; border-color: #596d87; }
       #result_title { color: #f5c451; font-size: 23px; }
       #result_state { color: #f8fafc; font-size: 18px; }
-      #result_win_hint, #result_loss_hint { color: #b7c3d3; }
+      #result_reason_text, #result_seed_label, #result_seed_text, #result_region_text, #result_depth_label, #result_depth_text, #result_time_label, #result_time_text { color: #b7c3d3; font-size: 12px; }
       progress { position: relative; display: block; width: 286px; height: 14px; margin-top: 4px; background-color: #202b38; border-width: 1px; border-color: #52647c; }
       progress fill { background-color: #d2a642; }
       progress .meter_label { position: absolute; left: 6px; top: -1px; height: 14px; line-height: 14px; color: #f8fafc; font-size: 11px; }
@@ -17,16 +17,22 @@
   </head>
   <body>
     <div id="result_panel">
-      <p id="result_title">会话状态</p>
-      <p id="result_state">继续探索或重新开始</p>
-      <p id="result_win_hint">无限沙盒没有终点与胜利条件。</p>
-      <p id="result_loss_hint">死亡后可回到安全出生区继续探索。</p>
+      <p id="result_title" path="result.title_text">本轮结束 / Run Ended</p>
+      <p id="result_state">运行结算</p>
+      <p id="result_reason_text" path="result.reason_text">永久死亡 / Run ended</p>
+      <p id="result_seed_label">Seed</p>
+      <p id="result_seed_text" path="result.seed_text">0000000000000000</p>
+      <p id="result_region_text" path="result.region_text">碎脉矿层 / Shattered Lode</p>
+      <p id="result_depth_label">最深 cell</p>
+      <p id="result_depth_text" path="result.depth_cells">0</p>
+      <p id="result_time_label">耗时 s</p>
+      <p id="result_time_text" path="result.elapsed_seconds">0</p>
       <progress id="result_won" path="result.won" value="0.0" text="场景状态"><div class="meter_label">场景状态</div></progress>
       <progress id="result_crystals" path="result.crystals" value="0.0" text="探索记录"><div class="meter_label">探索记录</div></progress>
       <progress id="result_time" path="result.time" value="0.0" text="会话时间"><div class="meter_label">会话时间</div></progress>
       <progress id="result_score" path="result.score" value="0.0" text="世界改造"><div class="meter_label">世界改造</div></progress>
       <progress id="result_reason" path="result.reason" value="0.0" text="重生状态"><div class="meter_label">重生状态</div></progress>
-      <button id="result_restart" data-event-click="restart_game">重开</button>
+      <button id="result_restart" data-event-click="restart_game">开始新轮</button>
       <button id="result_quit" data-event-click="quit_game">退出</button>
     </div>
   </body>

@@ -1045,7 +1045,7 @@ public sealed class Engine : IDisposable
                 fallbackReason = $"RmlUi 初始化失败，回退 ManagedFallback：{ex.GetType().Name}: {ex.Message}";
                 activeNativeProfile = null;
                 host.Dispose();
-                backend = CreateManagedFallbackGameUiBackend(window);
+                backend = CreateManagedFallbackGameUiBackend(window, strings);
                 host = new GameUiHost(backend);
                 InitializeGameUiHost(
                     host,
@@ -1160,7 +1160,7 @@ public sealed class Engine : IDisposable
         activeNativeProfile = null;
         if (requestedBackend == UiBackendKind.ManagedFallback)
         {
-            return CreateManagedFallbackGameUiBackend(window);
+            return CreateManagedFallbackGameUiBackend(window, strings);
         }
 
         if (requestedBackend == UiBackendKind.RmlUi)
@@ -1170,6 +1170,7 @@ public sealed class Engine : IDisposable
             {
                 return CreateManagedFallbackGameUiBackend(
                     window,
+                    strings,
                     out fallbackReason,
                     decision.FallbackReason ?? "RmlUi native profile gate 拒绝当前上下文，回退 ManagedFallback。");
             }
@@ -1178,6 +1179,7 @@ public sealed class Engine : IDisposable
             {
                 return CreateManagedFallbackGameUiBackend(
                     window,
+                    strings,
                     out fallbackReason,
                     $"RmlUi native 不可用：{probe.Error ?? "unknown"}。");
             }
@@ -1190,20 +1192,27 @@ public sealed class Engine : IDisposable
         return requestedBackend == UiBackendKind.Ultralight
             ? CreateManagedFallbackGameUiBackend(
                 window,
+                strings,
                 out fallbackReason,
                 UltralightOptionalProfileGate.InactiveReason)
             : throw new ArgumentOutOfRangeException(nameof(requestedBackend), requestedBackend, "未知游戏 UI 后端。");
     }
 
-    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window)
+    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window, UiStringPool strings)
     {
-        return new ManagedFallbackBackend(new GuiAppManagedFallbackHost(ResolveGuiApp(window), window));
+        return new ManagedFallbackBackend(
+            new GuiAppManagedFallbackHost(ResolveGuiApp(window), window),
+            stringResolver: strings);
     }
 
-    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(RenderWindow window, out string? fallbackReason, string reason)
+    private ManagedFallbackBackend CreateManagedFallbackGameUiBackend(
+        RenderWindow window,
+        UiStringPool strings,
+        out string? fallbackReason,
+        string reason)
     {
         fallbackReason = reason;
-        return CreateManagedFallbackGameUiBackend(window);
+        return CreateManagedFallbackGameUiBackend(window, strings);
     }
 
     private static void InitializeGameUiHost(

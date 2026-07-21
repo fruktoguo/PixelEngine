@@ -12,6 +12,7 @@ public sealed class PlayerHealth : Behaviour
     private MaterialId _fire;
     private MaterialId _acid;
     private PlayerVisual? _visual;
+    private CampaignRunDirector? _runDirector;
     private float _hurtCooldown;
     private bool _materialsResolved;
 
@@ -82,6 +83,7 @@ public sealed class PlayerHealth : Behaviour
         ResolveMaterials();
         _ = Entity.TryGetComponent<PlayerController>(out _player);
         _ = Entity.TryGetComponent<PlayerVisual>(out _visual);
+        _ = Entity.TryGetComponent<CampaignRunDirector>(out _runDirector);
     }
 
     /// <inheritdoc />
@@ -283,7 +285,15 @@ public sealed class PlayerHealth : Behaviour
         EmitHurtFeedback();
         if (Health <= 0f)
         {
-            Respawn();
+            if (_runDirector is null)
+            {
+                _ = Entity.TryGetComponent<CampaignRunDirector>(out _runDirector);
+            }
+
+            if (_runDirector?.HandlePlayerDeath() != true)
+            {
+                Respawn();
+            }
         }
     }
 
