@@ -2588,6 +2588,7 @@ public sealed class Engine : IDisposable
         IChunkSource simulationSource = simulationChunks ?? chunks;
         ConfigureMaterialRuntimeBehaviours(materials, particles, temperature, out IReactionExecutor? reactionExecutor, out ILifetimeSink? lifetimeSink);
         MaterialPropsTable props = new(materials.Hot);
+        CellTopologyChangeAccumulator topologyChanges = new();
         RigidDamageQueue damageQueue = ResolveRigidDamageQueue();
         CellGrid grid = new(simulationSource, props, damageQueue);
         SimulationKernel kernel = new(
@@ -2599,13 +2600,21 @@ public sealed class Engine : IDisposable
             lifetimeSink: lifetimeSink,
             customUpdateExecutor: materials,
             profiler: Context.Profiler,
-            cellDestructionSink: particles);
+            cellDestructionSink: particles,
+            cellTopologyChangeSink: topologyChanges);
         if (frameIndex != 0)
         {
             kernel.RestoreFrameState(frameIndex, CurrentParityFromGameTime(frameIndex));
         }
 
-        SimulationPhaseDriver driver = new(simulationSource, grid, kernel, particles, temperature, materials);
+        SimulationPhaseDriver driver = new(
+            simulationSource,
+            grid,
+            kernel,
+            particles,
+            temperature,
+            materials,
+            topologyChanges: topologyChanges);
         driver.RegisterPhases(Phases);
         SimulationEditApi editApi = new(
             kernel,
@@ -2620,6 +2629,7 @@ public sealed class Engine : IDisposable
         Context.RegisterService(kernel);
         Context.RegisterService(particles);
         Context.RegisterService(temperature);
+        Context.RegisterService(topologyChanges);
         Context.RegisterService(new EngineProbeApi(grid, kernel, temperature, materials, particles));
         Context.RegisterService<ISimulationEditApi>(editApi);
         Context.RegisterService<ISimulationInspectApi>(editApi);

@@ -19,11 +19,13 @@ public sealed class SimulationKernel(
     ILifetimeSink? lifetimeSink = null,
     IMaterialCustomUpdateExecutor? customUpdateExecutor = null,
     FrameProfiler? profiler = null,
-    ICellDestructionSink? cellDestructionSink = null)
+    ICellDestructionSink? cellDestructionSink = null,
+    ICellTopologyChangeSink? cellTopologyChangeSink = null)
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private readonly IRigidDamageSink _rigidDamageSink = rigidDamageSink ?? IRigidDamageSink.Null;
     private readonly ICellDestructionSink _cellDestructionSink = cellDestructionSink ?? ICellDestructionSink.Null;
+    private readonly ICellTopologyChangeSink _cellTopologyChangeSink = cellTopologyChangeSink ?? ICellTopologyChangeSink.Null;
     private readonly IReactionExecutor _reactionExecutor = reactionExecutor ?? IReactionExecutor.Null;
     private readonly ILifetimeSink _lifetimeSink = lifetimeSink ?? ILifetimeSink.Null;
     private readonly IMaterialCustomUpdateExecutor _customUpdateExecutor = customUpdateExecutor ?? IMaterialCustomUpdateExecutor.Null;
@@ -151,7 +153,9 @@ public sealed class SimulationKernel(
                     int localStart = CellAddressing.LocalIndexFromLocal(localX, localY);
                     for (int i = 0; i < run; i++)
                     {
-                        NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[localStart + i], materialBuffer[localStart + i]);
+                        ushort sourceMaterial = materialBuffer[localStart + i];
+                        NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[localStart + i], sourceMaterial);
+                        NotifyTopologyChange(runMinX + i, worldY, sourceMaterial, material);
                     }
 
                     materialBuffer.AsSpan(localStart, run).Fill(material);
@@ -179,7 +183,9 @@ public sealed class SimulationKernel(
             return;
         }
 
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.GetMaterialAt(local));
+        ushort sourceMaterial = chunk.GetMaterialAt(local);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], sourceMaterial);
+        NotifyTopologyChange(wx, wy, sourceMaterial, 0);
         chunk.SetMaterialAt(local, 0);
         chunk.FlagsBuffer[local] = 0;
         chunk.LifetimeBuffer[local] = 0;
@@ -233,6 +239,7 @@ public sealed class SimulationKernel(
                         int local = localStart + i;
                         rowChanged |= materialBuffer[local] != 0 || chunk.FlagsBuffer[local] != 0 || chunk.LifetimeBuffer[local] != 0 || chunk.DamageBuffer[local] != 0;
                         NotifyRigidDamageIfNeeded(runMinX + i, worldY, chunk.FlagsBuffer[local], materialBuffer[local]);
+                        NotifyTopologyChange(runMinX + i, worldY, materialBuffer[local], 0);
                     }
 
                     if (!rowChanged)
@@ -274,7 +281,7 @@ public sealed class SimulationKernel(
         Diagnostics.ResetCaIterationRecords();
         AdvanceParity();
         throttlePolicy = throttlePolicy.ForFrame(FrameIndex);
-        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
+        _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, _cellTopologyChangeSink, Diagnostics, Profiler, throttlePolicy);
     }
 
     /// <summary>
@@ -289,11 +296,11 @@ public sealed class SimulationKernel(
         // 确定性 oracle / 调试可强制走单线程，避免 JobSystem 引入调度差异。
         if (ForceSingleThread)
         {
-            _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
+            _scheduler.StepSingleThread(_chunks, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, _cellTopologyChangeSink, Diagnostics, Profiler, throttlePolicy);
             return;
         }
 
-        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, Diagnostics, Profiler, throttlePolicy);
+        _scheduler.Step(_chunks, jobs, MaterialProps, CurrentParity, FrameIndex, WorldSeed, _rigidDamageSink, _reactionExecutor, _lifetimeSink, _customUpdateExecutor, _cellTopologyChangeSink, Diagnostics, Profiler, throttlePolicy);
     }
 
     /// <summary>
@@ -320,6 +327,7 @@ public sealed class SimulationKernel(
         if (material != 0 || flags != 0 || lifetime != 0)
         {
             NotifyRigidDamageIfNeeded(wx, wy, flags, material);
+            NotifyTopologyChange(wx, wy, material, 0);
             chunk.SetMaterialAt(local, 0);
             chunk.FlagsBuffer[local] = 0;
             chunk.LifetimeBuffer[local] = 0;
@@ -635,6 +643,7 @@ public sealed class SimulationKernel(
         int local = CellAddressing.LocalIndex(wx, wy);
         replacedMaterial = chunk.GetMaterialAt(local);
         NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], replacedMaterial);
+        NotifyTopologyChange(wx, wy, replacedMaterial, material);
         chunk.SetMaterialAt(local, material);
         chunk.FlagsBuffer[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
         chunk.LifetimeBuffer[local] = DefaultLifetimeByte(material);
@@ -658,7 +667,9 @@ public sealed class SimulationKernel(
     {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
-        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], chunk.GetMaterialAt(local));
+        ushort sourceMaterial = chunk.GetMaterialAt(local);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], sourceMaterial);
+        NotifyTopologyChange(wx, wy, sourceMaterial, material);
         chunk.SetMaterialAt(local, material);
         chunk.FlagsBuffer[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
         chunk.LifetimeBuffer[local] = DefaultLifetimeByte(material);
@@ -675,7 +686,27 @@ public sealed class SimulationKernel(
         chunk.LifetimeBuffer[local] = DefaultLifetimeByte(rubbleTarget);
         chunk.DamageBuffer[local] = 0;
         MarkDamageDirty(wx, wy);
+        NotifyTopologyChange(wx, wy, sourceMaterial, rubbleTarget);
         NotifyCellDestroyed(wx, wy, sourceMaterial, rubbleTarget);
+    }
+
+    private void NotifyTopologyChange(int wx, int wy, ushort sourceMaterial, ushort targetMaterial)
+    {
+        if (sourceMaterial == targetMaterial)
+        {
+            return;
+        }
+
+        CellTopologyChangeKind kind = CellTopologyChangeClassifier.Classify(
+            MaterialProps.TypeOf(sourceMaterial),
+            MaterialProps.TypeOf(targetMaterial));
+        if (kind == CellTopologyChangeKind.None)
+        {
+            return;
+        }
+
+        CellTopologyChangeEvent item = new(wx, wy, sourceMaterial, targetMaterial, kind);
+        _cellTopologyChangeSink.OnCellTopologyChanged(in item);
     }
 
     private void NotifyCellDestroyed(int wx, int wy, ushort sourceMaterial, ushort targetMaterial)

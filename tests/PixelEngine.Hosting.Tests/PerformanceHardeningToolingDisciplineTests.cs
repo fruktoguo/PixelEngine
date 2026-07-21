@@ -7382,7 +7382,7 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("FindFirstOccupiedInColumn", chunk, StringComparison.Ordinal);
         Assert.Contains("_columnOccupancyValid = false;", chunk, StringComparison.Ordinal);
 
-        Assert.Contains("NeighborWindow window = new(chunk.Coord, in neighborhood);", updater, StringComparison.Ordinal);
+        Assert.Contains("NeighborWindow window = new(chunk.Coord, in neighborhood, materials, topologyChangeSink);", updater, StringComparison.Ordinal);
         Assert.Contains("ref ushort materialBase = ref chunk.GetMaterialBase();", updater, StringComparison.Ordinal);
         Assert.Contains("ref byte flagsBase = ref chunk.GetFlagsBase();", updater, StringComparison.Ordinal);
         Assert.Contains("ref byte lifetimeBase = ref chunk.GetLifetimeBase();", updater, StringComparison.Ordinal);

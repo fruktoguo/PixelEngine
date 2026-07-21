@@ -400,11 +400,13 @@ public sealed class TemperatureField
     /// <param name="materials">材质注册表。</param>
     /// <param name="parityBit">当前 CA parity 位。</param>
     /// <param name="rigidDamageSink">刚体占用 cell 相变时接收 damage 事件的可选 sink。</param>
+    /// <param name="topologyChangeSink">相变改变 Solid 占用时接收通知的可选 sink。</param>
     public void ApplyPhaseTransitions(
         IChunkSource chunks,
         MaterialTable materials,
         byte parityBit,
-        IRigidDamageSink? rigidDamageSink = null)
+        IRigidDamageSink? rigidDamageSink = null,
+        ICellTopologyChangeSink? topologyChangeSink = null)
     {
         ArgumentNullException.ThrowIfNull(chunks);
         ArgumentNullException.ThrowIfNull(materials);
@@ -414,6 +416,7 @@ public sealed class TemperatureField
         }
 
         MaterialHotTable hot = materials.Hot;
+        ICellTopologyChangeSink topologySink = topologyChangeSink ?? ICellTopologyChangeSink.Null;
         foreach (Chunk chunk in chunks.ResidentChunks)
         {
             if (!chunks.IsSimulationActive(chunk.Coord))
@@ -454,6 +457,15 @@ public sealed class TemperatureField
                     }
 
                     chunk.SetMaterialAt(local, target);
+                    CellTopologyChangeKind topologyKind = CellTopologyChangeClassifier.Classify(
+                        hot.Type[material],
+                        hot.Type[target]);
+                    if (topologyKind != CellTopologyChangeKind.None)
+                    {
+                        CellTopologyChangeEvent item = new(baseX + lx, wy, material, target, topologyKind);
+                        topologySink.OnCellTopologyChanged(in item);
+                    }
+
                     chunk.LifetimeBuffer[local] = DefaultLifetimeByte(hot, target);
                     chunk.FlagsBuffer[local] = CellFlags.SetParity(flags, parityBit);
                     chunk.DamageBuffer[local] = 0;

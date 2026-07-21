@@ -22,6 +22,7 @@ internal static class ChunkUpdater
         IReactionExecutor reactionExecutor,
         ILifetimeSink lifetimeSink,
         IMaterialCustomUpdateExecutor customUpdateExecutor,
+        ICellTopologyChangeSink topologyChangeSink,
         SimulationDiagnostics diagnostics)
     {
         DirtyRect rect = chunk.CurrentDirty;
@@ -31,7 +32,7 @@ internal static class ChunkUpdater
         }
 
         // 以 3x3 邻域窗口读写，跨界移动/反应恒落在 32px halo 内。
-        NeighborWindow window = new(chunk.Coord, in neighborhood);
+        NeighborWindow window = new(chunk.Coord, in neighborhood, materials, topologyChangeSink);
         Pcg32 rng = RngFactory.ForChunk(worldSeed, chunk.Coord.X, chunk.Coord.Y, frameIndex);
         int worldBaseX = chunk.Coord.X << EngineConstants.ChunkSizeLog2;
         int worldBaseY = chunk.Coord.Y << EngineConstants.ChunkSizeLog2;

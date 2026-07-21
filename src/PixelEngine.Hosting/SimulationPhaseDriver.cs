@@ -16,6 +16,7 @@ namespace PixelEngine.Hosting;
 /// <param name="temperature">温度场。</param>
 /// <param name="materials">材质注册表。</param>
 /// <param name="scriptContext">可选脚本 Simulation 上下文；提供时在相位安全窗口 flush 脚本命令。</param>
+/// <param name="topologyChanges">与 Kernel/Temperature 共用的固体拓扑变化累加器。</param>
 public sealed class SimulationPhaseDriver(
     IChunkSource chunks,
     CellGrid grid,
@@ -23,12 +24,15 @@ public sealed class SimulationPhaseDriver(
     ParticleSystem particles,
     TemperatureField temperature,
     MaterialTable materials,
-    ScriptSimulationContext? scriptContext = null) : IEnginePhaseDriver
+    ScriptSimulationContext? scriptContext = null,
+    CellTopologyChangeAccumulator? topologyChanges = null) : IEnginePhaseDriver
 {
     private const int DistantThrottleFullRatePaddingChunks = 1;
 
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private ScriptSimulationContext? _scriptContext = scriptContext;
+    private WorldMutationEvent _pendingTopologyMutation;
+    private bool _hasPendingTopologyMutation;
 
     /// <summary>
     /// 世界 cell 访问门面。
@@ -56,12 +60,22 @@ public sealed class SimulationPhaseDriver(
     public MaterialTable Materials { get; } = materials ?? throw new ArgumentNullException(nameof(materials));
 
     /// <summary>
+    /// 并行 Simulation 写入与脚本事件之间的固体拓扑区域累加器。
+    /// </summary>
+    public CellTopologyChangeAccumulator TopologyChanges { get; } = topologyChanges ?? new CellTopologyChangeAccumulator();
+
+    /// <summary>
     /// 绑定脚本 Simulation 上下文，使脚本命令在对应 Simulation 相位安全落地。
     /// </summary>
     /// <param name="scriptContext">脚本 Simulation 上下文。</param>
     public void AttachScriptContext(ScriptSimulationContext scriptContext)
     {
-        _scriptContext = scriptContext ?? throw new ArgumentNullException(nameof(scriptContext));
+        ArgumentNullException.ThrowIfNull(scriptContext);
+        // 程序化世界 Populate 可能早于脚本装配；订阅建立前的初始填充不是 gameplay 拓扑事件。
+        _ = TopologyChanges.TryDrain(out _);
+        _pendingTopologyMutation = default;
+        _hasPendingTopologyMutation = false;
+        _scriptContext = scriptContext;
     }
 
     /// <summary>
@@ -97,14 +111,65 @@ public sealed class SimulationPhaseDriver(
     // 相位 5：热传导与相变；步进间隔由过载策略通过 TemperatureField.SetStepInterval 控制。
     private void RunTemperature(EngineTickContext context)
     {
-        if (!Temperature.ShouldRun(Kernel.FrameIndex))
+        if (Temperature.ShouldRun(Kernel.FrameIndex))
+        {
+            Temperature.ConductStep(_chunks, Materials.Hot, context.Context.Jobs, Kernel.FrameIndex, unchecked((uint)Kernel.WorldSeed));
+            IRigidDamageSink? rigidDamageSink = context.Context.TryGetService(out RigidDamageQueue queue) ? queue : null;
+            Temperature.ApplyPhaseTransitions(_chunks, Materials, Kernel.CurrentParity, rigidDamageSink, TopologyChanges);
+        }
+
+        PublishTopologyMutation();
+    }
+
+    private void PublishTopologyMutation()
+    {
+        if (TopologyChanges.TryDrain(out CellTopologyChangeRegion region))
+        {
+            WorldMutationEvent mutation = new(
+                region.MinX,
+                region.MinY,
+                ToExclusive(region.MaxX),
+                ToExclusive(region.MaxY),
+                WorldMutationKind.SolidTopology);
+            _pendingTopologyMutation = _hasPendingTopologyMutation
+                ? Merge(_pendingTopologyMutation, mutation)
+                : mutation;
+            _hasPendingTopologyMutation = true;
+        }
+
+        if (!_hasPendingTopologyMutation)
         {
             return;
         }
 
-        Temperature.ConductStep(_chunks, Materials.Hot, context.Context.Jobs, Kernel.FrameIndex, unchecked((uint)Kernel.WorldSeed));
-        IRigidDamageSink? rigidDamageSink = context.Context.TryGetService(out RigidDamageQueue queue) ? queue : null;
-        Temperature.ApplyPhaseTransitions(_chunks, Materials, Kernel.CurrentParity, rigidDamageSink);
+        ScriptSimulationContext? scripts = _scriptContext;
+        if (scripts is null)
+        {
+            _pendingTopologyMutation = default;
+            _hasPendingTopologyMutation = false;
+            return;
+        }
+
+        if (scripts.Events.TryPublish(in _pendingTopologyMutation))
+        {
+            _pendingTopologyMutation = default;
+            _hasPendingTopologyMutation = false;
+        }
+    }
+
+    private static int ToExclusive(int inclusive)
+    {
+        return inclusive == int.MaxValue ? int.MaxValue : inclusive + 1;
+    }
+
+    private static WorldMutationEvent Merge(in WorldMutationEvent left, in WorldMutationEvent right)
+    {
+        return new WorldMutationEvent(
+            Math.Min(left.MinX, right.MinX),
+            Math.Min(left.MinY, right.MinY),
+            Math.Max(left.MaxXExclusive, right.MaxXExclusive),
+            Math.Max(left.MaxYExclusive, right.MaxYExclusive),
+            left.Kinds | right.Kinds);
     }
 
     // 相位 6：交换 dirty rectangle 双缓冲，为下一 tick 的 CA 读写分离做准备。

@@ -2309,6 +2309,41 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证引擎确认的 SolidTopology 事件会触发 Demo 有界坍塌扫描，而不依赖武器脚本先验半径。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileToolQueuesCollapseScanForAutonomousSolidTopologyMutation()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out _,
+            out _,
+            out ScriptScene scene,
+            materials);
+        Entity entity = scene.CreateEntity();
+        Transform transform = entity.AddComponent<Transform>();
+        transform.SetPosition(24f, 32f);
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.InputEnabled = false;
+        projectile.TrackWorldMutations = true;
+        engine.RunHeadlessTicks(2);
+        ScriptSimulationContext scripts = engine.Context.GetService<ScriptSimulationContext>();
+        WorldMutationEvent mutation = new(
+            MinX: 80,
+            MinY: 96,
+            MaxXExclusive: 112,
+            MaxYExclusive: 120,
+            WorldMutationKind.SolidTopology);
+
+        Assert.True(scripts.Events.TryPublish(in mutation));
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, projectile.WorldMutationEventsReceived);
+        Assert.True(projectile.PendingCollapseScanRadius >= 24);
+    }
+
+    /// <summary>
     /// 验证持续激光命中火花经 Emit 发射后活跃数量有界，停火后短寿命火花会退场。
     /// </summary>
     [Fact]

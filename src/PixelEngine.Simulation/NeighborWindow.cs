@@ -18,6 +18,8 @@ public ref struct NeighborWindow
     private readonly Chunk _chunk6;
     private readonly Chunk _chunk7;
     private readonly Chunk _chunk8;
+    private readonly MaterialPropsTable? _materialProps;
+    private readonly ICellTopologyChangeSink? _topologyChangeSink;
 
     private ref ushort _matBase0;
     private ref ushort _matBase1;
@@ -83,6 +85,8 @@ public ref struct NeighborWindow
         _chunk6 = neighborhood.Slot6;
         _chunk7 = neighborhood.Slot7;
         _chunk8 = neighborhood.Slot8;
+        _materialProps = null;
+        _topologyChangeSink = null;
 
         _matBase0 = ref neighborhood.Slot0.GetMaterialBase();
         _matBase1 = ref neighborhood.Slot1.GetMaterialBase();
@@ -130,7 +134,13 @@ public ref struct NeighborWindow
     /// </summary>
     /// <param name="center">中心 chunk 坐标。</param>
     /// <param name="neighborhood">完整驻留的 3x3 邻域。</param>
-    public NeighborWindow(ChunkCoord center, in ChunkNeighborhood neighborhood)
+    /// <param name="materialProps">可选材质热属性；与 topology sink 同时提供时跟踪 Solid 占用变化。</param>
+    /// <param name="topologyChangeSink">可选固体拓扑变化 sink。</param>
+    public NeighborWindow(
+        ChunkCoord center,
+        in ChunkNeighborhood neighborhood,
+        MaterialPropsTable? materialProps = null,
+        ICellTopologyChangeSink? topologyChangeSink = null)
     {
         BaseChunkX = center.X;
         BaseChunkY = center.Y;
@@ -144,6 +154,8 @@ public ref struct NeighborWindow
         _chunk6 = neighborhood.Slot6;
         _chunk7 = neighborhood.Slot7;
         _chunk8 = neighborhood.Slot8;
+        _materialProps = materialProps;
+        _topologyChangeSink = topologyChangeSink;
 
         _matBase0 = ref neighborhood.Slot0.GetMaterialBase();
         _matBase1 = ref neighborhood.Slot1.GetMaterialBase();
@@ -247,6 +259,7 @@ public ref struct NeighborWindow
         int slot = SlotOf(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
         ref ushort material = ref Unsafe.Add(ref SelectMaterialBase(slot), local);
+        ushort previous = material;
         bool wasOccupied = material != 0;
         material = value;
         bool isOccupied = value != 0;
@@ -256,6 +269,27 @@ public ref struct NeighborWindow
         }
 
         Unsafe.Add(ref SelectDamageBase(slot), local) = 0;
+        NotifyTopologyChange(wx, wy, previous, value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private readonly void NotifyTopologyChange(int wx, int wy, ushort sourceMaterial, ushort targetMaterial)
+    {
+        if (sourceMaterial == targetMaterial || _materialProps is null || _topologyChangeSink is null)
+        {
+            return;
+        }
+
+        CellTopologyChangeKind kind = CellTopologyChangeClassifier.Classify(
+            _materialProps.TypeOf(sourceMaterial),
+            _materialProps.TypeOf(targetMaterial));
+        if (kind == CellTopologyChangeKind.None)
+        {
+            return;
+        }
+
+        CellTopologyChangeEvent item = new(wx, wy, sourceMaterial, targetMaterial, kind);
+        _topologyChangeSink.OnCellTopologyChanged(in item);
     }
 
     /// <summary>

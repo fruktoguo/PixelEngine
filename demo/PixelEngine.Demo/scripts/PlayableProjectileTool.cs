@@ -373,7 +373,8 @@ public sealed class PlayableProjectileTool : Behaviour
         const WorldMutationKind topologyKinds =
             WorldMutationKind.CellRemoval |
             WorldMutationKind.Damage |
-            WorldMutationKind.Heat;
+            WorldMutationKind.Heat |
+            WorldMutationKind.SolidTopology;
         if (item.Width == 0 || item.Height == 0 || (item.Kinds & topologyKinds) == 0)
         {
             return;
