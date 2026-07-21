@@ -9,8 +9,15 @@
 PixelEngine 是一个自研的、对标 Noita 世界模拟的高性能 2D 像素游戏引擎，配一个在引擎之上开发的落沙游戏 Demo。
 
 - **引擎**（`src/PixelEngine.*`）：可复用、无玩法的内核。全像素 falling-sand 细胞自动机、自由粒子、像素级精确碰撞、刚体、材质反应、生命周期、渲染、音频、脚本系统、内嵌编辑器。
-- **Demo**（`demo/PixelEngine.Demo`）：一个具体游戏，**只依赖引擎的公开 API**，关系等同「Unity 游戏之于 Unity 引擎」。Demo 是引擎公开 API 的 dogfood 验证——若 Demo 需要某能力却只能靠引擎内部类实现，说明引擎 API 设计有缺陷，必须修引擎而非在 Demo 里开后门。
+- **Demo**（`demo/PixelEngine.Demo`）：一个以《Noita》为高保真参考目标的演示游戏，**只依赖引擎的公开 API**，关系等同「Unity 游戏之于 Unity 引擎」。Demo 可以复现参考游戏公开可观察的流程、地图拓扑、UI 信息架构、法杖/法术规则、敌人角色、材料交互与平衡语义；这些 Noita 专属内容必须全部留在 `demo/PixelEngine.Demo` 的脚本和数据中，不得进入通用引擎。Demo 是引擎公开 API 的 dogfood 验证——若 Demo 需要某能力却只能靠引擎内部类实现，说明引擎 API 设计有缺陷，必须修引擎而非在 Demo 里开后门。
 - **权威设计**：`docs/PixelEngine-架构与需求设计.md`（19 章，带置信度标注）。所有 plan 与实现以它为技术依据；plan 条目大量引用其 `§x.y` 章节号。
+
+### 0.1 Noita 复刻 Demo 边界
+
+- 产品授权（2026-07-22）：Showcase Demo 的目标由“原创 Noita-like 战役”调整为“尽可能完整、忠实的 Noita 复刻”；流程、名称、主路径区域、Holy Mountain、法杖/法术语义、敌人/物品角色、HUD/库存布局和可观察数值都可作为 parity 目标。
+- **引擎与内容严格分离**：`src/PixelEngine.*` 仍是无玩法、可复用内核，不得出现 Noita 专属法术、敌人、区域、剧情或 UI 类型。通用缺口以公开 API、数据 schema 或安全相位命令补齐，再由 Demo 消费。
+- **复刻不等于外部运行时依赖**：正式仓库与玩家包不得依赖本机 Noita 安装、读取其进程内存或在构建时抽取外部二进制资源。进入仓库的美术、字体、音频、文本和数据必须在 `demo/PixelEngine.Demo` 内可独立构建，并记录来源或生成方式；用户明确提供的资产也必须进入同一 provenance 清单。
+- **先行为后目录数量**：优先闭合主循环、地图拓扑、法杖求值、敌人压力、Holy Mountain、UI 和永久死亡；不得用大量未接线法术、敌人或图标冒充复刻完成度。parity 结论必须绑定真实 Editor/Player 画面、输入和状态证据。
 
 ---
 

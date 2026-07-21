@@ -1,139 +1,159 @@
-# PixelEngine 原创像素 Roguelite 战役设计
+# PixelEngine Noita 高保真复刻 Demo 设计
 
-> 状态：2026-07-21 产品定稿。本文是 Showcase Demo 从无限沙盒扩展为完整战役的权威产品设计；技术不变式仍以 `PixelEngine-架构与需求设计.md` 为准，执行状态只以 `plan/tasks/` 为准。
+> 状态：2026-07-22 产品转向定稿。文件名为历史兼容；本文是 Showcase Demo 从原创 Noita-like 战役调整为 Noita 高保真复刻后的权威产品设计。技术不变式仍以 `PixelEngine-架构与需求设计.md` 为准，执行状态只以 `plan/tasks/` 为准。
 >
-> 参考边界：借鉴《Noita》的公开玩法结构，不复制其品牌、名称、地图、剧情、角色、敌人、法术文本、数值、美术、音频或其他专有表达。
+> 分层边界：`src/PixelEngine.*` 始终是通用、无玩法的引擎；Noita 专属名称、流程、地图、Wand/Spell、敌人、Perk、UI 和平衡数据只能存在于 `demo/PixelEngine.Demo`，并且只能经引擎公开 API 驱动。
 
-## 1. 参考事实与采用范围
+## 1. 复刻目标与事实来源
 
-Nolla Games 的官方页面和 Steam 商店页把《Noita》的核心描述为：全像素物理世界、程序化生成、玩家自行组合的法术、向更深处探索多种环境，以及永久死亡后用知识推进下一次冒险。
+本 Demo 的目标是尽可能完整、忠实地复现《Noita》公开可观察的游戏体验，而不再只抽象借鉴其结构。复刻对象包括：
 
-实际游戏主路径的区域顺序、层间安全区和终局触发细节并未由官方产品页完整列成攻略。本文仅把社区 Wiki 的实机流程整理用于确认结构：地表起步，向下经过八个主路径区域；区域之间存在提供恢复、补给、商店、构筑和被动选择的安全枢纽；最终区域触发 Boss 与普通结局，同时世界保留侧区、捷径和替代路线。
+- Mountain 地表起步、向下探索、八个主路径 biome、七个 Holy Mountain、The Laboratory、Kolmisilma、Sampo、死亡与下一轮；
+- Wand/Spell 的牌组求值语义、法杖属性、库存编辑、Spell refresh、商店和 Perk；
+- 敌人角色、金币、掉落、药水、stain/status、材料识别、地形破坏和环境反应；
+- HUD、快捷栏、库存、Wand 编辑、拾取提示、商店、Perk、暂停和死亡结算的信息层级、布局密度与操作节奏；
+- 主路径、侧区、秘密连接、地表区域、平行世界与后续 New Game+ 的世界拓扑语义。
 
-参考来源：
+参考来源按可信度使用：官方页面和公开演示定义产品意图与视觉基线；社区 Wiki 用于核对可观察流程、目录、数值和边界；最终行为必须以实际参考游戏画面与输入复核，不靠记忆补细节。
 
 - Noita 官方页面：<https://noitagame.com/>
-- Noita Steam 商店页：<https://store.steampowered.com/app/881100/Noita/>
-- 社区 Wiki 主路径区域：<https://noita.wiki.gg/wiki/Biomes>
-- 社区 Wiki 层间安全区：<https://noita.wiki.gg/wiki/Holy_Mountain>
-- 社区 Wiki 终局区域：<https://noita.wiki.gg/wiki/The_Laboratory>
-- 社区 Wiki 法杖、法术与被动结构：<https://noita.wiki.gg/wiki/Wands>、<https://noita.wiki.gg/wiki/Spells>、<https://noita.wiki.gg/wiki/Perks>
+- 基础流程：<https://noita.wiki.gg/wiki/Guide:_How_to_Play>
+- Biomes：<https://noita.wiki.gg/wiki/Biomes>
+- Holy Mountain：<https://noita.wiki.gg/wiki/Holy_Mountain>
+- Wands / Wand Mechanics：<https://noita.wiki.gg/wiki/Wands>、<https://noita.wiki.gg/wiki/Guide:_Wand_Mechanics>
+- Spells / Perks / Enemies / Materials：<https://noita.wiki.gg/wiki/Spells>、<https://noita.wiki.gg/wiki/Perks>、<https://noita.wiki.gg/wiki/Enemies>、<https://noita.wiki.gg/wiki/Materials>
 
-采用的是以下抽象流程，而不是具体内容复刻：
+复刻完成度由版本化 parity matrix 管理。每一项必须记录 reference、PixelEngine 实现、自动化断言、真实 Player 证据和差异说明；“看起来差不多”或只有目录项不算完成。
+
+正式仓库和玩家包不得依赖本机 Noita 安装、运行时读取其进程或构建时抽取外部二进制资源。进入仓库的资产必须可独立构建，并在 provenance 清单中记录来源、生成方式或用户提供记录。
+
+## 2. 核心游戏流程
+
+默认流程固定为：
 
 ```text
-地表准备
-  -> 向下探索高风险程序化区域
-  -> 搜集资源、构筑装备、寻找出口
-  -> 进入层间安全枢纽恢复/交易/编辑/选择能力
-  -> 更深区域与更高风险
-  -> 终局遗迹与 Boss
-  -> 结算或永久死亡
-  -> 以新 seed 开始下一轮
+Main Menu
+  -> Mountain / 初始 Wand 与 Flask
+  -> Biome 探索、战斗、金币、Wand/Spell/物品搜集
+  -> Portal
+  -> Holy Mountain：恢复、Spell refresh、购买、Wand 编辑、Perk
+  -> 更深 Biome
+  -> The Laboratory / Sampo / Kolmisilma
+  -> 胜利、死亡或后续世界路线
+  -> Run Summary
+  -> 新 seed 开始下一轮
 ```
 
-## 2. 产品模式
+游戏性来自三个同时闭合的循环：
 
-Demo 保留两种正式模式，共用同一引擎、角色、材质、世界流送与内容系统：
+1. **秒级循环**：移动、有限悬浮、瞄准、施法、换 Wand/物品、喷洒/投掷 Flask、踢击和利用材料。
+2. **区域循环**：探索未知空间，在生命不可随意恢复的压力下对抗敌人、搜集金币和构筑资源，并决定继续冒险还是进入 Portal。
+3. **整局循环**：Holy Mountain 把恢复、消费、构筑和 Perk 选择集中成阶段性决策；永久死亡清空本轮资源，玩家主要以知识和解锁推进。
 
-1. **Campaign / 深潜战役**：默认产品模式。具备主路径、层间枢纽、构筑、敌人、Boss、结算和永久死亡；每一轮使用独立 run seed。
-2. **Infinite Sandbox / 无限沙盒**：保留 `DEMO-006` 的无终点模式。玩家可持续探索和改造世界，死亡在安全区重生，不进入战役结算。
+`InfiniteSandbox` 继续作为独立引擎展示模式存在，不改变 Campaign 的永久死亡和结算语义。
 
-战役不是把无限世界改回固定关卡。世界仍按全局坐标和 seed 逐 chunk 生成、向任意水平方向流送；战役只在纵深方向增加确定性的区域带、主路径锚点和层间枢纽。玩家可以横向离开主路径进入无限侧区，也可以发现连接非相邻区域的捷径。
+## 3. 世界与地图拓扑
 
-## 3. 原创世界流程
+主路径使用 Noita 的八个 biome 身份与顺序：
 
-战役从 `风蚀地表 / Windscar Surface` 开始，主路径使用八个原创纵深区域。名称只定义产品身份，地形仍由参数化生成器创建，不使用手工复制地图。
+| 顺序 | Biome | 主要玩法压力 |
+|---|---|---|
+| 1 | Mines | 基础材料教学、火、爆炸物、早期敌人和首次 Wand 选择 |
+| 2 | Coal Pits | 可燃煤层、密集洞穴、Fungal Caverns 侧区与更高构筑收益 |
+| 3 | Snowy Depths | 开阔垂直空间、远程敌人、冰雪材料与返回上层的路线关系 |
+| 4 | Hiisi Base | 人工结构、门廊、密集远程火力、爆炸物与机械危险 |
+| 5 | Underground Jungle | 高生物量、毒与酸、近距离包围、坚韧敌人与高阶 Wands |
+| 6 | The Vault | 高能材料、机械结构、危险反应和高密度混合敌群 |
+| 7 | Temple of the Art | 坚硬结构、黑暗、传送与高阶法术威胁 |
+| 8 | The Laboratory | Sampo、Kolmisilma、终局战斗和结局入口 |
 
-| 顺序 | 区域 | 主要环境语义 | 主要玩法压力 |
-|---|---|---|---|
-| 1 | 碎脉矿层 / Shattered Lode | 松散土石、煤尘、浅水和木支撑 | 基础移动、开路、火与坍塌 |
-| 2 | 余烬菌谷 / Ember Fungal Reach | 菌落、油、毒性孢子和余火 | 可燃链、气体、狭窄侧洞 |
-| 3 | 霜降深谷 / Frostfall Chasm | 冰、雪、蒸汽和垂直裂谷 | 低摩擦、冻结/融化、远程威胁 |
-| 4 | 铸炉堡垒 / Ironworks Bastion | 金属结构、机械门、熔融物 | 刚体、导电、火力密度 |
-| 5 | 根海雨林 / Rootsea Wilds | 根系、积水、酸液和高生物量 | 视野、腐蚀、包围与再生 |
-| 6 | 反应穹库 / Reactive Vault | 高能材料、密闭管路、反应池 | 连锁反应、材料识别、精确构筑 |
-| 7 | 失序神殿 / Null Temple | 低光、传送异常、坚硬结构 | 路线判断、构筑完整性、高阶敌人 |
-| 8 | 源核实验庭 / Origin Crucible | 终局桥区、能量槽和源核装置 | Boss、多阶段场地反应、结算选择 |
+区域 1 到 7 的 Portal 后进入 Holy Mountain。Holy Mountain 包含完整恢复、Spell refresher、Spell/Wand 商店、Wand 编辑、Perk altar、reroll、训练雕像、水池、出口坍塌及破坏保护区的后果。它不是普通菜单房间，所有设施必须作为真实世界对象和权威 run state 交互。
 
-区域 1 到 7 的出口后连接 `静界锻台 / Still Forge`。锻台是完整的层间安全枢纽：恢复生命、补充施法资源、购买或回收物品、编辑导器与符式、选择一项能力烙印，然后进入下一层。它不是不可破坏的剧情房间；保护、离开和破坏的后果由统一世界规则表达。
+世界生成采用 PixelEngine 的 chunk/seed 基础设施复现参考游戏的 Wang-tile + authored pixel-scene 观感：主路径始终可达，局部结构、地标、商店、宝箱、Portal、危险材料和遭遇点由 seed 决定；同 seed 初态与加载顺序无关。地表、侧区、秘密连接、捷径与 parallel worlds 按 parity 阶段逐步纳入，不得用一条纯垂直噪声走廊冒充地图复刻。
 
-## 4. Run 状态与确定性
+原 `Shattered Lode` 等八个原创区域名只作为旧存档/测试迁移 alias 保留，不再作为默认玩家可见内容。
 
-战役状态机固定为：
+## 4. Run 状态与生命周期
+
+Campaign 状态机固定为：
 
 ```text
 MainMenu
   -> StartingRun
-  -> Exploring <-> StillForge
-  -> Finale
+  -> Exploring <-> HolyMountain
+  -> Laboratory
   -> Completed -> RunSummary -> StartingRun
   -> Dead      -> RunSummary -> StartingRun
 ```
 
-- `RunSeed` 决定初始 chunk、区域布局、枢纽库存、掉落、敌人和能力候选；相同 seed 的初始内容可复现。
-- 实时 CA 与多线程物理仍允许按架构 §6 非 bit 级确定；战役逻辑不得宣称完整回放确定性。
-- run state 记录当前模式、seed、区域、深度、货币、生命、导器/符式、能力、Boss/结算状态和统计。
-- Campaign 死亡结束当前 run。新一轮必须换 seed、清理运行时世界/刚体/实体/UI，并恢复合法初始装备；不得只把玩家传回原点继续旧世界。
-- Sandbox 死亡沿用安全出生区重生，且不出现 Campaign 的 Boss/结算要求。
-- 在引入正式跨进程继续游戏前，run snapshot 只能作为同一运行时的安全重开基线，不能冒充完整存档能力。
+- `RunSeed` 决定初始世界、商店、掉落、敌人、Perk 候选和 shuffle；相同 seed 的初始内容可复现。
+- 实时 CA 与多线程 physics 仍允许非 bit 级确定，不宣称完整 replay determinism。
+- run state 记录 seed、biome、深度、生命、金币、四个 Wand、四个 item、Spell、Perk、Orb/quest 状态、Boss/结局状态和统计。
+- Campaign 死亡必须以新 seed 原子替换 world/script/entity/UI/physics/particle/audio/event 生命周期；不得只传送玩家继续旧世界。
+- Sandbox 死亡沿用安全出生区重生，不进入 Campaign 结算。
 
-## 5. 构筑系统
+## 5. Wand / Spell 系统
 
-原创构筑使用 `导器 / Conduit` 与 `符式 / Glyph` 术语。导器是有序施法容器，符式分为投射、修饰、触发、材料、移动和实用类别。
+Wand 是有序或 shuffle 的 Spell 容器，完整属性至少包括：Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast 和 projectile speed multiplier。
 
-完整系统必须具备：
+求值器必须复现以下语义：
 
-- 导器容量、施法延迟、充能时间、能量上限、能量恢复、扩散、顺序/扰序语义；
-- 符式按槽位从左到右求值，修饰符只影响当前 cast state，触发符式可开启有界子序列；
-- 求值有明确最大操作数、递归深度、投射物和世界效果预算，恶意组合不能挂死主循环；
-- 稳态施法零托管分配，使用预分配 command buffer；所有世界写入经公开延迟命令 API 在安全相位执行；
-- 内容由稳定字符串键入盘，运行时数值 id 只作索引；加载期校验引用、循环、预算和 schema；
-- 编辑、拾取、丢弃、购买、换装和 HUD 都走公开脚本/UI API；Demo 不引用 Simulation/Physics 内部类型。
+- non-shuffle 从左到右抽取，deck 耗尽后 recharge；shuffle 按 run RNG 产生可复现抽取顺序；
+- projectile modifier 改变当前 cast state 并继续抽取目标 Spell；multicast 增加当前 cast 的 draw；
+- trigger、timer 和 death trigger 建立有界 payload 子序列；Spell 可修改 mana、cast delay、recharge、spread、damage、speed、lifetime 和材料效果；
+- limited-use、passive、utility、material、summon、teleport 和特殊 draw 行为进入同一版本化 catalog；
+- evaluator 对 draw 次数、递归深度、payload、projectile 和 world effect 设硬预算，fail-closed；稳态 cast 零托管分配，使用预分配 command buffer；
+- 所有世界写入只经公开延迟命令 API 在安全相位执行。
 
-这是一套有限但完整、可继续扩展的原创规则系统。首批内容必须覆盖各类别和组合行为，但不以复制《Noita》的具体法术目录或数值为目标。
+库存支持四个 Wand 与四个 item，具备拾取、交换、拖放、丢弃、Spell 移动、Wand 编辑限制、Holy Mountain/Perk 例外和存取。UI 必须让玩家看到 Spell 顺序、Wand stats、mana/cast/recharge 实时状态和每个 Spell 的效果说明。
 
-## 6. 敌人、经济与枢纽
+## 6. 敌人、经济、材料与 Holy Mountain
 
-- 敌人是稀疏 gameplay entities，不进入 cell 热数据，也不向引擎内核引入通用 ECS。
-- 移动与碰撞走公开角色/刚体/世界查询 API；攻击效果走与玩家相同的投射、爆炸、材料和状态命令。
-- 每个区域有原创敌人族群、危险材料组合和遭遇预算；流送卸载后只持久化必要状态，常驻实体数受硬预算约束。
-- 货币、导器、符式、消耗品和能力候选都由 run seed 生成；商店价格与重抽规则数据驱动。
-- `Still Forge` 完整提供恢复、补给、买卖、构筑编辑和三选一能力烙印。每次选择立即写入 run state，未选项关闭；不存在未接线按钮或只改 UI 的假交易。
+- 每个 biome 按参考敌人角色和遭遇密度建立数据目录：地面/飞行、近战/远程、爆炸、召唤、机械、法师、Boss 与 faction/friendly-fire 关系。
+- 玩家与敌人共享伤害、projectile、explosion、status、stain、材料和世界效果合同；敌人尸体、血液、火、毒、酸与电必须进入材料世界，而不是只播动画。
+- 敌人掉落金币；金币消失节奏、拾取风险、商店价格、Spell/Wand tier、chest、Flask 和 Perk 候选由 run seed 与 biome tier 决定。
+- 材料必须通过准星/hover 名称、Flask 标签、stain/status 图标和说明被玩家识别；不能要求玩家从颜色猜用途。
+- Holy Mountain 完整提供恢复、Spell refresh、购买、Wand 编辑、Perk 三选一、reroll、出口坍塌及保护区破坏后果。所有交互立即写入权威 run state，不存在未接线按钮或假交易。
 
-## 7. 终局与下一轮
+## 7. UI parity
 
-`Origin Crucible` 包含原创源核装置和多阶段 Boss。玩家主动取用源核后锁定遭遇；Boss 攻击必须真实修改材料、投射物、场地和玩家状态。胜利后进入结算选择：完成当前战役，或在满足明确条件时带着规则修正进入下一轮。
+UI 使用 PixelEngine Web-first 透明 Canvas 实现，但目标是复现 Noita 的信息密度和布局节奏，而不是沿用当前两个大型诊断面板。
 
-普通完成、永久死亡和下一轮都必须：
+- Gameplay HUD：生命/最大生命、金币、有限悬浮、选中 Wand/item、mana/cast/recharge、charges、stain/status 与 Boss 状态。
+- Quick inventory：四个 Wand + 四个 item，数字键、滚轮和鼠标选择只有一个权威 input owner；选中态、耗尽态和不可用态清楚可见。
+- Context feedback：准星目标材质名、拾取名称/价格、Wand/Spell/Flask tooltip、危险与交互提示。
+- Inventory/Wand editor：Wand 列表、完整 stats、Spell slots、拖放、对比、容量与非法组合反馈；编辑权限严格服从 run 状态。
+- Holy Mountain：世界内商店和 Perk altar 配合紧凑 tooltip，不使用遮挡游戏的大型运营式 dashboard。
+- Pause/Settings/Death/Run Summary：布局、导航、输入和可读性与参考流程对应，并提供键鼠/手柄等价路径。
 
-- 显示真实 run 统计与构筑摘要；
-- 可靠停止旧 world/script/entity/UI 生命周期；
-- 不泄漏旧刚体、粒子、音频 source、事件订阅或 ALC；
-- 能从结果页开始新 run 或返回主菜单；
-- 由 headless 自动化和真实 Editor/Player 输入路线共同验证。
+参考 UI 截图、目标截图、viewport、像素差异和允许差异必须进入 parity matrix；正式证据只接受真实 PixelEngine Editor/Player capture。
 
-## 8. Canonical 实施顺序
+## 8. 终局与扩展世界
 
-任务按完整能力边界拆分，不把半成品称为 MVP：
+The Laboratory 包含 Sampo 与 Kolmisilma。取得 Sampo 后触发真实 Boss 战；Boss 攻击必须作用于 projectile、材料、场地和玩家状态。胜利、死亡和继续探索路线都进入真实 run 结果，并可靠清理旧生命周期。
 
-1. `DEMO-007`：Campaign/Sandbox 模式、run lifecycle、纵深区域拓扑和战役 HUD 基础。
-2. `DEMO-008`：八个原创区域、程序化遭遇点、侧区与跨区捷径。
-3. `DEMO-009`：导器/符式数据、求值器、施法、库存与构筑编辑。
-4. `DEMO-010`：敌人 AI、统一伤害/状态、掉落、货币与区域生态。
-5. `DEMO-011`：Still Forge 恢复、补给、交易、导器编辑和能力烙印闭环。
-6. `DEMO-012`：终局源核、Boss、完成/死亡结算和下一轮。
-7. `DEMO-013`：全流程平衡、可访问性、性能、真实窗口证据与最终输出。
+主路径闭合后继续扩展地表区域、侧区、Orb/quest、parallel worlds、New Game+ 和替代结局。扩展内容不得反向延迟主路径、Wand、敌人、Holy Mountain 和 UI 的首次完整闭环。
 
-后续任务发现通用能力缺口时，先在对应 canonical task 中设计带 XML 文档和测试的引擎公开 API，再由 Demo 消费；禁止 internals、反射或 friend assembly 后门。
+## 9. Canonical 实施顺序
 
-## 9. 完成定义
+1. `DEMO-007`：Campaign/Sandbox、run lifecycle、Noita 主路径拓扑、输入所有权、悬空地形正确性和基础 HUD。
+2. `DEMO-008`：八个主路径 biome、Holy Mountain 锚点、程序化遭遇点、侧区、秘密连接和地图 parity。
+3. `DEMO-009`：Wand/Spell 数据、求值器、施法、库存、Wand 编辑和对应 UI。
+4. `DEMO-010`：敌人 AI、统一伤害/status/stain、掉落、金币与 biome 生态。
+5. `DEMO-011`：Holy Mountain 恢复、Spell refresh、商店、Wand 编辑、Perk 与保护区后果。
+6. `DEMO-012`：The Laboratory、Sampo、Kolmisilma、完成/死亡结算与下一轮。
+7. `DEMO-013`：全流程平衡、参考 parity matrix、侧区/秘密/parallel-world 扩展、可访问性、性能、真实窗口证据与最终输出。
+
+发现通用能力缺口时，先在对应 canonical task 中设计带 XML 文档和测试的引擎公开 API，再由 Demo 消费；禁止 internals、反射或 friend assembly 后门。
+
+## 10. 完成定义
 
 完整 goal 只有在以下条件同时满足后才算完成：
 
-- Campaign 可从主菜单开始，连续完成八个区域、七个锻台、构筑、战斗、Boss 和结算；死亡可开始干净新 run。
+- Campaign 可从 Mountain 开始，连续完成八个 biome、七个 Holy Mountain、Wand 构筑、战斗、Kolmisilma 和结算；死亡可开始干净新 run。
 - Infinite Sandbox 仍可选择，保留无终点探索、修改持久化和安全重生。
-- 所有内容均为原创资产和文本，不含 Noita 专有资源或近似复刻地图。
-- Demo 只依赖公开 API；构筑、实体和 UI 稳态路径符合零分配与预算纪律。
+- parity matrix 中主循环、地图、Wand/Spell、敌人、材料、UI、Holy Mountain、Boss 和生命周期均有自动化与真实 Player 证据，未实现差异被显式记录而非隐藏。
+- Demo 专属内容只存在于 Demo 层；引擎保持通用公开 API，稳态热路径符合零分配与预算纪律。
+- 仓库和玩家包不依赖外部 Noita 安装；资产 provenance 完整，构建可复现。
 - 定向单元/性质/集成测试、Release solution、性能场景、真实 PixelEngine Editor/Player 输入、截图/日志和 clean final-output 全部绑定同一提交通过。
-- `plan/tasks/`、详细设计、evidence index、最终输出 manifest 与安装包身份同步。
+- `plan/tasks/`、详细设计、evidence index、parity matrix、最终输出 manifest 与安装包身份同步。

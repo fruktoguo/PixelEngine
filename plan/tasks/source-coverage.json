@@ -100,7 +100,7 @@
       "path": "plan/13-demo-game.md",
       "expected": { "done": 42, "open": 0, "active": 0, "blocked": 22 },
       "checkboxSha256": "8640831734c4f676c8158b1d187fcc15836e9f6c9c98d174be95cde8fb468edc",
-      "completedCapabilityIds": ["BASE-015", "SCOPE-006", "SCOPE-007"],
+      "completedCapabilityIds": ["BASE-015", "SCOPE-006", "SCOPE-007", "SCOPE-008"],
       "followUpTaskIds": ["DEMO-001", "DEMO-002", "DEMO-003", "DEMO-004", "DEMO-005", "DEMO-006", "DEMO-007", "DEMO-008", "DEMO-009", "DEMO-010", "DEMO-011", "DEMO-012", "DEMO-013", "UI-001", "PERF-007", "PERF-008"]
     },
     {
@@ -177,7 +177,7 @@
     },
     {
       "id": "E",
-      "name": "原创像素 Roguelite 战役",
+      "name": "Noita 高保真复刻 Demo",
       "taskIds": ["DEMO-007", "DEMO-008", "DEMO-009", "DEMO-010", "DEMO-011", "DEMO-012", "DEMO-013"]
     },
     {

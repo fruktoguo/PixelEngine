@@ -11,6 +11,7 @@
 - [x] `SCOPE-005` 证据状态严格分层：自动化测试证明契约，scripted probe 证明入口，人工材料证明体验，目标硬件报告证明性能，tag workflow 证明发行。任何较低层证据不得冒充较高层完成态。
 - [x] `SCOPE-006` Showcase Demo 的唯一正式验收路线曾定为“横向熔岩矿洞逃生”：从左侧出生点穿越熔岩坑和可拆障碍到达右侧出口；该历史范围先由 `DEMO-006` 的 Infinite Sandbox、再由 `SCOPE-007` 的双模式战役目标取代，仅用于解释旧证据。
 - [x] `SCOPE-007` Showcase Demo 的当前产品目标是“原创像素 Roguelite Campaign + 可选 Infinite Sandbox”。Campaign 借鉴《Noita》公开的下降探索、层间整备、构筑、永久死亡与终局结构，但所有名称、地图、剧情、角色、敌人、法术、数值和资产必须原创；Sandbox 保留 `DEMO-006` 的无终点世界。Demo 只经公开 API 实现，Engine Core 不硬编码玩法专属类型。设计依据：`docs/PixelEngine-原创Roguelite战役设计.md`。
+- [x] `SCOPE-008` Showcase Demo 的当前产品目标调整为“Noita 高保真复刻 Campaign + 可选 Infinite Sandbox”，取代 `SCOPE-007` 的原创内容限制。Campaign 允许复现 Noita 公开可观察的名称、主路径/侧区拓扑、Holy Mountain、Wand/Spell、敌人/物品角色、Perk、材料交互、UI 布局和数值语义；正式仓库与玩家包不得依赖本机 Noita 安装或构建时抽取外部二进制资源，资产必须可独立构建并记录 provenance。所有 Noita 专属内容只能存在于 `demo/PixelEngine.Demo`，Engine Core 继续无玩法、无专属类型，Demo 只经公开 API 实现。用户于 2026-07-22 明确授权本次产品转向；设计依据：`docs/PixelEngine-原创Roguelite战役设计.md`（历史文件名）。
 
 ## 当前能力声明
 

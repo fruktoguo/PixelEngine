@@ -27,7 +27,7 @@ PixelEngine 不应退化成以下任何一种东西：
 - **不是只服务内部调试的工具集合**：编辑器不能只是 ImGui 调试面板堆叠，必须形成 Unity-like 的产品工作流。
 - **不是 Unity 的完整克隆**：目标是 Unity-like 心智模型，不是复制 Unity 的所有系统、资产管线、UGUI 技术栈或运行时行为。
 - **不是传统 UGUI 复刻**：游戏 UI 的内容、布局与交互仍以 Web-first 透明 HTML/CSS 为主；但场景中的 Canvas authoring、分辨率适配和 Game View 验证必须保留 Unity 用户熟悉的心智模型，不能因为底层使用 Web 就退化成场景外的全局弹层。
-- **不是 Noita 的内容克隆**：Demo 现在包含完整原创像素 Roguelite 战役，但只借鉴下降探索、层间整备、构筑、永久死亡和终局的玩法结构；不复制其名称、地图、剧情、角色、敌人、法术文本、数值或资产，也不以无边界堆内容代替完整系统。
+- **引擎不是 Noita 专用运行时**：Engine Core 继续保持通用、无玩法，不硬编码 Noita 的法杖、法术、敌人、区域或 UI；但 Showcase Demo 的明确目标是尽可能完整、忠实地复现 Noita 的公开可观察游戏流程与内容结构。所有参考游戏专属表达只允许存在于 `demo/PixelEngine.Demo` 的脚本、配置和资产中，并只能经引擎公开 API 驱动。
 - **不是 GPU 权威模拟引擎**：CPU simulation authoritative 是根基；GPU 只做渲染、光照、粒子合成和可选非权威 pass。
 
 ---
@@ -252,13 +252,13 @@ Demo 和引擎示例至少应证明：
 
 ## 7. 产品支柱四：Showcase Demo Game
 
-Demo 不是「越简单越好」，而是**完整且系统边界清晰**。它以 `DEMO-006` 的可持续无限沙盒为世界地基，默认提供原创像素 Roguelite 深潜战役，并保留可单独选择的无终点 Infinite Sandbox；两种模式共同证明引擎能力、编辑器工作流、UI runtime、打包发行和公开 API dogfood。完整流程见 `PixelEngine-原创Roguelite战役设计.md`。
+Demo 不是「越简单越好」，而是**完整、忠实且系统边界清晰**。它以 `DEMO-006` 的可持续无限沙盒为世界地基，默认提供 Noita 高保真复刻战役，并保留可单独选择的无终点 Infinite Sandbox；两种模式共同证明引擎能力、编辑器工作流、UI runtime、打包发行和公开 API dogfood。完整流程见 `PixelEngine-原创Roguelite战役设计.md`（文件名为历史兼容，正文已转为复刻目标）。
 
 ### 7.1 Demo 的定位
 
 Demo 应承担四个职责：
 
-1. **玩家视角**：Campaign 必须有从地表准备、逐层深潜、层间整备、构筑、Boss 到结算/永久死亡/下一轮的完整流程；Infinite Sandbox 继续提供无终点探索和安全重生。
+1. **玩家视角**：Campaign 必须复现从 Mountain 地表准备、逐层深潜、Holy Mountain 整备、法杖构筑、Kolmisilma 终局到结算/永久死亡/下一轮的完整流程；Infinite Sandbox 继续提供无终点探索和安全重生。
 2. **引擎展示**：它必须集中展示 PixelEngine 区别于普通 2D 引擎的能力。
 3. **开发者样例**：它是后续开发者学习公开 API 的主要样本。
 4. **验收证据**：它是测试真实窗口、性能、UI、音频、发行包的主要载体。
@@ -275,9 +275,9 @@ Demo 应承担四个职责：
 - 以全局坐标确定性生成、可向正负方向持续流送的自然地形；
 - 山脉、山地、盆地、湖泊、土层与洞穴等可辨识地貌；
 - Campaign / Infinite Sandbox 模式选择与各自完整生命周期；
-- 八个原创纵深区域、无限横向侧区、跨区捷径与七个层间安全枢纽；
-- 数据驱动导器/符式构筑、库存、拾取、交易和能力选择；
-- 原创敌人、战利品、货币、区域生态与 Boss；
+- 八个 Noita 主路径区域、七个 Holy Mountain、横向侧区、秘密路线、跨区捷径与后续 parallel-world 扩展；
+- 数据驱动 Wand/Spell 构筑、库存、拾取、交易和 Perk 选择；
+- 与参考流程对应的敌人角色、战利品、金币、区域生态与 Boss；
 - 武器或工具系统；
 - 射击与爆炸；
 - 地形破坏；
@@ -295,20 +295,20 @@ Demo 应承担四个职责：
 
 ### 7.3 Demo 内容量边界
 
-Demo 必须有完整战役，但任务按完整系统边界推进，不以法术、敌人或关卡数量绑架架构质量。
+Demo 必须有完整战役，并以可验证的 Noita parity matrix 管理复刻覆盖率；任务仍按完整系统边界推进，不能用法术、敌人或关卡目录数量代替真实可玩闭环。
 
 可以做：
 
 - 一个由 seed 驱动、按 chunk 动态生成的无限世界；
-- 一条原创纵深战役主路径、程序化侧区和完整层间整备循环；
-- 一套有限但可扩展的导器/符式、敌人、经济、能力与 Boss 目录；
+- 一条忠实复现 Noita 八区主路径、Holy Mountain、程序化侧区和秘密连接的世界拓扑；
+- 一套按 Noita 语义实现、可持续扩展覆盖率的 Wand/Spell、敌人、经济、Perk 与 Boss 目录；
 - 几种足以覆盖引擎能力的传统武器 / 工具，作为 Sandbox 与战役早期装备；
 - 一套完整 UI；
 - 充分的反馈与打磨。
 
-不优先做：
+边界与次序：
 
-- 复制参考游戏的手工地图、品牌内容、角色、敌人、法术或数值；
+- 允许复现参考游戏公开可观察的名称、流程、地图语法、角色/敌人作用、法术规则、数值语义与 UI 布局；手工 pixel scene 采用仓库内可独立构建的复刻资产，不依赖外部游戏安装；
 - 大型线性剧情或任务树；
 - 为追求目录数量而加入同质法术/敌人/区域；
 - 把 gameplay 专属类型塞进 Engine Core；
@@ -319,7 +319,7 @@ Demo 必须有完整战役，但任务按完整系统边界推进，不以法术
 
 Demo 达标时，应能回答：
 
-- Campaign 能否从地表开始，依次完成原创区域、层间整备、构筑、战斗、Boss 与结算，并在死亡/完成后开始干净的新 run？
+- Campaign 能否从 Mountain 地表开始，依次完成 Noita 主路径区域、Holy Mountain、法杖构筑、战斗、Kolmisilma 与结算，并在死亡/完成后开始干净的新 run？
 - Infinite Sandbox 能否继续向任意水平方向探索，并在死亡或重开后回到可玩状态？
 - 相同 seed 的任意正负 chunk 是否独立生成且边界连续，修改后的 chunk 是否跨卸载 / 重载持久保留？
 - 玩家是否能直观看到地形被射击、爆炸、切割和物理坍塌？
@@ -464,6 +464,6 @@ RC 阶段目标：不靠口头判断，所有关键结论都有证据。
 
 当前版本定义为：
 
-**PixelEngine 是一个面向 Unity 开发者的现代 2D 像素游戏引擎。它用 Noita-like CPU 权威像素模拟作为底层差异化能力，用 Unity-like Editor 承载 GameObject / Component / Prefab / Project / Settings / Build 工作流，用 Web-first 透明 HTML UI Runtime 承载玩家 UI，用 Showcase Demo Game 证明从 authoring 到 build 到 runtime 的完整产品链路。**
+**PixelEngine 是一个面向 Unity 开发者的现代 2D 像素游戏引擎。它用 Noita-like CPU 权威像素模拟作为底层差异化能力，用 Unity-like Editor 承载 GameObject / Component / Prefab / Project / Settings / Build 工作流，用 Web-first 透明 HTML UI Runtime 承载玩家 UI，并用与通用引擎严格分层的 Noita 高保真复刻 Demo 证明从 authoring 到 build 到 runtime 的完整产品链路。**
 
 只要后续开发仍服务这句话，项目方向就是收敛的；如果某项工作偏离这句话，应先重新讨论目标，再继续实现。
