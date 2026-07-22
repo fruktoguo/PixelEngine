@@ -7,9 +7,20 @@ namespace PixelEngine.Demo;
 internal static class TransientParticleBurst
 {
     private const ushort DefaultVisualLifetime = 60;
+    private const uint DefaultCoreColorBgra = 0xE8_F8_F4_C8;
+    private const uint DefaultTrailColorBgra = 0xB8_96_92_84;
     private static readonly ConditionalWeakTable<Scene, TransientParticleBurstSystem> Systems = [];
 
-    public static void Emit(IScriptContext context, float x, float y, int count, float speed, ushort lifetime = DefaultVisualLifetime)
+    public static void Emit(
+        IScriptContext context,
+        float x,
+        float y,
+        int count,
+        float speed,
+        ushort lifetime = DefaultVisualLifetime,
+        uint coreColorBgra = DefaultCoreColorBgra,
+        uint trailColorBgra = DefaultTrailColorBgra,
+        float lightIntensity = 0.45f)
     {
         ArgumentNullException.ThrowIfNull(context);
         count = Math.Clamp(count, 0, 48);
@@ -25,7 +36,15 @@ internal static class TransientParticleBurst
             scene.RegisterSystem(created);
             return created;
         });
-        system.Add(x, y, count, MathF.Max(0f, speed), safeLifetime);
+        system.Add(
+            x,
+            y,
+            count,
+            MathF.Max(0f, speed),
+            safeLifetime,
+            coreColorBgra,
+            trailColorBgra,
+            float.IsFinite(lightIntensity) ? Math.Clamp(lightIntensity, 0f, 2f) : 0.45f);
     }
 
     public static int ActiveCount(Scene scene)
@@ -44,8 +63,6 @@ internal sealed class TransientParticleBurstSystem : ISystem
 {
     private const float GravityCellsPerSecondSquared = 22f;
     private const float DragPerSecond = 0.72f;
-    private const uint CoreColorBgra = 0xE8_F8_F4_C8;
-    private const uint SmokeColorBgra = 0xB8_96_92_84;
     private const int MaxBursts = 16;
 
     private readonly Burst[] _bursts = new Burst[MaxBursts];
@@ -56,7 +73,15 @@ internal sealed class TransientParticleBurstSystem : ISystem
     /// </summary>
     public int LastOverlayCommandsSubmitted { get; private set; }
 
-    public void Add(float x, float y, int count, float speedCellsPerSecond, ushort lifetimeTicks)
+    public void Add(
+        float x,
+        float y,
+        int count,
+        float speedCellsPerSecond,
+        ushort lifetimeTicks,
+        uint coreColorBgra,
+        uint trailColorBgra,
+        float lightIntensity)
     {
         int index = ActiveCount < _bursts.Length ? ActiveCount++ : OldestBurstIndex();
         float simHz = (float)EngineConstants.DefaultSimHz;
@@ -68,6 +93,9 @@ internal sealed class TransientParticleBurstSystem : ISystem
             Duration = Math.Clamp(lifetimeTicks / simHz, 0.05f, 2.5f),
             Count = Math.Clamp(count, 1, 48),
             Seed = Hash((int)MathF.Round(x * 16f), (int)MathF.Round(y * 16f), count),
+            CoreColorBgra = coreColorBgra,
+            TrailColorBgra = trailColorBgra,
+            LightIntensity = lightIntensity,
         };
     }
 
@@ -101,6 +129,7 @@ internal sealed class TransientParticleBurstSystem : ISystem
         float alpha = 1f - t;
         float scale = MathF.Max(1f, context.Camera.Zoom);
         int submitted = 0;
+        float trailElapsed = MathF.Max(0f, burst.Elapsed - 0.045f);
         for (int i = 0; i < burst.Count; i++)
         {
             float angle = ParticleAngle(burst, i);
@@ -109,17 +138,63 @@ internal sealed class TransientParticleBurstSystem : ISystem
             float worldX = burst.X + (MathF.Cos(angle) * distance);
             float worldY = burst.Y + (MathF.Sin(angle) * distance) + (0.5f * GravityCellsPerSecondSquared * burst.Elapsed * burst.Elapsed);
             Point2F screen = context.Camera.WorldToScreen(worldX, worldY);
+            uint particleColor = i < Math.Min(4, burst.Count)
+                ? burst.CoreColorBgra
+                : burst.TrailColorBgra;
+            if (trailElapsed < burst.Elapsed && i < burst.Count * 3 / 4)
+            {
+                float trailDistance = speed * trailElapsed * MathF.Pow(DragPerSecond, trailElapsed);
+                float trailWorldX = burst.X + (MathF.Cos(angle) * trailDistance);
+                float trailWorldY = burst.Y + (MathF.Sin(angle) * trailDistance) +
+                    (0.5f * GravityCellsPerSecondSquared * trailElapsed * trailElapsed);
+                Point2F trail = context.Camera.WorldToScreen(trailWorldX, trailWorldY);
+                context.Overlay.Line(
+                    trail.X,
+                    trail.Y,
+                    screen.X,
+                    screen.Y,
+                    MathF.Max(1f, scale * (1.25f - (0.65f * t))),
+                    FadeAlpha(particleColor, alpha * 0.78f));
+                submitted++;
+            }
+
             float size = MathF.Max(1.5f, scale * (2.5f - (1.4f * t)));
             context.Overlay.SolidRectangle(
                 screen.X - (size * 0.5f),
                 screen.Y - (size * 0.5f),
                 size,
                 size,
-                FadeAlpha(i < 3 ? CoreColorBgra : SmokeColorBgra, alpha));
+                FadeAlpha(particleColor, alpha));
             submitted++;
         }
 
-        context.Lighting.AddPointLight(burst.X, burst.Y, MathF.Max(4f, burst.Count * 0.45f) * (1.2f - (0.4f * t)), CoreColorBgra, 0.25f * alpha);
+        Point2F center = context.Camera.WorldToScreen(burst.X, burst.Y);
+        float pulseSize = MathF.Max(1.5f, scale * (5.5f - (3.5f * t)));
+        context.Overlay.SolidRectangle(
+            center.X - (pulseSize * 0.5f),
+            center.Y - (pulseSize * 0.5f),
+            pulseSize,
+            pulseSize,
+            FadeAlpha(burst.CoreColorBgra, alpha * 0.72f));
+        submitted++;
+        context.Overlay.OutlineRectangle(
+            center.X - pulseSize,
+            center.Y - pulseSize,
+            pulseSize * 2f,
+            pulseSize * 2f,
+            MathF.Max(1f, scale * 0.75f),
+            FadeAlpha(burst.TrailColorBgra, alpha * 0.58f));
+        submitted++;
+        if (burst.LightIntensity > 0f)
+        {
+            context.Lighting.AddPointLight(
+                burst.X,
+                burst.Y,
+                MathF.Max(5f, burst.Count * 0.55f) * (1.35f - (0.45f * t)),
+                burst.CoreColorBgra,
+                burst.LightIntensity * alpha);
+        }
+
         return submitted;
     }
 
@@ -196,5 +271,8 @@ internal sealed class TransientParticleBurstSystem : ISystem
         public float Elapsed;
         public int Count;
         public int Seed;
+        public uint CoreColorBgra;
+        public uint TrailColorBgra;
+        public float LightIntensity;
     }
 }

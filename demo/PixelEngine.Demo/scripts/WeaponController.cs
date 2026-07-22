@@ -66,6 +66,11 @@ public sealed class WeaponController : Behaviour
     public int CurrentAmmo => Ammo.Length == 0 ? 0 : Ammo[SelectedIndex];
 
     /// <summary>
+    /// 当前武器的最大作用距离，单位 cell。
+    /// </summary>
+    public float CurrentRange => CurrentWeapon?.Range ?? 0f;
+
+    /// <summary>
     /// 所有武器剩余弹药总数。
     /// </summary>
     public int TotalRemainingAmmo
@@ -340,9 +345,10 @@ public sealed class WeaponController : Behaviour
 
         dx /= length;
         dy /= length;
-        float hitX = target.X;
-        float hitY = target.Y;
-        if (Context.Solids.Raycast(origin.X, origin.Y, dx, dy, 220f, out RaycastHit hit))
+        float travelDistance = MathF.Min(length, MathF.Max(1f, weapon.Range));
+        float hitX = origin.X + (dx * travelDistance);
+        float hitY = origin.Y + (dy * travelDistance);
+        if (Context.Solids.Raycast(origin.X, origin.Y, dx, dy, travelDistance, out RaycastHit hit))
         {
             hitX = hit.X;
             hitY = hit.Y;
@@ -371,7 +377,16 @@ public sealed class WeaponController : Behaviour
                 break;
             case WeaponKind.Laser:
                 float hitDistance = MathF.Sqrt(((hitX - origin.X) * (hitX - origin.X)) + ((hitY - origin.Y) * (hitY - origin.Y)));
-                DispatchLaser(weapon, origin.X, origin.Y, dx, dy, Math.Min(RangeOrHitLength(hitDistance), 260), hitX, hitY, dt);
+                DispatchLaser(
+                    weapon,
+                    origin.X,
+                    origin.Y,
+                    dx,
+                    dy,
+                    Math.Min(RangeOrHitLength(hitDistance), (int)MathF.Ceiling(weapon.Range)),
+                    hitX,
+                    hitY,
+                    dt);
                 DrawBeamOverlay(origin.X, origin.Y, hitX, hitY, 0xFF_58_E6_FF);
                 EmitImpactFeedback(weapon, hitX, hitY, count: 2);
                 break;
@@ -518,13 +533,17 @@ public sealed class WeaponController : Behaviour
 
     private void EmitImpactFeedback(WeaponDefinition weapon, float x, float y, int count)
     {
+        uint coreColor = ParseBgraColor(weapon.HudColor, 0xFF_F8_F4_C8);
         TransientParticleBurst.Emit(
             Context,
             x,
             y,
-            Math.Clamp(count, 1, 32),
-            Math.Max(8f, ScaledImpulse(weapon) * 1.5f),
-            lifetime: weapon.Kind == WeaponKind.Bomb ? (ushort)36 : (ushort)24);
+            Math.Clamp(count + Math.Max(1, weapon.Radius / 3), 2, 40),
+            Math.Max(12f, ScaledImpulse(weapon) * 1.8f),
+            lifetime: weapon.Kind == WeaponKind.Bomb ? (ushort)48 : (ushort)32,
+            coreColorBgra: coreColor,
+            trailColorBgra: weapon.Kind == WeaponKind.Laser ? 0xD8_FF_FF_FF : 0xC8_E8_D0_90,
+            lightIntensity: weapon.Kind is WeaponKind.Bomb or WeaponKind.Grenade ? 0f : 0.72f);
     }
 
     private void PublishMineYieldForCircle(float x, float y, int radius)
@@ -602,6 +621,7 @@ public sealed class WeaponController : Behaviour
         _projectile.ImpactRadius = ScaledRadius(weapon);
         _projectile.ImpactForce = ScaledImpulse(weapon);
         _projectile.ImpactDamage = ScaledDamage(weapon);
+        _projectile.Range = weapon.Range;
         _projectile.UseExplosionDamage = false;
         _projectile.CooldownSeconds = Math.Max(0f, weapon.CooldownSeconds);
         _projectile.TracerDurationSeconds = Math.Clamp(weapon.TracerDuration, 0f, 0.25f);
@@ -659,6 +679,20 @@ public sealed class WeaponController : Behaviour
     private static string ToCuePath(string cue)
     {
         return cue.EndsWith(".wav", StringComparison.OrdinalIgnoreCase) ? cue : cue + ".wav";
+    }
+
+    private static uint ParseBgraColor(string value, uint fallback)
+    {
+        ReadOnlySpan<char> span = value.AsSpan().Trim();
+        return span.Length == 9 &&
+            span[0] == '#' &&
+            uint.TryParse(
+                span[1..],
+                System.Globalization.NumberStyles.HexNumber,
+                provider: null,
+                out uint parsed)
+            ? parsed
+            : fallback;
     }
 
     private readonly record struct GrenadeSpawnRequest(

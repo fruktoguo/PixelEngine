@@ -617,6 +617,7 @@ public sealed class DemoStartupOptionsTests
             Assert.False(string.IsNullOrWhiteSpace(weapon.MuzzleCue));
             Assert.False(string.IsNullOrWhiteSpace(weapon.ImpactCue));
             Assert.True(weapon.Radius >= 0);
+            Assert.InRange(weapon.Range, 32f, 2_048f);
             Assert.True(weapon.CooldownSeconds >= 0f);
             Assert.True(weapon.AmmoMax > 0);
         });
@@ -624,6 +625,8 @@ public sealed class DemoStartupOptionsTests
         Assert.Equal(WeaponFalloff.None, laser.Falloff);
         Assert.True(laser.BeamDps > 0f);
         Assert.True(laser.HeatPerCell > 0f);
+        WeaponDefinition pistol = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.SingleShot);
+        Assert.True(pistol.Range > 180f, "一号枪射程应覆盖当前可见战斗区域，而不是沿用旧 180-cell 固定上限。");
         WeaponDefinition grenade = Assert.Single(catalog.Weapons, weapon => weapon.Kind == WeaponKind.Grenade);
         Assert.True(grenade.FuseSeconds > 0f);
         Assert.True(grenade.Impulse > 0f);

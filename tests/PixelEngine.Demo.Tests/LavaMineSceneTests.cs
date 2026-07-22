@@ -180,6 +180,49 @@ public sealed class LavaMineSceneTests
     }
 
     /// <summary>
+    /// 验证达到刚体像素下限、但只有一像素厚而无法形成合法 Box2D 面积的悬空碎条，
+    /// 会降级成有限寿命 debris，而不是以 degenerate 原因永久留在静态网格。
+    /// </summary>
+    [Fact]
+    public async Task CollapseScanTurnsDetachedThinSolidStripIntoFallingDebris()
+    {
+        using Engine engine = await CreateLavaMineEngineAsync();
+        engine.RunHeadlessTicks(2);
+
+        ScriptScene scene = engine.Context.GetService<ScriptScene>();
+        PlayableProjectileTool projectile = FindBehaviour<PlayableProjectileTool>(scene);
+        ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+        CellGrid grid = engine.Context.GetService<CellGrid>();
+        ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+
+        const int debrisX = 316;
+        const int debrisY = 40;
+        const int debrisCount = 12;
+        ClearRect(edit, 300, 24, 340, 64);
+        FillRect(edit, stone, debrisX, debrisY, debrisX + debrisCount, debrisY + 1);
+        projectile.CollapseScanRadius = 16;
+        projectile.MinCollapsePixels = 8;
+        projectile.PlayerSupportProtectionRadius = 0;
+        int particlesBefore = particles.ActiveCount;
+
+        int convertedBodies = projectile.RunCollapseScanForTesting(
+            debrisX + (debrisCount / 2),
+            debrisY,
+            maxConversions: 1);
+
+        Assert.Equal(0, convertedBodies);
+        Assert.Equal(debrisCount, projectile.EjectedFloatingDebrisPixels);
+        Assert.Equal($"debris_ejected_{debrisCount}", projectile.LastCollapseSkipReason);
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(0, CountMaterial(grid, stone, debrisX, debrisY, debrisX + debrisCount, debrisY + 1));
+        Assert.Equal(particlesBefore + debrisCount, particles.ActiveCount);
+    }
+
+    /// <summary>
     /// 验证本次扫描达到刚体转换上限后仍会继续清理同一区域内的微小悬空碎屑。
     /// </summary>
     [Fact]

@@ -79,6 +79,16 @@ public sealed class ExplosiveTool : Behaviour
         Context.World.Explode(world.X, world.Y, radius, force);
         _flash.Start(world.X, world.Y, radius, 0xFF_30_80_FF);
         _flash.SubmitInitial(Context);
+        TransientParticleBurst.Emit(
+            Context,
+            world.X,
+            world.Y,
+            Math.Clamp(radius / 2, 16, 48),
+            Math.Max(18f, force * 0.28f),
+            lifetime: 24,
+            coreColorBgra: 0xFF_58_E8_FF,
+            trailColorBgra: 0xD8_68_98_FF,
+            lightIntensity: 0f);
         LastExplosionX = world.X;
         LastExplosionY = world.Y;
         ExplosionCount++;

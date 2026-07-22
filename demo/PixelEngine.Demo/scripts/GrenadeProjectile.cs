@@ -155,6 +155,9 @@ public sealed class GrenadeProjectile : Behaviour
             Y,
             Math.Clamp(Radius / 2, 12, 96),
             Math.Max(10f, _impulse * 1.5f),
-            lifetime: 54);
+            lifetime: 64,
+            coreColorBgra: 0xFF_58_E8_FF,
+            trailColorBgra: 0xD8_70_B8_FF,
+            lightIntensity: 0f);
     }
 }

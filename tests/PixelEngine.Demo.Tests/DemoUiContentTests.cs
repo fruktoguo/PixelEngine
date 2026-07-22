@@ -271,10 +271,14 @@ public sealed class DemoUiContentTests
 
         XElement statusPanel = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
         Assert.DoesNotContain(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
-        foreach (string id in new[] { "hud_title", "hud_route", "hud_region", "hud_health", "hud_levitation", "hud_context_divider" })
+        foreach (string id in new[] { "hud_title", "hud_route", "hud_region", "hud_health", "hud_levitation", "hud_context_divider", "hud_material_detail" })
         {
             _ = Assert.Single(statusPanel.Descendants(), element => (string?)element.Attribute("id") == id);
         }
+
+        string hudStyle = hud.Descendants("style").Select(static element => element.Value).Single();
+        Assert.Contains("#hud_material_detail", hudStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("#hud_material_detail { display: none;", hudStyle, StringComparison.Ordinal);
 
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "run_divider");
         _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context_divider");

@@ -84,6 +84,16 @@ public sealed class PlayableProjectileTool : Behaviour
     public float LastHitY { get; private set; }
 
     /// <summary>
+    /// 最近一次弹道是否命中权威固体 cell；false 表示弹道在射程端点结束。
+    /// </summary>
+    public bool LastShotHitSolid { get; private set; }
+
+    /// <summary>
+    /// 最近一次固体命中的稳定材质名；未命中时为空。
+    /// </summary>
+    public string LastHitMaterialName { get; private set; } = string.Empty;
+
+    /// <summary>
     /// 弹道 overlay 剩余显示时间，单位秒。
     /// </summary>
     public float TracerRemainingSeconds { get; private set; }
@@ -249,6 +259,8 @@ public sealed class PlayableProjectileTool : Behaviour
         LastShotStartY = 0f;
         LastHitX = 0f;
         LastHitY = 0f;
+        LastShotHitSolid = false;
+        LastHitMaterialName = string.Empty;
         TracerRemainingSeconds = 0f;
         CollapsedFloatingIslands = 0;
         EjectedFloatingDebrisPixels = 0;
@@ -327,10 +339,14 @@ public sealed class PlayableProjectileTool : Behaviour
         dy /= length;
         float hitX = startX + (dx * Range);
         float hitY = startY + (dy * Range);
+        bool hitSolid = false;
+        string hitMaterialName = string.Empty;
         if (TryRaycastSolid(startX, startY, dx, dy, Range, out RaycastHit hit) && hit.Hit)
         {
             hitX = hit.X;
             hitY = hit.Y;
+            hitSolid = true;
+            hitMaterialName = Context.Materials.GetInfo(hit.Material).Name;
         }
 
         // 大枪走 Explode；小枪走 DamageCircle 并补粒子反馈
@@ -342,15 +358,22 @@ public sealed class PlayableProjectileTool : Behaviour
         {
             float damage = ImpactDamage > 0f ? ImpactDamage : ImpactForce;
             Context.World.DamageCircle(hitX, hitY, Math.Max(1, ImpactRadius), MathF.Max(1f, damage), falloff: true, DamageKind.Impact);
-            EmitSmallImpactParticles(hitX, hitY);
+            EmitSmallImpactParticles(hitX, hitY, hitSolid);
         }
 
-        Context.Lighting.AddPointLight(hitX, hitY, ImpactRadius * 3f, 0xFF_60_D8_FF, 0.35f);
+        Context.Lighting.AddPointLight(
+            hitX,
+            hitY,
+            ImpactRadius * (hitSolid ? 3.6f : 2.2f),
+            hitSolid ? 0xFF_60_D8_FF : 0xFF_88_88_B8,
+            hitSolid ? 0.72f : 0.24f);
         Context.Audio.PlayAt(UseExplosionDamage ? "explosion.wav" : "impact_stone.wav", hitX, hitY, UseExplosionDamage ? 0.85f : 0.55f);
         LastShotStartX = startX;
         LastShotStartY = startY;
         LastHitX = hitX;
         LastHitY = hitY;
+        LastShotHitSolid = hitSolid;
+        LastHitMaterialName = hitMaterialName;
         TracerRemainingSeconds = Math.Clamp(TracerDurationSeconds, 0f, 0.25f);
         ShotsFired++;
         QueueCollapseScan(hitX, hitY, ImpactRadius);
@@ -377,15 +400,18 @@ public sealed class PlayableProjectileTool : Behaviour
         return exception.Message.Contains("目标 chunk 未驻留", StringComparison.Ordinal);
     }
 
-    private void EmitSmallImpactParticles(float hitX, float hitY)
+    private void EmitSmallImpactParticles(float hitX, float hitY, bool hitSolid)
     {
         TransientParticleBurst.Emit(
             Context,
             hitX,
             hitY,
-            Math.Clamp(ImpactRadius + 2, 3, 12),
-            Math.Max(1f, ImpactForce * 0.2f),
-            lifetime: 45);
+            Math.Clamp(ImpactRadius + (hitSolid ? 5 : 1), 3, 18),
+            Math.Max(1f, ImpactForce * (hitSolid ? 0.34f : 0.12f)),
+            lifetime: hitSolid ? (ushort)54 : (ushort)24,
+            coreColorBgra: hitSolid ? 0xFF_70_E8_FF : 0xC0_78_78_A8,
+            trailColorBgra: hitSolid ? 0xE0_FF_F4_C8 : 0x90_78_78_88,
+            lightIntensity: hitSolid ? 0.85f : 0.20f);
     }
 
     private void ProcessPendingCollapseScanSafely()
@@ -655,20 +681,34 @@ public sealed class PlayableProjectileTool : Behaviour
                 int worldY = originY + minY;
                 int width = maxX - minX + 1;
                 int height = maxY - minY + 1;
-                if (cellCount < Math.Max(1, MinCollapsePixels))
+                bool lacksRigidArea = !HasSolidBlock2x2(worldX, worldY, width, height);
+                if (cellCount < Math.Max(1, MinCollapsePixels) || lacksRigidArea)
                 {
                     int remainingDebrisBudget = MaxFloatingDebrisPixelsPerScan - ejectedDebrisPixels;
-                    if (cellCount > remainingDebrisBudget)
+                    if (remainingDebrisBudget <= 0)
                     {
                         LastCollapseSkipReason = "debris_budget_exhausted";
                         continue;
                     }
 
-                    int ejected = EjectFloatingDebris(originX, originY, size, cells, cellCount);
+                    // 只有一像素厚或无 2x2 实心核的连通块无法生成稳定 Box2D 面积。
+                    // 按固定预算逐步转成 debris，避免以 degenerate 名义永久留在静态网格。
+                    int ejected = EjectFloatingDebris(
+                        originX,
+                        originY,
+                        size,
+                        cells,
+                        cellCount,
+                        remainingDebrisBudget);
                     if (ejected > 0)
                     {
                         EjectedFloatingDebrisPixels += ejected;
                         ejectedDebrisPixels += ejected;
+                    }
+
+                    if (ejected < cellCount)
+                    {
+                        LastCollapseSkipReason = "debris_budget_exhausted";
                     }
 
                     continue;
@@ -823,10 +863,17 @@ public sealed class PlayableProjectileTool : Behaviour
         return true;
     }
 
-    private int EjectFloatingDebris(int originX, int originY, int size, int[] cells, int cellCount)
+    private int EjectFloatingDebris(
+        int originX,
+        int originY,
+        int size,
+        int[] cells,
+        int cellCount,
+        int maxPixels)
     {
         int ejected = 0;
-        for (int i = 0; i < cellCount; i++)
+        int limit = Math.Min(cellCount, Math.Max(0, maxPixels));
+        for (int i = 0; i < limit; i++)
         {
             int packed = cells[i];
             int worldX = originX + (packed % size);

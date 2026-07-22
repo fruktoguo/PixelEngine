@@ -36,6 +36,7 @@ public sealed class WeaponCatalog
                 Id = ReadString(item, "id"),
                 DisplayName = ReadString(item, "displayName"),
                 Kind = ReadEnum<WeaponKind>(item, "kind"),
+                Range = ReadOptionalSingle(item, "range", WeaponDefinition.DefaultRangeCells),
                 Damage = ReadSingle(item, "damage"),
                 Radius = ReadInt32(item, "radius"),
                 Falloff = ReadEnum<WeaponFalloff>(item, "falloff"),
@@ -86,6 +87,10 @@ public sealed class WeaponCatalog
             Require(!string.IsNullOrWhiteSpace(weapon.DisplayName), label, "displayName 不能为空。");
             Require(Enum.IsDefined(weapon.Kind), label, "kind 无效。");
             Require(Enum.IsDefined(weapon.Falloff), label, "falloff 无效。");
+            Require(
+                float.IsFinite(weapon.Range) && weapon.Range is >= 32f and <= 2_048f,
+                label,
+                "range 必须位于 [32,2048] cell。");
             Require(weapon.Damage >= 0f, label, "damage 不能为负。");
             Require(weapon.Radius >= 0, label, "radius 不能为负。");
             Require(weapon.Impulse >= 0f, label, "impulse 不能为负。");
@@ -195,6 +200,15 @@ public sealed class WeaponCatalog
                 : throw new InvalidDataException($"武器配置字段 {name} 必须是有限数值。");
     }
 
+    private static float ReadOptionalSingle(JsonElement item, string name, float fallback)
+    {
+        return !item.TryGetProperty(name, out JsonElement value)
+            ? fallback
+            : value.TryGetSingle(out float result) && float.IsFinite(result)
+                ? result
+                : throw new InvalidDataException($"武器配置字段 {name} 必须是有限数值。");
+    }
+
     private static int ReadInt32(JsonElement item, string name)
     {
         return !item.TryGetProperty(name, out JsonElement value)
@@ -265,6 +279,9 @@ public enum WeaponFalloff
 /// </summary>
 public sealed class WeaponDefinition
 {
+    /// <summary>旧内容未声明 range 时使用的兼容射程，单位 cell。</summary>
+    public const float DefaultRangeCells = 320f;
+
     /// <summary>稳定武器 id。</summary>
     public string Id { get; init; } = string.Empty;
 
@@ -273,6 +290,9 @@ public sealed class WeaponDefinition
 
     /// <summary>武器类型。</summary>
     public WeaponKind Kind { get; init; }
+
+    /// <summary>射线或即时世界效果的最大作用距离，单位 cell。</summary>
+    public float Range { get; init; } = DefaultRangeCells;
 
     /// <summary>结构破坏当量。</summary>
     public float Damage { get; init; }

@@ -792,6 +792,7 @@ public sealed class PlayerControllerIntegrationTests
 
         ParticleSystem particles = engine.Context.GetService<ParticleSystem>();
         Assert.True(particles.ActiveCount > 0);
+        Assert.Equal(1, TransientParticleBurst.ActiveCount(scene));
 
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(1, lighting.PointLights.Length);
@@ -1364,7 +1365,7 @@ public sealed class PlayerControllerIntegrationTests
         engine.RunHeadlessTicks(1);
 
         // Assert：验证不变式与预期结果
-        Assert.True(probe.LastOverlayCommandsSubmitted > 0);
+        Assert.True(probe.LastOverlayCommandsSubmitted >= 11);
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(1, lighting.PointLights.Length);
         Assert.Equal(0, lighting.FogOfWar.RevealAlpha(18, 14));
@@ -1907,6 +1908,9 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(1, projectile.ShotsFired);
         Assert.Equal(WeaponKind.SingleShot, weapons.LastDispatchedKind);
         Assert.Equal(179, weapons.CurrentAmmo);
+        Assert.Equal(weapons.CurrentRange, projectile.Range);
+        Assert.True(projectile.LastShotHitSolid);
+        Assert.Equal("stone", projectile.LastHitMaterialName);
         Assert.Equal("impact_stone.wav", audio.LastCue);
         Assert.True(projectile.TracerRemainingSeconds > 0f);
         Assert.False(string.IsNullOrWhiteSpace(projectile.CollapseStatus));
@@ -1916,6 +1920,47 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(1, weapons.PrimaryFireCount);
         Assert.Equal(1, projectile.ShotsFired);
         Assert.True(weapons.CooldownRemaining > 0f);
+    }
+
+    /// <summary>
+    /// 验证一号枪的射程来自 weapons.json，并能命中旧 180-cell 上限之外、仍在宽屏镜头内的前景地形。
+    /// </summary>
+    [Fact]
+    public void WeaponControllerPistolHitsForegroundBeyondLegacyFixedRange()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(
+            out ScriptInputApi input,
+            out CellGrid grid,
+            out ScriptCameraApi camera,
+            out ScriptScene scene,
+            materials,
+            contentRoot: DemoContentRoot(),
+            worldWidthCells: 512,
+            worldHeightCells: 96);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillWall(grid, stone, x: 260, y0: 0, y1: 95);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 14f;
+        player.SpawnY = 30f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.InputEnabled = false;
+        WeaponController weapons = entity.AddComponent<WeaponController>();
+
+        engine.RunHeadlessTicks(2);
+        Point2F target = camera.WorldToScreen(260f, player.CenterY - 2f);
+        input.Update([], [MouseButton.Left], target.X, target.Y, wheelY: 0f);
+        engine.RunHeadlessTicks(2);
+
+        Assert.Equal("pistol", weapons.SelectedWeaponId);
+        Assert.True(weapons.CurrentRange > 180f);
+        Assert.Equal(weapons.CurrentRange, projectile.Range);
+        Assert.True(projectile.LastShotHitSolid);
+        Assert.Equal("stone", projectile.LastHitMaterialName);
+        Assert.InRange(projectile.LastHitX, 259f, 261f);
     }
 
     /// <summary>
@@ -2564,6 +2609,50 @@ public sealed class PlayerControllerIntegrationTests
         Assert.Equal(1, projectile.ShotsFired);
         Assert.True(projectile.CollapsedFloatingIslands >= 1, $"应转换悬空石块，region={projectile.LastCollapsedRegion}");
         Assert.True(physics.Stats.ActiveBodyCount >= 1);
+    }
+
+    /// <summary>
+    /// 验证真实 Damage 事件路径也会清理一像素厚的退化悬空碎条，而不只是在测试入口手动调用扫描器。
+    /// </summary>
+    [Fact]
+    public void PlayableProjectileEjectsDegenerateDetachedStripAfterWorldMutation()
+    {
+        MaterialTable materials = DemoMaterials();
+        using Engine engine = CreateManualScriptEngine(
+            out ScriptInputApi input,
+            out CellGrid grid,
+            out _,
+            out ScriptScene scene,
+            materials);
+        Assert.True(materials.TryGetId("stone", out ushort stone));
+        FillRect(grid, stone, minX: 40, minY: 30, maxX: 52, maxY: 31);
+
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 12f;
+        player.SpawnY = 26f;
+        PlayableProjectileTool projectile = entity.AddComponent<PlayableProjectileTool>();
+        projectile.CooldownSeconds = 0f;
+        projectile.Range = 96f;
+        projectile.ImpactRadius = 1;
+        projectile.CollapseScanRadius = 16;
+        projectile.MinCollapsePixels = 8;
+
+        engine.RunHeadlessTicks(2);
+        input.Update([], [MouseButton.Left], mouseX: 46f, mouseY: 30f, wheelY: 0f);
+        engine.RunHeadlessTicks(1);
+        input.Update([], [], mouseX: 46f, mouseY: 30f, wheelY: 0f);
+        for (int i = 0; i < 10 && projectile.EjectedFloatingDebrisPixels == 0; i++)
+        {
+            engine.RunHeadlessTicks(1);
+        }
+
+        Assert.Equal(1, projectile.ShotsFired);
+        Assert.True(
+            projectile.EjectedFloatingDebrisPixels >= 8,
+            $"真实 Damage 事件应把退化碎条转成 debris，ejected={projectile.EjectedFloatingDebrisPixels}, status={projectile.CollapseStatus}");
+        Assert.Equal(0, CountMaterial(grid, stone, minX: 40, minY: 30, maxX: 52, maxY: 31));
     }
 
     /// <summary>

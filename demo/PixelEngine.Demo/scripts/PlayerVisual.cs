@@ -185,10 +185,27 @@ public sealed class PlayerVisual : Behaviour
             return;
         }
 
-        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 3f, 0xFF_F8_DA_8C);
+        uint outerColor = _projectile.LastShotHitSolid ? 0xFF_F8_DA_8C : 0xC0_78_78_A8;
+        uint innerColor = _projectile.LastShotHitSolid ? 0xFF_FF_FF_FF : 0xB0_A8_A8_C8;
+        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 3f, outerColor);
         LastOverlayCommandsSubmitted++;
-        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 1f, 0xFF_FF_FF_FF);
+        Context.Overlay.Line(start.X, start.Y, end.X, end.Y, 1f, innerColor);
         LastOverlayCommandsSubmitted++;
+        if (_projectile.LastShotHitSolid)
+        {
+            Context.Overlay.SolidRectangle(end.X - 2f, end.Y - 2f, 4f, 4f, 0xFF_FF_FF_FF);
+            LastOverlayCommandsSubmitted++;
+            Context.Overlay.OutlineRectangle(end.X - 5f, end.Y - 5f, 10f, 10f, 1.5f, outerColor);
+            LastOverlayCommandsSubmitted++;
+        }
+        else
+        {
+            // 射程截止用暗色叉号，与真实材质命中的亮点/描边明确区分。
+            Context.Overlay.Line(end.X - 4f, end.Y - 4f, end.X + 4f, end.Y + 4f, 1.5f, outerColor);
+            LastOverlayCommandsSubmitted++;
+            Context.Overlay.Line(end.X + 4f, end.Y - 4f, end.X - 4f, end.Y + 4f, 1.5f, outerColor);
+            LastOverlayCommandsSubmitted++;
+        }
     }
 
     private void RevealViewport()

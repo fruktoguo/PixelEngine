@@ -107,7 +107,52 @@ public struct ExplosionFlashEffect
         LastOverlayCommandsSubmitted++;
         context.Overlay.Line(x, y + inner, x, y + outer, 3f, color);
         LastOverlayCommandsSubmitted++;
+        const float DiagonalScale = 0.70710677f;
+        float diagonalInner = inner * DiagonalScale;
+        float diagonalOuter = outer * DiagonalScale;
+        context.Overlay.Line(
+            x - diagonalOuter,
+            y - diagonalOuter,
+            x - diagonalInner,
+            y - diagonalInner,
+            2f,
+            color);
+        LastOverlayCommandsSubmitted++;
+        context.Overlay.Line(
+            x + diagonalInner,
+            y + diagonalInner,
+            x + diagonalOuter,
+            y + diagonalOuter,
+            2f,
+            color);
+        LastOverlayCommandsSubmitted++;
+        context.Overlay.Line(
+            x + diagonalOuter,
+            y - diagonalOuter,
+            x + diagonalInner,
+            y - diagonalInner,
+            2f,
+            color);
+        LastOverlayCommandsSubmitted++;
+        context.Overlay.Line(
+            x - diagonalInner,
+            y + diagonalInner,
+            x - diagonalOuter,
+            y + diagonalOuter,
+            2f,
+            color);
+        LastOverlayCommandsSubmitted++;
+        float coreSize = MathF.Max(2f, inner * 0.72f);
+        context.Overlay.SolidRectangle(
+            x - (coreSize * 0.5f),
+            y - (coreSize * 0.5f),
+            coreSize,
+            coreSize,
+            color);
+        LastOverlayCommandsSubmitted++;
         context.Overlay.OutlineRectangle(x - inner, y - inner, inner * 2f, inner * 2f, 2f, color);
+        LastOverlayCommandsSubmitted++;
+        context.Overlay.OutlineRectangle(x - outer, y - outer, outer * 2f, outer * 2f, 1f, color);
         LastOverlayCommandsSubmitted++;
     }
 
