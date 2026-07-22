@@ -162,19 +162,21 @@
   - 提交节点：一，canonical task、产品目标、架构与详细设计；二，缺失 chunk 初始化公开 API、流式 procedural Hosting 装配与 World/Hosting 测试；三，Demo 自然地形、无边界相机、沙盒 UI / 启动入口与 Demo 测试；四，真实窗口 / CLI 证据、最终输出与 canonical 完成状态。每个节点按 `AGENTS.md §6` 中文提交。
   - 完成证据：`docs/evidence-2026-07-20-demo-006-infinite-sandbox.md`（Evidence Index: `demo-006-infinite-sandbox-20260720`）；Release build 0 warning / 0 error，Simulation 207/207、World 46/46、Demo 156 passed / 1 native GL skipped、Hosting 976 passed / 7 环境条件 skipped；公共 Editor CLI Play/Pause/Step/Stop/Exit、Scene/Game 双重 SHA256 截图、负坐标 runtime 检视、最终 RmlUi 玩家包 1080x720 截图与 exit 0 均通过。
 
-- [x] `DEMO-007` 建立 Campaign / InfiniteSandbox 双模式、完整 run lifecycle 与纵深战役世界拓扑。
+- [~] `DEMO-007` 建立 Campaign / InfiniteSandbox 双模式、完整 run lifecycle 与纵深战役世界拓扑。
   - 优先级：P0。
   - 依赖：`DEMO-006`、`BASE-007`、`BASE-010`、`BASE-015`、`SCOPE-008`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §2–§4、§9；`docs/PixelEngine-架构与需求设计.md` §1.5；`plan/13-demo-game.md` §3.16–§3.17。
   - 验收：主菜单可选择默认 Campaign 或 InfiniteSandbox；`content/campaign.json` 经公开 Content/Config API 加载并校验；Campaign 使用显式 run seed/state 和 `MainMenu -> StartingRun -> Exploring <-> HolyMountain -> Laboratory -> Completed/Dead -> RunSummary` 生命周期；Campaign 死亡以新 seed 原子替换 world/script/entity/UI/physics/particle/audio/event 并清理旧状态，Sandbox 继续安全重生且无结算；程序化 generator 按深度生成 Noita 八个主路径 biome、七个 Holy Mountain 锚点、横向侧区和确定性连接，修改 chunk 仍以 region store 优先且 resident 预算有界；所有破坏来源统一提交 terrain-topology dirty region，局部 solid 与锚点断开后有界转为刚体或自由粒子，不再留下永久静态悬空颗粒；MaterialBrush、Wand/武器、item 与 UI 之间的数字键、滚轮、左右键只有一个权威 input owner；HUD 显示模式、seed、biome、深度、run state、当前装备与准星材质名。现有六武器与环境危险只作为后续 Wand/Spell/敌人完成前的真实可玩能力，不挂载占位对象；Demo 只使用公开 API。定向测试覆盖 schema、同 seed/跨加载顺序、区域边界/负坐标、模式隔离、死亡替换、资源清理、存档优先、全破坏入口悬空地形、输入仲裁和 UI；Release build、真实 Editor/Player 输入与 framebuffer 证据通过。
   - 提交节点：历史节点一至三已完成 `SCOPE-007`、mode/run/content 合同、八区拓扑与流式生成；转向节点新增 `SCOPE-008`、Noita parity 设计和 canonical 更新；随后完成 terrain topology/input/material HUD 正确性、Campaign/Sandbox UI 与死亡/重开产品流，最后取得自动化、真实窗口证据、最终输出并把本任务改为 `[x]`。每个节点按 `AGENTS.md §6` 中文提交。
   - 完成证据：`docs/evidence-2026-07-22-demo-007-noita-campaign-foundation.md`（Evidence Index: `demo-007-noita-campaign-foundation-20260722`）；clean Release build 0 warning / 0 error，Scripting 99/99、Demo 175 passed / 1 native GL skipped、Hosting 980 passed / 7 环境条件 skipped；公共 Editor CLI 完成 Campaign 永久死亡→RunSummary→新 seed 原子换局与 Sandbox 同 seed 重生，三张 1280x720 artifact 双重 SHA256 校验、Console 0 warning / 0 error；正式 RmlUi Player 1080x720、3 Canvas、无 fallback、stderr 0、包内 186/186 checksum 与 MSI verifier 均通过。
+  - 2026-07-22 回归重开：真实游玩发现大范围破坏后仍可能留下无 2x2 实心核、却达到刚体像素下限的退化悬空碎条；现有扫描把它们标记为 `degenerate` 后留在权威网格，违反本任务“不再留下永久静态悬空颗粒”的验收条件。同时一号枪沿用固定 180-cell 射程且未提供射程截止/高硬度累积伤害的明确反馈，导致镜头内远处可破坏前景被误读成不可交互背景。解除条件：补退化碎条 debris 降级、数据化射程与命中反馈回归测试，取得真实 Editor/Player 复验并更新同源证据后重新完成。
 
-- [~] `DEMO-008` 复现 Noita 八个主路径 biome、程序化遭遇点、侧区、秘密连接和跨区捷径。
+- [ ] `DEMO-008` 复现 Noita 八个主路径 biome、程序化遭遇点、侧区、秘密连接和跨区捷径。
   - 优先级：P0。
   - 依赖：`DEMO-007`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §3；`plan/13-demo-game.md` §3.17。
   - 验收：`content/biomes.json` 定义 Mines、Coal Pits、Snowy Depths、Hiisi Base、Underground Jungle、The Vault、Temple of the Art 与 The Laboratory 的材料 palette、Wang-tile/pixel-scene 地形语法、结构、危险、地标、Portal、Holy Mountain、侧区、秘密连接和捷径；参考 seed 路线通过分区拓扑与截图 parity matrix 核对，全局 seed/chunk 坐标决定生成且跨边界连续，加载顺序无关，修改持久化优先；主路径始终可达，侧区/地表/parallel-world 扩展有显式阶段状态；生成热路径、resident 预算、自动化、性能和真实窗口长路线证据通过。
+  - 当前排队原因：`DEMO-007` 因真实游玩发现悬空退化碎条与武器命中可读性回归而重新进行；修复并恢复 `DEMO-007 [x]` 后，继续本任务已经提交的八区语法、Portal、Holy Mountain 与固定地标长路线验收。
 
 - [ ] `DEMO-009` 实现 Noita Wand / Spell 数据、施法求值、库存与 Wand 编辑系统。
   - 优先级：P0。
