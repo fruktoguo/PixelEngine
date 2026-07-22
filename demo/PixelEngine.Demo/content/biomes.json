@@ -1,11 +1,63 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "expansionStages": {
     "surface": "active",
     "sideBiomes": "active",
     "secretConnections": "active",
     "parallelWorlds": "planned",
     "newGamePlus": "planned"
+  },
+  "holyMountain": {
+    "baseTemperature": 20,
+    "shellMaterial": "boundary_stone",
+    "platformMaterial": "metal",
+    "shellThicknessCells": 8,
+    "layoutOperations": [
+      { "kind": "fillRect", "material": "metal", "x": -144, "y": 48, "width": 56, "height": 4 },
+      { "kind": "fillRect", "material": "water", "x": -132, "y": 76, "width": 32, "height": 6 },
+      { "kind": "fillRect", "material": "metal", "x": -136, "y": 82, "width": 40, "height": 4 },
+      { "kind": "fillRect", "material": "metal", "x": -80, "y": 58, "width": 68, "height": 4 },
+      { "kind": "fillRect", "material": "boundary_stone", "x": -63, "y": 84, "width": 34, "height": 34 },
+      { "kind": "carveRect", "material": "empty", "x": -58, "y": 89, "width": 24, "height": 22 },
+      { "kind": "fillRect", "material": "crystal", "x": -48, "y": 103, "width": 4, "height": 8 },
+      { "kind": "fillRect", "material": "metal", "x": 20, "y": 58, "width": 68, "height": 4 },
+      { "kind": "fillRect", "material": "crystal", "x": 50, "y": 51, "width": 6, "height": 7 },
+      { "kind": "fillRect", "material": "metal", "x": 92, "y": 38, "width": 4, "height": 20 },
+      { "kind": "fillRect", "material": "metal", "x": 108, "y": 38, "width": 4, "height": 20 },
+      { "kind": "fillRect", "material": "water", "x": 116, "y": 76, "width": 28, "height": 6 },
+      { "kind": "fillRect", "material": "metal", "x": 112, "y": 82, "width": 36, "height": 4 },
+      { "kind": "carveRect", "material": "empty", "x": 146, "y": 34, "width": 38, "height": 78 },
+      { "kind": "fillRect", "material": "metal", "x": 140, "y": 60, "width": 6, "height": 4 },
+      { "kind": "carveRect", "material": "empty", "x": 0, "y": 108, "width": 184, "height": 20 }
+    ],
+    "landmarks": [
+      { "id": "portal-arrival", "kind": "arrival", "offsetXCells": -112, "localDepthCells": 24 },
+      { "id": "wash-pool", "kind": "water-pool", "offsetXCells": -116, "localDepthCells": 78 },
+      { "id": "shop-zone", "kind": "shop-platform", "offsetXCells": -46, "localDepthCells": 54 },
+      { "id": "worm-crystal-room", "kind": "worm-crystal-room", "offsetXCells": -46, "localDepthCells": 100 },
+      { "id": "perk-zone", "kind": "perk-platform", "offsetXCells": 53, "localDepthCells": 54 },
+      { "id": "training-statues", "kind": "training-statues", "offsetXCells": 102, "localDepthCells": 48 },
+      { "id": "fish-pond", "kind": "water-pool", "offsetXCells": 130, "localDepthCells": 78 },
+      { "id": "exit-collapse-tunnel", "kind": "exit-tunnel", "offsetXCells": 158, "localDepthCells": 46 }
+    ]
+  },
+  "portalNetwork": {
+    "portalsPerHolyMountain": 3,
+    "spacingCells": 52,
+    "sourceOffsetAboveBoundaryCells": 30,
+    "destinationLocalDepthCells": 24,
+    "destinationOffsetCells": -112,
+    "triggerHalfWidthCells": 7,
+    "triggerHalfHeightCells": 9,
+    "eyeShellMaterial": "boundary_stone",
+    "teleportatiumMaterial": "teleportatium",
+    "basinTopOffsetCells": 7,
+    "basinHalfWidthCells": 9,
+    "basinDepthCells": 7,
+    "minimumPowerCells": 18,
+    "transitionSeconds": 0.18,
+    "cooldownSeconds": 0.45,
+    "invulnerabilitySeconds": 0.04
   },
   "mainPath": [
     {

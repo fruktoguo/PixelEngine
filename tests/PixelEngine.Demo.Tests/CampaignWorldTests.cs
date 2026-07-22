@@ -37,8 +37,9 @@ public sealed class CampaignWorldTests
         Assert.Equal(
             ["Mines", "Coal Pits", "Snowy Depths", "Hiisi Base", "Underground Jungle", "The Vault", "Temple of the Art", "The Laboratory"],
             config.Regions.Select(static region => region.DisplayName));
-        Assert.True(materials.Resolve(config.HolyMountainShellMaterial).IsValid);
-        Assert.True(materials.Resolve(config.HolyMountainPlatformMaterial).IsValid);
+        Assert.True(materials.Resolve(biomes.HolyMountain.ShellMaterial).IsValid);
+        Assert.True(materials.Resolve(biomes.HolyMountain.PlatformMaterial).IsValid);
+        Assert.True(materials.Resolve(biomes.PortalNetwork.TeleportatiumMaterial).IsValid);
         Assert.Equal(BiomeCatalog.CurrentSchemaVersion, biomes.SchemaVersion);
         Assert.Equal(CampaignConfig.RequiredRegionCount, biomes.MainPath.Length);
         Assert.Equal(3, biomes.SideBiomes.Length);
@@ -48,6 +49,13 @@ public sealed class CampaignWorldTests
         Assert.Equal("active", biomes.ExpansionStages.SecretConnections);
         Assert.Equal("planned", biomes.ExpansionStages.ParallelWorlds);
         Assert.Equal("planned", biomes.ExpansionStages.NewGamePlus);
+        Assert.Equal(8, biomes.HolyMountain.Landmarks.Length);
+        Assert.Equal(16, biomes.HolyMountain.LayoutOperations.Length);
+        Assert.Equal(3, biomes.PortalNetwork.PortalsPerHolyMountain);
+        Assert.Equal("teleportatium", biomes.PortalNetwork.TeleportatiumMaterial);
+        JsonObject campaignDocument = ParseObject(File.ReadAllText(Path.Combine(ContentRoot(), "campaign.json")));
+        Assert.False(campaignDocument.ContainsKey("holyMountainShellMaterial"));
+        Assert.False(campaignDocument.ContainsKey("holyMountainPlatformMaterial"));
 
         string[] legacyIds =
         [
@@ -112,8 +120,8 @@ public sealed class CampaignWorldTests
             legacy["schemaVersion"] = 1;
             MoveProperty(legacy, "holyMountainHeightCells", "forgeHeightCells");
             MoveProperty(legacy, "holyMountainHalfWidthCells", "forgeHalfWidthCells");
-            MoveProperty(legacy, "holyMountainShellMaterial", "forgeShellMaterial");
-            MoveProperty(legacy, "holyMountainPlatformMaterial", "forgePlatformMaterial");
+            legacy["forgeShellMaterial"] = "boundary_stone";
+            legacy["forgePlatformMaterial"] = "metal";
 
             string[] legacyIds =
             [
@@ -170,6 +178,8 @@ public sealed class CampaignWorldTests
         {
             JsonObject legacy = ParseObject(File.ReadAllText(Path.Combine(ContentRoot(), "campaign.json")));
             legacy["schemaVersion"] = 2;
+            legacy["holyMountainShellMaterial"] = "boundary_stone";
+            legacy["holyMountainPlatformMaterial"] = "metal";
             BiomeCatalog biomes = LoadBiomes(LoadConfig());
             JsonArray regions = Assert.IsType<JsonArray>(legacy["regions"]);
             for (int i = 0; i < regions.Count; i++)
@@ -184,6 +194,32 @@ public sealed class CampaignWorldTests
             }
 
             File.WriteAllText(Path.Combine(tempRoot, "campaign.json"), legacy.ToJsonString());
+            CampaignConfig migrated = CampaignConfig.Load(new EngineScriptConfigApi(tempRoot));
+
+            AssertEquivalent(migrated, CampaignConfig.BuiltinDefault);
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证首个 biomes 拆分节点的 v3 配置会继续迁移 Holy Mountain 材质，v4 不再保留地形权威。
+    /// </summary>
+    [Fact]
+    public void CampaignConfigMigratesV3HolyMountainTerrainFields()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.CampaignConfig", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(tempRoot);
+        try
+        {
+            JsonObject legacy = ParseObject(File.ReadAllText(Path.Combine(ContentRoot(), "campaign.json")));
+            legacy["schemaVersion"] = 3;
+            legacy["holyMountainShellMaterial"] = "boundary_stone";
+            legacy["holyMountainPlatformMaterial"] = "metal";
+            File.WriteAllText(Path.Combine(tempRoot, "campaign.json"), legacy.ToJsonString());
+
             CampaignConfig migrated = CampaignConfig.Load(new EngineScriptConfigApi(tempRoot));
 
             AssertEquivalent(migrated, CampaignConfig.BuiltinDefault);
@@ -277,6 +313,21 @@ public sealed class CampaignWorldTests
         InvalidDataException capacityError = Assert.Throws<InvalidDataException>(
             () => BiomeCatalog.Parse(excessiveConnections.ToJsonString(), campaign));
         Assert.Contains("最多允许八项", capacityError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidHolyMountain = ParseObject(source);
+        JsonObject holyMountain = Assert.IsType<JsonObject>(invalidHolyMountain["holyMountain"]);
+        JsonArray layoutOperations = Assert.IsType<JsonArray>(holyMountain["layoutOperations"]);
+        Assert.IsType<JsonObject>(layoutOperations[0])["x"] = 4_096;
+        InvalidDataException holyMountainError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidHolyMountain.ToJsonString(), campaign));
+        Assert.Contains("超出 Holy Mountain 横向布局", holyMountainError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidPortal = ParseObject(source);
+        JsonObject portal = Assert.IsType<JsonObject>(invalidPortal["portalNetwork"]);
+        portal["minimumPowerCells"] = 4_096;
+        InvalidDataException portalError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidPortal.ToJsonString(), campaign));
+        Assert.Contains("供能池可采样容量", portalError.Message, StringComparison.Ordinal);
 
         JsonObject invalidMaterial = ParseObject(source);
         JsonArray mainPath = Assert.IsType<JsonArray>(invalidMaterial["mainPath"]);
@@ -479,6 +530,132 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
+    /// 验证七排 Portal 都有真实 Teleportatium 供能池、同层固定目的地，且 Holy Mountain authored 地标写入地形。
+    /// </summary>
+    [Fact]
+    public void PortalBasinsAndHolyMountainLandmarksMaterializeFromBiomeData()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog catalog = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, catalog, campaign.InitialRunSeed);
+        PortalNetworkDefinition portal = catalog.PortalNetwork;
+        ushort teleportatium = ResolveRequired(materials, portal.TeleportatiumMaterial);
+        ushort portalShell = ResolveRequired(materials, portal.EyeShellMaterial);
+        ushort empty = ResolveRequired(materials, "empty");
+        ushort water = ResolveRequired(materials, "water");
+        ushort metal = ResolveRequired(materials, catalog.HolyMountain.PlatformMaterial);
+        ushort crystal = ResolveRequired(materials, "crystal");
+        HolyMountainLandmarkAnchor[] landmarks = new HolyMountainLandmarkAnchor[16];
+        HolyMountainLandmarkAnchor[] repeatedLandmarks = new HolyMountainLandmarkAnchor[16];
+
+        for (int holyMountainIndex = 0; holyMountainIndex < CampaignConfig.RequiredRegionCount - 1; holyMountainIndex++)
+        {
+            CampaignPortalAnchor first = default;
+            CampaignPortalAnchor previous = default;
+            for (int portalIndex = 0; portalIndex < portal.PortalsPerHolyMountain; portalIndex++)
+            {
+                CampaignPortalAnchor anchor = PlayableCavernWorldGenerator.ResolvePortalAnchor(
+                    campaign,
+                    portal,
+                    holyMountainIndex,
+                    portalIndex,
+                    campaign.InitialRunSeed);
+                if (portalIndex == 0)
+                {
+                    first = anchor;
+                }
+                else
+                {
+                    Assert.Equal(first.DestinationX, anchor.DestinationX);
+                    Assert.Equal(first.DestinationY, anchor.DestinationY);
+                    Assert.Equal(
+                        empty,
+                        probe.MaterialAt(
+                            previous.SourceX + ((anchor.SourceX - previous.SourceX) / 2),
+                            anchor.SourceY));
+                }
+
+                previous = anchor;
+
+                long liquidY = anchor.SourceY + portal.BasinTopOffsetCells + 2;
+                Assert.Equal(teleportatium, probe.MaterialAt(anchor.SourceX, liquidY));
+                Assert.Equal(
+                    portalShell,
+                    probe.MaterialAt(anchor.SourceX + portal.BasinHalfWidthCells, liquidY));
+                int poweredCells = CountMaterialInRect(
+                    probe,
+                    teleportatium,
+                    anchor.SourceX - portal.BasinHalfWidthCells + 1,
+                    liquidY,
+                    anchor.SourceX + portal.BasinHalfWidthCells - 1,
+                    anchor.SourceY + portal.BasinTopOffsetCells + portal.BasinDepthCells - 1);
+                Assert.True(poweredCells >= portal.MinimumPowerCells);
+                Assert.Equal(empty, probe.MaterialAt(anchor.SourceX, anchor.SourceY));
+                Assert.Equal(empty, probe.MaterialAt(anchor.DestinationX, anchor.DestinationY));
+            }
+
+            int landmarkCount = PlayableCavernWorldGenerator.CollectHolyMountainLandmarkAnchors(
+                catalog,
+                campaign,
+                holyMountainIndex,
+                campaign.InitialRunSeed,
+                landmarks);
+            int repeatedLandmarkCount = PlayableCavernWorldGenerator.CollectHolyMountainLandmarkAnchors(
+                catalog,
+                campaign,
+                holyMountainIndex,
+                campaign.InitialRunSeed,
+                repeatedLandmarks);
+            Assert.Equal(catalog.HolyMountain.Landmarks.Length, landmarkCount);
+            Assert.Equal(landmarkCount, repeatedLandmarkCount);
+            Assert.True(
+                landmarks.AsSpan(0, landmarkCount).SequenceEqual(
+                    repeatedLandmarks.AsSpan(0, repeatedLandmarkCount)));
+            foreach (HolyMountainLandmarkAnchor landmark in landmarks[..landmarkCount])
+            {
+                switch (landmark.Kind)
+                {
+                    case "arrival":
+                    case "exit-tunnel":
+                        Assert.Equal(empty, probe.MaterialAt(landmark.WorldX, landmark.WorldY));
+                        break;
+                    case "water-pool":
+                        Assert.Equal(water, probe.MaterialAt(landmark.WorldX, landmark.WorldY));
+                        break;
+                    case "shop-platform":
+                        Assert.True(CountMaterialInRect(probe, metal, landmark.WorldX - 4, landmark.WorldY, landmark.WorldX + 4, landmark.WorldY + 8) > 0);
+                        break;
+                    case "worm-crystal-room":
+                        Assert.True(CountMaterialInRect(probe, crystal, landmark.WorldX - 4, landmark.WorldY, landmark.WorldX + 4, landmark.WorldY + 12) > 0);
+                        break;
+                    case "perk-platform":
+                    case "training-statues":
+                        Assert.True(CountMaterialInRect(probe, metal, landmark.WorldX - 10, landmark.WorldY - 12, landmark.WorldX + 10, landmark.WorldY + 10) > 0);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"未覆盖 Holy Mountain landmark kind：{landmark.Kind}。");
+                }
+            }
+
+
+            long holyMountainY = campaign.HolyMountainStartCellY(holyMountainIndex);
+            long exitShaftY = holyMountainY + 88;
+            long exitShaftX = PlayableCavernWorldGenerator.MainPathCenterX(
+                exitShaftY,
+                campaign,
+                campaign.InitialRunSeed) + 158;
+            Assert.Equal(empty, probe.MaterialAt(exitShaftX, exitShaftY));
+            long returnCorridorY = holyMountainY + 116;
+            long returnCorridorX = PlayableCavernWorldGenerator.MainPathCenterX(
+                returnCorridorY,
+                campaign,
+                campaign.InitialRunSeed) + 80;
+            Assert.Equal(empty, probe.MaterialAt(returnCorridorX, returnCorridorY));
+        }
+    }
+
+    /// <summary>
     /// 验证目录已经在 Describe 阶段编译，之后八区 chunk 与固定容量 encounter 查询不产生稳态托管分配。
     /// </summary>
     [Fact]
@@ -497,6 +674,7 @@ public sealed class CampaignWorldTests
         ushort[] materialCells = new ushort[ChunkSize * ChunkSize];
         Half[] temperatureCells = new Half[TemperatureSize * TemperatureSize];
         BiomeEncounterAnchor[] anchors = new BiomeEncounterAnchor[32];
+        HolyMountainLandmarkAnchor[] holyMountainLandmarks = new HolyMountainLandmarkAnchor[16];
 
         for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
         {
@@ -517,6 +695,15 @@ public sealed class CampaignWorldTests
                 1_024,
                 campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCells - 1L,
                 anchors);
+            if (regionIndex < CampaignConfig.RequiredRegionCount - 1)
+            {
+                _ = PlayableCavernWorldGenerator.CollectHolyMountainLandmarkAnchors(
+                    catalog,
+                    campaign,
+                    regionIndex,
+                    campaign.InitialRunSeed,
+                    holyMountainLandmarks);
+            }
         }
 
         long chunkBefore = GC.GetAllocatedBytesForCurrentThread();
@@ -552,9 +739,22 @@ public sealed class CampaignWorldTests
         }
 
         long encounterAllocated = GC.GetAllocatedBytesForCurrentThread() - encounterBefore;
+        long landmarkBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < 256; iteration++)
+        {
+            checksum ^= PlayableCavernWorldGenerator.CollectHolyMountainLandmarkAnchors(
+                catalog,
+                campaign,
+                iteration % (CampaignConfig.RequiredRegionCount - 1),
+                campaign.InitialRunSeed,
+                holyMountainLandmarks);
+        }
+
+        long landmarkAllocated = GC.GetAllocatedBytesForCurrentThread() - landmarkBefore;
         GC.KeepAlive(checksum);
         Assert.InRange(chunkAllocated, 0, 1_024);
         Assert.InRange(encounterAllocated, 0, 1_024);
+        Assert.InRange(landmarkAllocated, 0, 1_024);
     }
 
     /// <summary>
@@ -568,14 +768,17 @@ public sealed class CampaignWorldTests
         IMaterialQuery materials = LoadMaterials();
         TerrainProbe probe = new(materials, config, biomes, config.InitialRunSeed);
         ushort empty = ResolveRequired(materials, "empty");
-        ushort holyMountainShell = ResolveRequired(materials, config.HolyMountainShellMaterial);
-        ushort holyMountainPlatform = ResolveRequired(materials, config.HolyMountainPlatformMaterial);
+        ushort holyMountainShell = ResolveRequired(materials, biomes.HolyMountain.ShellMaterial);
+        ushort holyMountainPlatform = ResolveRequired(materials, biomes.HolyMountain.PlatformMaterial);
 
         long campaignBottom = RegionStart(config, CampaignConfig.RequiredRegionCount - 1) + config.RegionHeightCells;
         for (long worldY = config.SurfaceY; worldY <= campaignBottom; worldY += 31)
         {
             long pathX = PlayableCavernWorldGenerator.MainPathCenterX(worldY, config, config.InitialRunSeed);
-            Assert.Equal(empty, probe.MaterialAt(pathX, worldY));
+            if (!IsPortalTransitionRow(config, biomes.PortalNetwork, worldY))
+            {
+                Assert.Equal(empty, probe.MaterialAt(pathX, worldY));
+            }
         }
 
         for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
@@ -768,6 +971,26 @@ public sealed class CampaignWorldTests
         return count;
     }
 
+    private static int CountMaterialInRect(
+        TerrainProbe probe,
+        ushort expected,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY)
+    {
+        int count = 0;
+        for (long y = minimumY; y <= maximumY; y++)
+        {
+            for (long x = minimumX; x <= maximumX; x++)
+            {
+                count += probe.MaterialAt(x, y) == expected ? 1 : 0;
+            }
+        }
+
+        return count;
+    }
+
     private static void AssertEquivalent(CampaignConfig actual, CampaignConfig expected)
     {
         Assert.Equal(expected.SchemaVersion, actual.SchemaVersion);
@@ -781,8 +1004,6 @@ public sealed class CampaignWorldTests
         Assert.Equal(expected.MainPathEntranceX, actual.MainPathEntranceX);
         Assert.Equal(expected.MainPathWanderCells, actual.MainPathWanderCells);
         Assert.Equal(expected.HolyMountainHalfWidthCells, actual.HolyMountainHalfWidthCells);
-        Assert.Equal(expected.HolyMountainShellMaterial, actual.HolyMountainShellMaterial);
-        Assert.Equal(expected.HolyMountainPlatformMaterial, actual.HolyMountainPlatformMaterial);
         Assert.Equal(expected.Regions.Length, actual.Regions.Length);
         for (int i = 0; i < expected.Regions.Length; i++)
         {
@@ -804,6 +1025,30 @@ public sealed class CampaignWorldTests
     private static long HolyMountainStart(CampaignConfig config, int holyMountainIndex)
     {
         return RegionStart(config, holyMountainIndex) + config.RegionHeightCells;
+    }
+
+    private static bool IsPortalTransitionRow(
+        CampaignConfig config,
+        PortalNetworkDefinition portal,
+        long worldY)
+    {
+        long minimumOffset = -portal.SourceOffsetAboveBoundaryCells - portal.TriggerHalfHeightCells;
+        long maximumOffset = -portal.SourceOffsetAboveBoundaryCells +
+            portal.BasinTopOffsetCells +
+            portal.BasinDepthCells +
+            1L;
+        for (int holyMountainIndex = 0;
+             holyMountainIndex < CampaignConfig.RequiredRegionCount - 1;
+             holyMountainIndex++)
+        {
+            long offset = worldY - config.HolyMountainStartCellY(holyMountainIndex);
+            if (offset >= minimumOffset && offset <= maximumOffset)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void MoveProperty(JsonObject source, string oldName, string newName)

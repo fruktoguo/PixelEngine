@@ -10,7 +10,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class BiomeCatalog
 {
-    internal const int CurrentSchemaVersion = 1;
+    internal const int CurrentSchemaVersion = 2;
     private const string EmbeddedResourceName = "PixelEngine.Demo.biomes.json";
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -24,6 +24,10 @@ internal sealed class BiomeCatalog
     public int SchemaVersion { get; init; }
 
     public BiomeExpansionStages ExpansionStages { get; init; } = new();
+
+    public HolyMountainDefinition HolyMountain { get; init; } = new();
+
+    public PortalNetworkDefinition PortalNetwork { get; init; } = new();
 
     public BiomeDefinition[] MainPath { get; init; } = [];
 
@@ -125,6 +129,8 @@ internal sealed class BiomeCatalog
             string.Equals(ExpansionStages.ParallelWorlds, "planned", StringComparison.Ordinal) &&
             string.Equals(ExpansionStages.NewGamePlus, "planned", StringComparison.Ordinal),
             "parallelWorlds 与 newGamePlus 在当前阶段必须明确标记 planned。 ");
+        ValidateHolyMountain(campaign);
+        ValidatePortalNetwork(campaign);
 
         BiomeDefinition[] mainPath = MainPath ??
             throw new InvalidDataException("biomes.json 配置无效：mainPath 不能为空。");
@@ -206,6 +212,127 @@ internal sealed class BiomeCatalog
         Require(hasSecret, "connections 缺少 active secret-side-biome。 ");
         Require(hasShortcut, "connections 缺少 active vertical-shortcut。 ");
         return this;
+    }
+
+    private void ValidateHolyMountain(CampaignConfig campaign)
+    {
+        HolyMountainDefinition holyMountain = HolyMountain ??
+            throw new InvalidDataException("biomes.json 配置无效：holyMountain 不能为空。");
+        Require(
+            float.IsFinite(holyMountain.BaseTemperature) &&
+            holyMountain.BaseTemperature is >= 0f and <= 255f,
+            "holyMountain.baseTemperature 必须位于 [0,255]。");
+        RequireMaterialKey(holyMountain.ShellMaterial, "holyMountain.shellMaterial");
+        RequireMaterialKey(holyMountain.PlatformMaterial, "holyMountain.platformMaterial");
+        Require(
+            holyMountain.ShellThicknessCells is >= 4 and <= 16 &&
+            holyMountain.ShellThicknessCells < campaign.HolyMountainHeightCells / 4,
+            "holyMountain.shellThicknessCells 必须位于 [4,16] 且能容纳内部房间。");
+
+        HolyMountainOperationDefinition[] operations = holyMountain.LayoutOperations ??
+            throw new InvalidDataException("biomes.json 配置无效：holyMountain.layoutOperations 不能为空。");
+        Require(operations.Length is >= 8 and <= 32, "holyMountain.layoutOperations 必须包含 [8,32] 项。");
+        int minimumX = -campaign.HolyMountainHalfWidthCells;
+        int maximumXExclusive = campaign.HolyMountainHalfWidthCells + 9;
+        for (int i = 0; i < operations.Length; i++)
+        {
+            HolyMountainOperationDefinition operation = operations[i] ??
+                throw new InvalidDataException($"biomes.json 配置无效：holyMountain.layoutOperations[{i}] 不能为空。");
+            string label = $"holyMountain.layoutOperations[{i}]";
+            Require(operation.Kind is "fillRect" or "carveRect", $"{label}.kind 不受支持。");
+            RequireMaterialKey(operation.Material, $"{label}.material");
+            Require(operation.Width >= 1 && operation.Height >= 1, $"{label} 尺寸必须为正。");
+            Require(
+                operation.X >= minimumX &&
+                operation.X + operation.Width <= maximumXExclusive,
+                $"{label} 超出 Holy Mountain 横向布局。");
+            Require(
+                operation.Y >= 0 &&
+                operation.Y + operation.Height <= campaign.HolyMountainHeightCells,
+                $"{label} 超出 Holy Mountain 纵向布局。");
+            if (operation.Kind == "carveRect")
+            {
+                Require(string.Equals(operation.Material, "empty", StringComparison.Ordinal), $"{label} carve 操作必须使用 empty。");
+            }
+        }
+
+        HolyMountainLandmarkDefinition[] landmarks = holyMountain.Landmarks ??
+            throw new InvalidDataException("biomes.json 配置无效：holyMountain.landmarks 不能为空。");
+        Require(landmarks.Length is >= 8 and <= 16, "holyMountain.landmarks 必须包含 [8,16] 项。");
+        HashSet<string> landmarkIds = new(StringComparer.Ordinal);
+        HashSet<string> landmarkKinds = new(StringComparer.Ordinal);
+        for (int i = 0; i < landmarks.Length; i++)
+        {
+            HolyMountainLandmarkDefinition landmark = landmarks[i] ??
+                throw new InvalidDataException($"biomes.json 配置无效：holyMountain.landmarks[{i}] 不能为空。");
+            string label = $"holyMountain.landmarks[{i}]";
+            RequireStableId(landmark.Id, $"{label}.id");
+            Require(landmarkIds.Add(landmark.Id), $"Holy Mountain landmark id 重复：{landmark.Id}。");
+            Require(
+                landmark.Kind is "arrival" or "water-pool" or "shop-platform" or "worm-crystal-room" or
+                    "perk-platform" or "training-statues" or "exit-tunnel",
+                $"{label}.kind 不受支持：{landmark.Kind}。");
+            _ = landmarkKinds.Add(landmark.Kind);
+            Require(
+                landmark.OffsetXCells >= minimumX && landmark.OffsetXCells < maximumXExclusive,
+                $"{label}.offsetXCells 超出 Holy Mountain 横向布局。");
+            Require(
+                landmark.LocalDepthCells >= 0 && landmark.LocalDepthCells < campaign.HolyMountainHeightCells,
+                $"{label}.localDepthCells 超出 Holy Mountain 纵向布局。");
+        }
+
+        string[] requiredLandmarkKinds =
+        [
+            "arrival",
+            "water-pool",
+            "shop-platform",
+            "worm-crystal-room",
+            "perk-platform",
+            "training-statues",
+            "exit-tunnel",
+        ];
+        for (int i = 0; i < requiredLandmarkKinds.Length; i++)
+        {
+            Require(landmarkKinds.Contains(requiredLandmarkKinds[i]), $"holyMountain.landmarks 缺少 {requiredLandmarkKinds[i]}。");
+        }
+    }
+
+    private void ValidatePortalNetwork(CampaignConfig campaign)
+    {
+        PortalNetworkDefinition portal = PortalNetwork ??
+            throw new InvalidDataException("biomes.json 配置无效：portalNetwork 不能为空。");
+        Require(
+            portal.PortalsPerHolyMountain is >= 1 and <= 5 && (portal.PortalsPerHolyMountain & 1) == 1,
+            "portalNetwork.portalsPerHolyMountain 必须是 [1,5] 内的奇数。");
+        Require(portal.SpacingCells is >= 24 and <= 96, "portalNetwork.spacingCells 必须位于 [24,96]。");
+        Require(
+            portal.SourceOffsetAboveBoundaryCells is >= 16 and <= 96,
+            "portalNetwork.sourceOffsetAboveBoundaryCells 必须位于 [16,96]。");
+        Require(
+            portal.DestinationLocalDepthCells is >= 12 &&
+            portal.DestinationLocalDepthCells < campaign.HolyMountainHeightCells - 12,
+            "portalNetwork.destinationLocalDepthCells 必须位于 Holy Mountain 安全内部。");
+        Require(
+            Math.Abs(portal.DestinationOffsetCells) <= campaign.HolyMountainHalfWidthCells - 16,
+            "portalNetwork.destinationOffsetCells 必须位于 Holy Mountain 房间内部。");
+        Require(portal.TriggerHalfWidthCells is >= 3 and <= 16, "portalNetwork.triggerHalfWidthCells 必须位于 [3,16]。");
+        Require(portal.TriggerHalfHeightCells is >= 4 and <= 20, "portalNetwork.triggerHalfHeightCells 必须位于 [4,20]。");
+        RequireMaterialKey(portal.EyeShellMaterial, "portalNetwork.eyeShellMaterial");
+        RequireMaterialKey(portal.TeleportatiumMaterial, "portalNetwork.teleportatiumMaterial");
+        Require(portal.BasinTopOffsetCells is >= 4 and <= 16, "portalNetwork.basinTopOffsetCells 必须位于 [4,16]。");
+        Require(portal.BasinHalfWidthCells is >= 5 and <= 16, "portalNetwork.basinHalfWidthCells 必须位于 [5,16]。");
+        Require(portal.BasinDepthCells is >= 5 and <= 14, "portalNetwork.basinDepthCells 必须位于 [5,14]。");
+        Require(
+            portal.SourceOffsetAboveBoundaryCells >=
+                portal.BasinTopOffsetCells + portal.BasinDepthCells + 4,
+            "portalNetwork 供能池必须完整位于来源 biome 内。");
+        int maximumPowerCells = ((portal.BasinHalfWidthCells * 2) - 1) * (portal.BasinDepthCells - 2);
+        Require(
+            portal.MinimumPowerCells is >= 1 && portal.MinimumPowerCells <= maximumPowerCells,
+            "portalNetwork.minimumPowerCells 超出供能池可采样容量。");
+        RequireFiniteRange(portal.TransitionSeconds, 0.05, 1.0, "portalNetwork.transitionSeconds");
+        RequireFiniteRange(portal.CooldownSeconds, 0.10, 2.0, "portalNetwork.cooldownSeconds");
+        RequireFiniteRange(portal.InvulnerabilitySeconds, 1.0 / 120.0, 0.25, "portalNetwork.invulnerabilitySeconds");
     }
 
     private void ValidateConnection(
@@ -393,6 +520,82 @@ internal sealed class BiomeExpansionStages
     public string ParallelWorlds { get; init; } = string.Empty;
 
     public string NewGamePlus { get; init; } = string.Empty;
+}
+
+internal sealed class HolyMountainDefinition
+{
+    public float BaseTemperature { get; init; }
+
+    public string ShellMaterial { get; init; } = string.Empty;
+
+    public string PlatformMaterial { get; init; } = string.Empty;
+
+    public int ShellThicknessCells { get; init; }
+
+    public HolyMountainOperationDefinition[] LayoutOperations { get; init; } = [];
+
+    public HolyMountainLandmarkDefinition[] Landmarks { get; init; } = [];
+}
+
+internal sealed class HolyMountainOperationDefinition
+{
+    public string Kind { get; init; } = string.Empty;
+
+    public string Material { get; init; } = string.Empty;
+
+    public int X { get; init; }
+
+    public int Y { get; init; }
+
+    public int Width { get; init; }
+
+    public int Height { get; init; }
+}
+
+internal sealed class HolyMountainLandmarkDefinition
+{
+    public string Id { get; init; } = string.Empty;
+
+    public string Kind { get; init; } = string.Empty;
+
+    public int OffsetXCells { get; init; }
+
+    public int LocalDepthCells { get; init; }
+}
+
+internal sealed class PortalNetworkDefinition
+{
+    public int PortalsPerHolyMountain { get; init; }
+
+    public int SpacingCells { get; init; }
+
+    public int SourceOffsetAboveBoundaryCells { get; init; }
+
+    public int DestinationLocalDepthCells { get; init; }
+
+    public int DestinationOffsetCells { get; init; }
+
+    public int TriggerHalfWidthCells { get; init; }
+
+    public int TriggerHalfHeightCells { get; init; }
+
+    public string EyeShellMaterial { get; init; } = string.Empty;
+
+    public string TeleportatiumMaterial { get; init; } = string.Empty;
+
+    public int BasinTopOffsetCells { get; init; }
+
+    public int BasinHalfWidthCells { get; init; }
+
+    public int BasinDepthCells { get; init; }
+
+    public int MinimumPowerCells { get; init; }
+
+    public double TransitionSeconds { get; init; }
+
+    public double CooldownSeconds { get; init; }
+
+    public double InvulnerabilitySeconds { get; init; }
 }
 
 internal sealed class BiomeDefinition

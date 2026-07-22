@@ -113,6 +113,8 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         health.LavaDamagePerSecond = 40f;
         health.AcidDamagePerSecond = 35f;
 
+        _ = playerEntity.AddComponent<CampaignPortalNetwork>();
+
         CameraFollow camera = playerEntity.AddComponent<CameraFollow>();
         camera.ClampToBounds = false;
         camera.Zoom = 2f;

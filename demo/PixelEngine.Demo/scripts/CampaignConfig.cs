@@ -9,10 +9,11 @@ namespace PixelEngine.Demo;
 public sealed class CampaignConfig
 {
     /// <summary>当前支持的 schema 版本。</summary>
-    public const int CurrentSchemaVersion = 3;
+    public const int CurrentSchemaVersion = 4;
 
     private const int LegacySchemaVersion = 1;
     private const int TerrainSchemaVersion = 2;
+    private const int RegionIdentitySchemaVersion = 3;
 
     private static readonly string[] CanonicalRegionIds =
     [
@@ -92,18 +93,6 @@ public sealed class CampaignConfig
     /// <summary>v1 脚本使用的 Holy Mountain 半宽只读 alias。</summary>
     public int ForgeHalfWidthCells => HolyMountainHalfWidthCells;
 
-    /// <summary>Holy Mountain 边界材质稳定字符串键。</summary>
-    public string HolyMountainShellMaterial { get; init; } = string.Empty;
-
-    /// <summary>v1 脚本使用的 Holy Mountain 边界材质只读 alias。</summary>
-    public string ForgeShellMaterial => HolyMountainShellMaterial;
-
-    /// <summary>Holy Mountain 平台材质稳定字符串键。</summary>
-    public string HolyMountainPlatformMaterial { get; init; } = string.Empty;
-
-    /// <summary>v1 脚本使用的 Holy Mountain 平台材质只读 alias。</summary>
-    public string ForgePlatformMaterial => HolyMountainPlatformMaterial;
-
     /// <summary>按 Noita 主路径顺序排列的八个区域。</summary>
     public CampaignRegionDefinition[] Regions { get; init; } = [];
 
@@ -129,10 +118,10 @@ public sealed class CampaignConfig
         }
 
         int sourceSchemaVersion = ReadInt32(root, "schemaVersion");
-        if (sourceSchemaVersion is not (LegacySchemaVersion or TerrainSchemaVersion or CurrentSchemaVersion))
+        if (sourceSchemaVersion is not (LegacySchemaVersion or TerrainSchemaVersion or RegionIdentitySchemaVersion or CurrentSchemaVersion))
         {
             throw new InvalidDataException(
-                $"campaign.json schemaVersion 必须为 {LegacySchemaVersion}、{TerrainSchemaVersion} 或 {CurrentSchemaVersion}。");
+                $"campaign.json schemaVersion 必须位于 [{LegacySchemaVersion},{CurrentSchemaVersion}]。");
         }
 
         JsonElement regionsElement = ReadRequired(root, "regions");
@@ -163,7 +152,7 @@ public sealed class CampaignConfig
                     ? []
                     : ReadStringArray(regionElement, "legacyIds"),
             };
-            if (sourceSchemaVersion != CurrentSchemaVersion)
+            if (sourceSchemaVersion is LegacySchemaVersion or TerrainSchemaVersion)
             {
                 _ = ReadString(regionElement, "rockMaterial");
                 _ = ReadString(regionElement, "looseMaterial");
@@ -176,6 +165,16 @@ public sealed class CampaignConfig
                 ? UpgradeLegacyRegion(region, regionIndex)
                 : region;
             regionIndex++;
+        }
+
+        if (sourceSchemaVersion != CurrentSchemaVersion)
+        {
+            _ = ReadString(
+                root,
+                sourceSchemaVersion == LegacySchemaVersion ? "forgeShellMaterial" : "holyMountainShellMaterial");
+            _ = ReadString(
+                root,
+                sourceSchemaVersion == LegacySchemaVersion ? "forgePlatformMaterial" : "holyMountainPlatformMaterial");
         }
 
         return new CampaignConfig
@@ -195,18 +194,12 @@ public sealed class CampaignConfig
             HolyMountainHalfWidthCells = ReadInt32(
                 root,
                 sourceSchemaVersion == LegacySchemaVersion ? "forgeHalfWidthCells" : "holyMountainHalfWidthCells"),
-            HolyMountainShellMaterial = ReadString(
-                root,
-                sourceSchemaVersion == LegacySchemaVersion ? "forgeShellMaterial" : "holyMountainShellMaterial"),
-            HolyMountainPlatformMaterial = ReadString(
-                root,
-                sourceSchemaVersion == LegacySchemaVersion ? "forgePlatformMaterial" : "holyMountainPlatformMaterial"),
             Regions = regions,
         }.Validate();
     }
 
     /// <summary>
-    /// 校验 schema、拓扑尺寸、模式、材质键与八区唯一性。
+    /// 校验 schema、拓扑尺寸、模式与八区唯一性。
     /// </summary>
     /// <returns>当前已校验配置。</returns>
     public CampaignConfig Validate()
@@ -232,8 +225,6 @@ public sealed class CampaignConfig
         Require(MainPathWanderCells is >= 0 and <= 512, "mainPathWanderCells 必须位于 [0,512]。");
         Require(HolyMountainHalfWidthCells is >= 96 and <= 384, "holyMountainHalfWidthCells 必须位于 [96,384]。");
         Require(HolyMountainHalfWidthCells > MainPathHalfWidthCells + 32, "holyMountainHalfWidthCells 必须显著宽于主通道。");
-        RequireMaterialKey(HolyMountainShellMaterial, nameof(HolyMountainShellMaterial));
-        RequireMaterialKey(HolyMountainPlatformMaterial, nameof(HolyMountainPlatformMaterial));
         CampaignRegionDefinition[] regions = Regions ??
             throw new InvalidDataException("campaign.json 配置无效：regions 不能为空。");
         Require(regions.Length == RequiredRegionCount, $"regions 必须恰好包含 {RequiredRegionCount} 个区域。");
@@ -367,8 +358,6 @@ public sealed class CampaignConfig
             MainPathEntranceX = 96,
             MainPathWanderCells = 176,
             HolyMountainHalfWidthCells = 176,
-            HolyMountainShellMaterial = "boundary_stone",
-            HolyMountainPlatformMaterial = "metal",
             Regions =
             [
                 Region(0),
@@ -423,11 +412,6 @@ public sealed class CampaignConfig
             bool valid = character is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_' or '-';
             Require(valid, $"{field} 只能使用小写 ASCII、数字、短横线与下划线。");
         }
-    }
-
-    private static void RequireMaterialKey(string value, string field)
-    {
-        RequireStableId(value, field);
     }
 
     private static void Require(bool condition, string message)

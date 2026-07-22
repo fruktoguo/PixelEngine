@@ -2963,6 +2963,124 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 Campaign Portal 只有在眼状池保有足量 Teleportatium 时才固定传送到 Holy Mountain，
+    /// 并提供黑屏、材质粒子与约两帧无敌；移走供能液后入口立即失效。
+    /// </summary>
+    [Fact]
+    public void CampaignPortalRequiresTeleportatiumAndTeleportsToFixedHolyMountainDestination()
+    {
+        string contentRoot = DemoContentRoot();
+        CampaignConfig config = CampaignConfig.Load(new EngineScriptConfigApi(contentRoot));
+        BiomeCatalog catalog = BiomeCatalog.Load(new EngineScriptConfigApi(contentRoot), config);
+        PortalNetworkDefinition portalDefinition = catalog.PortalNetwork;
+        CampaignPortalAnchor anchor = PlayableCavernWorldGenerator.ResolvePortalAnchor(
+            config,
+            portalDefinition,
+            holyMountainIndex: 0,
+            portalIndex: portalDefinition.PortalsPerHolyMountain / 2,
+            worldSeed: config.InitialRunSeed);
+        MaterialTable materials = DemoContentMaterials();
+        Assert.True(materials.TryGetId(portalDefinition.TeleportatiumMaterial, out ushort teleportatium));
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out CellGrid grid,
+            out _,
+            out ScriptScene scene,
+            materials,
+            contentRoot: contentRoot,
+            worldWidthCells: 512,
+            worldHeightCells: 1_024);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        CampaignPortalNetwork portal = entity.AddComponent<CampaignPortalNetwork>();
+        CampaignRunDirector run = entity.AddComponent<CampaignRunDirector>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = anchor.SourceX - (player.Width * 0.5f);
+        player.SpawnY = anchor.SourceY - (player.Height * 0.5f);
+        PlayerHealth health = entity.AddComponent<PlayerHealth>();
+        FillPortalPower(grid, teleportatium, anchor, portalDefinition);
+
+        engine.RunHeadlessTicks(1);
+        Assert.Equal(CampaignRunState.MainMenu, run.State);
+        Assert.Equal(0, portal.TransitionCount);
+        Assert.True(run.StartSelectedRun());
+
+        engine.RunHeadlessTicks(1);
+
+        Assert.False(portal.Faulted, portal.LastException?.ToString());
+        Assert.Equal(1, portal.TransitionCount);
+        Assert.Equal(0, portal.LastTransitionHolyMountainIndex);
+        Assert.True(portal.LastPortalActive);
+        Assert.True(portal.LastPoweredCellCount >= portalDefinition.MinimumPowerCells);
+        Assert.Equal(anchor.DestinationX, player.CenterX, precision: 2);
+        Assert.Equal(anchor.DestinationY, player.CenterY, precision: 2);
+        Assert.True(portal.TransitionFadeRemainingSeconds > 0f);
+        Assert.True(health.InvulnerabilityRemainingSeconds > 0f);
+        Assert.True(engine.Context.GetService<ParticleSystem>().ActiveCount > 0);
+
+        engine.RunHeadlessTicks(32);
+        FillPortalPower(grid, 0, anchor, portalDefinition);
+        player.TeleportToCenter(anchor.SourceX, anchor.SourceY);
+        engine.RunHeadlessTicks(1);
+
+        Assert.Equal(1, portal.TransitionCount);
+        Assert.False(portal.LastPortalActive);
+        Assert.Equal(0, portal.LastPoweredCellCount);
+        Assert.InRange(player.CenterX, anchor.SourceX - 1f, anchor.SourceX + 1f);
+        Assert.InRange(player.CenterY, anchor.SourceY - 1f, anchor.SourceY + 1f);
+    }
+
+    /// <summary>
+    /// 验证相同世界坐标与供能池在 InfiniteSandbox 中不会劫持玩家，保持模式玩法隔离。
+    /// </summary>
+    [Fact]
+    public void CampaignPortalDoesNotActivateInInfiniteSandbox()
+    {
+        string contentRoot = DemoContentRoot();
+        EngineScriptConfigApi configApi = new(contentRoot);
+        CampaignConfig config = CampaignConfig.Load(configApi);
+        BiomeCatalog catalog = BiomeCatalog.Load(configApi, config);
+        PortalNetworkDefinition portalDefinition = catalog.PortalNetwork;
+        CampaignPortalAnchor anchor = PlayableCavernWorldGenerator.ResolvePortalAnchor(
+            config,
+            portalDefinition,
+            holyMountainIndex: 0,
+            portalIndex: portalDefinition.PortalsPerHolyMountain / 2,
+            worldSeed: config.InitialRunSeed);
+        MaterialTable materials = DemoContentMaterials();
+        Assert.True(materials.TryGetId(portalDefinition.TeleportatiumMaterial, out ushort teleportatium));
+        using Engine engine = CreateManualScriptEngine(
+            out _,
+            out CellGrid grid,
+            out _,
+            out ScriptScene scene,
+            materials,
+            contentRoot: contentRoot,
+            worldWidthCells: 512,
+            worldHeightCells: 1_024);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        CampaignRunDirector run = entity.AddComponent<CampaignRunDirector>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = anchor.SourceX - (player.Width * 0.5f);
+        player.SpawnY = anchor.SourceY - (player.Height * 0.5f);
+        _ = entity.AddComponent<PlayerHealth>();
+        CampaignPortalNetwork portal = entity.AddComponent<CampaignPortalNetwork>();
+        FillPortalPower(grid, teleportatium, anchor, portalDefinition);
+
+        engine.RunHeadlessTicks(1);
+        Assert.True(run.SelectMode(DemoGameMode.InfiniteSandbox));
+        Assert.True(run.StartSelectedRun());
+        engine.RunHeadlessTicks(2);
+
+        Assert.False(portal.Faulted, portal.LastException?.ToString());
+        Assert.Equal(0, portal.TransitionCount);
+        Assert.False(portal.LastPortalActive);
+        Assert.InRange(player.CenterX, anchor.SourceX - 1f, anchor.SourceX + 1f);
+        Assert.InRange(player.CenterY, anchor.SourceY - 1f, anchor.SourceY + 2f);
+    }
+
+    /// <summary>
     /// 验证真实可玩场景使用受控左键破坏弹与大范围中键爆破，避免满屏高速碎点且保留直接拆障碍能力。
     /// </summary>
     [Fact]
@@ -3322,13 +3440,37 @@ public sealed class PlayerControllerIntegrationTests
 
     private static Engine CreateScriptEngine(Type entryType, out ScriptInputApi input, out CellGrid grid, out ScriptCameraApi camera)
     {
-        Engine engine = CreateBaseEngine(out input, out grid, out camera, entryType);
+        bool playableWorld = entryType == typeof(PlayableWorldDirector);
+        Engine engine = CreateBaseEngine(
+            out input,
+            out grid,
+            out camera,
+            entryType,
+            materials: playableWorld ? DemoContentMaterials() : null,
+            contentRoot: playableWorld ? DemoContentRoot() : null);
         engine.RegisterScriptAssembly(entryType.Assembly);
         engine.RegisterScriptAssembly(typeof(PlayerController).Assembly);
         ScriptSimulationContext scripts = engine.AttachScriptingFromServices();
         Assert.Same(input, scripts.Input);
         Assert.Same(camera, scripts.Camera);
         return engine;
+    }
+
+    private static void FillPortalPower(
+        CellGrid grid,
+        ushort material,
+        in CampaignPortalAnchor anchor,
+        PortalNetworkDefinition portal)
+    {
+        int centerX = checked((int)anchor.SourceX);
+        int sourceY = checked((int)anchor.SourceY);
+        FillRect(
+            grid,
+            material,
+            centerX - portal.BasinHalfWidthCells + 1,
+            sourceY + portal.BasinTopOffsetCells + 2,
+            centerX + portal.BasinHalfWidthCells - 1,
+            sourceY + portal.BasinTopOffsetCells + portal.BasinDepthCells - 1);
     }
 
     private static Engine CreateBaseEngine(

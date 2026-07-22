@@ -71,6 +71,9 @@ public sealed class PlayerHealth : Behaviour
     /// </summary>
     public float HurtFlashSeconds { get; set; } = 0.12f;
 
+    /// <summary>Portal 或其他明确保护效果剩余的全伤害无敌时间。</summary>
+    public float InvulnerabilityRemainingSeconds { get; private set; }
+
     /// <summary>
     /// 强制按熔岩伤害计算；仅供窗口运行态健康链路探针使用。
     /// </summary>
@@ -80,6 +83,7 @@ public sealed class PlayerHealth : Behaviour
     protected override void OnStart()
     {
         Health = MaxHealth;
+        InvulnerabilityRemainingSeconds = 0f;
         ResolveMaterials();
         _ = Entity.TryGetComponent<PlayerController>(out _player);
         _ = Entity.TryGetComponent<PlayerVisual>(out _visual);
@@ -105,6 +109,14 @@ public sealed class PlayerHealth : Behaviour
 
         ResolveMaterials();
         _hurtCooldown = MathF.Max(0f, _hurtCooldown - dt);
+        InvulnerabilityRemainingSeconds = MathF.Max(0f, InvulnerabilityRemainingSeconds - dt);
+        if (InvulnerabilityRemainingSeconds > 0f)
+        {
+            HazardContactCellCount = 0;
+            HazardContactFraction = 0f;
+            return;
+        }
+
         float damage = SampleHazardDamage() * dt;
         if (damage <= 0f)
         {
@@ -120,6 +132,7 @@ public sealed class PlayerHealth : Behaviour
     public void Respawn()
     {
         Health = MaxHealth;
+        InvulnerabilityRemainingSeconds = 0f;
         HazardContactCellCount = 0;
         HazardContactFraction = 0f;
         RespawnCount++;
@@ -132,12 +145,28 @@ public sealed class PlayerHealth : Behaviour
     /// <param name="amount">伤害量。</param>
     public void ApplyExternalDamage(float amount)
     {
-        if (!float.IsFinite(amount) || amount <= 0f)
+        if (!float.IsFinite(amount) || amount <= 0f || InvulnerabilityRemainingSeconds > 0f)
         {
             return;
         }
 
         ApplyDamage(amount);
+    }
+
+    /// <summary>
+    /// 授予一段有界的全伤害无敌时间；较长的现有效果不会被较短请求覆盖。
+    /// </summary>
+    /// <param name="seconds">持续时间，单位秒。</param>
+    public void GrantInvulnerability(float seconds)
+    {
+        if (!float.IsFinite(seconds) || seconds <= 0f)
+        {
+            return;
+        }
+
+        InvulnerabilityRemainingSeconds = MathF.Max(
+            InvulnerabilityRemainingSeconds,
+            Math.Clamp(seconds, 0f, 1f));
     }
 
     private void ResolveMaterials()

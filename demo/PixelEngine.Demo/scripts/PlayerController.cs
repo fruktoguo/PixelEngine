@@ -16,6 +16,9 @@ public sealed class PlayerController : Behaviour
     private float _footstepTimer;
     private float _rigidImpactCooldown;
     private float _levitationRechargeDelay;
+    private float _teleportHoldCenterX;
+    private float _teleportHoldCenterY;
+    private int _teleportHoldUpdates;
     private Transform? _transform;
     private PlayerHealth? _health;
     private IDisposable? _postPhysicsSubscription;
@@ -223,8 +226,43 @@ public sealed class PlayerController : Behaviour
         _rigidImpactCooldown = 0f;
         LevitationRemainingSeconds = NonNegativeFinite(LevitationCapacitySeconds);
         _levitationRechargeDelay = 0f;
+        _teleportHoldUpdates = 0;
         IsLevitating = false;
         State = Context.Character.SetPosition(_body, SpawnX, SpawnY);
+        SyncTransform();
+    }
+
+    /// <summary>
+    /// 把角色中心传送到指定世界坐标并清空运动状态；用于固定目的地的世界 Portal。
+    /// </summary>
+    /// <param name="centerX">目标中心 X，单位 cell。</param>
+    /// <param name="centerY">目标中心 Y，单位 cell。</param>
+    public void TeleportToCenter(float centerX, float centerY)
+    {
+        if (!float.IsFinite(centerX))
+        {
+            throw new ArgumentOutOfRangeException(nameof(centerX));
+        }
+
+        if (!float.IsFinite(centerY))
+        {
+            throw new ArgumentOutOfRangeException(nameof(centerY));
+        }
+
+        EnsureBody();
+        _velocityX = 0f;
+        _velocityY = 0f;
+        _coyoteTimer = 0f;
+        _jumpBufferTimer = 0f;
+        _footstepTimer = 0f;
+        IsLevitating = false;
+        State = Context.Character.SetPosition(
+            _body,
+            centerX - (Width * 0.5f),
+            centerY - (Height * 0.5f));
+        _teleportHoldCenterX = centerX;
+        _teleportHoldCenterY = centerY;
+        _teleportHoldUpdates = 1;
         SyncTransform();
     }
 
@@ -248,6 +286,7 @@ public sealed class PlayerController : Behaviour
         LevitationRemainingSeconds = 0f;
         _levitationRechargeDelay = 0f;
         IsLevitating = false;
+        _teleportHoldUpdates = 0;
     }
 
     /// <inheritdoc />
@@ -260,6 +299,17 @@ public sealed class PlayerController : Behaviour
 
         EnsureBody();
         ResolveHealth();
+        if (_teleportHoldUpdates > 0)
+        {
+            _teleportHoldUpdates--;
+            State = Context.Character.SetPosition(
+                _body,
+                _teleportHoldCenterX - (Width * 0.5f),
+                _teleportHoldCenterY - (Height * 0.5f));
+            SyncTransform();
+            return;
+        }
+
         _rigidImpactCooldown = MathF.Max(0f, _rigidImpactCooldown - dt);
         CharacterState previousState = State;
         State = Context.Character.GetState(_body);

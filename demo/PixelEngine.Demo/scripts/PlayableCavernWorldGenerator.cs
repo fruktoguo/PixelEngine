@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v3";
+    public const string PersistenceKey = "showcase-campaign-v4";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -198,6 +198,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 state,
                 worldY,
                 connectionSegments);
+            PortalRowContext portalRow = BuildPortalRowContext(
+                state,
+                location,
+                regionIndex,
+                worldY);
             long pathCenterX = location.DepthCells >= config.CampaignStartDepthCells
                 ? MainPathCenterX(worldY, config, worldSeed, mainPathOriginNoise)
                 : config.MainPathEntranceX;
@@ -209,17 +214,40 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 regionIndex,
                 biome,
                 palette,
+                portalRow,
                 connectionSegments[..connectionSegmentCount]);
             int row = localY * sizeCells;
+            if (portalRow.Kind == PortalRowKind.None)
+            {
+                for (int localX = 0; localX < sizeCells; localX++)
+                {
+                    materialCells[row + localX] = SelectMaterial(
+                        originCellX + localX,
+                        worldY,
+                        surfaces[localX],
+                        soilDepths[localX],
+                        moisture[localX],
+                        in rowContext);
+                }
+
+                continue;
+            }
+
             for (int localX = 0; localX < sizeCells; localX++)
             {
-                materialCells[row + localX] = SelectMaterial(
-                    originCellX + localX,
-                    worldY,
-                    surfaces[localX],
-                    soilDepths[localX],
-                    moisture[localX],
-                    in rowContext);
+                long worldX = originCellX + localX;
+                materialCells[row + localX] = TrySelectPortalTerrain(
+                    worldX,
+                    in rowContext,
+                    out ushort portalTerrainMaterial)
+                        ? portalTerrainMaterial
+                        : SelectMaterial(
+                            worldX,
+                            worldY,
+                            surfaces[localX],
+                            soilDepths[localX],
+                            moisture[localX],
+                            in rowContext);
             }
         }
 
@@ -314,21 +342,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
         if (row.Location.Kind == CampaignDepthKind.HolyMountain)
         {
-            long distanceX = Math.Abs(worldX - row.PathCenterX);
-            int shell = 8;
-            if (distanceX <= config.HolyMountainHalfWidthCells + shell)
+            if (TrySelectHolyMountainMaterial(worldX, in row, out ushort holyMountainMaterial))
             {
-                bool passage = distanceX <= config.MainPathHalfWidthCells + 4;
-                bool cap = row.Location.LocalDepthCells < shell ||
-                    row.Location.LocalDepthCells >= config.HolyMountainHeightCells - shell;
-                bool wall = distanceX >= config.HolyMountainHalfWidthCells;
-                bool platform = row.Location.LocalDepthCells is >= 60 and <= 64 &&
-                    distanceX > config.MainPathHalfWidthCells + 20;
-                return wall || (cap && !passage)
-                    ? row.Palette.HolyMountainShell
-                    : platform
-                        ? row.Palette.HolyMountainPlatform
-                        : row.Palette.Empty;
+                return holyMountainMaterial;
             }
         }
 
@@ -361,6 +377,121 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
         bool protectedSpawn = Math.Abs((double)worldX) < SafeOuterRadius && depth < 160;
         return SelectBiomeMaterial(worldX, worldY, protectedSpawn, row.Biome, in row);
+    }
+
+    private static bool TrySelectHolyMountainMaterial(
+        long worldX,
+        in TerrainRowContext row,
+        out ushort material)
+    {
+        CampaignConfig config = row.State.Config;
+        CompiledHolyMountain holyMountain = row.State.HolyMountain;
+        long relativeX = worldX - row.PathCenterX;
+        long localY = row.Location.LocalDepthCells;
+        ReadOnlySpan<CompiledHolyMountainOperation> operations = holyMountain.Operations;
+        for (int i = operations.Length - 1; i >= 0; i--)
+        {
+            CompiledHolyMountainOperation operation = operations[i];
+            if (operation.Contains(relativeX, localY))
+            {
+                material = operation.Material;
+                return true;
+            }
+        }
+
+        long distanceX = Math.Abs(relativeX);
+        int shellThickness = holyMountain.ShellThicknessCells;
+        if (distanceX > config.HolyMountainHalfWidthCells + shellThickness)
+        {
+            material = default;
+            return false;
+        }
+
+        bool passage = distanceX <= config.MainPathHalfWidthCells + 4;
+        bool cap = localY < shellThickness ||
+            localY >= config.HolyMountainHeightCells - shellThickness;
+        bool wall = distanceX >= config.HolyMountainHalfWidthCells;
+        bool centralPlatform = localY is >= 60 and <= 63 &&
+            distanceX > config.MainPathHalfWidthCells + 20;
+        material = wall || (cap && !passage)
+            ? holyMountain.ShellMaterial
+            : centralPlatform
+                ? holyMountain.PlatformMaterial
+                : row.Palette.Empty;
+        return true;
+    }
+
+    private static bool TrySelectPortalTerrain(
+        long worldX,
+        in TerrainRowContext row,
+        out ushort material)
+    {
+        TerrainGenerationState state = row.State;
+        CompiledPortalNetwork portal = state.PortalNetwork;
+        PortalRowContext portalRow = row.PortalRow;
+        int firstPortalIndex = portalRow.FirstPortalIndex;
+        long relativeY = portalRow.RelativeY;
+        int basinBottom = portal.BasinTopOffsetCells + portal.BasinDepthCells;
+
+        if (portalRow.Kind == PortalRowKind.Chamber)
+        {
+            long chamberMinimumX = state.PortalAnchors[firstPortalIndex].SourceX -
+                portal.TriggerHalfWidthCells;
+            long chamberMaximumX = state.PortalAnchors[
+                firstPortalIndex + portal.PortalsPerHolyMountain - 1].SourceX +
+                portal.TriggerHalfWidthCells;
+            bool insideChamber = worldX >= chamberMinimumX && worldX <= chamberMaximumX;
+            material = insideChamber ? row.Palette.Empty : default;
+            return insideChamber;
+        }
+
+        for (int i = 0; i < portal.PortalsPerHolyMountain; i++)
+        {
+            CampaignPortalAnchor anchor = state.PortalAnchors[firstPortalIndex + i];
+            long distanceX = Math.Abs(worldX - anchor.SourceX);
+            if (distanceX > portal.BasinHalfWidthCells + 2L)
+            {
+                continue;
+            }
+
+            bool shell = distanceX >= portal.BasinHalfWidthCells || relativeY >= basinBottom;
+            bool liquid = relativeY >= portal.BasinTopOffsetCells + 2L;
+            material = shell
+                ? portal.EyeShellMaterial
+                : liquid
+                    ? portal.TeleportatiumMaterial
+                    : row.Palette.Empty;
+            return true;
+        }
+
+        material = default;
+        return false;
+    }
+
+    private static PortalRowContext BuildPortalRowContext(
+        TerrainGenerationState state,
+        in CampaignDepthLocation location,
+        int regionIndex,
+        long worldY)
+    {
+        if (location.Kind != CampaignDepthKind.Region ||
+            (uint)regionIndex >= CampaignConfig.RequiredRegionCount - 1)
+        {
+            return default;
+        }
+
+        CompiledPortalNetwork portal = state.PortalNetwork;
+        int firstPortalIndex = regionIndex * portal.PortalsPerHolyMountain;
+        long relativeY = worldY - state.PortalAnchors[firstPortalIndex].SourceY;
+        int basinBottom = portal.BasinTopOffsetCells + portal.BasinDepthCells;
+        return relativeY < -portal.TriggerHalfHeightCells || relativeY > basinBottom + 1L
+            ? default
+            : new PortalRowContext(
+                relativeY < portal.BasinTopOffsetCells
+                    ? PortalRowKind.Chamber
+                    : PortalRowKind.Basins,
+                firstPortalIndex,
+                relativeY);
     }
 
     private static ushort SelectBiomeMaterial(
@@ -775,7 +906,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     regionIndex,
                     state);
                 float temperature = location.Kind == CampaignDepthKind.HolyMountain
-                    ? 20f
+                    ? state.HolyMountain.BaseTemperature
                     : biome.BaseTemperature;
                 bool containsHotHazard = false;
                 for (int y = 0; y < cellScale && !containsHotHazard; y++)
@@ -865,6 +996,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 state,
                 y,
                 connectionSegments);
+            PortalRowContext portalRow = BuildPortalRowContext(
+                state,
+                location,
+                regionIndex,
+                y);
             long pathCenterX = location.DepthCells >= config.CampaignStartDepthCells
                 ? MainPathCenterX(y, config, Seed, mainPathOriginNoise)
                 : config.MainPathEntranceX;
@@ -876,9 +1012,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 regionIndex,
                 biome,
                 palette,
+                portalRow,
                 connectionSegments[..connectionSegmentCount]);
             int runStart = 0;
-            ushort runMaterial = SelectMaterial(
+            ushort runMaterial = SelectMaterialIncludingPortal(
                 previewOriginX,
                 y,
                 surfaces[0],
@@ -889,7 +1026,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             {
                 ushort material = x == context.WidthCells
                     ? ushort.MaxValue
-                    : SelectMaterial(
+                    : SelectMaterialIncludingPortal(
                         previewOriginX + x,
                         y,
                         surfaces[x],
@@ -910,6 +1047,26 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 runMaterial = material;
             }
         }
+    }
+
+    private static ushort SelectMaterialIncludingPortal(
+        long worldX,
+        long worldY,
+        int surfaceY,
+        int soilDepth,
+        double moisture,
+        in TerrainRowContext row)
+    {
+        return row.PortalRow.Kind != PortalRowKind.None &&
+            TrySelectPortalTerrain(worldX, in row, out ushort portalTerrainMaterial)
+                ? portalTerrainMaterial
+                : SelectMaterial(
+                    worldX,
+                    worldY,
+                    surfaceY,
+                    soilDepth,
+                    moisture,
+                    in row);
     }
 
     private static TerrainGenerationState CreateGenerationState(
@@ -936,16 +1093,25 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             config,
             worldSeed,
             connections);
+        CompiledHolyMountain holyMountain = CompileHolyMountain(materials, biomes.HolyMountain);
+        CompiledPortalNetwork portalNetwork = CompilePortalNetwork(materials, biomes.PortalNetwork);
+        CampaignPortalAnchor[] portalAnchors = ResolvePortalAnchors(
+            config,
+            biomes.PortalNetwork,
+            worldSeed);
         return new TerrainGenerationState(
             config,
             biomes,
-            ResolvePalette(materials, config),
+            ResolvePalette(materials),
             mainBiomes,
             sideBiomes,
-            resolvedConnections);
+            resolvedConnections,
+            holyMountain,
+            portalNetwork,
+            portalAnchors);
     }
 
-    private static TerrainMaterialPalette ResolvePalette(IMaterialQuery materials, CampaignConfig config)
+    private static TerrainMaterialPalette ResolvePalette(IMaterialQuery materials)
     {
         return new TerrainMaterialPalette(
             ResolveRequired(materials, "empty"),
@@ -956,9 +1122,49 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             ResolveRequired(materials, "stone"),
             ResolveRequired(materials, "ice"),
             ResolveRequired(materials, "gravel"),
-            ResolveRequired(materials, "crystal"),
-            ResolveRequired(materials, config.HolyMountainShellMaterial),
-            ResolveRequired(materials, config.HolyMountainPlatformMaterial));
+            ResolveRequired(materials, "crystal"));
+    }
+
+    private static CompiledHolyMountain CompileHolyMountain(
+        IMaterialQuery materials,
+        HolyMountainDefinition definition)
+    {
+        CompiledHolyMountainOperation[] operations =
+            new CompiledHolyMountainOperation[definition.LayoutOperations.Length];
+        for (int i = 0; i < operations.Length; i++)
+        {
+            HolyMountainOperationDefinition operation = definition.LayoutOperations[i];
+            operations[i] = new CompiledHolyMountainOperation(
+                ResolveRequired(materials, operation.Material),
+                operation.X,
+                operation.Y,
+                operation.Width,
+                operation.Height);
+        }
+
+        return new CompiledHolyMountain(
+            definition.BaseTemperature,
+            ResolveRequired(materials, definition.ShellMaterial),
+            ResolveRequired(materials, definition.PlatformMaterial),
+            definition.ShellThicknessCells,
+            operations);
+    }
+
+    private static CompiledPortalNetwork CompilePortalNetwork(
+        IMaterialQuery materials,
+        PortalNetworkDefinition definition)
+    {
+        return new CompiledPortalNetwork(
+            definition.PortalsPerHolyMountain,
+            definition.SourceOffsetAboveBoundaryCells,
+            definition.TriggerHalfWidthCells,
+            definition.TriggerHalfHeightCells,
+            ResolveRequired(materials, definition.EyeShellMaterial),
+            ResolveRequired(materials, definition.TeleportatiumMaterial),
+            definition.BasinTopOffsetCells,
+            definition.BasinHalfWidthCells,
+            definition.BasinDepthCells,
+            definition.MinimumPowerCells);
     }
 
     private static CompiledPixelScene[] CompilePixelScenes(
@@ -1160,6 +1366,103 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     internal static long MainPathCenterX(long worldY, CampaignConfig config, ulong worldSeed)
     {
         return MainPathCenterX(worldY, config, worldSeed, MainPathOriginNoise(worldSeed));
+    }
+
+    private static CampaignPortalAnchor[] ResolvePortalAnchors(
+        CampaignConfig config,
+        PortalNetworkDefinition portal,
+        ulong worldSeed)
+    {
+        int holyMountainCount = CampaignConfig.RequiredRegionCount - 1;
+        CampaignPortalAnchor[] result =
+            new CampaignPortalAnchor[holyMountainCount * portal.PortalsPerHolyMountain];
+        int index = 0;
+        for (int holyMountainIndex = 0; holyMountainIndex < holyMountainCount; holyMountainIndex++)
+        {
+            for (int portalIndex = 0; portalIndex < portal.PortalsPerHolyMountain; portalIndex++)
+            {
+                result[index++] = ResolvePortalAnchor(
+                    config,
+                    portal,
+                    holyMountainIndex,
+                    portalIndex,
+                    worldSeed);
+            }
+        }
+
+        return result;
+    }
+
+    internal static CampaignPortalAnchor ResolvePortalAnchor(
+        CampaignConfig config,
+        PortalNetworkDefinition portal,
+        int holyMountainIndex,
+        int portalIndex,
+        ulong worldSeed)
+    {
+        ArgumentNullException.ThrowIfNull(config);
+        ArgumentNullException.ThrowIfNull(portal);
+        if ((uint)holyMountainIndex >= CampaignConfig.RequiredRegionCount - 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(holyMountainIndex));
+        }
+
+        if ((uint)portalIndex >= (uint)portal.PortalsPerHolyMountain)
+        {
+            throw new ArgumentOutOfRangeException(nameof(portalIndex));
+        }
+
+        long holyMountainY = config.HolyMountainStartCellY(holyMountainIndex);
+        long sourceY = holyMountainY - portal.SourceOffsetAboveBoundaryCells;
+        int centeredPortalIndex = portalIndex - (portal.PortalsPerHolyMountain / 2);
+        long sourceX = MainPathCenterX(sourceY, config, worldSeed) +
+            ((long)centeredPortalIndex * portal.SpacingCells);
+        long destinationY = holyMountainY + portal.DestinationLocalDepthCells;
+        long destinationX = MainPathCenterX(destinationY, config, worldSeed) +
+            portal.DestinationOffsetCells;
+        return new CampaignPortalAnchor(
+            holyMountainIndex,
+            portalIndex,
+            sourceX,
+            sourceY,
+            destinationX,
+            destinationY);
+    }
+
+    /// <summary>
+    /// 收集给定 Holy Mountain 的数据化地图地标；调用方提供固定容量目标，热路径不分配。
+    /// </summary>
+    internal static int CollectHolyMountainLandmarkAnchors(
+        BiomeCatalog catalog,
+        CampaignConfig config,
+        int holyMountainIndex,
+        ulong worldSeed,
+        Span<HolyMountainLandmarkAnchor> destination)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(config);
+        if ((uint)holyMountainIndex >= CampaignConfig.RequiredRegionCount - 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(holyMountainIndex));
+        }
+
+        ReadOnlySpan<HolyMountainLandmarkDefinition> landmarks = catalog.HolyMountain.Landmarks;
+        int count = Math.Min(destination.Length, landmarks.Length);
+        long holyMountainY = config.HolyMountainStartCellY(holyMountainIndex);
+        for (int i = 0; i < count; i++)
+        {
+            HolyMountainLandmarkDefinition landmark = landmarks[i];
+            long worldY = holyMountainY + landmark.LocalDepthCells;
+            long worldX = MainPathCenterX(worldY, config, worldSeed) + landmark.OffsetXCells;
+            destination[i] = new HolyMountainLandmarkAnchor(
+                holyMountainIndex,
+                landmark.Id,
+                landmark.Kind,
+                worldX,
+                worldY);
+        }
+
+        return count;
     }
 
     /// <summary>
@@ -1375,7 +1678,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         TerrainMaterialPalette palette,
         CompiledBiome[] mainBiomes,
         CompiledBiome[] sideBiomes,
-        ResolvedConnection[] connections)
+        ResolvedConnection[] connections,
+        CompiledHolyMountain holyMountain,
+        CompiledPortalNetwork portalNetwork,
+        CampaignPortalAnchor[] portalAnchors)
     {
         public CampaignConfig Config { get; } = config;
 
@@ -1388,6 +1694,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public CompiledBiome[] SideBiomes { get; } = sideBiomes;
 
         public ResolvedConnection[] Connections { get; } = connections;
+
+        public CompiledHolyMountain HolyMountain { get; } = holyMountain;
+
+        public CompiledPortalNetwork PortalNetwork { get; } = portalNetwork;
+
+        public CampaignPortalAnchor[] PortalAnchors { get; } = portalAnchors;
     }
 
     private readonly ref struct TerrainRowContext(
@@ -1398,6 +1710,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         int regionIndex,
         CompiledBiome biome,
         TerrainMaterialPalette palette,
+        PortalRowContext portalRow,
         ReadOnlySpan<ConnectionRowSegment> connectionSegments)
     {
         public ulong WorldSeed { get; } = worldSeed;
@@ -1413,6 +1726,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public CompiledBiome Biome { get; } = biome;
 
         public TerrainMaterialPalette Palette { get; } = palette;
+
+        public PortalRowContext PortalRow { get; } = portalRow;
 
         public ReadOnlySpan<ConnectionRowSegment> ConnectionSegments { get; } = connectionSegments;
     }
@@ -1477,6 +1792,50 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public CompiledPixelSceneOperation[] Operations { get; } = operations;
     }
 
+    private sealed class CompiledHolyMountain(
+        float baseTemperature,
+        ushort shellMaterial,
+        ushort platformMaterial,
+        int shellThicknessCells,
+        CompiledHolyMountainOperation[] operations)
+    {
+        public float BaseTemperature { get; } = baseTemperature;
+
+        public ushort ShellMaterial { get; } = shellMaterial;
+
+        public ushort PlatformMaterial { get; } = platformMaterial;
+
+        public int ShellThicknessCells { get; } = shellThicknessCells;
+
+        public CompiledHolyMountainOperation[] Operations { get; } = operations;
+    }
+
+    private readonly record struct CompiledHolyMountainOperation(
+        ushort Material,
+        int X,
+        int Y,
+        int Width,
+        int Height)
+    {
+        public bool Contains(long x, long y)
+        {
+            return x >= X && x < X + (long)Width &&
+                y >= Y && y < Y + (long)Height;
+        }
+    }
+
+    private readonly record struct CompiledPortalNetwork(
+        int PortalsPerHolyMountain,
+        int SourceOffsetAboveBoundaryCells,
+        int TriggerHalfWidthCells,
+        int TriggerHalfHeightCells,
+        ushort EyeShellMaterial,
+        ushort TeleportatiumMaterial,
+        int BasinTopOffsetCells,
+        int BasinHalfWidthCells,
+        int BasinDepthCells,
+        int MinimumPowerCells);
+
     private readonly record struct CompiledConnection(
         CompiledConnectionKind Kind,
         int FromRegionIndex,
@@ -1509,6 +1868,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort Material,
         ushort GateMaterial,
         int SideBiomeIndex);
+
+    private readonly record struct PortalRowContext(
+        PortalRowKind Kind,
+        int FirstPortalIndex,
+        long RelativeY);
 
     private readonly record struct CompiledPixelSceneOperation(
         CompiledPixelSceneOperationKind Kind,
@@ -1556,6 +1920,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         SideBiome,
     }
 
+    private enum PortalRowKind : byte
+    {
+        None,
+        Chamber,
+        Basins,
+    }
+
     private enum CompiledPixelSceneOperationKind : byte
     {
         Rectangle,
@@ -1571,9 +1942,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort Stone,
         ushort Ice,
         ushort Gravel,
-        ushort Crystal,
-        ushort HolyMountainShell,
-        ushort HolyMountainPlatform);
+        ushort Crystal);
 }
 
 internal readonly record struct BiomeEncounterAnchor(
@@ -1584,3 +1953,18 @@ internal readonly record struct BiomeEncounterAnchor(
     long WorldY,
     int WidthCells,
     int HeightCells);
+
+internal readonly record struct CampaignPortalAnchor(
+    int HolyMountainIndex,
+    int PortalIndex,
+    long SourceX,
+    long SourceY,
+    long DestinationX,
+    long DestinationY);
+
+internal readonly record struct HolyMountainLandmarkAnchor(
+    int HolyMountainIndex,
+    string Id,
+    string Kind,
+    long WorldX,
+    long WorldY);

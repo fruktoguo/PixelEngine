@@ -260,8 +260,6 @@ public sealed class CampaignRunDirectorTests
             MainPathEntranceX = source.MainPathEntranceX,
             MainPathWanderCells = source.MainPathWanderCells,
             HolyMountainHalfWidthCells = source.HolyMountainHalfWidthCells,
-            HolyMountainShellMaterial = source.HolyMountainShellMaterial,
-            HolyMountainPlatformMaterial = source.HolyMountainPlatformMaterial,
             Regions = source.Regions,
         }.Validate();
     }

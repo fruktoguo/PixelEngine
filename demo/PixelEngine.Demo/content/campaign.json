@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "defaultMode": "campaign",
   "initialRunSeed": 5785252250990625352,
   "surfaceY": 224,
@@ -10,8 +10,6 @@
   "mainPathEntranceX": 96,
   "mainPathWanderCells": 176,
   "holyMountainHalfWidthCells": 176,
-  "holyMountainShellMaterial": "boundary_stone",
-  "holyMountainPlatformMaterial": "metal",
   "regions": [
     {
       "id": "mines",
