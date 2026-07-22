@@ -3215,6 +3215,26 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证参考路线/截图可在 TemporarySnapshot 中显式跳过主菜单，
+    /// 且自动开始仍只调用 CampaignRunDirector 的公开选择与开始合同。
+    /// </summary>
+    [Fact]
+    public void PlayableWorldDirectorCanAutoStartCampaignForReferenceRouteCapture()
+    {
+        using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
+        PlayableWorldDirector director = FindBehaviour<PlayableWorldDirector>(engine);
+        director.AutoStartCampaign = true;
+
+        engine.RunHeadlessTicks(4);
+
+        CampaignRunDirector run = FindBehaviour<CampaignRunDirector>(engine);
+        CampaignAutoStart autoStart = FindBehaviour<CampaignAutoStart>(engine);
+        Assert.True(autoStart.Completed);
+        Assert.Equal(DemoGameMode.Campaign, run.Mode);
+        Assert.Equal(CampaignRunState.Exploring, run.State);
+    }
+
+    /// <summary>
     /// 验证可玩 Demo 的六个数字键固定对应小枪、激光炮、手雷、炸弹、挖掘与建造工具，且小枪使用材质耐久伤害而非爆炸破坏。
     /// </summary>
     [Fact]

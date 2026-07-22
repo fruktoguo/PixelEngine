@@ -22,6 +22,12 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
     /// </summary>
     public float PlayerSpawnY { get; set; } = PlayableCavernWorldGenerator.PlayerSpawnY;
 
+    /// <summary>
+    /// 是否在实体完成初始化后自动选择并开始 Campaign。
+    /// 默认关闭；自动化和参考路线捕获可在 TemporarySnapshot 中启用，正式玩家仍经过主菜单。
+    /// </summary>
+    public bool AutoStartCampaign { get; set; }
+
     /// <inheritdoc />
     public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
     {
@@ -98,6 +104,10 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         Entity playerEntity = Context.Scene.CreateEntity();
         _ = playerEntity.AddComponent<Transform>();
         _ = playerEntity.AddComponent<CampaignRunDirector>();
+        if (AutoStartCampaign)
+        {
+            _ = playerEntity.AddComponent<CampaignAutoStart>();
+        }
         PlayerController player = playerEntity.AddComponent<PlayerController>();
         player.SpawnX = PlayerSpawnX;
         player.SpawnY = PlayerSpawnY;
@@ -174,5 +184,41 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
             _ = dt;
             director.BuildEntities();
         }
+    }
+}
+
+/// <summary>
+/// 在脚本组件全部完成 <c>OnStart</c> 后，经公开 Campaign API 自动开始一轮。
+/// 只由显式启用 <see cref="PlayableWorldDirector.AutoStartCampaign"/> 的场景快照装配。
+/// </summary>
+public sealed class CampaignAutoStart : Behaviour
+{
+    private CampaignRunDirector? _run;
+
+    /// <summary>
+    /// 是否已经成功从 MainMenu 进入当前 Campaign。
+    /// </summary>
+    public bool Completed { get; private set; }
+
+    /// <inheritdoc />
+    protected override void OnUpdate(float dt)
+    {
+        _ = dt;
+        if (Completed)
+        {
+            return;
+        }
+
+        if (_run is null && Entity.TryGetComponent(out CampaignRunDirector run))
+        {
+            _run = run;
+        }
+
+        if (_run is null || _run.State != CampaignRunState.MainMenu)
+        {
+            return;
+        }
+
+        Completed = _run.SelectMode(DemoGameMode.Campaign) && _run.StartSelectedRun();
     }
 }

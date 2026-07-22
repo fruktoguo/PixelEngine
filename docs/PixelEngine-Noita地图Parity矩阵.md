@@ -33,6 +33,7 @@
 | `RunSeed + global cell/chunk coordinate` 决定初态 | 负坐标、跨加载顺序、跨 seed、共享 tile edge、pixel-scene 与固定 landmark anchor 测试 |
 | 修改持久化优先 | 继续复用 `DEMO-006/007` region store 与 streaming initializer 合同 |
 | 主路径可达 | 普通纵深连续；Portal 行由供能入口桥接；Holy Mountain 右侧出口回接下一层；逐点地形测试 |
+| 真实流送长路线 | reference seed 经正式 `WorldStreamer` 依次装载 12 个固定地标，逐站校验 authored operation 与 256-chunk cap；首站修改跨完整纵深驱逐后由 region store 恢复 |
 | 稳态零托管分配 | 64 次八区 chunk、256 次 encounter/biome landmark/Holy Mountain landmark query allocation gate；BDN 诊断为 0-6 B 噪声 |
 | 代表场景成本 | 2026-07-22 Release InProcess ShortRun：Surface/Mines/Fungal/Portal-Holy Mountain/Laboratory 为 185.0-535.6 us/chunk |
 
@@ -51,4 +52,4 @@
 
 ## 5. DEMO-008 剩余验收
 
-当前未关闭 `DEMO-008`。12 个代表性固定地标已经数据化并写入地形，但其中的 Boss、商店、谜题与 Portal 交互仍分别归后续玩法任务。剩余验收是扩充 structure pool、选择并冻结 reference seeds，取得八区/侧区/Portal/Holy Mountain 的同源参考与真实 PixelEngine Player 截图，验证一条完整长路线、resident budget 和修改持久化，再更新 evidence index、最终输出与 canonical 状态。
+当前未关闭 `DEMO-008`。12 个代表性固定地标已经数据化并经正式 WorldStreamer reference-seed 长路线、resident budget 与修改持久化验证，但其中的 Boss、商店、谜题与 Portal 交互仍分别归后续玩法任务。剩余验收是扩充 structure pool，取得八区/侧区/Portal/Holy Mountain 的同源参考与真实 PixelEngine Player 截图，再更新 evidence index、最终输出与 canonical 状态。

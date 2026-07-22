@@ -14,6 +14,7 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
     private readonly bool _routeProbe = routeProbe;
     private readonly Key[] _keys = new Key[3];
     private readonly MouseButton[] _buttons = new MouseButton[2];
+    private PlayerController? _routePlayer;
 
     /// <summary>
     /// 已注入输入的帧数。
@@ -160,6 +161,7 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
         int buttonCount = 0;
         Point2F target = RouteColumnTargetWorld;
         float wheelY = 0f;
+        bool recoveryLevitation = false;
 
         if (frame == 2)
         {
@@ -219,13 +221,19 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
             _keys[keyCount++] = Key.D;
             if (frame == 356)
             {
-                _keys[keyCount++] = Key.Digit1;
+                _keys[keyCount++] = Key.Digit2;
             }
 
-            target = new Point2F(
-                MathF.Min(604f, 298f + ((frame - 356) * 0.28f)),
-                260f + (frame / 24 % 3 * 12f));
-            if (frame % 9 is 0 or 1)
+            ResolveRoutePlayer();
+            bool clearingRoute = _routePlayer is not null;
+            target = clearingRoute
+                ? new Point2F(_routePlayer!.CenterX + 96f, _routePlayer.CenterY)
+                : new Point2F(
+                    MathF.Min(604f, 298f + ((frame - 356) * 0.28f)),
+                    260f + (frame / 24 % 3 * 12f));
+            recoveryLevitation = clearingRoute && (frame - 356) % 54 is >= 0 and <= 8;
+
+            if (clearingRoute ? frame % 18 is >= 0 and <= 3 : frame % 9 is 0 or 1)
             {
                 _buttons[buttonCount++] = MouseButton.Left;
             }
@@ -237,7 +245,9 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
         }
 
         bool earlyLevitation = frame is >= 24 and <= 179 && (frame - 24) % 64 is >= 8 and <= 28;
-        bool lateLevitation = frame >= 356 && (frame - 356) % 72 is >= 0 and <= 26;
+        bool lateLevitation =
+            (frame >= 356 && (frame - 356) % 72 is >= 0 and <= 26) ||
+            recoveryLevitation;
         if (earlyLevitation || lateLevitation)
         {
             _keys[keyCount++] = Key.Space;
@@ -268,6 +278,18 @@ internal sealed class DemoWindowScriptedInput(EngineProbeApi probe, bool routePr
             screen.X,
             screen.Y,
             wheelY);
+    }
+
+    private void ResolveRoutePlayer()
+    {
+        if (_routePlayer is not null ||
+            !_probe.TryGetScriptScene(out PixelEngine.Scripting.Scene? scene) ||
+            !scene.TryGetFirstComponent(out PlayerController? player))
+        {
+            return;
+        }
+
+        _routePlayer = player;
     }
 }
 

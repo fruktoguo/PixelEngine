@@ -347,6 +347,204 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证正式 WorldStreamer 装配链使用 content/campaign.json 与 biomes.json，
+    /// 将 Mines Lava Lake 固定地标的外壳、空洞、木桥和熔岩实际写入 resident chunk。
+    /// </summary>
+    [Fact]
+    public void DefaultPlayableWorldStreamsConfiguredLavaLakeLandmarkThroughRuntimePath()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        string worldRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.Demo.LandmarkRuntime", Guid.NewGuid().ToString("N"));
+        try
+        {
+            EngineScriptConfigApi configApi = new(contentRoot);
+            CampaignConfig campaign = CampaignConfig.Load(configApi);
+            BiomeCatalog biomes = BiomeCatalog.Load(configApi, campaign);
+            BiomeLandmarkAnchor[] anchors = new BiomeLandmarkAnchor[4];
+            int anchorCount = PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
+                biomes,
+                campaign,
+                regionIndex: 0,
+                campaign.InitialRunSeed,
+                anchors);
+            BiomeLandmarkAnchor anchor = Assert.Single(
+                anchors[..anchorCount],
+                candidate => string.Equals(
+                    candidate.LandmarkId,
+                    "mines-lava-lake-overlook",
+                    StringComparison.Ordinal));
+
+            DemoStartupOptions options = DemoStartupOptions.Parse([
+                "--headless",
+                "--no-hot-reload",
+                "--content",
+                contentRoot,
+                "--scene",
+                DemoStartupOptions.DefaultSceneName,
+            ]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+            engine.RegisterStreamingProceduralWorldGenerator(
+                PlayableCavernWorldGenerator.Key,
+                new PlayableCavernWorldGenerator());
+            _ = engine.LoadContentPackage();
+            _ = engine.AttachCurrentSceneWorld(
+                streamingConfig: new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 1,
+                    BorderRingWidth = 1,
+                    ResidentMemoryCapBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes * 200L,
+                    EvictionTargetBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes * 192L,
+                    MaxStreamOpsPerFrame = 512,
+                },
+                proceduralWorldRoot: worldRoot);
+
+            WorldManager world = engine.Context.GetService<WorldManager>();
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            MaterialTable materials = engine.Context.GetService<MaterialTable>();
+            world.UpdateCamera(anchor.WorldX, anchor.WorldY);
+            for (long frame = 1; frame <= 4; frame++)
+            {
+                world.ApplyResidency(frame);
+                _ = world.Streamer.ProcessIoOnce(engine.Context.Jobs);
+            }
+
+            world.ApplyResidency(5);
+            Assert.True(world.Chunks.Contains(world.Camera.FocusChunk));
+
+            int minimumX = checked((int)(anchor.WorldX - (anchor.WidthCells / 2L)));
+            int minimumY = checked((int)(anchor.WorldY - (anchor.HeightCells / 2L)));
+            Assert.Equal(materials.GetIdOrFallback("stone", 0), grid.MaterialAt(minimumX + 1, minimumY + 1));
+            Assert.Equal(materials.GetIdOrFallback("empty", 0), grid.MaterialAt(minimumX + 64, minimumY + 32));
+            Assert.Equal(materials.GetIdOrFallback("wood", 0), grid.MaterialAt(minimumX + 30, minimumY + 39));
+            Assert.Equal(materials.GetIdOrFallback("lava", 0), grid.MaterialAt(minimumX + 64, minimumY + 54));
+        }
+        finally
+        {
+            if (Directory.Exists(worldRoot))
+            {
+                Directory.Delete(worldRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 验证 reference seed 的十二个固定地标可沿真实流送路线逐一装载，
+    /// authored 顶层 operation、resident memory cap 与首站修改持久化同时成立。
+    /// </summary>
+    [Fact]
+    public void DefaultPlayableWorldStreamsAllReferenceLandmarksWithinBudgetAndRestoresEdits()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        string worldRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.Demo.LandmarkRoute", Guid.NewGuid().ToString("N"));
+        try
+        {
+            EngineScriptConfigApi configApi = new(contentRoot);
+            CampaignConfig campaign = CampaignConfig.Load(configApi);
+            BiomeCatalog biomes = BiomeCatalog.Load(configApi, campaign);
+            BiomeLandmarkAnchor[] route = new BiomeLandmarkAnchor[biomes.Landmarks.Length];
+            BiomeLandmarkAnchor[] regionAnchors = new BiomeLandmarkAnchor[4];
+            int routeCount = 0;
+            for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
+            {
+                int regionCount = PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
+                    biomes,
+                    campaign,
+                    regionIndex,
+                    campaign.InitialRunSeed,
+                    regionAnchors);
+                regionAnchors.AsSpan(0, regionCount).CopyTo(route.AsSpan(routeCount));
+                routeCount += regionCount;
+            }
+
+            Assert.Equal(biomes.Landmarks.Length, routeCount);
+
+            DemoStartupOptions options = DemoStartupOptions.Parse([
+                "--headless",
+                "--no-hot-reload",
+                "--content",
+                contentRoot,
+                "--scene",
+                DemoStartupOptions.DefaultSceneName,
+            ]);
+            EngineProject project = DemoProgram.BuildProject(options);
+            using Engine engine = DemoProgram.BuildEngine(options, project);
+            engine.RegisterStreamingProceduralWorldGenerator(
+                PlayableCavernWorldGenerator.Key,
+                new PlayableCavernWorldGenerator());
+            _ = engine.LoadContentPackage();
+            long residentCap = ChunkMemoryBudget.EstimatedResidentChunkBytes * 256L;
+            _ = engine.AttachCurrentSceneWorld(
+                streamingConfig: new WorldStreamingConfig
+                {
+                    ActivationMarginChunks = 1,
+                    BorderRingWidth = 1,
+                    ResidentMemoryCapBytes = residentCap,
+                    EvictionTargetBytes = ChunkMemoryBudget.EstimatedResidentChunkBytes * 248L,
+                    MaxStreamOpsPerFrame = 512,
+                },
+                proceduralWorldRoot: worldRoot);
+
+            WorldManager world = engine.Context.GetService<WorldManager>();
+            CellGrid grid = engine.Context.GetService<CellGrid>();
+            MaterialTable materials = engine.Context.GetService<MaterialTable>();
+            ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+            long frame = 1;
+            int persistedX = 0;
+            int persistedY = 0;
+            foreach (BiomeLandmarkAnchor anchor in route)
+            {
+                StreamTo(anchor.WorldX, anchor.WorldY);
+                int definitionIndex = biomes.FindLandmarkIndex(anchor.LandmarkId);
+                Assert.InRange(definitionIndex, 0, biomes.Landmarks.Length - 1);
+                BiomeLandmarkDefinition definition = biomes.Landmarks[definitionIndex];
+                BiomePixelSceneOperationDefinition topOperation = definition.Operations[^1];
+                int operationX = checked((int)(
+                    anchor.WorldX - (anchor.WidthCells / 2L) +
+                    topOperation.X + (topOperation.Width / 2L)));
+                int operationY = checked((int)(
+                    anchor.WorldY - (anchor.HeightCells / 2L) +
+                    topOperation.Y + (topOperation.Height / 2L)));
+                Assert.Equal(
+                    materials.GetIdOrFallback(topOperation.Material, 0),
+                    grid.MaterialAt(operationX, operationY));
+                Assert.InRange(world.MemoryBudget.ResidentBytes, 0, residentCap);
+
+                if (persistedX == 0 && persistedY == 0)
+                {
+                    persistedX = checked((int)(anchor.WorldX - (anchor.WidthCells / 2L) + 1));
+                    persistedY = checked((int)(anchor.WorldY - (anchor.HeightCells / 2L) + 1));
+                    Assert.NotEqual(materials.GetIdOrFallback("empty", 0), grid.MaterialAt(persistedX, persistedY));
+                    edit.PaintCell(persistedX, persistedY, materials.GetIdOrFallback("empty", 0));
+                }
+            }
+
+            StreamTo(route[0].WorldX, route[0].WorldY);
+            Assert.Equal(materials.GetIdOrFallback("empty", 0), grid.MaterialAt(persistedX, persistedY));
+
+            void StreamTo(long worldX, long worldY)
+            {
+                world.UpdateCamera(worldX, worldY);
+                for (int iteration = 0; iteration < 4; iteration++)
+                {
+                    world.ApplyResidency(frame++);
+                    _ = world.Streamer.ProcessIoOnce(engine.Context.Jobs);
+                }
+
+                world.ApplyResidency(frame++);
+                Assert.True(world.Chunks.Contains(world.Camera.FocusChunk));
+            }
+        }
+        finally
+        {
+            if (Directory.Exists(worldRoot))
+            {
+                Directory.Delete(worldRoot, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// 验证默认无限沙盒跨正负远距离流送时内存有界，且原点修改经卸载 / 重入持久保留。
     /// </summary>
     [Fact]
