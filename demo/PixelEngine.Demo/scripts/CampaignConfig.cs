@@ -9,11 +9,36 @@ namespace PixelEngine.Demo;
 public sealed class CampaignConfig
 {
     /// <summary>当前支持的 schema 版本。</summary>
-    public const int CurrentSchemaVersion = 4;
+    public const int CurrentSchemaVersion = 5;
 
     private const int LegacySchemaVersion = 1;
     private const int TerrainSchemaVersion = 2;
     private const int RegionIdentitySchemaVersion = 3;
+    private const int TerrainAuthoritySchemaVersion = 4;
+
+    private static readonly int[] CanonicalRegionStartDepthCells =
+    [
+        0,
+        1_536,
+        3_072,
+        5_120,
+        6_656,
+        8_704,
+        10_752,
+        13_312,
+    ];
+
+    private static readonly int[] CanonicalRegionHeightCells =
+    [
+        1_024,
+        1_024,
+        1_536,
+        1_024,
+        1_536,
+        1_536,
+        2_048,
+        1_600,
+    ];
 
     private static readonly string[] CanonicalRegionIds =
     [
@@ -69,7 +94,7 @@ public sealed class CampaignConfig
     /// <summary>地表以下多少 cell 开始第一个主路径区域。</summary>
     public int CampaignStartDepthCells { get; init; }
 
-    /// <summary>每个主路径区域带的高度。</summary>
+    /// <summary>v1-v4 等高地图的迁移高度；v5 运行时使用各 region 的 HeightCells。</summary>
     public int RegionHeightCells { get; init; }
 
     /// <summary>相邻区域之间 Holy Mountain 带的高度。</summary>
@@ -118,12 +143,28 @@ public sealed class CampaignConfig
         }
 
         int sourceSchemaVersion = ReadInt32(root, "schemaVersion");
-        if (sourceSchemaVersion is not (LegacySchemaVersion or TerrainSchemaVersion or RegionIdentitySchemaVersion or CurrentSchemaVersion))
+        if (sourceSchemaVersion is not (
+            LegacySchemaVersion or
+            TerrainSchemaVersion or
+            RegionIdentitySchemaVersion or
+            TerrainAuthoritySchemaVersion or
+            CurrentSchemaVersion))
         {
             throw new InvalidDataException(
                 $"campaign.json schemaVersion 必须位于 [{LegacySchemaVersion},{CurrentSchemaVersion}]。");
         }
 
+        int campaignStartDepthCells = ReadInt32(root, "campaignStartDepthCells");
+        int sourceRegionHeightCells = ReadInt32(root, "regionHeightCells");
+        int sourceHolyMountainHeightCells = ReadInt32(
+            root,
+            sourceSchemaVersion == LegacySchemaVersion ? "forgeHeightCells" : "holyMountainHeightCells");
+        int regionHeightCells = sourceSchemaVersion == CurrentSchemaVersion
+            ? sourceRegionHeightCells
+            : 512;
+        int holyMountainHeightCells = sourceSchemaVersion == CurrentSchemaVersion
+            ? sourceHolyMountainHeightCells
+            : 512;
         JsonElement regionsElement = ReadRequired(root, "regions");
         if (regionsElement.ValueKind == JsonValueKind.Null)
         {
@@ -151,6 +192,12 @@ public sealed class CampaignConfig
                 LegacyIds = sourceSchemaVersion == LegacySchemaVersion
                     ? []
                     : ReadStringArray(regionElement, "legacyIds"),
+                StartDepthCells = sourceSchemaVersion == CurrentSchemaVersion
+                    ? ReadInt32(regionElement, "startDepthCells")
+                    : checked(campaignStartDepthCells + CanonicalRegionStartDepthCells[regionIndex]),
+                HeightCells = sourceSchemaVersion == CurrentSchemaVersion
+                    ? ReadInt32(regionElement, "heightCells")
+                    : CanonicalRegionHeightCells[regionIndex],
             };
             if (sourceSchemaVersion is LegacySchemaVersion or TerrainSchemaVersion)
             {
@@ -183,11 +230,9 @@ public sealed class CampaignConfig
             DefaultMode = ReadString(root, "defaultMode"),
             InitialRunSeed = ReadUInt64(root, "initialRunSeed"),
             SurfaceY = ReadInt32(root, "surfaceY"),
-            CampaignStartDepthCells = ReadInt32(root, "campaignStartDepthCells"),
-            RegionHeightCells = ReadInt32(root, "regionHeightCells"),
-            HolyMountainHeightCells = ReadInt32(
-                root,
-                sourceSchemaVersion == LegacySchemaVersion ? "forgeHeightCells" : "holyMountainHeightCells"),
+            CampaignStartDepthCells = campaignStartDepthCells,
+            RegionHeightCells = regionHeightCells,
+            HolyMountainHeightCells = holyMountainHeightCells,
             MainPathHalfWidthCells = ReadInt32(root, "mainPathHalfWidthCells"),
             MainPathEntranceX = ReadInt32(root, "mainPathEntranceX"),
             MainPathWanderCells = ReadInt32(root, "mainPathWanderCells"),
@@ -219,7 +264,7 @@ public sealed class CampaignConfig
         Require(SurfaceY == PlayableCavernWorldGenerator.SafeSurfaceY, $"surfaceY 必须与安全出生区 {PlayableCavernWorldGenerator.SafeSurfaceY} 一致。");
         Require(CampaignStartDepthCells is >= 0 and <= 64, "campaignStartDepthCells 必须位于 [0,64]。");
         Require(RegionHeightCells is >= 256 and <= 2_048, "regionHeightCells 必须位于 [256,2048]。");
-        Require(HolyMountainHeightCells is >= 64 and <= 256, "holyMountainHeightCells 必须位于 [64,256]。");
+        Require(HolyMountainHeightCells is >= 64 and <= 512, "holyMountainHeightCells 必须位于 [64,512]。");
         Require(MainPathHalfWidthCells is >= 12 and <= 64, "mainPathHalfWidthCells 必须位于 [12,64]。");
         Require(Math.Abs(MainPathEntranceX) <= 512, "mainPathEntranceX 必须位于原点 512 cell 内。");
         Require(MainPathWanderCells is >= 0 and <= 512, "mainPathWanderCells 必须位于 [0,512]。");
@@ -230,6 +275,7 @@ public sealed class CampaignConfig
         Require(regions.Length == RequiredRegionCount, $"regions 必须恰好包含 {RequiredRegionCount} 个区域。");
 
         HashSet<string> idsAndAliases = new(StringComparer.Ordinal);
+        int expectedStartDepthCells = CampaignStartDepthCells;
         for (int i = 0; i < regions.Length; i++)
         {
             CampaignRegionDefinition region = regions[i] ??
@@ -254,6 +300,16 @@ public sealed class CampaignConfig
             }
 
             Require(containsRequiredLegacyId, $"{label}.legacyIds 必须包含历史 id {LegacyRegionIds[i]}。");
+            Require(
+                region.StartDepthCells == expectedStartDepthCells,
+                $"{label}.startDepthCells 必须为 {expectedStartDepthCells}，以保持主路径与 Holy Mountain 连续。");
+            Require(
+                region.HeightCells is >= 256 and <= 2_048,
+                $"{label}.heightCells 必须位于 [256,2048]。");
+            expectedStartDepthCells = checked(
+                region.StartDepthCells +
+                region.HeightCells +
+                (i < RequiredRegionCount - 1 ? HolyMountainHeightCells : 0));
         }
 
         return this;
@@ -299,47 +355,64 @@ public sealed class CampaignConfig
     internal CampaignDepthLocation ResolveLocation(long worldY)
     {
         long depth = worldY - SurfaceY;
-        if (depth < CampaignStartDepthCells)
+        if (depth < Regions[0].StartDepthCells)
         {
             return new CampaignDepthLocation(CampaignDepthKind.Surface, 0, -1, depth, depth);
         }
 
-        long remaining = depth - CampaignStartDepthCells;
-        for (int regionIndex = 0; regionIndex < RequiredRegionCount - 1; regionIndex++)
+        for (int regionIndex = 0; regionIndex < RequiredRegionCount; regionIndex++)
         {
-            if (remaining < RegionHeightCells)
+            CampaignRegionDefinition region = Regions[regionIndex];
+            if (depth < region.StartDepthCells)
             {
-                return new CampaignDepthLocation(CampaignDepthKind.Region, regionIndex, -1, depth, remaining);
+                CampaignRegionDefinition previous = Regions[regionIndex - 1];
+                long holyMountainStart = (long)previous.StartDepthCells + previous.HeightCells;
+                return new CampaignDepthLocation(
+                    CampaignDepthKind.HolyMountain,
+                    regionIndex - 1,
+                    regionIndex - 1,
+                    depth,
+                    depth - holyMountainStart);
             }
 
-            remaining -= RegionHeightCells;
-            if (remaining < HolyMountainHeightCells)
+            long localDepth = depth - region.StartDepthCells;
+            if (localDepth < region.HeightCells || regionIndex == RequiredRegionCount - 1)
             {
-                return new CampaignDepthLocation(CampaignDepthKind.HolyMountain, regionIndex, regionIndex, depth, remaining);
+                return new CampaignDepthLocation(
+                    CampaignDepthKind.Region,
+                    regionIndex,
+                    -1,
+                    depth,
+                    localDepth);
             }
-
-            remaining -= HolyMountainHeightCells;
         }
 
-        return new CampaignDepthLocation(CampaignDepthKind.Region, RequiredRegionCount - 1, -1, depth, remaining);
+        throw new InvalidOperationException("战役纵深解析未覆盖当前坐标。");
     }
 
     internal long RegionStartCellY(int regionIndex)
     {
         return (uint)regionIndex >= RequiredRegionCount
             ? throw new ArgumentOutOfRangeException(nameof(regionIndex))
-            : checked(
-                SurfaceY +
-                CampaignStartDepthCells +
-                ((long)regionIndex * (RegionHeightCells + HolyMountainHeightCells)));
+            : checked(SurfaceY + (long)Regions[regionIndex].StartDepthCells);
+    }
+
+    internal int RegionHeightCellsAt(int regionIndex)
+    {
+        return (uint)regionIndex >= RequiredRegionCount
+            ? throw new ArgumentOutOfRangeException(nameof(regionIndex))
+            : Regions[regionIndex].HeightCells;
     }
 
     internal long HolyMountainStartCellY(int holyMountainIndex)
     {
         return (uint)holyMountainIndex >= RequiredRegionCount - 1
             ? throw new ArgumentOutOfRangeException(nameof(holyMountainIndex))
-            : checked(RegionStartCellY(holyMountainIndex) + RegionHeightCells);
+            : checked(RegionStartCellY(holyMountainIndex) + RegionHeightCellsAt(holyMountainIndex));
     }
+
+    internal long CampaignEndDepthCells => checked(
+        (long)Regions[^1].StartDepthCells + Regions[^1].HeightCells);
 
     internal static CampaignConfig BuiltinDefault { get; } = CreateBuiltinDefault();
 
@@ -353,7 +426,7 @@ public sealed class CampaignConfig
             SurfaceY = PlayableCavernWorldGenerator.SafeSurfaceY,
             CampaignStartDepthCells = 0,
             RegionHeightCells = 512,
-            HolyMountainHeightCells = 128,
+            HolyMountainHeightCells = 512,
             MainPathHalfWidthCells = 22,
             MainPathEntranceX = 96,
             MainPathWanderCells = 176,
@@ -379,6 +452,8 @@ public sealed class CampaignConfig
             Id = CanonicalRegionIds[index],
             DisplayName = CanonicalRegionDisplayNames[index],
             LegacyIds = [LegacyRegionIds[index]],
+            StartDepthCells = CanonicalRegionStartDepthCells[index],
+            HeightCells = CanonicalRegionHeightCells[index],
         };
     }
 
@@ -399,6 +474,8 @@ public sealed class CampaignConfig
                 Id = canonicalId,
                 DisplayName = CanonicalRegionDisplayNames[index],
                 LegacyIds = [legacyId],
+                StartDepthCells = region.StartDepthCells,
+                HeightCells = region.HeightCells,
             }
             : region;
     }
@@ -506,6 +583,12 @@ public sealed class CampaignRegionDefinition
 
     /// <summary>转向前区域 id 等历史读取 alias；新数据始终写入 canonical id。</summary>
     public string[] LegacyIds { get; init; } = [];
+
+    /// <summary>相对安全地表的区域起始纵深，单位 cell。</summary>
+    public int StartDepthCells { get; init; }
+
+    /// <summary>区域纵深跨度，单位 cell。</summary>
+    public int HeightCells { get; init; }
 
 }
 

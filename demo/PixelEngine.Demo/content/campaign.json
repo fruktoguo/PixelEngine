@@ -1,11 +1,11 @@
 {
-  "schemaVersion": 4,
+  "schemaVersion": 5,
   "defaultMode": "campaign",
   "initialRunSeed": 5785252250990625352,
   "surfaceY": 224,
   "campaignStartDepthCells": 0,
   "regionHeightCells": 512,
-  "holyMountainHeightCells": 128,
+  "holyMountainHeightCells": 512,
   "mainPathHalfWidthCells": 22,
   "mainPathEntranceX": 96,
   "mainPathWanderCells": 176,
@@ -14,42 +14,58 @@
     {
       "id": "mines",
       "displayName": "Mines",
-      "legacyIds": ["shattered-lode"]
+      "legacyIds": ["shattered-lode"],
+      "startDepthCells": 0,
+      "heightCells": 1024
     },
     {
       "id": "coal-pits",
       "displayName": "Coal Pits",
-      "legacyIds": ["ember-fungal-reach"]
+      "legacyIds": ["ember-fungal-reach"],
+      "startDepthCells": 1536,
+      "heightCells": 1024
     },
     {
       "id": "snowy-depths",
       "displayName": "Snowy Depths",
-      "legacyIds": ["frostfall-chasm"]
+      "legacyIds": ["frostfall-chasm"],
+      "startDepthCells": 3072,
+      "heightCells": 1536
     },
     {
       "id": "hiisi-base",
       "displayName": "Hiisi Base",
-      "legacyIds": ["ironworks-bastion"]
+      "legacyIds": ["ironworks-bastion"],
+      "startDepthCells": 5120,
+      "heightCells": 1024
     },
     {
       "id": "underground-jungle",
       "displayName": "Underground Jungle",
-      "legacyIds": ["rootsea-wilds"]
+      "legacyIds": ["rootsea-wilds"],
+      "startDepthCells": 6656,
+      "heightCells": 1536
     },
     {
       "id": "the-vault",
       "displayName": "The Vault",
-      "legacyIds": ["reactive-vault"]
+      "legacyIds": ["reactive-vault"],
+      "startDepthCells": 8704,
+      "heightCells": 1536
     },
     {
       "id": "temple-of-the-art",
       "displayName": "Temple of the Art",
-      "legacyIds": ["null-temple"]
+      "legacyIds": ["null-temple"],
+      "startDepthCells": 10752,
+      "heightCells": 2048
     },
     {
       "id": "the-laboratory",
       "displayName": "The Laboratory",
-      "legacyIds": ["origin-crucible"]
+      "legacyIds": ["origin-crucible"],
+      "startDepthCells": 13312,
+      "heightCells": 1600
     }
   ]
 }

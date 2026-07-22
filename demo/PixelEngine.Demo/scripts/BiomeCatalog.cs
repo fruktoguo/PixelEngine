@@ -260,7 +260,7 @@ internal sealed class BiomeCatalog
             int halfHeight = landmark.HeightCells / 2;
             Require(
                 landmark.LocalDepthCells - halfHeight >= 0 &&
-                landmark.LocalDepthCells + (landmark.HeightCells - halfHeight) <= campaign.RegionHeightCells,
+                landmark.LocalDepthCells + (landmark.HeightCells - halfHeight) <= campaign.RegionHeightCellsAt(regionIndex),
                 $"{label} 必须完整位于所属 biome 纵深内。");
             RequireStableId(landmark.EncounterId, $"{label}.encounterId");
 
@@ -431,12 +431,13 @@ internal sealed class BiomeCatalog
         Require(connection.Side is "west" or "east", $"{label}.side 必须为 west 或 east。");
         int fromIndex = FindMainPathIndex(connection.From);
         Require(fromIndex >= 0, $"{label}.from 必须引用主路径 biome。");
+        int fromRegionHeightCells = campaign.RegionHeightCellsAt(fromIndex);
         Require(connection.OffsetCells is >= 128 and <= 2_048, $"{label}.offsetCells 必须位于 [128,2048]。");
         Require(connection.HalfWidthCells is >= 8 and <= 384, $"{label}.halfWidthCells 必须位于 [8,384]。");
         Require(connection.CorridorHalfWidthCells is >= 2 and <= 32, $"{label}.corridorHalfWidthCells 必须位于 [2,32]。");
         RequireMaterialKey(connection.GateMaterial, $"{label}.gateMaterial");
         Require(
-            connection.FromLocalDepthCells is >= 0 && connection.FromLocalDepthCells < campaign.RegionHeightCells,
+            connection.FromLocalDepthCells is >= 0 && connection.FromLocalDepthCells < fromRegionHeightCells,
             $"{label}.fromLocalDepthCells 必须位于来源 biome 内。");
 
         if (connection.Kind is "side-biome" or "secret-side-biome")
@@ -444,7 +445,7 @@ internal sealed class BiomeCatalog
             Require(FindSideBiomeIndex(connection.To) >= 0, $"{label}.to 必须引用侧区 biome。");
             Require(
                 connection.ToLocalDepthCells > connection.FromLocalDepthCells &&
-                connection.ToLocalDepthCells <= campaign.RegionHeightCells,
+                connection.ToLocalDepthCells <= fromRegionHeightCells,
                 $"{label}.toLocalDepthCells 必须是来源 biome 内更深的侧区终点。");
             Require(string.IsNullOrEmpty(connection.SideBiome), $"{label}.sideBiome 仅供 vertical-side-biome 使用。");
             return;
@@ -453,7 +454,8 @@ internal sealed class BiomeCatalog
         int toIndex = FindMainPathIndex(connection.To);
         Require(toIndex > fromIndex, $"{label}.to 必须引用更深的主路径 biome。");
         Require(
-            connection.ToLocalDepthCells is >= 0 && connection.ToLocalDepthCells <= campaign.RegionHeightCells,
+            connection.ToLocalDepthCells is >= 0 &&
+            connection.ToLocalDepthCells <= campaign.RegionHeightCellsAt(toIndex),
             $"{label}.toLocalDepthCells 必须位于目标 biome 内。");
         if (connection.Kind == "vertical-side-biome")
         {

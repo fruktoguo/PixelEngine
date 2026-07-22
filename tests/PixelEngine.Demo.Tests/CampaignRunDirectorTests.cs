@@ -36,27 +36,24 @@ public sealed class CampaignRunDirectorTests
         Assert.Equal(CampaignRunState.Exploring, director.State);
         Assert.Equal(64, director.CurrentDepthCells);
 
-        long firstHolyMountainY = config.SurfaceY + config.CampaignStartDepthCells + config.RegionHeightCells + 16L;
+        long firstHolyMountainY = config.HolyMountainStartCellY(0) + 16L;
         director.AdvanceRun(firstHolyMountainY, 1f);
         Assert.Equal(CampaignRunState.HolyMountain, director.State);
         Assert.Equal("Holy Mountain", director.StateDisplayName);
 
-        long secondRegionY = firstHolyMountainY + config.HolyMountainHeightCells;
+        long secondRegionY = config.RegionStartCellY(1) + 16L;
         director.AdvanceRun(secondRegionY, 1f);
         Assert.Equal(CampaignRunState.Exploring, director.State);
         Assert.Equal(1, director.CurrentRegionIndex);
 
-        long finalRegionY = config.SurfaceY +
-            config.CampaignStartDepthCells +
-            ((CampaignConfig.RequiredRegionCount - 1L) * (config.RegionHeightCells + config.HolyMountainHeightCells)) +
-            16L;
+        long finalRegionY = config.RegionStartCellY(CampaignConfig.RequiredRegionCount - 1) + 16L;
         director.AdvanceRun(finalRegionY, 1f);
         Assert.Equal(CampaignRunState.Laboratory, director.State);
         Assert.Equal("The Laboratory", director.StateDisplayName);
         Assert.Equal("The Laboratory", director.CurrentRegionDisplayName);
         Assert.Equal(CampaignConfig.RequiredRegionCount - 1, director.CurrentRegionIndex);
 
-        long completionY = finalRegionY - 16L + config.RegionHeightCells;
+        long completionY = config.SurfaceY + config.CampaignEndDepthCells;
         director.AdvanceRun(completionY, 1f);
         Assert.Equal(CampaignRunState.Completed, director.State);
         Assert.True(director.WasCompleted);

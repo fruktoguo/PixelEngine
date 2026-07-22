@@ -38,6 +38,14 @@ public sealed class CampaignWorldTests
         Assert.Equal(
             ["Mines", "Coal Pits", "Snowy Depths", "Hiisi Base", "Underground Jungle", "The Vault", "Temple of the Art", "The Laboratory"],
             config.Regions.Select(static region => region.DisplayName));
+        Assert.Equal(
+            [0, 1_536, 3_072, 5_120, 6_656, 8_704, 10_752, 13_312],
+            config.Regions.Select(static region => region.StartDepthCells));
+        Assert.Equal(
+            [1_024, 1_024, 1_536, 1_024, 1_536, 1_536, 2_048, 1_600],
+            config.Regions.Select(static region => region.HeightCells));
+        Assert.Equal(512, config.HolyMountainHeightCells);
+        Assert.Equal(14_912, config.CampaignEndDepthCells);
         Assert.True(materials.Resolve(biomes.HolyMountain.ShellMaterial).IsValid);
         Assert.True(materials.Resolve(biomes.HolyMountain.PlatformMaterial).IsValid);
         Assert.True(materials.Resolve(biomes.PortalNetwork.TeleportatiumMaterial).IsValid);
@@ -421,7 +429,7 @@ public sealed class CampaignWorldTests
         for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
         {
             long minimumY = campaign.RegionStartCellY(regionIndex);
-            long maximumY = minimumY + campaign.RegionHeightCells - 1L;
+            long maximumY = minimumY + campaign.RegionHeightCellsAt(regionIndex) - 1L;
             int count = PlayableCavernWorldGenerator.CollectEncounterAnchors(
                 catalog,
                 campaign,
@@ -838,7 +846,7 @@ public sealed class CampaignWorldTests
                 -1_024,
                 campaign.RegionStartCellY(regionIndex),
                 1_024,
-                campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCells - 1L,
+                campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCellsAt(regionIndex) - 1L,
                 anchors);
             _ = PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
                 catalog,
@@ -885,7 +893,7 @@ public sealed class CampaignWorldTests
                 -1_024,
                 campaign.RegionStartCellY(regionIndex),
                 1_024,
-                campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCells - 1L,
+                campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCellsAt(regionIndex) - 1L,
                 anchors);
         }
 
@@ -935,7 +943,7 @@ public sealed class CampaignWorldTests
         ushort holyMountainShell = ResolveRequired(materials, biomes.HolyMountain.ShellMaterial);
         ushort holyMountainPlatform = ResolveRequired(materials, biomes.HolyMountain.PlatformMaterial);
 
-        long campaignBottom = RegionStart(config, CampaignConfig.RequiredRegionCount - 1) + config.RegionHeightCells;
+        long campaignBottom = config.SurfaceY + config.CampaignEndDepthCells;
         for (long worldY = config.SurfaceY; worldY <= campaignBottom; worldY += 31)
         {
             long pathX = PlayableCavernWorldGenerator.MainPathCenterX(worldY, config, config.InitialRunSeed);
@@ -947,7 +955,7 @@ public sealed class CampaignWorldTests
 
         for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
         {
-            long regionY = RegionStart(config, regionIndex) + (config.RegionHeightCells / 2);
+            long regionY = RegionStart(config, regionIndex) + (config.RegionHeightCellsAt(regionIndex) / 2);
             CampaignDepthLocation location = config.ResolveLocation(regionY);
             Assert.Equal(CampaignDepthKind.Region, location.Kind);
             Assert.Equal(regionIndex, location.RegionIndex);
@@ -964,10 +972,12 @@ public sealed class CampaignWorldTests
             Assert.True(signatureCells >= 256, $"区域 {region.Id} 缺少可辨识的材质地层，cells={signatureCells}。");
 
             int hazardCells = 0;
-            for (int sampleIndex = 0; sampleIndex < 6; sampleIndex++)
+            int regionHeightCells = config.RegionHeightCellsAt(regionIndex);
+            for (int sampleIndex = 0; sampleIndex < 16; sampleIndex++)
             {
                 long hazardX = 8_192L + (regionIndex * 4_096L) + (sampleIndex * 257L);
-                long hazardY = regionY + ((sampleIndex - 2L) * ChunkSize);
+                long hazardY = RegionStart(config, regionIndex) +
+                    ((sampleIndex + 1L) * regionHeightCells / 17L);
                 hazardCells += Count(sideChunk: probe.ChunkAt(hazardX, hazardY).Materials, hazard);
             }
 
@@ -1176,19 +1186,19 @@ public sealed class CampaignWorldTests
             Assert.Equal(expectedRegion.Id, actualRegion.Id);
             Assert.Equal(expectedRegion.DisplayName, actualRegion.DisplayName);
             Assert.Equal(expectedRegion.LegacyIds, actualRegion.LegacyIds);
+            Assert.Equal(expectedRegion.StartDepthCells, actualRegion.StartDepthCells);
+            Assert.Equal(expectedRegion.HeightCells, actualRegion.HeightCells);
         }
     }
 
     private static long RegionStart(CampaignConfig config, int regionIndex)
     {
-        return config.SurfaceY +
-            config.CampaignStartDepthCells +
-            ((long)regionIndex * (config.RegionHeightCells + config.HolyMountainHeightCells));
+        return config.RegionStartCellY(regionIndex);
     }
 
     private static long HolyMountainStart(CampaignConfig config, int holyMountainIndex)
     {
-        return RegionStart(config, holyMountainIndex) + config.RegionHeightCells;
+        return config.HolyMountainStartCellY(holyMountainIndex);
     }
 
     private static bool IsPortalTransitionRow(

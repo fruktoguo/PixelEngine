@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v5";
+    public const string PersistenceKey = "showcase-campaign-v6";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -365,13 +365,28 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             }
         }
 
+        if (TrySelectConnectionMaterial(
+                worldX,
+                worldY,
+                sideBiomeOnly: false,
+                in row,
+                out ushort connectionMaterial))
+        {
+            return connectionMaterial;
+        }
+
         if (!row.BiomeLandmarkSegments.IsEmpty &&
             TrySelectBiomeLandmarkMaterial(worldX, in row, out ushort landmarkMaterial))
         {
             return landmarkMaterial;
         }
 
-        if (TrySelectConnectionMaterial(worldX, worldY, in row, out ushort connectionMaterial))
+        if (TrySelectConnectionMaterial(
+                worldX,
+                worldY,
+                sideBiomeOnly: true,
+                in row,
+                out connectionMaterial))
         {
             return connectionMaterial;
         }
@@ -543,6 +558,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     private static bool TrySelectConnectionMaterial(
         long worldX,
         long worldY,
+        bool sideBiomeOnly,
         in TerrainRowContext row,
         out ushort material)
     {
@@ -550,6 +566,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         for (int i = 0; i < segments.Length; i++)
         {
             ConnectionRowSegment segment = segments[i];
+            if (segment.Kind == ConnectionRowSegmentKind.SideBiome != sideBiomeOnly)
+            {
+                continue;
+            }
+
             if (worldX < segment.MinimumX || worldX > segment.MaximumX)
             {
                 continue;
@@ -1688,7 +1709,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         BiomeDefinition biome = catalog.MainPath[regionIndex];
         int tileSize = biome.Grammar.TileSizeCells;
         long regionMinimumY = config.RegionStartCellY(regionIndex);
-        long regionMaximumY = checked(regionMinimumY + config.RegionHeightCells - 1L);
+        long regionMaximumY = checked(regionMinimumY + config.RegionHeightCellsAt(regionIndex) - 1L);
         long clippedMinimumY = Math.Max(minimumY, regionMinimumY);
         long clippedMaximumY = Math.Min(maximumY, regionMaximumY);
         if (clippedMinimumY > clippedMaximumY || destination.IsEmpty)

@@ -330,10 +330,7 @@ public sealed class CampaignRunDirector : Behaviour
             return;
         }
 
-        long completionDepth =
-            config.CampaignStartDepthCells +
-            ((CampaignConfig.RequiredRegionCount - 1L) * (config.RegionHeightCells + config.HolyMountainHeightCells)) +
-            config.RegionHeightCells;
+        long completionDepth = config.CampaignEndDepthCells;
         if (depth >= completionDepth)
         {
             WasCompleted = true;

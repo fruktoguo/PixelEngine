@@ -3078,7 +3078,7 @@ public sealed class PlayerControllerIntegrationTests
             materials,
             contentRoot: contentRoot,
             worldWidthCells: 512,
-            worldHeightCells: 1_024);
+            worldHeightCells: 2_048);
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<Transform>();
         CampaignPortalNetwork portal = entity.AddComponent<CampaignPortalNetwork>();
@@ -3146,7 +3146,7 @@ public sealed class PlayerControllerIntegrationTests
             materials,
             contentRoot: contentRoot,
             worldWidthCells: 512,
-            worldHeightCells: 1_024);
+            worldHeightCells: 2_048);
         Entity entity = scene.CreateEntity();
         _ = entity.AddComponent<Transform>();
         CampaignRunDirector run = entity.AddComponent<CampaignRunDirector>();
