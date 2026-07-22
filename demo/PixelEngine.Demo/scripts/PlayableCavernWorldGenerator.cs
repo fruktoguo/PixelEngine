@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v2";
+    public const string PersistenceKey = "showcase-campaign-v3";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -39,6 +39,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     internal const int SeaLevelY = 242;
     private const long SafeInnerRadius = 112;
     private const long SafeOuterRadius = 320;
+    private const int MaximumConnectionSegmentsPerRow = 16;
     private const double Inverse53Bit = 1.0 / 9_007_199_254_740_992.0;
 
     /// <inheritdoc />
@@ -48,12 +49,15 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         CampaignConfig config = request.Config is null
             ? currentState?.Config ?? CampaignConfig.BuiltinDefault
             : CampaignConfig.Load(request.Config);
+        BiomeCatalog biomes = request.Config is null
+            ? currentState?.Biomes ?? BiomeCatalog.BuiltinDefault
+            : BiomeCatalog.Load(request.Config, config);
+        ulong worldSeed = request.WorldSeedOverride ?? config.InitialRunSeed;
         if (request.Materials is not null)
         {
-            Volatile.Write(ref _state, CreateGenerationState(request.Materials, config));
+            Volatile.Write(ref _state, CreateGenerationState(request.Materials, config, biomes, worldSeed));
         }
 
-        ulong worldSeed = request.WorldSeedOverride ?? config.InitialRunSeed;
         return ProceduralWorldDescriptor.CreateInfinite(
             worldSeed,
             initialFocusX: (long)PlayerSpawnX,
@@ -67,7 +71,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         TerrainGenerationState? state = Volatile.Read(ref _state);
         if (state is null)
         {
-            TerrainGenerationState created = CreateGenerationState(context.Materials, CampaignConfig.BuiltinDefault);
+            TerrainGenerationState created = CreateGenerationState(
+                context.Materials,
+                CampaignConfig.BuiltinDefault,
+                BiomeCatalog.BuiltinDefault,
+                context.WorldSeed);
             state = Interlocked.CompareExchange(ref _state, created, null) ?? created;
         }
 
@@ -89,7 +97,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         Span<ushort> materialCells,
         Span<Half> temperatureCells,
         ulong worldSeed = Seed,
-        CampaignConfig? config = null)
+        CampaignConfig? config = null,
+        BiomeCatalog? biomes = null)
     {
         const int SizeCells = 64;
         const int TemperatureSizeCells = 16;
@@ -103,9 +112,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             throw new ArgumentException("温度数组必须恰好容纳一个 16x16 temperature chunk。", nameof(temperatureCells));
         }
 
+        CampaignConfig resolvedConfig = config ?? CampaignConfig.BuiltinDefault;
         TerrainGenerationState state = CreateGenerationState(
             materials,
-            config ?? CampaignConfig.BuiltinDefault);
+            resolvedConfig,
+            biomes ?? BiomeCatalog.BuiltinDefault,
+            worldSeed);
         PopulateChunkCore(
             state,
             worldSeed,
@@ -161,13 +173,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     {
         CampaignConfig config = state.Config;
         TerrainMaterialPalette palette = state.Palette;
-        ReadOnlySpan<ushort> regionRock = state.RegionRock;
-        ReadOnlySpan<ushort> regionLoose = state.RegionLoose;
-        ReadOnlySpan<ushort> regionHazard = state.RegionHazard;
         Span<int> surfaces = stackalloc int[sizeCells];
         Span<int> soilDepths = stackalloc int[sizeCells];
         Span<double> moisture = stackalloc double[sizeCells];
         double mainPathOriginNoise = MainPathOriginNoise(worldSeed);
+        Span<ConnectionRowSegment> connectionSegments =
+            stackalloc ConnectionRowSegment[MaximumConnectionSegmentsPerRow];
         for (int localX = 0; localX < sizeCells; localX++)
         {
             long worldX = originCellX + localX;
@@ -182,21 +193,23 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             long worldY = originCellY + localY;
             CampaignDepthLocation location = config.ResolveLocation(worldY);
             int regionIndex = Math.Clamp(location.RegionIndex, 0, CampaignConfig.RequiredRegionCount - 1);
+            CompiledBiome biome = state.MainBiomes[regionIndex];
+            int connectionSegmentCount = BuildConnectionRowSegments(
+                state,
+                worldY,
+                connectionSegments);
             long pathCenterX = location.DepthCells >= config.CampaignStartDepthCells
                 ? MainPathCenterX(worldY, config, worldSeed, mainPathOriginNoise)
                 : config.MainPathEntranceX;
-            double hazardThreshold = HazardThreshold(config.Regions[regionIndex].HazardFrequency);
             TerrainRowContext rowContext = new(
                 worldSeed,
-                config,
-                in location,
+                state,
+                location,
                 pathCenterX,
                 regionIndex,
-                hazardThreshold,
-                in palette,
-                regionRock,
-                regionLoose,
-                regionHazard);
+                biome,
+                palette,
+                connectionSegments[..connectionSegmentCount]);
             int row = localY * sizeCells;
             for (int localX = 0; localX < sizeCells; localX++)
             {
@@ -215,10 +228,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             sizeCells,
             temperatureCells,
             temperatureSizeCells,
+            originCellX,
             originCellY,
-            config,
-            in palette,
-            regionHazard);
+            state,
+            in palette);
     }
 
     /// <summary>
@@ -289,6 +302,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         double moisture,
         in TerrainRowContext row)
     {
+        CampaignConfig config = row.State.Config;
         long depth = worldY - surfaceY;
         if (depth < 0)
         {
@@ -302,14 +316,14 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         {
             long distanceX = Math.Abs(worldX - row.PathCenterX);
             int shell = 8;
-            if (distanceX <= row.Config.HolyMountainHalfWidthCells + shell)
+            if (distanceX <= config.HolyMountainHalfWidthCells + shell)
             {
-                bool passage = distanceX <= row.Config.MainPathHalfWidthCells + 4;
+                bool passage = distanceX <= config.MainPathHalfWidthCells + 4;
                 bool cap = row.Location.LocalDepthCells < shell ||
-                    row.Location.LocalDepthCells >= row.Config.HolyMountainHeightCells - shell;
-                bool wall = distanceX >= row.Config.HolyMountainHalfWidthCells;
+                    row.Location.LocalDepthCells >= config.HolyMountainHeightCells - shell;
+                bool wall = distanceX >= config.HolyMountainHalfWidthCells;
                 bool platform = row.Location.LocalDepthCells is >= 60 and <= 64 &&
-                    distanceX > row.Config.MainPathHalfWidthCells + 20;
+                    distanceX > config.MainPathHalfWidthCells + 20;
                 return wall || (cap && !passage)
                     ? row.Palette.HolyMountainShell
                     : platform
@@ -318,17 +332,17 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             }
         }
 
-        if (row.Location.DepthCells >= row.Config.CampaignStartDepthCells)
+        if (row.Location.DepthCells >= config.CampaignStartDepthCells)
         {
-            if (Math.Abs(worldX - row.PathCenterX) <= row.Config.MainPathHalfWidthCells)
+            if (Math.Abs(worldX - row.PathCenterX) <= config.MainPathHalfWidthCells)
             {
                 return row.Palette.Empty;
             }
         }
 
-        if (IsCaveAt(worldX, worldY, surfaceY, row.WorldSeed))
+        if (TrySelectConnectionMaterial(worldX, worldY, in row, out ushort connectionMaterial))
         {
-            return row.Palette.Empty;
+            return connectionMaterial;
         }
 
         if (depth <= soilDepth)
@@ -346,18 +360,391 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         }
 
         bool protectedSpawn = Math.Abs((double)worldX) < SafeOuterRadius && depth < 160;
+        return SelectBiomeMaterial(worldX, worldY, protectedSpawn, row.Biome, in row);
+    }
+
+    private static ushort SelectBiomeMaterial(
+        long worldX,
+        long worldY,
+        bool protectedSpawn,
+        CompiledBiome biome,
+        in TerrainRowContext row)
+    {
+        if (TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial))
+        {
+            return sceneMaterial;
+        }
+
+        if (IsBiomeOpenAt(worldX, worldY, biome, row.WorldSeed))
+        {
+            return row.Palette.Empty;
+        }
+
         double strata = Fractal2D(
-            worldX * 0.034,
-            worldY * 0.031,
-            row.WorldSeed ^ (0xDE90517UL + ((ulong)row.RegionIndex * 0x85EBUL)),
+            worldX * biome.Grammar.HorizontalScale * 1.9,
+            worldY * biome.Grammar.VerticalScale * 1.9,
+            row.WorldSeed ^ biome.Salt ^ 0xDE90_517UL,
             2);
-        return !protectedSpawn && depth > 28 && strata > row.HazardThreshold
-            ? row.RegionHazard[row.RegionIndex]
-            : strata > 0.32
-                ? row.RegionLoose[row.RegionIndex]
-                : depth > 70 && strata < -0.70
-                    ? row.Palette.Crystal
-                    : row.RegionRock[row.RegionIndex];
+        return !protectedSpawn && strata > biome.HazardThreshold
+            ? biome.Hazard
+            : strata > 0.34
+                ? biome.Loose
+                : strata < -0.56
+                    ? biome.Secondary
+                    : biome.Primary;
+    }
+
+    private static bool TrySelectConnectionMaterial(
+        long worldX,
+        long worldY,
+        in TerrainRowContext row,
+        out ushort material)
+    {
+        ReadOnlySpan<ConnectionRowSegment> segments = row.ConnectionSegments;
+        for (int i = 0; i < segments.Length; i++)
+        {
+            ConnectionRowSegment segment = segments[i];
+            if (worldX < segment.MinimumX || worldX > segment.MaximumX)
+            {
+                continue;
+            }
+
+            if (segment.Kind == ConnectionRowSegmentKind.SideBiome)
+            {
+                material = SelectBiomeMaterial(
+                    worldX,
+                    worldY,
+                    protectedSpawn: false,
+                    row.State.SideBiomes[segment.SideBiomeIndex],
+                    in row);
+                return true;
+            }
+
+            material = segment.Kind == ConnectionRowSegmentKind.Access &&
+                worldX >= segment.GateMinimumX &&
+                worldX <= segment.GateMaximumX
+                    ? segment.GateMaterial
+                    : segment.Material;
+            return true;
+        }
+
+        material = default;
+        return false;
+    }
+
+    private static int BuildConnectionRowSegments(
+        TerrainGenerationState state,
+        long worldY,
+        Span<ConnectionRowSegment> destination)
+    {
+        int count = 0;
+        ReadOnlySpan<ResolvedConnection> connections = state.Connections;
+        for (int i = 0; i < connections.Length; i++)
+        {
+            ResolvedConnection resolved = connections[i];
+            CompiledConnection connection = resolved.Connection;
+            if (connection.Kind is CompiledConnectionKind.SideBiome or CompiledConnectionKind.SecretSideBiome)
+            {
+                if (Math.Abs(worldY - resolved.AnchorY) <= connection.CorridorHalfWidthCells)
+                {
+                    AddAccessSegment(
+                        resolved,
+                        resolved.AnchorPathX,
+                        state.Palette.Empty,
+                        destination,
+                        ref count);
+                }
+
+                if (worldY >= resolved.StartY && worldY <= resolved.EndY)
+                {
+                    AddSideBiomeSegment(resolved, destination, ref count);
+                }
+
+                continue;
+            }
+
+            if (connection.Kind == CompiledConnectionKind.VerticalShortcut)
+            {
+                if (worldY >= resolved.StartY && worldY <= resolved.EndY)
+                {
+                    AddMaterialSegment(
+                        resolved.CenterX - connection.HalfWidthCells,
+                        resolved.CenterX + connection.HalfWidthCells,
+                        state.Palette.Empty,
+                        destination,
+                        ref count);
+                }
+
+                if (Math.Abs(worldY - resolved.StartY) <= connection.CorridorHalfWidthCells)
+                {
+                    AddAccessSegment(
+                        resolved,
+                        resolved.StartPathX,
+                        state.Palette.Empty,
+                        destination,
+                        ref count);
+                }
+
+                if (Math.Abs(worldY - resolved.EndY) <= connection.CorridorHalfWidthCells)
+                {
+                    AddAccessSegment(
+                        resolved,
+                        resolved.EndPathX,
+                        state.Palette.Empty,
+                        destination,
+                        ref count);
+                }
+
+                continue;
+            }
+
+            if (worldY >= resolved.StartY && worldY <= resolved.EndY)
+            {
+                AddSideBiomeSegment(resolved, destination, ref count);
+            }
+
+            if (Math.Abs(worldY - resolved.StartY) <= connection.CorridorHalfWidthCells)
+            {
+                AddAccessSegment(
+                    resolved,
+                    resolved.StartPathX,
+                    state.Palette.Empty,
+                    destination,
+                    ref count);
+            }
+
+            if (Math.Abs(worldY - resolved.EndY) <= connection.CorridorHalfWidthCells)
+            {
+                AddAccessSegment(
+                    resolved,
+                    resolved.EndPathX,
+                    state.Palette.Empty,
+                    destination,
+                    ref count);
+            }
+        }
+
+        return count;
+    }
+
+    private static void AddSideBiomeSegment(
+        in ResolvedConnection resolved,
+        Span<ConnectionRowSegment> destination,
+        ref int count)
+    {
+        CompiledConnection connection = resolved.Connection;
+        AddConnectionSegment(
+            new ConnectionRowSegment(
+                ConnectionRowSegmentKind.SideBiome,
+                resolved.CenterX - connection.HalfWidthCells,
+                resolved.CenterX + connection.HalfWidthCells,
+                1,
+                0,
+                default,
+                default,
+                connection.SideBiomeIndex),
+            destination,
+            ref count);
+    }
+
+    private static void AddMaterialSegment(
+        long minimumX,
+        long maximumX,
+        ushort material,
+        Span<ConnectionRowSegment> destination,
+        ref int count)
+    {
+        AddConnectionSegment(
+            new ConnectionRowSegment(
+                ConnectionRowSegmentKind.Material,
+                minimumX,
+                maximumX,
+                1,
+                0,
+                material,
+                material,
+                -1),
+            destination,
+            ref count);
+    }
+
+    private static void AddAccessSegment(
+        in ResolvedConnection resolved,
+        long pathX,
+        ushort empty,
+        Span<ConnectionRowSegment> destination,
+        ref int count)
+    {
+        CompiledConnection connection = resolved.Connection;
+        long nearEdgeX = resolved.CenterX - ((long)connection.Direction * connection.HalfWidthCells);
+        long gateX = nearEdgeX - (connection.Direction * 2L);
+        AddConnectionSegment(
+            new ConnectionRowSegment(
+                ConnectionRowSegmentKind.Access,
+                Math.Min(pathX, nearEdgeX) - connection.CorridorHalfWidthCells,
+                Math.Max(pathX, nearEdgeX) + connection.CorridorHalfWidthCells,
+                gateX - 2,
+                gateX + 2,
+                empty,
+                connection.GateMaterial,
+                -1),
+            destination,
+            ref count);
+    }
+
+    private static void AddConnectionSegment(
+        in ConnectionRowSegment segment,
+        Span<ConnectionRowSegment> destination,
+        ref int count)
+    {
+        if ((uint)count >= (uint)destination.Length)
+        {
+            throw new InvalidOperationException(
+                $"单行 biome connection segment 超过固定容量 {destination.Length}。 ");
+        }
+
+        destination[count++] = segment;
+    }
+
+    private static bool TrySelectPixelSceneMaterial(
+        long worldX,
+        long worldY,
+        CompiledBiome biome,
+        in TerrainRowContext row,
+        out ushort material)
+    {
+        BiomeTerrainGrammarDefinition grammar = biome.Grammar;
+        int tileSize = grammar.TileSizeCells;
+        long tileX = FloorDivide(worldX, tileSize);
+        long tileY = FloorDivide(worldY, tileSize);
+        int tileLocalX = FloorRemainder(worldX, tileSize);
+        int tileLocalY = FloorRemainder(worldY, tileSize);
+        ReadOnlySpan<CompiledPixelScene> scenes = biome.PixelScenes;
+        for (int sceneIndex = 0; sceneIndex < scenes.Length; sceneIndex++)
+        {
+            CompiledPixelScene scene = scenes[sceneIndex];
+            if (!IsPixelSceneSelected(tileX, tileY, row.WorldSeed, scene.Salt, scene.SpawnChance))
+            {
+                continue;
+            }
+
+            int sceneX = tileLocalX - ((tileSize - scene.WidthCells) / 2);
+            int sceneY = tileLocalY - ((tileSize - scene.HeightCells) / 2);
+            if ((uint)sceneX >= (uint)scene.WidthCells || (uint)sceneY >= (uint)scene.HeightCells)
+            {
+                continue;
+            }
+
+            ReadOnlySpan<CompiledPixelSceneOperation> operations = scene.Operations;
+            for (int operationIndex = operations.Length - 1; operationIndex >= 0; operationIndex--)
+            {
+                CompiledPixelSceneOperation operation = operations[operationIndex];
+                if (operation.Contains(sceneX, sceneY))
+                {
+                    material = operation.Material;
+                    return true;
+                }
+            }
+        }
+
+        material = default;
+        return false;
+    }
+
+    private static bool IsBiomeOpenAt(long worldX, long worldY, CompiledBiome biome, ulong worldSeed)
+    {
+        return IsBiomeGrammarOpenAt(worldX, worldY, biome.Grammar, biome.Salt, worldSeed);
+    }
+
+    internal static bool IsBiomeGrammarOpenAt(
+        long worldX,
+        long worldY,
+        BiomeDefinition biome,
+        ulong worldSeed)
+    {
+        ArgumentNullException.ThrowIfNull(biome);
+        return IsBiomeGrammarOpenAt(
+            worldX,
+            worldY,
+            biome.Grammar,
+            StableIdSalt(biome.Id),
+            worldSeed);
+    }
+
+    private static bool IsBiomeGrammarOpenAt(
+        long worldX,
+        long worldY,
+        BiomeTerrainGrammarDefinition grammar,
+        ulong biomeSalt,
+        ulong worldSeed)
+    {
+        int tileSize = grammar.TileSizeCells;
+        long tileX = FloorDivide(worldX, tileSize);
+        long tileY = FloorDivide(worldY, tileSize);
+        int localX = FloorRemainder(worldX, tileSize);
+        int localY = FloorRemainder(worldY, tileSize);
+        int center = tileSize / 2;
+        int dx = localX - center;
+        int dy = localY - center;
+        int radius = grammar.ChamberRadiusCells;
+        if ((((long)dx * dx) + ((long)dy * dy)) <= (long)radius * radius)
+        {
+            return true;
+        }
+
+        ulong edgeSalt = worldSeed ^ biomeSalt ^ 0xED6E_5A17UL;
+        bool north = HashUnit(tileX, tileY, edgeSalt) < grammar.EdgeOpenChance;
+        bool south = HashUnit(tileX, tileY + 1, edgeSalt) < grammar.EdgeOpenChance;
+        bool west = HashUnit(tileX, tileY, edgeSalt ^ 0x9E37_79B9UL) < grammar.EdgeOpenChance;
+        bool east = HashUnit(tileX + 1, tileY, edgeSalt ^ 0x9E37_79B9UL) < grammar.EdgeOpenChance;
+        int verticalCorridor = grammar.CorridorHalfWidthCells +
+            (int)Math.Round(Math.Max(0.0, grammar.VerticalBias) * 8.0);
+        int horizontalCorridor = grammar.CorridorHalfWidthCells +
+            (int)Math.Round(Math.Max(0.0, -grammar.VerticalBias) * 8.0);
+        if (localY == 0 && Math.Abs(dx) <= verticalCorridor)
+        {
+            return north;
+        }
+
+        if (localY == tileSize - 1 && Math.Abs(dx) <= verticalCorridor)
+        {
+            return south;
+        }
+
+        if (localX == 0 && Math.Abs(dy) <= horizontalCorridor)
+        {
+            return west;
+        }
+
+        if (localX == tileSize - 1 && Math.Abs(dy) <= horizontalCorridor)
+        {
+            return east;
+        }
+
+        if ((north && localY <= center && Math.Abs(dx) <= verticalCorridor) ||
+            (south && localY >= center && Math.Abs(dx) <= verticalCorridor) ||
+            (west && localX <= center && Math.Abs(dy) <= horizontalCorridor) ||
+            (east && localX >= center && Math.Abs(dy) <= horizontalCorridor))
+        {
+            return true;
+        }
+
+        double cave = Fractal2D(
+            worldX * grammar.HorizontalScale,
+            worldY * grammar.VerticalScale,
+            worldSeed ^ biomeSalt ^ 0xCA7E_61DUL,
+            3);
+        return cave > grammar.NoiseOpenThreshold;
+    }
+
+    private static bool IsPixelSceneSelected(
+        long tileX,
+        long tileY,
+        ulong worldSeed,
+        ulong sceneSalt,
+        double spawnChance)
+    {
+        return HashUnit(tileX, tileY, worldSeed ^ sceneSalt) < spawnChance;
     }
 
     private static void PopulateTemperature(
@@ -365,24 +752,31 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         int sizeCells,
         Span<Half> temperatureCells,
         int temperatureSizeCells,
+        long originCellX,
         long originCellY,
-        CampaignConfig config,
-        in TerrainMaterialPalette palette,
-        ReadOnlySpan<ushort> regionHazard)
+        TerrainGenerationState state,
+        in TerrainMaterialPalette palette)
     {
+        CampaignConfig config = state.Config;
         int cellScale = sizeCells / temperatureSizeCells;
         for (int temperatureY = 0; temperatureY < temperatureSizeCells; temperatureY++)
         {
             long sampleWorldY = originCellY + (temperatureY * cellScale) + (cellScale / 2);
             CampaignDepthLocation location = config.ResolveLocation(sampleWorldY);
             int regionIndex = Math.Clamp(location.RegionIndex, 0, CampaignConfig.RequiredRegionCount - 1);
-            float temperature = location.Kind == CampaignDepthKind.HolyMountain
-                ? 20f
-                : config.Regions[regionIndex].BaseTemperature;
             for (int temperatureX = 0; temperatureX < temperatureSizeCells; temperatureX++)
             {
                 int startY = temperatureY * cellScale;
                 int startX = temperatureX * cellScale;
+                long sampleWorldX = originCellX + (temperatureX * cellScale) + (cellScale / 2);
+                CompiledBiome biome = ResolveTemperatureBiome(
+                    sampleWorldX,
+                    sampleWorldY,
+                    regionIndex,
+                    state);
+                float temperature = location.Kind == CampaignDepthKind.HolyMountain
+                    ? 20f
+                    : biome.BaseTemperature;
                 bool containsHotHazard = false;
                 for (int y = 0; y < cellScale && !containsHotHazard; y++)
                 {
@@ -390,7 +784,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     for (int x = 0; x < cellScale; x++)
                     {
                         ushort material = materialCells[row + startX + x];
-                        if (material == palette.Lava && regionHazard[regionIndex] == palette.Lava)
+                        if (material == palette.Lava)
                         {
                             containsHotHazard = true;
                             break;
@@ -404,22 +798,55 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         }
     }
 
+    private static CompiledBiome ResolveTemperatureBiome(
+        long worldX,
+        long worldY,
+        int mainRegionIndex,
+        TerrainGenerationState state)
+    {
+        ReadOnlySpan<ResolvedConnection> connections = state.Connections;
+        for (int i = 0; i < connections.Length; i++)
+        {
+            ResolvedConnection resolved = connections[i];
+            CompiledConnection connection = resolved.Connection;
+            if (connection.SideBiomeIndex < 0)
+            {
+                continue;
+            }
+
+            if (worldY < resolved.StartY || worldY > resolved.EndY)
+            {
+                continue;
+            }
+
+            if (Math.Abs(worldX - resolved.CenterX) <= connection.HalfWidthCells)
+            {
+                return state.SideBiomes[connection.SideBiomeIndex];
+            }
+        }
+
+        return state.MainBiomes[mainRegionIndex];
+    }
+
     /// <summary>
     /// 在有限 Editor 预览画布中显示以世界原点为中心的同源地形切片。
     /// </summary>
     internal static void PopulateAuthoringWorld(in AuthoringWorldPreviewContext context)
     {
-        TerrainGenerationState state = CreateGenerationState(context.Materials, CampaignConfig.BuiltinDefault);
+        TerrainGenerationState state = CreateGenerationState(
+            context.Materials,
+            CampaignConfig.BuiltinDefault,
+            BiomeCatalog.BuiltinDefault,
+            Seed);
         CampaignConfig config = state.Config;
         TerrainMaterialPalette palette = state.Palette;
-        ReadOnlySpan<ushort> regionRock = state.RegionRock;
-        ReadOnlySpan<ushort> regionLoose = state.RegionLoose;
-        ReadOnlySpan<ushort> regionHazard = state.RegionHazard;
         _ = context.Edit.ClearRect(0, 0, context.WidthCells - 1, context.HeightCells - 1);
         Span<int> surfaces = stackalloc int[context.WidthCells];
         Span<int> soilDepths = stackalloc int[context.WidthCells];
         Span<double> moisture = stackalloc double[context.WidthCells];
         double mainPathOriginNoise = MainPathOriginNoise(Seed);
+        Span<ConnectionRowSegment> connectionSegments =
+            stackalloc ConnectionRowSegment[MaximumConnectionSegmentsPerRow];
         long previewOriginX = -(context.WidthCells / 2L);
         for (int x = 0; x < context.WidthCells; x++)
         {
@@ -433,21 +860,23 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         {
             CampaignDepthLocation location = config.ResolveLocation(y);
             int regionIndex = Math.Clamp(location.RegionIndex, 0, CampaignConfig.RequiredRegionCount - 1);
+            CompiledBiome biome = state.MainBiomes[regionIndex];
+            int connectionSegmentCount = BuildConnectionRowSegments(
+                state,
+                y,
+                connectionSegments);
             long pathCenterX = location.DepthCells >= config.CampaignStartDepthCells
                 ? MainPathCenterX(y, config, Seed, mainPathOriginNoise)
                 : config.MainPathEntranceX;
-            double hazardThreshold = HazardThreshold(config.Regions[regionIndex].HazardFrequency);
             TerrainRowContext rowContext = new(
                 Seed,
-                config,
-                in location,
+                state,
+                location,
                 pathCenterX,
                 regionIndex,
-                hazardThreshold,
-                in palette,
-                regionRock,
-                regionLoose,
-                regionHazard);
+                biome,
+                palette,
+                connectionSegments[..connectionSegmentCount]);
             int runStart = 0;
             ushort runMaterial = SelectMaterial(
                 previewOriginX,
@@ -485,18 +914,35 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
     private static TerrainGenerationState CreateGenerationState(
         IMaterialQuery materials,
-        CampaignConfig config)
+        CampaignConfig config,
+        BiomeCatalog biomes,
+        ulong worldSeed)
     {
-        ushort[] regionRock = new ushort[CampaignConfig.RequiredRegionCount];
-        ushort[] regionLoose = new ushort[CampaignConfig.RequiredRegionCount];
-        ushort[] regionHazard = new ushort[CampaignConfig.RequiredRegionCount];
-        ResolveRegionMaterials(materials, config, regionRock, regionLoose, regionHazard);
+        CompiledPixelScene[] pixelScenes = CompilePixelScenes(materials, biomes);
+        CompiledBiome[] mainBiomes = CompileBiomes(
+            materials,
+            biomes.MainPath,
+            biomes,
+            pixelScenes);
+        CompiledBiome[] sideBiomes = CompileBiomes(
+            materials,
+            biomes.SideBiomes,
+            biomes,
+            pixelScenes);
+        CompiledConnection[] connections = CompileConnections(
+            materials,
+            biomes);
+        ResolvedConnection[] resolvedConnections = ResolveConnections(
+            config,
+            worldSeed,
+            connections);
         return new TerrainGenerationState(
             config,
+            biomes,
             ResolvePalette(materials, config),
-            regionRock,
-            regionLoose,
-            regionHazard);
+            mainBiomes,
+            sideBiomes,
+            resolvedConnections);
     }
 
     private static TerrainMaterialPalette ResolvePalette(IMaterialQuery materials, CampaignConfig config)
@@ -515,25 +961,187 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             ResolveRequired(materials, config.HolyMountainPlatformMaterial));
     }
 
-    private static void ResolveRegionMaterials(
+    private static CompiledPixelScene[] CompilePixelScenes(
         IMaterialQuery materials,
-        CampaignConfig config,
-        Span<ushort> regionRock,
-        Span<ushort> regionLoose,
-        Span<ushort> regionHazard)
+        BiomeCatalog catalog)
     {
-        for (int i = 0; i < CampaignConfig.RequiredRegionCount; i++)
+        CompiledPixelScene[] result = new CompiledPixelScene[catalog.PixelScenes.Length];
+        for (int sceneIndex = 0; sceneIndex < result.Length; sceneIndex++)
         {
-            CampaignRegionDefinition region = config.Regions[i];
-            regionRock[i] = ResolveRequired(materials, region.RockMaterial);
-            regionLoose[i] = ResolveRequired(materials, region.LooseMaterial);
-            regionHazard[i] = ResolveRequired(materials, region.HazardMaterial);
+            BiomePixelSceneDefinition source = catalog.PixelScenes[sceneIndex];
+            CompiledPixelSceneOperation[] operations =
+                new CompiledPixelSceneOperation[source.Operations.Length];
+            for (int operationIndex = 0; operationIndex < operations.Length; operationIndex++)
+            {
+                BiomePixelSceneOperationDefinition operation = source.Operations[operationIndex];
+                operations[operationIndex] = new CompiledPixelSceneOperation(
+                    operation.Kind == "carveEllipse"
+                        ? CompiledPixelSceneOperationKind.Ellipse
+                        : CompiledPixelSceneOperationKind.Rectangle,
+                    ResolveRequired(materials, operation.Material),
+                    operation.X,
+                    operation.Y,
+                    operation.Width,
+                    operation.Height);
+            }
+
+            result[sceneIndex] = new CompiledPixelScene(
+                source.WidthCells,
+                source.HeightCells,
+                source.SpawnChance,
+                StableIdSalt(source.Id),
+                source.EncounterId,
+                operations);
         }
+
+        return result;
+    }
+
+    private static CompiledBiome[] CompileBiomes(
+        IMaterialQuery materials,
+        BiomeDefinition[] definitions,
+        BiomeCatalog catalog,
+        CompiledPixelScene[] pixelScenes)
+    {
+        CompiledBiome[] result = new CompiledBiome[definitions.Length];
+        for (int biomeIndex = 0; biomeIndex < result.Length; biomeIndex++)
+        {
+            BiomeDefinition definition = definitions[biomeIndex];
+            CompiledPixelScene[] scenes = new CompiledPixelScene[definition.PixelScenes.Length];
+            for (int sceneIndex = 0; sceneIndex < scenes.Length; sceneIndex++)
+            {
+                int catalogIndex = catalog.FindPixelSceneIndex(definition.PixelScenes[sceneIndex]);
+                if (catalogIndex < 0)
+                {
+                    throw new InvalidDataException(
+                        $"biome {definition.Id} 引用了未编译的 pixel scene {definition.PixelScenes[sceneIndex]}。 ");
+                }
+
+                CompiledPixelScene scene = pixelScenes[catalogIndex];
+                if (scene.WidthCells > definition.Grammar.TileSizeCells ||
+                    scene.HeightCells > definition.Grammar.TileSizeCells)
+                {
+                    throw new InvalidDataException(
+                        $"biome {definition.Id} 的 pixel scene {definition.PixelScenes[sceneIndex]} 超出 tile。 ");
+                }
+
+                scenes[sceneIndex] = scene;
+            }
+
+            BiomeMaterialPaletteDefinition palette = definition.Palette;
+            result[biomeIndex] = new CompiledBiome(
+                definition.Id,
+                definition.BaseTemperature,
+                definition.Grammar,
+                ResolveRequired(materials, palette.Primary),
+                ResolveRequired(materials, palette.Secondary),
+                ResolveRequired(materials, palette.Loose),
+                ResolveRequired(materials, palette.Structure),
+                ResolveRequired(materials, palette.Hazard),
+                ResolveRequired(materials, palette.Pool),
+                HazardThreshold(definition.HazardFrequency),
+                StableIdSalt(definition.Id),
+                scenes);
+        }
+
+        return result;
+    }
+
+    private static CompiledConnection[] CompileConnections(
+        IMaterialQuery materials,
+        BiomeCatalog catalog)
+    {
+        CompiledConnection[] result = new CompiledConnection[catalog.Connections.Length];
+        for (int i = 0; i < result.Length; i++)
+        {
+            BiomeConnectionDefinition definition = catalog.Connections[i];
+            CompiledConnectionKind kind = definition.Kind switch
+            {
+                "side-biome" => CompiledConnectionKind.SideBiome,
+                "secret-side-biome" => CompiledConnectionKind.SecretSideBiome,
+                "vertical-shortcut" => CompiledConnectionKind.VerticalShortcut,
+                "vertical-side-biome" => CompiledConnectionKind.VerticalSideBiome,
+                _ => throw new InvalidDataException($"不支持的 biome connection kind：{definition.Kind}。"),
+            };
+            int fromRegionIndex = catalog.FindMainPathIndex(definition.From);
+            int toRegionIndex = kind is CompiledConnectionKind.SideBiome or CompiledConnectionKind.SecretSideBiome
+                ? -1
+                : catalog.FindMainPathIndex(definition.To);
+            int sideBiomeIndex = kind switch
+            {
+                CompiledConnectionKind.SideBiome or CompiledConnectionKind.SecretSideBiome =>
+                    catalog.FindSideBiomeIndex(definition.To),
+                CompiledConnectionKind.VerticalSideBiome => catalog.FindSideBiomeIndex(definition.SideBiome),
+                CompiledConnectionKind.VerticalShortcut => -1,
+                _ => throw new InvalidDataException($"不支持的 biome connection kind：{kind}。"),
+            };
+            result[i] = new CompiledConnection(
+                kind,
+                fromRegionIndex,
+                toRegionIndex,
+                definition.Side == "west" ? -1 : 1,
+                definition.OffsetCells,
+                definition.HalfWidthCells,
+                definition.CorridorHalfWidthCells,
+                definition.FromLocalDepthCells,
+                definition.ToLocalDepthCells,
+                ResolveRequired(materials, definition.GateMaterial),
+                sideBiomeIndex);
+        }
+
+        return result;
+    }
+
+    private static ResolvedConnection[] ResolveConnections(
+        CampaignConfig config,
+        ulong worldSeed,
+        CompiledConnection[] connections)
+    {
+        ResolvedConnection[] result = new ResolvedConnection[connections.Length];
+        double mainPathOriginNoise = MainPathOriginNoise(worldSeed);
+        for (int i = 0; i < result.Length; i++)
+        {
+            CompiledConnection connection = connections[i];
+            long startY = config.RegionStartCellY(connection.FromRegionIndex) +
+                connection.FromLocalDepthCells;
+            long endY = connection.Kind is CompiledConnectionKind.SideBiome or CompiledConnectionKind.SecretSideBiome
+                ? config.RegionStartCellY(connection.FromRegionIndex) + connection.ToLocalDepthCells
+                : config.RegionStartCellY(connection.ToRegionIndex) + connection.ToLocalDepthCells;
+            long anchorY = startY + ((endY - startY) / 2);
+            long startPathX = MainPathCenterX(startY, config, worldSeed, mainPathOriginNoise);
+            long endPathX = MainPathCenterX(endY, config, worldSeed, mainPathOriginNoise);
+            long anchorPathX = MainPathCenterX(anchorY, config, worldSeed, mainPathOriginNoise);
+            long centerX = anchorPathX +
+                ((long)connection.Direction * connection.OffsetCells);
+            result[i] = new ResolvedConnection(
+                connection,
+                startY,
+                endY,
+                anchorY,
+                centerX,
+                startPathX,
+                endPathX,
+                anchorPathX);
+        }
+
+        return result;
     }
 
     private static double HazardThreshold(double frequency)
     {
         return frequency <= 0.0 ? double.PositiveInfinity : 0.58 - (frequency * 3.0);
+    }
+
+    private static ulong StableIdSalt(string value)
+    {
+        ulong hash = 14_695_981_039_346_656_037UL;
+        for (int i = 0; i < value.Length; i++)
+        {
+            hash ^= value[i];
+            hash *= 1_099_511_628_211UL;
+        }
+
+        return hash;
     }
 
     private static ushort ResolveRequired(IMaterialQuery materials, string name)
@@ -552,6 +1160,94 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     internal static long MainPathCenterX(long worldY, CampaignConfig config, ulong worldSeed)
     {
         return MainPathCenterX(worldY, config, worldSeed, MainPathOriginNoise(worldSeed));
+    }
+
+    /// <summary>
+    /// 收集给定主路径 biome 和矩形内由 authored pixel-scene 产生的确定性遭遇锚点。
+    /// 调用方提供固定容量目标，热路径不分配；返回值不会超过 destination 长度。
+    /// </summary>
+    internal static int CollectEncounterAnchors(
+        BiomeCatalog catalog,
+        CampaignConfig config,
+        int regionIndex,
+        ulong worldSeed,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY,
+        Span<BiomeEncounterAnchor> destination)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(config);
+        if ((uint)regionIndex >= CampaignConfig.RequiredRegionCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(regionIndex));
+        }
+
+        if (minimumX > maximumX || minimumY > maximumY)
+        {
+            throw new ArgumentException("遭遇锚点查询矩形无效。");
+        }
+
+        BiomeDefinition biome = catalog.MainPath[regionIndex];
+        int tileSize = biome.Grammar.TileSizeCells;
+        long regionMinimumY = config.RegionStartCellY(regionIndex);
+        long regionMaximumY = checked(regionMinimumY + config.RegionHeightCells - 1L);
+        long clippedMinimumY = Math.Max(minimumY, regionMinimumY);
+        long clippedMaximumY = Math.Min(maximumY, regionMaximumY);
+        if (clippedMinimumY > clippedMaximumY || destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        long minimumTileX = FloorDivide(minimumX, tileSize);
+        long maximumTileX = FloorDivide(maximumX, tileSize);
+        long minimumTileY = FloorDivide(clippedMinimumY, tileSize);
+        long maximumTileY = FloorDivide(clippedMaximumY, tileSize);
+        int count = 0;
+        for (long tileY = minimumTileY; tileY <= maximumTileY; tileY++)
+        {
+            for (long tileX = minimumTileX; tileX <= maximumTileX; tileX++)
+            {
+                for (int sceneReferenceIndex = 0; sceneReferenceIndex < biome.PixelScenes.Length; sceneReferenceIndex++)
+                {
+                    int sceneIndex = catalog.FindPixelSceneIndex(biome.PixelScenes[sceneReferenceIndex]);
+                    BiomePixelSceneDefinition scene = catalog.PixelScenes[sceneIndex];
+                    ulong sceneSalt = StableIdSalt(scene.Id);
+                    if (!IsPixelSceneSelected(tileX, tileY, worldSeed, sceneSalt, scene.SpawnChance))
+                    {
+                        continue;
+                    }
+
+                    long worldX = checked((tileX * tileSize) + (tileSize / 2L));
+                    long worldY = checked((tileY * tileSize) + (tileSize / 2L));
+                    long sceneMinimumX = worldX - (scene.WidthCells / 2L);
+                    long sceneMaximumX = sceneMinimumX + scene.WidthCells - 1L;
+                    long sceneMinimumY = worldY - (scene.HeightCells / 2L);
+                    long sceneMaximumY = sceneMinimumY + scene.HeightCells - 1L;
+                    if (sceneMinimumX < minimumX || sceneMaximumX > maximumX ||
+                        sceneMinimumY < clippedMinimumY || sceneMaximumY > clippedMaximumY)
+                    {
+                        continue;
+                    }
+
+                    destination[count++] = new BiomeEncounterAnchor(
+                        biome.Id,
+                        scene.Id,
+                        scene.EncounterId,
+                        worldX,
+                        worldY,
+                        scene.WidthCells,
+                        scene.HeightCells);
+                    if (count == destination.Length)
+                    {
+                        return count;
+                    }
+                }
+            }
+        }
+
+        return count;
     }
 
     private static long MainPathCenterX(
@@ -640,6 +1336,23 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         return ((value >> 11) * Inverse53Bit * 2.0) - 1.0;
     }
 
+    private static double HashUnit(long x, long y, ulong salt)
+    {
+        return (HashSigned(x, y, salt) + 1.0) * 0.5;
+    }
+
+    private static long FloorDivide(long value, int divisor)
+    {
+        long quotient = Math.DivRem(value, divisor, out long remainder);
+        return remainder < 0 ? quotient - 1 : quotient;
+    }
+
+    private static int FloorRemainder(long value, int divisor)
+    {
+        long remainder = value % divisor;
+        return checked((int)(remainder < 0 ? remainder + divisor : remainder));
+    }
+
     private static double SmoothFraction(double value)
     {
         return value * value * (3.0 - (2.0 * value));
@@ -658,67 +1371,195 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
     private sealed class TerrainGenerationState(
         CampaignConfig config,
+        BiomeCatalog biomes,
         TerrainMaterialPalette palette,
-        ushort[] regionRock,
-        ushort[] regionLoose,
-        ushort[] regionHazard)
+        CompiledBiome[] mainBiomes,
+        CompiledBiome[] sideBiomes,
+        ResolvedConnection[] connections)
     {
         public CampaignConfig Config { get; } = config;
 
+        public BiomeCatalog Biomes { get; } = biomes;
+
         public TerrainMaterialPalette Palette { get; } = palette;
 
-        public ushort[] RegionRock { get; } = regionRock;
+        public CompiledBiome[] MainBiomes { get; } = mainBiomes;
 
-        public ushort[] RegionLoose { get; } = regionLoose;
+        public CompiledBiome[] SideBiomes { get; } = sideBiomes;
 
-        public ushort[] RegionHazard { get; } = regionHazard;
+        public ResolvedConnection[] Connections { get; } = connections;
     }
 
-    private readonly ref struct TerrainRowContext
+    private readonly ref struct TerrainRowContext(
+        ulong worldSeed,
+        TerrainGenerationState state,
+        CampaignDepthLocation location,
+        long pathCenterX,
+        int regionIndex,
+        CompiledBiome biome,
+        TerrainMaterialPalette palette,
+        ReadOnlySpan<ConnectionRowSegment> connectionSegments)
     {
-        public TerrainRowContext(
-            ulong worldSeed,
-            CampaignConfig config,
-            in CampaignDepthLocation location,
-            long pathCenterX,
-            int regionIndex,
-            double hazardThreshold,
-            in TerrainMaterialPalette palette,
-            ReadOnlySpan<ushort> regionRock,
-            ReadOnlySpan<ushort> regionLoose,
-            ReadOnlySpan<ushort> regionHazard)
+        public ulong WorldSeed { get; } = worldSeed;
+
+        public TerrainGenerationState State { get; } = state;
+
+        public CampaignDepthLocation Location { get; } = location;
+
+        public long PathCenterX { get; } = pathCenterX;
+
+        public int RegionIndex { get; } = regionIndex;
+
+        public CompiledBiome Biome { get; } = biome;
+
+        public TerrainMaterialPalette Palette { get; } = palette;
+
+        public ReadOnlySpan<ConnectionRowSegment> ConnectionSegments { get; } = connectionSegments;
+    }
+
+    private sealed class CompiledBiome(
+        string id,
+        float baseTemperature,
+        BiomeTerrainGrammarDefinition grammar,
+        ushort primary,
+        ushort secondary,
+        ushort loose,
+        ushort structure,
+        ushort hazard,
+        ushort pool,
+        double hazardThreshold,
+        ulong salt,
+        CompiledPixelScene[] pixelScenes)
+    {
+        public string Id { get; } = id;
+
+        public float BaseTemperature { get; } = baseTemperature;
+
+        public BiomeTerrainGrammarDefinition Grammar { get; } = grammar;
+
+        public ushort Primary { get; } = primary;
+
+        public ushort Secondary { get; } = secondary;
+
+        public ushort Loose { get; } = loose;
+
+        public ushort Structure { get; } = structure;
+
+        public ushort Hazard { get; } = hazard;
+
+        public ushort Pool { get; } = pool;
+
+        public double HazardThreshold { get; } = hazardThreshold;
+
+        public ulong Salt { get; } = salt;
+
+        public CompiledPixelScene[] PixelScenes { get; } = pixelScenes;
+    }
+
+    private sealed class CompiledPixelScene(
+        int widthCells,
+        int heightCells,
+        double spawnChance,
+        ulong salt,
+        string encounterId,
+        CompiledPixelSceneOperation[] operations)
+    {
+        public int WidthCells { get; } = widthCells;
+
+        public int HeightCells { get; } = heightCells;
+
+        public double SpawnChance { get; } = spawnChance;
+
+        public ulong Salt { get; } = salt;
+
+        public string EncounterId { get; } = encounterId;
+
+        public CompiledPixelSceneOperation[] Operations { get; } = operations;
+    }
+
+    private readonly record struct CompiledConnection(
+        CompiledConnectionKind Kind,
+        int FromRegionIndex,
+        int ToRegionIndex,
+        int Direction,
+        int OffsetCells,
+        int HalfWidthCells,
+        int CorridorHalfWidthCells,
+        int FromLocalDepthCells,
+        int ToLocalDepthCells,
+        ushort GateMaterial,
+        int SideBiomeIndex);
+
+    private readonly record struct ResolvedConnection(
+        CompiledConnection Connection,
+        long StartY,
+        long EndY,
+        long AnchorY,
+        long CenterX,
+        long StartPathX,
+        long EndPathX,
+        long AnchorPathX);
+
+    private readonly record struct ConnectionRowSegment(
+        ConnectionRowSegmentKind Kind,
+        long MinimumX,
+        long MaximumX,
+        long GateMinimumX,
+        long GateMaximumX,
+        ushort Material,
+        ushort GateMaterial,
+        int SideBiomeIndex);
+
+    private readonly record struct CompiledPixelSceneOperation(
+        CompiledPixelSceneOperationKind Kind,
+        ushort Material,
+        int X,
+        int Y,
+        int Width,
+        int Height)
+    {
+        public bool Contains(int x, int y)
         {
-            WorldSeed = worldSeed;
-            Config = config;
-            Location = location;
-            PathCenterX = pathCenterX;
-            RegionIndex = regionIndex;
-            HazardThreshold = hazardThreshold;
-            Palette = palette;
-            RegionRock = regionRock;
-            RegionLoose = regionLoose;
-            RegionHazard = regionHazard;
+            int localX = x - X;
+            int localY = y - Y;
+            if ((uint)localX >= (uint)Width || (uint)localY >= (uint)Height)
+            {
+                return false;
+            }
+
+            if (Kind == CompiledPixelSceneOperationKind.Rectangle)
+            {
+                return true;
+            }
+
+            long dx = (localX * 2L) + 1L - Width;
+            long dy = (localY * 2L) + 1L - Height;
+            long widthSquared = (long)Width * Width;
+            long heightSquared = (long)Height * Height;
+            return (dx * dx * heightSquared) + (dy * dy * widthSquared) <=
+                widthSquared * heightSquared;
         }
+    }
 
-        public ulong WorldSeed { get; }
+    private enum CompiledConnectionKind : byte
+    {
+        SideBiome,
+        SecretSideBiome,
+        VerticalShortcut,
+        VerticalSideBiome,
+    }
 
-        public CampaignConfig Config { get; }
+    private enum ConnectionRowSegmentKind : byte
+    {
+        Material,
+        Access,
+        SideBiome,
+    }
 
-        public CampaignDepthLocation Location { get; }
-
-        public long PathCenterX { get; }
-
-        public int RegionIndex { get; }
-
-        public double HazardThreshold { get; }
-
-        public TerrainMaterialPalette Palette { get; }
-
-        public ReadOnlySpan<ushort> RegionRock { get; }
-
-        public ReadOnlySpan<ushort> RegionLoose { get; }
-
-        public ReadOnlySpan<ushort> RegionHazard { get; }
+    private enum CompiledPixelSceneOperationKind : byte
+    {
+        Rectangle,
+        Ellipse,
     }
 
     private readonly record struct TerrainMaterialPalette(
@@ -734,3 +1575,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort HolyMountainShell,
         ushort HolyMountainPlatform);
 }
+
+internal readonly record struct BiomeEncounterAnchor(
+    string BiomeId,
+    string PixelSceneId,
+    string EncounterId,
+    long WorldX,
+    long WorldY,
+    int WidthCells,
+    int HeightCells);

@@ -1,0 +1,221 @@
+{
+  "schemaVersion": 1,
+  "expansionStages": {
+    "surface": "active",
+    "sideBiomes": "active",
+    "secretConnections": "active",
+    "parallelWorlds": "planned",
+    "newGamePlus": "planned"
+  },
+  "mainPath": [
+    {
+      "id": "mines",
+      "displayName": "Mines",
+      "baseTemperature": 12,
+      "hazardFrequency": 0.012,
+      "palette": { "primary": "stone", "secondary": "dirt", "loose": "gravel", "structure": "wood", "hazard": "oil", "pool": "water" },
+      "grammar": { "kind": "mine-shafts", "tileSizeCells": 64, "corridorHalfWidthCells": 5, "chamberRadiusCells": 13, "edgeOpenChance": 0.58, "noiseOpenThreshold": 0.46, "horizontalScale": 0.020, "verticalScale": 0.018, "verticalBias": 0.08 },
+      "pixelScenes": ["mines-wood-shaft"]
+    },
+    {
+      "id": "coal-pits",
+      "displayName": "Coal Pits",
+      "baseTemperature": 58,
+      "hazardFrequency": 0.014,
+      "palette": { "primary": "dirt", "secondary": "stone", "loose": "oil", "structure": "wood", "hazard": "fire", "pool": "water" },
+      "grammar": { "kind": "open-coal", "tileSizeCells": 80, "corridorHalfWidthCells": 7, "chamberRadiusCells": 19, "edgeOpenChance": 0.74, "noiseOpenThreshold": 0.36, "horizontalScale": 0.014, "verticalScale": 0.012, "verticalBias": 0.10 },
+      "pixelScenes": ["coal-pits-support"]
+    },
+    {
+      "id": "snowy-depths",
+      "displayName": "Snowy Depths",
+      "baseTemperature": 0,
+      "hazardFrequency": 0.010,
+      "palette": { "primary": "ice", "secondary": "stone", "loose": "gravel", "structure": "metal", "hazard": "oil", "pool": "water" },
+      "grammar": { "kind": "open-snow", "tileSizeCells": 96, "corridorHalfWidthCells": 9, "chamberRadiusCells": 25, "edgeOpenChance": 0.82, "noiseOpenThreshold": 0.28, "horizontalScale": 0.010, "verticalScale": 0.012, "verticalBias": -0.05 },
+      "pixelScenes": ["snowy-depths-outpost"]
+    },
+    {
+      "id": "hiisi-base",
+      "displayName": "Hiisi Base",
+      "baseTemperature": 18,
+      "hazardFrequency": 0.012,
+      "palette": { "primary": "ice", "secondary": "stone", "loose": "gravel", "structure": "metal", "hazard": "oil", "pool": "acid" },
+      "grammar": { "kind": "industrial-grid", "tileSizeCells": 64, "corridorHalfWidthCells": 5, "chamberRadiusCells": 12, "edgeOpenChance": 0.68, "noiseOpenThreshold": 0.52, "horizontalScale": 0.018, "verticalScale": 0.018, "verticalBias": 0.00 },
+      "pixelScenes": ["hiisi-base-corridor"]
+    },
+    {
+      "id": "underground-jungle",
+      "displayName": "Underground Jungle",
+      "baseTemperature": 24,
+      "hazardFrequency": 0.016,
+      "palette": { "primary": "dirt", "secondary": "stone", "loose": "wood", "structure": "wood", "hazard": "acid", "pool": "water" },
+      "grammar": { "kind": "jungle-dropshafts", "tileSizeCells": 72, "corridorHalfWidthCells": 7, "chamberRadiusCells": 18, "edgeOpenChance": 0.72, "noiseOpenThreshold": 0.38, "horizontalScale": 0.013, "verticalScale": 0.015, "verticalBias": 0.20 },
+      "pixelScenes": ["jungle-root-room"]
+    },
+    {
+      "id": "the-vault",
+      "displayName": "The Vault",
+      "baseTemperature": 42,
+      "hazardFrequency": 0.020,
+      "palette": { "primary": "stone", "secondary": "metal", "loose": "gravel", "structure": "metal", "hazard": "acid", "pool": "acid" },
+      "grammar": { "kind": "vault-factory", "tileSizeCells": 64, "corridorHalfWidthCells": 5, "chamberRadiusCells": 14, "edgeOpenChance": 0.66, "noiseOpenThreshold": 0.44, "horizontalScale": 0.016, "verticalScale": 0.017, "verticalBias": 0.04 },
+      "pixelScenes": ["vault-acid-vat"]
+    },
+    {
+      "id": "temple-of-the-art",
+      "displayName": "Temple of the Art",
+      "baseTemperature": 16,
+      "hazardFrequency": 0.010,
+      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "sand", "structure": "boundary_stone", "hazard": "smoke", "pool": "water" },
+      "grammar": { "kind": "temple-labyrinth", "tileSizeCells": 64, "corridorHalfWidthCells": 4, "chamberRadiusCells": 11, "edgeOpenChance": 0.54, "noiseOpenThreshold": 0.56, "horizontalScale": 0.020, "verticalScale": 0.020, "verticalBias": 0.02 },
+      "pixelScenes": ["temple-art-chamber"]
+    },
+    {
+      "id": "the-laboratory",
+      "displayName": "The Laboratory",
+      "baseTemperature": 96,
+      "hazardFrequency": 0.026,
+      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "crystal", "structure": "metal", "hazard": "lava", "pool": "lava" },
+      "grammar": { "kind": "laboratory-arena", "tileSizeCells": 96, "corridorHalfWidthCells": 10, "chamberRadiusCells": 28, "edgeOpenChance": 0.80, "noiseOpenThreshold": 0.30, "horizontalScale": 0.010, "verticalScale": 0.010, "verticalBias": 0.00 },
+      "pixelScenes": ["laboratory-bridge"]
+    }
+  ],
+  "sideBiomes": [
+    {
+      "id": "fungal-caverns",
+      "displayName": "Fungal Caverns",
+      "baseTemperature": 26,
+      "hazardFrequency": 0.024,
+      "palette": { "primary": "dirt", "secondary": "metal", "loose": "wood", "structure": "metal", "hazard": "acid", "pool": "water" },
+      "grammar": { "kind": "fungal-tight", "tileSizeCells": 56, "corridorHalfWidthCells": 4, "chamberRadiusCells": 10, "edgeOpenChance": 0.48, "noiseOpenThreshold": 0.58, "horizontalScale": 0.024, "verticalScale": 0.022, "verticalBias": 0.00 },
+      "pixelScenes": ["fungal-steel-nest"]
+    },
+    {
+      "id": "magical-temple",
+      "displayName": "Magical Temple",
+      "baseTemperature": 12,
+      "hazardFrequency": 0.014,
+      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "sand", "structure": "boundary_stone", "hazard": "smoke", "pool": "acid" },
+      "grammar": { "kind": "dark-brick-labyrinth", "tileSizeCells": 48, "corridorHalfWidthCells": 3, "chamberRadiusCells": 9, "edgeOpenChance": 0.46, "noiseOpenThreshold": 0.62, "horizontalScale": 0.026, "verticalScale": 0.024, "verticalBias": 0.00 },
+      "pixelScenes": ["magical-temple-altar"]
+    },
+    {
+      "id": "lukki-lair",
+      "displayName": "Lukki Lair",
+      "baseTemperature": 20,
+      "hazardFrequency": 0.028,
+      "palette": { "primary": "dirt", "secondary": "boundary_stone", "loose": "wood", "structure": "stone", "hazard": "acid", "pool": "acid" },
+      "grammar": { "kind": "lukki-tight", "tileSizeCells": 56, "corridorHalfWidthCells": 3, "chamberRadiusCells": 9, "edgeOpenChance": 0.44, "noiseOpenThreshold": 0.60, "horizontalScale": 0.026, "verticalScale": 0.024, "verticalBias": 0.12 },
+      "pixelScenes": ["lukki-lair-pocket"]
+    }
+  ],
+  "pixelScenes": [
+    {
+      "id": "mines-wood-shaft", "widthCells": 48, "heightCells": 36, "spawnChance": 0.16, "encounterId": "mines-shaft-room",
+      "operations": [
+        { "kind": "carveRect", "material": "empty", "x": 5, "y": 6, "width": 38, "height": 26 },
+        { "kind": "fillRect", "material": "wood", "x": 3, "y": 3, "width": 3, "height": 31 },
+        { "kind": "fillRect", "material": "wood", "x": 42, "y": 3, "width": 3, "height": 31 },
+        { "kind": "fillRect", "material": "wood", "x": 3, "y": 4, "width": 42, "height": 3 }
+      ]
+    },
+    {
+      "id": "coal-pits-support", "widthCells": 64, "heightCells": 48, "spawnChance": 0.14, "encounterId": "coal-pits-open-room",
+      "operations": [
+        { "kind": "carveEllipse", "material": "empty", "x": 3, "y": 3, "width": 58, "height": 42 },
+        { "kind": "fillRect", "material": "wood", "x": 8, "y": 9, "width": 3, "height": 32 },
+        { "kind": "fillRect", "material": "wood", "x": 53, "y": 9, "width": 3, "height": 32 },
+        { "kind": "fillRect", "material": "wood", "x": 8, "y": 10, "width": 48, "height": 2 }
+      ]
+    },
+    {
+      "id": "snowy-depths-outpost", "widthCells": 72, "heightCells": 44, "spawnChance": 0.12, "encounterId": "snowy-hiisi-outpost",
+      "operations": [
+        { "kind": "fillRect", "material": "metal", "x": 4, "y": 5, "width": 64, "height": 34 },
+        { "kind": "carveRect", "material": "empty", "x": 8, "y": 9, "width": 56, "height": 26 },
+        { "kind": "fillRect", "material": "glass", "x": 34, "y": 9, "width": 3, "height": 14 },
+        { "kind": "carveRect", "material": "empty", "x": 30, "y": 31, "width": 12, "height": 8 }
+      ]
+    },
+    {
+      "id": "hiisi-base-corridor", "widthCells": 56, "heightCells": 40, "spawnChance": 0.20, "encounterId": "hiisi-base-room",
+      "operations": [
+        { "kind": "fillRect", "material": "metal", "x": 2, "y": 3, "width": 52, "height": 34 },
+        { "kind": "carveRect", "material": "empty", "x": 6, "y": 7, "width": 44, "height": 26 },
+        { "kind": "fillRect", "material": "metal", "x": 26, "y": 7, "width": 4, "height": 18 },
+        { "kind": "carveRect", "material": "empty", "x": 24, "y": 28, "width": 8, "height": 9 }
+      ]
+    },
+    {
+      "id": "jungle-root-room", "widthCells": 60, "heightCells": 52, "spawnChance": 0.15, "encounterId": "jungle-drop-room",
+      "operations": [
+        { "kind": "carveEllipse", "material": "empty", "x": 3, "y": 3, "width": 54, "height": 46 },
+        { "kind": "fillRect", "material": "wood", "x": 12, "y": 4, "width": 4, "height": 30 },
+        { "kind": "fillRect", "material": "wood", "x": 44, "y": 15, "width": 4, "height": 33 },
+        { "kind": "fillRect", "material": "water", "x": 20, "y": 43, "width": 22, "height": 5 }
+      ]
+    },
+    {
+      "id": "vault-acid-vat", "widthCells": 58, "heightCells": 42, "spawnChance": 0.18, "encounterId": "vault-machine-room",
+      "operations": [
+        { "kind": "carveRect", "material": "empty", "x": 3, "y": 3, "width": 52, "height": 36 },
+        { "kind": "fillRect", "material": "glass", "x": 10, "y": 18, "width": 38, "height": 20 },
+        { "kind": "fillRect", "material": "acid", "x": 13, "y": 23, "width": 32, "height": 12 },
+        { "kind": "fillRect", "material": "metal", "x": 7, "y": 5, "width": 44, "height": 4 }
+      ]
+    },
+    {
+      "id": "temple-art-chamber", "widthCells": 52, "heightCells": 44, "spawnChance": 0.16, "encounterId": "temple-split-room",
+      "operations": [
+        { "kind": "fillRect", "material": "boundary_stone", "x": 2, "y": 2, "width": 48, "height": 40 },
+        { "kind": "fillRect", "material": "stone", "x": 5, "y": 5, "width": 42, "height": 34 },
+        { "kind": "carveRect", "material": "empty", "x": 8, "y": 8, "width": 36, "height": 28 },
+        { "kind": "fillRect", "material": "crystal", "x": 24, "y": 17, "width": 4, "height": 9 }
+      ]
+    },
+    {
+      "id": "laboratory-bridge", "widthCells": 84, "heightCells": 54, "spawnChance": 0.22, "encounterId": "laboratory-bridge-arena",
+      "operations": [
+        { "kind": "carveRect", "material": "empty", "x": 2, "y": 2, "width": 80, "height": 38 },
+        { "kind": "fillRect", "material": "stone", "x": 2, "y": 39, "width": 80, "height": 5 },
+        { "kind": "fillRect", "material": "lava", "x": 2, "y": 46, "width": 80, "height": 8 },
+        { "kind": "fillRect", "material": "metal", "x": 18, "y": 31, "width": 16, "height": 8 },
+        { "kind": "fillRect", "material": "metal", "x": 50, "y": 31, "width": 16, "height": 8 }
+      ]
+    },
+    {
+      "id": "fungal-steel-nest", "widthCells": 44, "heightCells": 40, "spawnChance": 0.18, "encounterId": "fungal-sealed-room",
+      "operations": [
+        { "kind": "fillRect", "material": "metal", "x": 3, "y": 3, "width": 38, "height": 34 },
+        { "kind": "carveEllipse", "material": "empty", "x": 7, "y": 7, "width": 30, "height": 26 },
+        { "kind": "fillRect", "material": "wood", "x": 18, "y": 26, "width": 8, "height": 8 },
+        { "kind": "fillRect", "material": "water", "x": 10, "y": 31, "width": 24, "height": 4 }
+      ]
+    },
+    {
+      "id": "magical-temple-altar", "widthCells": 40, "heightCells": 36, "spawnChance": 0.16, "encounterId": "magical-dark-altar",
+      "operations": [
+        { "kind": "fillRect", "material": "boundary_stone", "x": 2, "y": 2, "width": 36, "height": 32 },
+        { "kind": "carveRect", "material": "empty", "x": 6, "y": 6, "width": 28, "height": 24 },
+        { "kind": "fillRect", "material": "crystal", "x": 18, "y": 20, "width": 4, "height": 8 }
+      ]
+    },
+    {
+      "id": "lukki-lair-pocket", "widthCells": 42, "heightCells": 38, "spawnChance": 0.17, "encounterId": "lukki-tight-pocket",
+      "operations": [
+        { "kind": "carveEllipse", "material": "empty", "x": 3, "y": 3, "width": 36, "height": 32 },
+        { "kind": "fillRect", "material": "acid", "x": 10, "y": 30, "width": 22, "height": 5 },
+        { "kind": "fillRect", "material": "wood", "x": 19, "y": 8, "width": 4, "height": 20 }
+      ]
+    }
+  ],
+  "connections": [
+    { "id": "coal-pits-fungal-caverns", "kind": "side-biome", "stage": "active", "from": "coal-pits", "to": "fungal-caverns", "side": "west", "offsetCells": 384, "halfWidthCells": 160, "corridorHalfWidthCells": 7, "fromLocalDepthCells": 64, "toLocalDepthCells": 448, "gateMaterial": "empty" },
+    { "id": "snowy-magical-temple", "kind": "secret-side-biome", "stage": "active", "from": "snowy-depths", "to": "magical-temple", "side": "west", "offsetCells": 384, "halfWidthCells": 128, "corridorHalfWidthCells": 6, "fromLocalDepthCells": 128, "toLocalDepthCells": 448, "gateMaterial": "stone" },
+    { "id": "mines-snowy-chasm", "kind": "vertical-shortcut", "stage": "active", "from": "mines", "to": "snowy-depths", "side": "east", "offsetCells": 448, "halfWidthCells": 20, "corridorHalfWidthCells": 7, "fromLocalDepthCells": 96, "toLocalDepthCells": 64, "gateMaterial": "empty" },
+    { "id": "jungle-vault-lukki-lair", "kind": "vertical-side-biome", "stage": "active", "from": "underground-jungle", "to": "the-vault", "side": "west", "offsetCells": 416, "halfWidthCells": 144, "corridorHalfWidthCells": 6, "fromLocalDepthCells": 64, "toLocalDepthCells": 448, "sideBiome": "lukki-lair", "gateMaterial": "stone" },
+    { "id": "temple-east-magical-temple", "kind": "secret-side-biome", "stage": "active", "from": "temple-of-the-art", "to": "magical-temple", "side": "east", "offsetCells": 384, "halfWidthCells": 144, "corridorHalfWidthCells": 5, "fromLocalDepthCells": 160, "toLocalDepthCells": 448, "gateMaterial": "boundary_stone" },
+    { "id": "temple-laboratory-return", "kind": "vertical-shortcut", "stage": "active", "from": "temple-of-the-art", "to": "the-laboratory", "side": "east", "offsetCells": 320, "halfWidthCells": 14, "corridorHalfWidthCells": 5, "fromLocalDepthCells": 384, "toLocalDepthCells": 96, "gateMaterial": "stone" }
+  ]
+}

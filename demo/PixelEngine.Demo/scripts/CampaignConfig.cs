@@ -9,9 +9,10 @@ namespace PixelEngine.Demo;
 public sealed class CampaignConfig
 {
     /// <summary>当前支持的 schema 版本。</summary>
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     private const int LegacySchemaVersion = 1;
+    private const int TerrainSchemaVersion = 2;
 
     private static readonly string[] CanonicalRegionIds =
     [
@@ -128,10 +129,10 @@ public sealed class CampaignConfig
         }
 
         int sourceSchemaVersion = ReadInt32(root, "schemaVersion");
-        if (sourceSchemaVersion is not (LegacySchemaVersion or CurrentSchemaVersion))
+        if (sourceSchemaVersion is not (LegacySchemaVersion or TerrainSchemaVersion or CurrentSchemaVersion))
         {
             throw new InvalidDataException(
-                $"campaign.json schemaVersion 必须为 {LegacySchemaVersion} 或 {CurrentSchemaVersion}。");
+                $"campaign.json schemaVersion 必须为 {LegacySchemaVersion}、{TerrainSchemaVersion} 或 {CurrentSchemaVersion}。");
         }
 
         JsonElement regionsElement = ReadRequired(root, "regions");
@@ -161,12 +162,16 @@ public sealed class CampaignConfig
                 LegacyIds = sourceSchemaVersion == LegacySchemaVersion
                     ? []
                     : ReadStringArray(regionElement, "legacyIds"),
-                RockMaterial = ReadString(regionElement, "rockMaterial"),
-                LooseMaterial = ReadString(regionElement, "looseMaterial"),
-                HazardMaterial = ReadString(regionElement, "hazardMaterial"),
-                HazardFrequency = ReadDouble(regionElement, "hazardFrequency"),
-                BaseTemperature = ReadSingle(regionElement, "baseTemperature"),
             };
+            if (sourceSchemaVersion != CurrentSchemaVersion)
+            {
+                _ = ReadString(regionElement, "rockMaterial");
+                _ = ReadString(regionElement, "looseMaterial");
+                _ = ReadString(regionElement, "hazardMaterial");
+                _ = ReadDouble(regionElement, "hazardFrequency");
+                _ = ReadSingle(regionElement, "baseTemperature");
+            }
+
             regions[regionIndex] = sourceSchemaVersion == LegacySchemaVersion
                 ? UpgradeLegacyRegion(region, regionIndex)
                 : region;
@@ -258,11 +263,6 @@ public sealed class CampaignConfig
             }
 
             Require(containsRequiredLegacyId, $"{label}.legacyIds 必须包含历史 id {LegacyRegionIds[i]}。");
-            RequireMaterialKey(region.RockMaterial, $"{label}.rockMaterial");
-            RequireMaterialKey(region.LooseMaterial, $"{label}.looseMaterial");
-            RequireMaterialKey(region.HazardMaterial, $"{label}.hazardMaterial");
-            Require(region.HazardFrequency is >= 0.0 and <= 0.2, $"{label}.hazardFrequency 必须位于 [0,0.2]。");
-            Require(float.IsFinite(region.BaseTemperature) && region.BaseTemperature is >= 0f and <= 255f, $"{label}.baseTemperature 必须位于 [0,255]。");
         }
 
         return this;
@@ -333,6 +333,23 @@ public sealed class CampaignConfig
         return new CampaignDepthLocation(CampaignDepthKind.Region, RequiredRegionCount - 1, -1, depth, remaining);
     }
 
+    internal long RegionStartCellY(int regionIndex)
+    {
+        return (uint)regionIndex >= RequiredRegionCount
+            ? throw new ArgumentOutOfRangeException(nameof(regionIndex))
+            : checked(
+                SurfaceY +
+                CampaignStartDepthCells +
+                ((long)regionIndex * (RegionHeightCells + HolyMountainHeightCells)));
+    }
+
+    internal long HolyMountainStartCellY(int holyMountainIndex)
+    {
+        return (uint)holyMountainIndex >= RequiredRegionCount - 1
+            ? throw new ArgumentOutOfRangeException(nameof(holyMountainIndex))
+            : checked(RegionStartCellY(holyMountainIndex) + RegionHeightCells);
+    }
+
     internal static CampaignConfig BuiltinDefault { get; } = CreateBuiltinDefault();
 
     private static CampaignConfig CreateBuiltinDefault()
@@ -354,36 +371,25 @@ public sealed class CampaignConfig
             HolyMountainPlatformMaterial = "metal",
             Regions =
             [
-                Region(0, "stone", "gravel", "water", 0.020, 12f),
-                Region(1, "dirt", "oil", "fire", 0.018, 58f),
-                Region(2, "ice", "gravel", "water", 0.022, 0f),
-                Region(3, "metal", "stone", "lava", 0.014, 82f),
-                Region(4, "dirt", "wood", "acid", 0.018, 24f),
-                Region(5, "glass", "metal", "acid", 0.020, 42f),
-                Region(6, "boundary_stone", "stone", "smoke", 0.016, 16f),
-                Region(7, "metal", "crystal", "lava", 0.024, 96f),
+                Region(0),
+                Region(1),
+                Region(2),
+                Region(3),
+                Region(4),
+                Region(5),
+                Region(6),
+                Region(7),
             ],
         }.Validate();
     }
 
-    private static CampaignRegionDefinition Region(
-        int index,
-        string rock,
-        string loose,
-        string hazard,
-        double hazardFrequency,
-        float baseTemperature)
+    private static CampaignRegionDefinition Region(int index)
     {
         return new CampaignRegionDefinition
         {
             Id = CanonicalRegionIds[index],
             DisplayName = CanonicalRegionDisplayNames[index],
             LegacyIds = [LegacyRegionIds[index]],
-            RockMaterial = rock,
-            LooseMaterial = loose,
-            HazardMaterial = hazard,
-            HazardFrequency = hazardFrequency,
-            BaseTemperature = baseTemperature,
         };
     }
 
@@ -404,11 +410,6 @@ public sealed class CampaignConfig
                 Id = canonicalId,
                 DisplayName = CanonicalRegionDisplayNames[index],
                 LegacyIds = [legacyId],
-                RockMaterial = region.RockMaterial,
-                LooseMaterial = region.LooseMaterial,
-                HazardMaterial = region.HazardMaterial,
-                HazardFrequency = region.HazardFrequency,
-                BaseTemperature = region.BaseTemperature,
             }
             : region;
     }
@@ -509,7 +510,7 @@ public sealed class CampaignConfig
 }
 
 /// <summary>
-/// 单个战役纵深区域的材质与环境参数。
+/// 单个战役纵深区域的稳定身份；材质与生成语法由 biomes.json 独占。
 /// </summary>
 public sealed class CampaignRegionDefinition
 {
@@ -522,20 +523,6 @@ public sealed class CampaignRegionDefinition
     /// <summary>转向前区域 id 等历史读取 alias；新数据始终写入 canonical id。</summary>
     public string[] LegacyIds { get; init; } = [];
 
-    /// <summary>主要岩层材质名。</summary>
-    public string RockMaterial { get; init; } = string.Empty;
-
-    /// <summary>松散夹层材质名。</summary>
-    public string LooseMaterial { get; init; } = string.Empty;
-
-    /// <summary>环境危险材质名。</summary>
-    public string HazardMaterial { get; init; } = string.Empty;
-
-    /// <summary>危险矿囊出现频率。</summary>
-    public double HazardFrequency { get; init; }
-
-    /// <summary>区域基础温度。</summary>
-    public float BaseTemperature { get; init; }
 }
 
 internal enum CampaignDepthKind : byte

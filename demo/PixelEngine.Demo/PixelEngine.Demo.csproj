@@ -14,5 +14,6 @@
     <Content Include="content\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <EmbeddedResource Include="content\biomes.json" LogicalName="PixelEngine.Demo.biomes.json" />
   </ItemGroup>
 </Project>

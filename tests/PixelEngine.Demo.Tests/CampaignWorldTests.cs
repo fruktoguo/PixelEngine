@@ -21,6 +21,7 @@ public sealed class CampaignWorldTests
     public void CampaignConfigLoadsEightValidatedRegionsThroughPublicConfigApi()
     {
         CampaignConfig config = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(config);
         IMaterialQuery materials = LoadMaterials();
         EngineScriptConfigApi configApi = new(ContentRoot());
 
@@ -38,6 +39,15 @@ public sealed class CampaignWorldTests
             config.Regions.Select(static region => region.DisplayName));
         Assert.True(materials.Resolve(config.HolyMountainShellMaterial).IsValid);
         Assert.True(materials.Resolve(config.HolyMountainPlatformMaterial).IsValid);
+        Assert.Equal(BiomeCatalog.CurrentSchemaVersion, biomes.SchemaVersion);
+        Assert.Equal(CampaignConfig.RequiredRegionCount, biomes.MainPath.Length);
+        Assert.Equal(3, biomes.SideBiomes.Length);
+        Assert.Equal(11, biomes.PixelScenes.Length);
+        Assert.Equal(6, biomes.Connections.Length);
+        Assert.Equal("active", biomes.ExpansionStages.SideBiomes);
+        Assert.Equal("active", biomes.ExpansionStages.SecretConnections);
+        Assert.Equal("planned", biomes.ExpansionStages.ParallelWorlds);
+        Assert.Equal("planned", biomes.ExpansionStages.NewGamePlus);
 
         string[] legacyIds =
         [
@@ -59,9 +69,15 @@ public sealed class CampaignWorldTests
             Assert.Equal(i, canonicalIndex);
             Assert.True(config.TryResolveRegionIndex(legacyIds[i], out int legacyIndex));
             Assert.Equal(i, legacyIndex);
-            Assert.True(materials.Resolve(region.RockMaterial).IsValid, $"区域 {region.Id} 缺少岩层材质。");
-            Assert.True(materials.Resolve(region.LooseMaterial).IsValid, $"区域 {region.Id} 缺少松散材质。");
-            Assert.True(materials.Resolve(region.HazardMaterial).IsValid, $"区域 {region.Id} 缺少危险材质。");
+            BiomeDefinition biome = biomes.MainPath[i];
+            Assert.Equal(region.Id, biome.Id);
+            Assert.Equal(region.DisplayName, biome.DisplayName);
+            Assert.True(materials.Resolve(biome.Palette.Primary).IsValid, $"区域 {region.Id} 缺少 primary 材质。");
+            Assert.True(materials.Resolve(biome.Palette.Secondary).IsValid, $"区域 {region.Id} 缺少 secondary 材质。");
+            Assert.True(materials.Resolve(biome.Palette.Loose).IsValid, $"区域 {region.Id} 缺少 loose 材质。");
+            Assert.True(materials.Resolve(biome.Palette.Structure).IsValid, $"区域 {region.Id} 缺少 structure 材质。");
+            Assert.True(materials.Resolve(biome.Palette.Hazard).IsValid, $"区域 {region.Id} 缺少 hazard 材质。");
+            Assert.True(materials.Resolve(biome.Palette.Pool).IsValid, $"区域 {region.Id} 缺少 pool 材质。");
         }
 
         Assert.False(config.TryResolveRegionIndex("unknown-biome", out int missingIndex));
@@ -111,12 +127,19 @@ public sealed class CampaignWorldTests
                 "origin-crucible",
             ];
             JsonArray regions = Assert.IsType<JsonArray>(legacy["regions"]);
+            BiomeCatalog biomes = LoadBiomes(LoadConfig());
             for (int i = 0; i < regions.Count; i++)
             {
                 JsonObject region = Assert.IsType<JsonObject>(regions[i]);
                 region["id"] = legacyIds[i];
                 region["displayName"] = $"legacy-{i}";
                 _ = region.Remove("legacyIds");
+                BiomeDefinition biome = biomes.MainPath[i];
+                region["rockMaterial"] = biome.Palette.Primary;
+                region["looseMaterial"] = biome.Palette.Loose;
+                region["hazardMaterial"] = biome.Palette.Hazard;
+                region["hazardFrequency"] = biome.HazardFrequency;
+                region["baseTemperature"] = biome.BaseTemperature;
             }
 
             File.WriteAllText(Path.Combine(tempRoot, "campaign.json"), legacy.ToJsonString());
@@ -128,6 +151,42 @@ public sealed class CampaignWorldTests
                 Assert.True(migrated.TryResolveRegionIndex(legacyIds[i], out int resolved));
                 Assert.Equal(i, resolved);
             }
+        }
+        finally
+        {
+            Directory.Delete(tempRoot, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// 验证 v2 中与区域身份混存的地形字段会被完整消费后迁移，v3 只保留 run/topology 权威数据。
+    /// </summary>
+    [Fact]
+    public void CampaignConfigMigratesLegacyV2TerrainFields()
+    {
+        string tempRoot = Path.Combine(Path.GetTempPath(), "PixelEngine.CampaignConfig", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(tempRoot);
+        try
+        {
+            JsonObject legacy = ParseObject(File.ReadAllText(Path.Combine(ContentRoot(), "campaign.json")));
+            legacy["schemaVersion"] = 2;
+            BiomeCatalog biomes = LoadBiomes(LoadConfig());
+            JsonArray regions = Assert.IsType<JsonArray>(legacy["regions"]);
+            for (int i = 0; i < regions.Count; i++)
+            {
+                JsonObject region = Assert.IsType<JsonObject>(regions[i]);
+                BiomeDefinition biome = biomes.MainPath[i];
+                region["rockMaterial"] = biome.Palette.Primary;
+                region["looseMaterial"] = biome.Palette.Loose;
+                region["hazardMaterial"] = biome.Palette.Hazard;
+                region["hazardFrequency"] = biome.HazardFrequency;
+                region["baseTemperature"] = biome.BaseTemperature;
+            }
+
+            File.WriteAllText(Path.Combine(tempRoot, "campaign.json"), legacy.ToJsonString());
+            CampaignConfig migrated = CampaignConfig.Load(new EngineScriptConfigApi(tempRoot));
+
+            AssertEquivalent(migrated, CampaignConfig.BuiltinDefault);
         }
         finally
         {
@@ -175,14 +234,339 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
+    /// 验证 biomes.json 对未知字段、越界 pixel-scene、坏连接和不存在材质均 fail-closed。
+    /// </summary>
+    [Fact]
+    public void BiomeCatalogRejectsUnknownFieldsInvalidScenesConnectionsAndMaterials()
+    {
+        CampaignConfig campaign = LoadConfig();
+        string source = File.ReadAllText(Path.Combine(ContentRoot(), "biomes.json"));
+
+        JsonObject unknownField = ParseObject(source);
+        unknownField["unmappedField"] = true;
+        InvalidDataException unknownError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(unknownField.ToJsonString(), campaign));
+        _ = Assert.IsType<System.Text.Json.JsonException>(unknownError.InnerException);
+
+        JsonObject invalidScene = ParseObject(source);
+        JsonArray scenes = Assert.IsType<JsonArray>(invalidScene["pixelScenes"]);
+        JsonObject scene = Assert.IsType<JsonObject>(scenes[0]);
+        JsonArray operations = Assert.IsType<JsonArray>(scene["operations"]);
+        JsonObject firstOperation = Assert.IsType<JsonObject>(operations[0]);
+        firstOperation["width"] = 4_096;
+        InvalidDataException sceneError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidScene.ToJsonString(), campaign));
+        Assert.Contains("超出 scene 宽度", sceneError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidConnection = ParseObject(source);
+        JsonArray connections = Assert.IsType<JsonArray>(invalidConnection["connections"]);
+        Assert.IsType<JsonObject>(connections[0])["to"] = "missing-side-biome";
+        InvalidDataException connectionError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidConnection.ToJsonString(), campaign));
+        Assert.Contains("to 必须引用侧区 biome", connectionError.Message, StringComparison.Ordinal);
+
+        JsonObject excessiveConnections = ParseObject(source);
+        JsonArray excessiveConnectionArray = Assert.IsType<JsonArray>(excessiveConnections["connections"]);
+        for (int i = 0; i < 3; i++)
+        {
+            JsonObject clone = Assert.IsType<JsonObject>(excessiveConnectionArray[i]!.DeepClone());
+            clone["id"] = $"capacity-overflow-{i}";
+            excessiveConnectionArray.Add(clone);
+        }
+
+        InvalidDataException capacityError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(excessiveConnections.ToJsonString(), campaign));
+        Assert.Contains("最多允许八项", capacityError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidMaterial = ParseObject(source);
+        JsonArray mainPath = Assert.IsType<JsonArray>(invalidMaterial["mainPath"]);
+        JsonObject firstBiome = Assert.IsType<JsonObject>(mainPath[0]);
+        Assert.IsType<JsonObject>(firstBiome["palette"])["primary"] = "missing-material";
+        BiomeCatalog catalog = BiomeCatalog.Parse(invalidMaterial.ToJsonString(), campaign);
+        ushort[] materialCells = new ushort[ChunkSize * ChunkSize];
+        Half[] temperatureCells = new Half[TemperatureSize * TemperatureSize];
+        InvalidOperationException materialError = Assert.Throws<InvalidOperationException>(
+            () => PlayableCavernWorldGenerator.PopulateChunkForVerification(
+                LoadMaterials(),
+                0,
+                4,
+                materialCells,
+                temperatureCells,
+                campaign.InitialRunSeed,
+                campaign,
+                catalog));
+        Assert.Contains("missing-material", materialError.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// 验证每个主路径 biome 都能在固定容量 Span 中产生同 seed 相同的 authored encounter room，
+    /// 且锚点对应的最高层 pixel-scene operation 确实写入世界。
+    /// </summary>
+    [Fact]
+    public void BiomePixelScenesProduceDeterministicBoundedEncounterAnchors()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog catalog = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, catalog, campaign.InitialRunSeed);
+        BiomeEncounterAnchor[] first = new BiomeEncounterAnchor[64];
+        BiomeEncounterAnchor[] repeated = new BiomeEncounterAnchor[64];
+
+        for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
+        {
+            long minimumY = campaign.RegionStartCellY(regionIndex);
+            long maximumY = minimumY + campaign.RegionHeightCells - 1L;
+            int count = PlayableCavernWorldGenerator.CollectEncounterAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                -4_096,
+                minimumY,
+                4_096,
+                maximumY,
+                first);
+            int repeatedCount = PlayableCavernWorldGenerator.CollectEncounterAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                -4_096,
+                minimumY,
+                4_096,
+                maximumY,
+                repeated);
+
+            Assert.InRange(count, 1, first.Length);
+            Assert.Equal(count, repeatedCount);
+            Assert.True(first.AsSpan(0, count).SequenceEqual(repeated.AsSpan(0, repeatedCount)));
+            BiomeDefinition biome = catalog.MainPath[regionIndex];
+            BiomeEncounterAnchor anchor = first[..count].First(candidate =>
+                Math.Abs(candidate.WorldX - PlayableCavernWorldGenerator.MainPathCenterX(
+                    candidate.WorldY,
+                    campaign,
+                    campaign.InitialRunSeed)) > campaign.MainPathHalfWidthCells + candidate.WidthCells);
+            Assert.Equal(biome.Id, anchor.BiomeId);
+            BiomePixelSceneDefinition scene = catalog.PixelScenes[catalog.FindPixelSceneIndex(anchor.PixelSceneId)];
+            Assert.Equal(scene.EncounterId, anchor.EncounterId);
+            BiomePixelSceneOperationDefinition topOperation = scene.Operations[^1];
+            long operationX = anchor.WorldX - (scene.WidthCells / 2L) + topOperation.X + (topOperation.Width / 2L);
+            long operationY = anchor.WorldY - (scene.HeightCells / 2L) + topOperation.Y + (topOperation.Height / 2L);
+            Assert.Equal(
+                ResolveRequired(materials, topOperation.Material),
+                probe.MaterialAt(operationX, operationY));
+        }
+    }
+
+    /// <summary>
+    /// 验证 edge-compatible tile grammar 在正负坐标的共享边使用同一开口决策，
+    /// 并且八个主路径区域不是同一套参数换皮。
+    /// </summary>
+    [Fact]
+    public void BiomeTileGrammarHasSymmetricSharedEdgesAcrossNegativeCoordinates()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog catalog = LoadBiomes(campaign);
+        Assert.Equal(
+            CampaignConfig.RequiredRegionCount,
+            catalog.MainPath.Select(static biome => biome.Grammar.Kind).Distinct(StringComparer.Ordinal).Count());
+
+        foreach (BiomeDefinition biome in catalog.MainPath)
+        {
+            int tileSize = biome.Grammar.TileSizeCells;
+            int openVerticalEdges = 0;
+            int openHorizontalEdges = 0;
+            for (long tile = -24; tile <= 24; tile++)
+            {
+                long boundaryX = tile * tileSize;
+                long centerY = (7L * tileSize) + (tileSize / 2L);
+                bool left = PlayableCavernWorldGenerator.IsBiomeGrammarOpenAt(
+                    boundaryX - 1,
+                    centerY,
+                    biome,
+                    campaign.InitialRunSeed);
+                bool right = PlayableCavernWorldGenerator.IsBiomeGrammarOpenAt(
+                    boundaryX,
+                    centerY,
+                    biome,
+                    campaign.InitialRunSeed);
+                Assert.Equal(left, right);
+                openVerticalEdges += left ? 1 : 0;
+
+                long centerX = (tile * tileSize) + (tileSize / 2L);
+                long boundaryY = 11L * tileSize;
+                bool above = PlayableCavernWorldGenerator.IsBiomeGrammarOpenAt(
+                    centerX,
+                    boundaryY - 1,
+                    biome,
+                    campaign.InitialRunSeed);
+                bool below = PlayableCavernWorldGenerator.IsBiomeGrammarOpenAt(
+                    centerX,
+                    boundaryY,
+                    biome,
+                    campaign.InitialRunSeed);
+                Assert.Equal(above, below);
+                openHorizontalEdges += above ? 1 : 0;
+            }
+
+            Assert.InRange(openVerticalEdges, 1, 48);
+            Assert.InRange(openHorizontalEdges, 1, 48);
+        }
+    }
+
+    /// <summary>
+    /// 验证 active connection 不只存在于数据：侧区实际使用目标 palette，秘密入口保留可挖 gate，
+    /// Mines→Snowy 与 Temple→Laboratory 纵向捷径逐 cell 连续。
+    /// </summary>
+    [Fact]
+    public void ActiveBiomeConnectionsMaterializeSideAreasSecretsAndVerticalShortcuts()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog catalog = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, catalog, campaign.InitialRunSeed);
+
+        foreach (BiomeConnectionDefinition connection in catalog.Connections)
+        {
+            int fromIndex = catalog.FindMainPathIndex(connection.From);
+            int direction = connection.Side == "west" ? -1 : 1;
+            long startY = campaign.RegionStartCellY(fromIndex) + connection.FromLocalDepthCells;
+            bool sideConnection = connection.Kind is "side-biome" or "secret-side-biome";
+            int toIndex = sideConnection ? -1 : catalog.FindMainPathIndex(connection.To);
+            long endY = sideConnection
+                ? campaign.RegionStartCellY(fromIndex) + connection.ToLocalDepthCells
+                : campaign.RegionStartCellY(toIndex) + connection.ToLocalDepthCells;
+            long anchorY = startY + ((endY - startY) / 2);
+            long centerX = PlayableCavernWorldGenerator.MainPathCenterX(
+                anchorY,
+                campaign,
+                campaign.InitialRunSeed) + ((long)direction * connection.OffsetCells);
+
+            if (connection.Kind == "vertical-shortcut")
+            {
+                for (long y = startY; y <= endY; y += 23)
+                {
+                    Assert.Equal(ResolveRequired(materials, "empty"), probe.MaterialAt(centerX, y));
+                }
+
+                continue;
+            }
+
+            BiomeDefinition sideBiome = connection.Kind == "vertical-side-biome"
+                ? catalog.SideBiomes[catalog.FindSideBiomeIndex(connection.SideBiome)]
+                : catalog.SideBiomes[catalog.FindSideBiomeIndex(connection.To)];
+            int signatureCells = CountPaletteInRect(
+                probe,
+                materials,
+                sideBiome.Palette,
+                centerX - 31,
+                anchorY - 31,
+                centerX + 32,
+                anchorY + 32);
+            Assert.True(signatureCells >= 128, $"连接 {connection.Id} 未生成侧区 palette，cells={signatureCells}。 ");
+
+            long corridorY = connection.Kind == "vertical-side-biome" ? startY : anchorY;
+            long corridorPathX = PlayableCavernWorldGenerator.MainPathCenterX(
+                corridorY,
+                campaign,
+                campaign.InitialRunSeed);
+            long nearEdgeX = centerX - ((long)direction * connection.HalfWidthCells);
+            long gateX = nearEdgeX - (direction * 2L);
+            Assert.Equal(ResolveRequired(materials, connection.GateMaterial), probe.MaterialAt(gateX, corridorY));
+            long sampleX = corridorPathX + ((nearEdgeX - corridorPathX) / 2);
+            Assert.Equal(ResolveRequired(materials, "empty"), probe.MaterialAt(sampleX, corridorY));
+        }
+    }
+
+    /// <summary>
+    /// 验证目录已经在 Describe 阶段编译，之后八区 chunk 与固定容量 encounter 查询不产生稳态托管分配。
+    /// </summary>
+    [Fact]
+    public void BiomeChunkAndEncounterGenerationRemainAllocationFreeAfterWarmup()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog catalog = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        PlayableCavernWorldGenerator generator = new();
+        EngineScriptConfigApi configApi = new(ContentRoot());
+        ProceduralWorldBuildRequest request = new(
+            PlayableCavernWorldGenerator.Key,
+            materials,
+            Config: configApi);
+        _ = generator.Describe(in request);
+        ushort[] materialCells = new ushort[ChunkSize * ChunkSize];
+        Half[] temperatureCells = new Half[TemperatureSize * TemperatureSize];
+        BiomeEncounterAnchor[] anchors = new BiomeEncounterAnchor[32];
+
+        for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
+        {
+            int chunkY = checked((int)((campaign.RegionStartCellY(regionIndex) + 256) / ChunkSize));
+            generator.PopulatePreparedChunkForBenchmark(
+                chunkX: 16 + regionIndex,
+                chunkY,
+                materialCells,
+                temperatureCells,
+                campaign.InitialRunSeed);
+            _ = PlayableCavernWorldGenerator.CollectEncounterAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                -1_024,
+                campaign.RegionStartCellY(regionIndex),
+                1_024,
+                campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCells - 1L,
+                anchors);
+        }
+
+        long chunkBefore = GC.GetAllocatedBytesForCurrentThread();
+        int checksum = 0;
+        for (int iteration = 0; iteration < 64; iteration++)
+        {
+            int regionIndex = iteration & 7;
+            int chunkY = checked((int)((campaign.RegionStartCellY(regionIndex) + 256) / ChunkSize));
+            generator.PopulatePreparedChunkForBenchmark(
+                chunkX: 16 + regionIndex,
+                chunkY,
+                materialCells,
+                temperatureCells,
+                campaign.InitialRunSeed);
+            checksum ^= materialCells[(iteration * 61) & (materialCells.Length - 1)];
+        }
+
+        long chunkAllocated = GC.GetAllocatedBytesForCurrentThread() - chunkBefore;
+        long encounterBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < 256; iteration++)
+        {
+            int regionIndex = iteration & 7;
+            checksum ^= PlayableCavernWorldGenerator.CollectEncounterAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                -1_024,
+                campaign.RegionStartCellY(regionIndex),
+                1_024,
+                campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCells - 1L,
+                anchors);
+        }
+
+        long encounterAllocated = GC.GetAllocatedBytesForCurrentThread() - encounterBefore;
+        GC.KeepAlive(checksum);
+        Assert.InRange(chunkAllocated, 0, 1_024);
+        Assert.InRange(encounterAllocated, 0, 1_024);
+    }
+
+    /// <summary>
     /// 验证八个纵深区域由一条逐 cell 连续的主通道连接，七个 Holy Mountain 具备房间、边界和平台实体地形。
     /// </summary>
     [Fact]
     public void CampaignTopologyConnectsEightRegionsThroughSevenHolyMountains()
     {
         CampaignConfig config = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(config);
         IMaterialQuery materials = LoadMaterials();
-        TerrainProbe probe = new(materials, config, config.InitialRunSeed);
+        TerrainProbe probe = new(materials, config, biomes, config.InitialRunSeed);
         ushort empty = ResolveRequired(materials, "empty");
         ushort holyMountainShell = ResolveRequired(materials, config.HolyMountainShellMaterial);
         ushort holyMountainPlatform = ResolveRequired(materials, config.HolyMountainPlatformMaterial);
@@ -204,10 +588,12 @@ public sealed class CampaignWorldTests
             long sideX = 4_096L + (regionIndex * 512L);
             ChunkSample sideChunk = probe.ChunkAt(sideX, regionY);
             CampaignRegionDefinition region = config.Regions[regionIndex];
-            ushort rock = ResolveRequired(materials, region.RockMaterial);
-            ushort loose = ResolveRequired(materials, region.LooseMaterial);
-            ushort hazard = ResolveRequired(materials, region.HazardMaterial);
-            int signatureCells = CountAny(sideChunk.Materials, rock, loose, hazard);
+            BiomeDefinition biome = biomes.MainPath[regionIndex];
+            ushort primary = ResolveRequired(materials, biome.Palette.Primary);
+            ushort secondary = ResolveRequired(materials, biome.Palette.Secondary);
+            ushort loose = ResolveRequired(materials, biome.Palette.Loose);
+            ushort hazard = ResolveRequired(materials, biome.Palette.Hazard);
+            int signatureCells = CountAny(sideChunk.Materials, primary, secondary, loose, hazard);
             Assert.True(signatureCells >= 256, $"区域 {region.Id} 缺少可辨识的材质地层，cells={signatureCells}。");
 
             int hazardCells = 0;
@@ -218,10 +604,10 @@ public sealed class CampaignWorldTests
                 hazardCells += Count(sideChunk: probe.ChunkAt(hazardX, hazardY).Materials, hazard);
             }
 
-            Assert.True(hazardCells > 0, $"区域 {region.Id} 必须实际生成危险材质 {region.HazardMaterial}。");
+            Assert.True(hazardCells > 0, $"区域 {region.Id} 必须实际生成危险材质 {biome.Palette.Hazard}。");
 
             long pathX = PlayableCavernWorldGenerator.MainPathCenterX(regionY, config, config.InitialRunSeed);
-            Assert.Equal((float)(Half)region.BaseTemperature, probe.TemperatureAt(pathX, regionY));
+            Assert.Equal((float)(Half)biome.BaseTemperature, probe.TemperatureAt(pathX, regionY));
 
             if (regionIndex == CampaignConfig.RequiredRegionCount - 1)
             {
@@ -256,6 +642,7 @@ public sealed class CampaignWorldTests
     public void CampaignChunksAreLoadOrderIndependentAndSeedSensitiveAcrossNegativeCoordinates()
     {
         CampaignConfig config = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(config);
         IMaterialQuery materials = LoadMaterials();
         (int X, int Y)[] coordinates = [(-13, 4), (11, 10), (-7, 40), (5, 77)];
         Dictionary<(int X, int Y), ChunkSample> forward = [];
@@ -263,13 +650,13 @@ public sealed class CampaignWorldTests
 
         foreach ((int x, int y) in coordinates)
         {
-            forward.Add((x, y), GenerateChunk(materials, config, config.InitialRunSeed, x, y));
+            forward.Add((x, y), GenerateChunk(materials, config, biomes, config.InitialRunSeed, x, y));
         }
 
         for (int i = coordinates.Length - 1; i >= 0; i--)
         {
             (int x, int y) = coordinates[i];
-            reverse.Add((x, y), GenerateChunk(materials, config, config.InitialRunSeed, x, y));
+            reverse.Add((x, y), GenerateChunk(materials, config, biomes, config.InitialRunSeed, x, y));
         }
 
         bool differentSeedChangedTerrain = false;
@@ -283,6 +670,7 @@ public sealed class CampaignWorldTests
             ChunkSample otherSeed = GenerateChunk(
                 materials,
                 config,
+                biomes,
                 config.InitialRunSeed ^ 0x9E37_79B9_7F4A_7C15UL,
                 x,
                 y);
@@ -295,6 +683,7 @@ public sealed class CampaignWorldTests
     private static ChunkSample GenerateChunk(
         IMaterialQuery materials,
         CampaignConfig config,
+        BiomeCatalog biomes,
         ulong worldSeed,
         int chunkX,
         int chunkY)
@@ -308,17 +697,23 @@ public sealed class CampaignWorldTests
             materialCells,
             temperatureCells,
             worldSeed,
-            config);
+            config,
+            biomes);
         return new ChunkSample(materialCells, temperatureCells);
     }
 
-    private static int CountAny(ReadOnlySpan<ushort> materials, ushort first, ushort second, ushort third)
+    private static int CountAny(
+        ReadOnlySpan<ushort> materials,
+        ushort first,
+        ushort second,
+        ushort third,
+        ushort fourth)
     {
         int count = 0;
         for (int i = 0; i < materials.Length; i++)
         {
             ushort material = materials[i];
-            count += material == first || material == second || material == third ? 1 : 0;
+            count += material == first || material == second || material == third || material == fourth ? 1 : 0;
         }
 
         return count;
@@ -330,6 +725,44 @@ public sealed class CampaignWorldTests
         for (int i = 0; i < sideChunk.Length; i++)
         {
             count += sideChunk[i] == expected ? 1 : 0;
+        }
+
+        return count;
+    }
+
+    private static int CountPaletteInRect(
+        TerrainProbe probe,
+        IMaterialQuery materials,
+        BiomeMaterialPaletteDefinition palette,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY)
+    {
+        Span<ushort> ids =
+        [
+            ResolveRequired(materials, palette.Primary),
+            ResolveRequired(materials, palette.Secondary),
+            ResolveRequired(materials, palette.Loose),
+            ResolveRequired(materials, palette.Structure),
+            ResolveRequired(materials, palette.Hazard),
+            ResolveRequired(materials, palette.Pool),
+        ];
+        int count = 0;
+        for (long y = minimumY; y <= maximumY; y++)
+        {
+            for (long x = minimumX; x <= maximumX; x++)
+            {
+                ushort material = probe.MaterialAt(x, y);
+                for (int i = 0; i < ids.Length; i++)
+                {
+                    if (material == ids[i])
+                    {
+                        count++;
+                        break;
+                    }
+                }
+            }
         }
 
         return count;
@@ -358,11 +791,6 @@ public sealed class CampaignWorldTests
             Assert.Equal(expectedRegion.Id, actualRegion.Id);
             Assert.Equal(expectedRegion.DisplayName, actualRegion.DisplayName);
             Assert.Equal(expectedRegion.LegacyIds, actualRegion.LegacyIds);
-            Assert.Equal(expectedRegion.RockMaterial, actualRegion.RockMaterial);
-            Assert.Equal(expectedRegion.LooseMaterial, actualRegion.LooseMaterial);
-            Assert.Equal(expectedRegion.HazardMaterial, actualRegion.HazardMaterial);
-            Assert.Equal(expectedRegion.HazardFrequency, actualRegion.HazardFrequency);
-            Assert.Equal(expectedRegion.BaseTemperature, actualRegion.BaseTemperature);
         }
     }
 
@@ -398,6 +826,11 @@ public sealed class CampaignWorldTests
         return CampaignConfig.Load(new EngineScriptConfigApi(ContentRoot()));
     }
 
+    private static BiomeCatalog LoadBiomes(CampaignConfig campaign)
+    {
+        return BiomeCatalog.Load(new EngineScriptConfigApi(ContentRoot()), campaign);
+    }
+
     private static IMaterialQuery LoadMaterials()
     {
         return EngineContentLoader.LoadMaterialPackage(ContentRoot()).Materials;
@@ -429,7 +862,11 @@ public sealed class CampaignWorldTests
         throw new InvalidOperationException("无法从测试输出目录定位 PixelEngine.sln。");
     }
 
-    private sealed class TerrainProbe(IMaterialQuery materials, CampaignConfig config, ulong worldSeed)
+    private sealed class TerrainProbe(
+        IMaterialQuery materials,
+        CampaignConfig config,
+        BiomeCatalog biomes,
+        ulong worldSeed)
     {
         private readonly Dictionary<(int X, int Y), ChunkSample> _chunks = [];
 
@@ -467,7 +904,7 @@ public sealed class CampaignWorldTests
         {
             if (!_chunks.TryGetValue((chunkX, chunkY), out ChunkSample? chunk))
             {
-                chunk = GenerateChunk(materials, config, worldSeed, chunkX, chunkY);
+                chunk = GenerateChunk(materials, config, biomes, worldSeed, chunkX, chunkY);
                 _chunks.Add((chunkX, chunkY), chunk);
             }
 

@@ -202,6 +202,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 区域分类、枢纽锚点、捷径与首次 chunk 内容必须独立于加载顺序；修改后 chunk 仍以 region store 优先。WorldStreamer 只保持 active + border / 缓存预算，战役元数据不得迫使整条纵深路径常驻。
 
+`DEMO-008` 的首个实现节点把 run/topology 身份与地形生成权威拆开：`campaign.json` v3 只保存模式、seed、纵深尺度和八区稳定身份，v1/v2 继续只读迁移；`biomes.json` 以严格 schema 数据化八个主路径 biome、Fungal Caverns / Magical Temple / Lukki Lair、11 个 authored pixel scene、六条 active 侧区 / 秘密 / 跨区连接，以及 surface / side / secret 已启用、parallel worlds / New Game+ 仍 planned 的阶段声明。生成器在 `Describe` 阶段编译材质和连接几何，64x64 chunk 热路径使用 edge-compatible tile grammar、固定容量 row segment 与 encounter `Span`，不逐 cell 分配或重算连接路径。定向测试覆盖未知字段与越界数据拒绝、v1/v2 schema 迁移、负坐标加载顺序、共享边对称、pixel-scene 锚点、连接实体化及八区稳态分配；2026-07-22 的 Release BenchmarkDotNet surface 样本为 211.8–435.5 us/chunk、0–3 B 诊断噪声。Portal、Holy Mountain 地标、参考 seed 长路线截图与 parallel-world 实体拓扑仍属后续节点，故 canonical `DEMO-008` 保持进行中。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。

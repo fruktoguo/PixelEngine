@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "defaultMode": "campaign",
   "initialRunSeed": 5785252250990625352,
   "surfaceY": 224,
@@ -16,82 +16,42 @@
     {
       "id": "mines",
       "displayName": "Mines",
-      "legacyIds": ["shattered-lode"],
-      "rockMaterial": "stone",
-      "looseMaterial": "gravel",
-      "hazardMaterial": "water",
-      "hazardFrequency": 0.020,
-      "baseTemperature": 12
+      "legacyIds": ["shattered-lode"]
     },
     {
       "id": "coal-pits",
       "displayName": "Coal Pits",
-      "legacyIds": ["ember-fungal-reach"],
-      "rockMaterial": "dirt",
-      "looseMaterial": "oil",
-      "hazardMaterial": "fire",
-      "hazardFrequency": 0.018,
-      "baseTemperature": 58
+      "legacyIds": ["ember-fungal-reach"]
     },
     {
       "id": "snowy-depths",
       "displayName": "Snowy Depths",
-      "legacyIds": ["frostfall-chasm"],
-      "rockMaterial": "ice",
-      "looseMaterial": "gravel",
-      "hazardMaterial": "water",
-      "hazardFrequency": 0.022,
-      "baseTemperature": 0
+      "legacyIds": ["frostfall-chasm"]
     },
     {
       "id": "hiisi-base",
       "displayName": "Hiisi Base",
-      "legacyIds": ["ironworks-bastion"],
-      "rockMaterial": "metal",
-      "looseMaterial": "stone",
-      "hazardMaterial": "lava",
-      "hazardFrequency": 0.014,
-      "baseTemperature": 82
+      "legacyIds": ["ironworks-bastion"]
     },
     {
       "id": "underground-jungle",
       "displayName": "Underground Jungle",
-      "legacyIds": ["rootsea-wilds"],
-      "rockMaterial": "dirt",
-      "looseMaterial": "wood",
-      "hazardMaterial": "acid",
-      "hazardFrequency": 0.018,
-      "baseTemperature": 24
+      "legacyIds": ["rootsea-wilds"]
     },
     {
       "id": "the-vault",
       "displayName": "The Vault",
-      "legacyIds": ["reactive-vault"],
-      "rockMaterial": "glass",
-      "looseMaterial": "metal",
-      "hazardMaterial": "acid",
-      "hazardFrequency": 0.020,
-      "baseTemperature": 42
+      "legacyIds": ["reactive-vault"]
     },
     {
       "id": "temple-of-the-art",
       "displayName": "Temple of the Art",
-      "legacyIds": ["null-temple"],
-      "rockMaterial": "boundary_stone",
-      "looseMaterial": "stone",
-      "hazardMaterial": "smoke",
-      "hazardFrequency": 0.016,
-      "baseTemperature": 16
+      "legacyIds": ["null-temple"]
     },
     {
       "id": "the-laboratory",
       "displayName": "The Laboratory",
-      "legacyIds": ["origin-crucible"],
-      "rockMaterial": "metal",
-      "looseMaterial": "crystal",
-      "hazardMaterial": "lava",
-      "hazardFrequency": 0.024,
-      "baseTemperature": 96
+      "legacyIds": ["origin-crucible"]
     }
   ]
 }
