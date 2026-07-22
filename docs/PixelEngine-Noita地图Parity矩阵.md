@@ -35,7 +35,7 @@
 | 主路径可达 | 旧人工贯穿直井已删除；Portal 供能入口、Holy Mountain 设施覆盖和固定 Laboratory 入口保留自动化测试。完整参考色图上的无软锁长路线需要在 Wang/BitmapCaves 接入后重新验证，当前不冒充已闭合 |
 | 真实流送长路线 | reference seed 经正式 `WorldStreamer` 依次装载 12 个固定地标，逐站校验 authored operation 与 256-chunk cap；首站修改跨完整纵深驱逐后由 region store 恢复 |
 | 稳态零托管分配 | 64 次八区 chunk、256 次程序化 encounter/biome landmark/Holy Mountain landmark query allocation gate；固定 Laboratory 不产生随机 encounter；既有 BDN 诊断为 0-6 B 噪声，二维拓扑节点仍需补跑新基准 |
-| 代表场景成本 | 2026-07-23 Release InProcess ShortRun：lake surface 75.34、spawn mountain 343.41、desert surface 730.56、Mines 539.82、Fungal 409.08、Portal/Holy Mountain 270.24、fixed Laboratory 112.39 us/chunk；MemoryDiagnoser 0-7 B 为既有诊断噪声范围 |
+| 代表场景成本 | `ff9898bf` detached clean Release InProcess ShortRun：lake surface 81.60、spawn mountain 330.70、desert surface 744.55、Mines 491.44、Fungal 383.30、Portal/Holy Mountain 266.90、fixed Laboratory 102.48 us/chunk；MemoryDiagnoser 0-7 B 为既有诊断噪声范围 |
 
 ## 4. 参考来源
 

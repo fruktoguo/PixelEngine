@@ -974,6 +974,19 @@
       "reportPath": "docs/evidence-2026-07-22-demo-007-noita-campaign-foundation.md",
       "sha256": "9f6ec28c20d75786b48925a2b17c07023460711deda98ad7b9e7ef439a0e1889",
       "notes": "Campaign and InfiniteSandbox keep isolated lifecycle semantics and deterministic eight-biome/seven-Holy-Mountain topology. The e4491e90 regression closes the real-play edge case where detached strips met the rigid pixel threshold but had no 2x2 area: they now become bounded finite debris through both direct and real Damage/WorldMutation paths. Weapon ranges are data-driven, pistol hits beyond the legacy 180-cell cap, hit/range feedback is distinct, material purpose text is visible, and impact/explosion visuals are layered. Clean build/tests and real Editor/Player captures pass with zero Console warnings/errors; the earlier packaged-player and installer evidence remains recorded, and fast-output verified=false is not promoted into a full release claim."
+    },
+    {
+      "entryId": "demo-008-noita-full-map-topology-20260723",
+      "taskIds": ["DEMO-008"],
+      "evidenceState": "checkpoint_full_macro_topology_and_fixed_terrain_complete_task_active",
+      "commit": "ff9898bffbad47ae464461630976285fc5162e2a",
+      "runSessionId": "local-20260723-demo008-map-topology-ff9898bf",
+      "runIdentityStatus": "captured_clean_commit_bound_source_audit_tests_benchmark_and_player_runs",
+      "hardware": "Microsoft Windows 11 build 26100.8457; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; .NET SDK 10.0.108 / runtime 10.0.8; win-x64; real Win32 dpi=144 (150%)",
+      "command": "detached clean ff9898bf submodule materialization and tools/build-native.ps1 win-x64 Release; full solution Release build; full Demo tests; direct source audit against local Noita Build 17130612 biome_map.png and fixed-mask hashes; two real RmlUi Player framebuffer captures; BenchmarkDotNet InfiniteTerrainChunkGenerationBenchmarks InProcess ShortRun",
+      "reportPath": "docs/evidence-2026-07-23-demo-008-noita-full-map-topology.md",
+      "sha256": "f2a4f595f8f07ff5f532386ba6a5c0bf4e7bd426d6d3dcd9901d3dba44b67d08",
+      "notes": "The product now decodes all 3360 cells and 129 used colors from Noita's 70x48 macro map with zero source mismatches, removes the artificial global shaft, and uses source/decoded-hash-locked semantic masks for the spawn mountain, Holy Mountain composition and fixed 2600x1600 Laboratory. Clean solution build, 193 passed plus one explicit GL skip, seven-scenario benchmark and two real Player captures pass. DEMO-008 stays active because ordinary biome Wang/BitmapCaves, backgrounds, spawn markers, remaining pixel scenes, ecology and the all-region screenshot matrix are not complete."
     }
   ]
 }

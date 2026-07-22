@@ -77,5 +77,6 @@
 | `test-002-behavior-coverage-20260717` | `TEST-002` | `complete_local_behavior_coverage_gate` | `e95a49c6` | `local-20260717-test002-final-e95a49c6` | [TEST-002 behavior coverage gate](evidence-2026-07-17-test-002-behavior-coverage.md) | `64ae656b…80a00dc` |
 | `demo-006-infinite-sandbox-20260720` | `DEMO-006` | `complete` | `34973b16` | `local-20260720-demo006-final-34973b16` | [DEMO-006 deterministic streaming infinite sandbox](evidence-2026-07-20-demo-006-infinite-sandbox.md) | `e4fd9856…3cd935a` |
 | `demo-007-noita-campaign-foundation-20260722` | `DEMO-007` | `complete` | `e4491e90` | `local-20260722-demo007-regression-e4491e90` | [DEMO-007 Noita campaign foundation and terrain regression](evidence-2026-07-22-demo-007-noita-campaign-foundation.md) | `9f6ec28c…0e1889` |
+| `demo-008-noita-full-map-topology-20260723` | `DEMO-008` | `checkpoint_full_macro_topology_and_fixed_terrain_complete_task_active` | `ff9898bf` | `local-20260723-demo008-map-topology-ff9898bf` | [DEMO-008 Noita full macro map and fixed terrain checkpoint](evidence-2026-07-23-demo-008-noita-full-map-topology.md) | `f2a4f595…4b67d08` |
 
 完整硬件、命令、报告路径、SHA256、状态和备注以 JSON 为准；此表使用短 hash 仅便于人工浏览。当前索引中的历史条目保留“可追溯但未完成”的状态，不能据此把 `CI-*`、`PERF-*`、`DEMO-*`、`EDITOR-*` 或 `UI-*` 的阻塞任务改成 `[x]`。
