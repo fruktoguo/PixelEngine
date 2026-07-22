@@ -1,17 +1,17 @@
 # PixelEngine Noita 地图 Parity 矩阵
 
 > 用途：`DEMO-008` 的参考事实、实现状态、允许差异与证据索引。Canonical 完成状态仍只以 `plan/tasks/` 为准。
-> 参考核对日期：2026-07-22。参考资料是 Noita Wiki 的公开地图说明；正式截图 parity 仍需绑定同一目标提交的真实参考/Player capture。
+> 参考核对日期：2026-07-22。除公开 Wiki 外，已核对用户本机 Steam Build `17130612` 的官方解包数据；版本、哈希、加载链和坐标基线见 [`reference-noita-build-17130612-map-topology.md`](reference-noita-build-17130612-map-topology.md)。正式截图 parity 仍需绑定同一目标提交的真实参考/Player capture。
 
 ## 1. 主流程拓扑
 
 | 参考流程 | 参考事实 | 当前 Demo | 状态与差异 |
 |---|---|---|---|
 | Mountain / Surface | 从地表 Mountain 进入第一层，世界在主路径外仍可横向探索 | 确定性自然地表、安全出生区、无横向硬边界 | 已实现；地表固定地标与 parallel-world 入口待扩展 |
-| Mines -> Coal Pits -> Snowy Depths -> Hiisi Base -> Underground Jungle -> The Vault -> Temple of the Art -> The Laboratory | 八个主路径 biome 固定纵深顺序，前七层经 Portal/Holy Mountain 过层 | `campaign.json` v4 固定身份/纵深；`biomes.json` v3 独占地形权威并声明 12 个固定地标 | 已实现拓扑、初态生成和代表性固定地标；长路线真实截图待验收 |
+| Mines -> Coal Pits -> Snowy Depths -> Hiisi Base -> Underground Jungle -> The Vault -> Temple of the Art -> The Laboratory | 70×48 宏观 biome map 先做二维区域分类；主区高度依次为 1024/1024/1536/1024/1536/1536/2048，层间占完整 512-cell 宏格；Laboratory 是东南侧固定 2600×1600 拼接场景 | `campaign.json` v4 仍把普通层压成统一 512 高、Holy Mountain 压成 128 高；生成器只按 Y 选区并横向铺满 | **结构不匹配，必须重构**；八区名称、地标和旧长路线只作功能基线，不再算地图 parity |
 | Portal Deeper | 每层底部一排 Portal 指向同一个 Holy Mountain 内部；下方 Teleportatium 眼池被抽空或污染会令 Portal 失效；进入后固定传送并短暂无敌 | 每层 3 个同目的地 Portal、横向入口大厅、真实 Teleportatium 池、逐 cell 供能检查、黑屏、材质粒子、0.04 s 无敌；Sandbox 不响应 | 已实现核心地图/交互语义；参考的 10% 随机危险液体池和 polymorph 日志未实现 |
-| Holy Mountain | Brickwork 房间依次容纳入口、恢复/刷新、商店、水池、Worm Crystal、Perk、训练雕像与右侧坍塌出口 | authored layout 提供 arrival、双水池、shop/perk 平台、Worm Crystal 房、训练雕像、右侧竖井和回接下一层的底部通道 | 地图已实现；恢复、商店、Perk、坍塌、诅咒与 angry gods 属于 `DEMO-011` |
-| Laboratory | 最终 Holy Mountain 通向横向桥与 lava sea，Sampo 触发 Kolmisilma | Laboratory grammar、随机 bridge/lava scene 与固定 Kolmisilma bridge 双平台/lava 布局已生成 | 地图轮廓已实现；Sampo/Boss/结算属于 `DEMO-012` |
+| Holy Mountain | 每层入口落在完整 512-cell 宏格；altar/left/right 参考材质图各为 512×282，并由 temple wall 包围 | 128-cell 高、半宽 176 的手写房间，设施语义已预留 | **比例与组合结构不匹配**；交互仍归 `DEMO-011` |
+| Laboratory | Final Holy Mountain 通向东南侧固定 boss arena；参考由 5×4 个 512-cell 分片拼成 2600×1600 场景 | 随机 Laboratory grammar + 手写 bridge landmark | **地图轮廓不匹配**；固定场景重建归当前地图任务，Sampo/Boss/结算归 `DEMO-012` |
 
 ## 2. Biome 生成矩阵
 
@@ -39,6 +39,7 @@
 
 ## 4. 参考来源
 
+- [本机 Build 17130612 地图生成参考基线](reference-noita-build-17130612-map-topology.md)
 - [Holy Mountain](https://noita.wiki.gg/wiki/Holy_Mountain)
 - [Portal](https://noita.wiki.gg/wiki/Portal)
 - [Mines](https://noita.wiki.gg/wiki/Mines)
@@ -52,4 +53,4 @@
 
 ## 5. DEMO-008 剩余验收
 
-当前未关闭 `DEMO-008`。12 个代表性固定地标已经数据化并经正式 WorldStreamer reference-seed 长路线、resident budget 与修改持久化验证，但其中的 Boss、商店、谜题与 Portal 交互仍分别归后续玩法任务。剩余验收是扩充 structure pool，取得八区/侧区/Portal/Holy Mountain 的同源参考与真实 PixelEngine Player 截图，再更新 evidence index、最终输出与 canonical 状态。
+当前未关闭 `DEMO-008`。12 个代表性固定地标已经数据化并经正式 WorldStreamer reference-seed 长路线、resident budget 与修改持久化验证，但本机权威数据证明宏观拓扑仍不匹配。下一节点必须先实现 512-cell 二维宏格、可变主区跨度、完整高度 Holy Mountain、横向边界/侧区和固定 Laboratory；之后才能扩充 Wang/pixel-scene structure pool、取得同源参考/Player 截图并更新 evidence index。Boss、商店、谜题与 Portal 玩法交互仍分别归后续任务。

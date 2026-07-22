@@ -210,6 +210,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 第四个实现节点把 fixed-landmark 验证从生成器纯函数推进到正式 `WorldStreamer`：reference seed 依次流送 12 个远距地标，逐站核对 authored 顶层 operation、256-chunk resident cap，并在离开首站、跨越完整纵深后验证 region store 修改优先恢复。Mines Lava Lake 另以 stone 外壳、empty 洞室、wood 桥与 lava 池四签名锁定真实运行装配，消除把 Editor authoring preview 本地画布坐标误当全局世界坐标的误判。`PlayableWorldDirector.AutoStartCampaign` 默认关闭，只允许显式 TemporarySnapshot/路线捕获在所有 Behaviour 完成 `OnStart` 后经 `CampaignRunDirector` 公开 API 进入战役；正式玩家仍经过主菜单。真实 Editor 八区截图矩阵仍需取得，故 `DEMO-008` 继续保持 `[~]`。
 
+第五个实现节点以用户本机 Steam Noita Build `17130612` 的官方解包数据重新建立地图权威基线（只记录结构/哈希，不提交原始资产）。`biome_map.lua` 明确加载 70×48 色图，`_biomes_all.xml` 以 Y offset 14 映射 174 个唯一 biome/color；每个宏格对应 512×512 cell。主路径区域不是统一 512 高：Mines/Coal Pits/Hiisi Base 为 1024，Snowy Depths/Jungle/Vault 为 1536，Temple of the Art 为 2048，层间节点占完整 512；The Laboratory 由 `spliced/boss_arena.xml` 在东南侧拼接 2600×1600 固定场景。现有 v4/v3 的一维等高带、连续摆动竖井、128 高 Holy Mountain 与随机 Laboratory 由此确认不具备地图 parity，旧地标/长路线证据只保留为功能基线。实现必须升级为 512-cell 二维宏观分类、可变 region span、横向侧区/实心边界和固定 Laboratory，再在区域内部运行 seed/chunk 确定的 Wang/pixel-scene grammar；详细来源见 `docs/reference-noita-build-17130612-map-topology.md`。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。
