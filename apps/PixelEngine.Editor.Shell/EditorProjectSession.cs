@@ -605,6 +605,7 @@ internal sealed class EditorProjectSession : IDisposable
             AuthoringWorldPreviewRuntime authoringWorld = new(
                 engine.Context.GetService<IChunkSource>(),
                 engine.Context.GetService<IMaterialQuery>(),
+                new EngineScriptConfigApi(project.ContentRootPath),
                 engine.Context.GetService<ISimulationEditApi>());
             _ = authoringWorld.Refresh(projection.Scene, projection.StableIdToEntityId);
             editorHost.ConfigureAuthoring(sceneModel, undoStack, prefabs, authoringWorld);

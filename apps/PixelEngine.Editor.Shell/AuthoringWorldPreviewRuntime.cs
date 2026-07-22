@@ -13,6 +13,7 @@ internal sealed class AuthoringWorldPreviewRuntime
     private const ulong FnvPrime = 1099511628211UL;
     private readonly IChunkSource _chunks;
     private readonly IMaterialQuery _materials;
+    private readonly IConfigApi _config;
     private readonly ISimulationEditApi _simulationEdit;
     private readonly IAuthoringWorldEditApi _providerEdit;
     private ulong _lastContentFingerprint;
@@ -24,10 +25,12 @@ internal sealed class AuthoringWorldPreviewRuntime
     public AuthoringWorldPreviewRuntime(
         IChunkSource chunks,
         IMaterialQuery materials,
+        IConfigApi config,
         ISimulationEditApi edit)
     {
         _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
         _materials = materials ?? throw new ArgumentNullException(nameof(materials));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
         _simulationEdit = edit ?? throw new ArgumentNullException(nameof(edit));
         _providerEdit = new SimulationAuthoringWorldEditApi(_simulationEdit);
     }
@@ -88,6 +91,7 @@ internal sealed class AuthoringWorldPreviewRuntime
             AuthoringWorldPreviewDescriptor descriptor = entry.Descriptor;
             AuthoringWorldPreviewContext context = new(
                 _materials,
+                _config,
                 _providerEdit,
                 descriptor.WidthCells,
                 descriptor.HeightCells);

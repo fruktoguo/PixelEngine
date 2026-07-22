@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using PixelEngine.Hosting;
 using PixelEngine.Scripting;
 using Xunit;
@@ -527,6 +528,29 @@ public sealed class CampaignWorldTests
         }
 
         Assert.Equal(catalog.Landmarks.Length, total);
+    }
+
+    /// <summary>
+    /// 验证 Editor 动态脚本的 authoring preview 只通过公开 Config API 读取战役与 biome 数据，
+    /// 不依赖静态 Demo 程序集才具备的 embedded resource。
+    /// </summary>
+    [Fact]
+    public void CampaignAuthoringPreviewLoadsTerrainCatalogThroughPublicConfigApi()
+    {
+        TrackingConfigApi config = new(ContentRoot());
+        CountingAuthoringWorldEditApi edit = new(width: 720, height: 480);
+        AuthoringWorldPreviewContext context = new(
+            LoadMaterials(),
+            config,
+            edit,
+            WidthCells: 720,
+            HeightCells: 480);
+
+        PlayableCavernWorldGenerator.PopulateAuthoringWorld(in context);
+
+        Assert.Equal(["campaign.json", "biomes.json"], config.ReadPaths);
+        Assert.Equal(1, edit.ClearRectCount);
+        Assert.True(edit.PaintedCellCount > 0);
     }
 
     /// <summary>
@@ -1304,4 +1328,77 @@ public sealed class CampaignWorldTests
     }
 
     private sealed record ChunkSample(ushort[] Materials, Half[] Temperatures);
+
+    private sealed class TrackingConfigApi(string contentRoot) : IConfigApi
+    {
+        private readonly EngineScriptConfigApi _inner = new(contentRoot);
+        private readonly List<string> _readPaths = [];
+
+        public IReadOnlyList<string> ReadPaths => _readPaths;
+
+        public string ReadText(string relativePath)
+        {
+            _readPaths.Add(relativePath);
+            return _inner.ReadText(relativePath);
+        }
+
+        public TConfig Load<TConfig>(string relativePath, JsonTypeInfo<TConfig> typeInfo)
+            where TConfig : class
+        {
+            _readPaths.Add(relativePath);
+            return _inner.Load(relativePath, typeInfo);
+        }
+    }
+
+    private sealed class CountingAuthoringWorldEditApi(int width, int height) : IAuthoringWorldEditApi
+    {
+        public int ClearRectCount { get; private set; }
+
+        public long PaintedCellCount { get; private set; }
+
+        public void PaintCell(int worldX, int worldY, MaterialId material)
+        {
+            ValidateCoordinate(worldX, worldY);
+            PaintedCellCount++;
+        }
+
+        public int PaintRect(int minX, int minY, int maxX, int maxY, MaterialId material)
+        {
+            ValidateRect(minX, minY, maxX, maxY);
+            int area = checked((maxX - minX + 1) * (maxY - minY + 1));
+            PaintedCellCount += area;
+            return area;
+        }
+
+        public void ClearCell(int worldX, int worldY)
+        {
+            ValidateCoordinate(worldX, worldY);
+        }
+
+        public int ClearRect(int minX, int minY, int maxX, int maxY)
+        {
+            ValidateRect(minX, minY, maxX, maxY);
+            ClearRectCount++;
+            return checked((maxX - minX + 1) * (maxY - minY + 1));
+        }
+
+        private void ValidateRect(int minX, int minY, int maxX, int maxY)
+        {
+            if (minX > maxX || minY > maxY)
+            {
+                throw new ArgumentException("authoring world 矩形边界顺序无效。");
+            }
+
+            ValidateCoordinate(minX, minY);
+            ValidateCoordinate(maxX, maxY);
+        }
+
+        private void ValidateCoordinate(int x, int y)
+        {
+            if ((uint)x >= (uint)width || (uint)y >= (uint)height)
+            {
+                throw new ArgumentOutOfRangeException(nameof(x));
+            }
+        }
+    }
 }

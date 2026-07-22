@@ -36,6 +36,7 @@ public sealed class LavaMineSceneTests
         RecordingAuthoringWorld authoring = new(descriptor.WidthCells, descriptor.HeightCells);
         AuthoringWorldPreviewContext context = new(
             runtimeEngine.Context.GetService<IMaterialQuery>(),
+            runtimeEngine.Context.GetService<IConfigApi>(),
             authoring,
             descriptor.WidthCells,
             descriptor.HeightCells);

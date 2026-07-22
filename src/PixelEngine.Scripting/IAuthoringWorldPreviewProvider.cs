@@ -104,11 +104,13 @@ public readonly record struct AuthoringWorldPreviewDescriptor(
 /// authoring world provider 的受限铺设上下文。
 /// </summary>
 /// <param name="Materials">材质查询能力。</param>
+/// <param name="Config">当前项目 ContentRoot 的只读配置能力。</param>
 /// <param name="Edit">由 Editor 适配到权威 Simulation 的受限编辑门面。</param>
 /// <param name="WidthCells">本次描述的世界宽度。</param>
 /// <param name="HeightCells">本次描述的世界高度。</param>
 public readonly record struct AuthoringWorldPreviewContext(
     IMaterialQuery Materials,
+    IConfigApi Config,
     IAuthoringWorldEditApi Edit,
     int WidthCells,
     int HeightCells);

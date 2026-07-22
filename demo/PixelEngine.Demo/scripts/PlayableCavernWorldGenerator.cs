@@ -1045,18 +1045,20 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// </summary>
     internal static void PopulateAuthoringWorld(in AuthoringWorldPreviewContext context)
     {
+        CampaignConfig config = CampaignConfig.Load(context.Config);
+        BiomeCatalog biomes = BiomeCatalog.Load(context.Config, config);
+        ulong worldSeed = config.InitialRunSeed;
         TerrainGenerationState state = CreateGenerationState(
             context.Materials,
-            CampaignConfig.BuiltinDefault,
-            BiomeCatalog.BuiltinDefault,
-            Seed);
-        CampaignConfig config = state.Config;
+            config,
+            biomes,
+            worldSeed);
         TerrainMaterialPalette palette = state.Palette;
         _ = context.Edit.ClearRect(0, 0, context.WidthCells - 1, context.HeightCells - 1);
         Span<int> surfaces = stackalloc int[context.WidthCells];
         Span<int> soilDepths = stackalloc int[context.WidthCells];
         Span<double> moisture = stackalloc double[context.WidthCells];
-        double mainPathOriginNoise = MainPathOriginNoise(Seed);
+        double mainPathOriginNoise = MainPathOriginNoise(worldSeed);
         Span<ConnectionRowSegment> connectionSegments =
             stackalloc ConnectionRowSegment[MaximumConnectionSegmentsPerRow];
         Span<BiomeLandmarkRowSegment> landmarkSegments =
@@ -1065,9 +1067,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         for (int x = 0; x < context.WidthCells; x++)
         {
             long worldX = previewOriginX + x;
-            surfaces[x] = SurfaceYAt(worldX);
-            moisture[x] = MoistureAt(worldX, Seed);
-            soilDepths[x] = 5 + (int)Math.Round((ValueNoise1D(worldX * 0.011, Seed ^ 0x5A17UL) + 1.0) * 2.5);
+            surfaces[x] = SurfaceYAt(worldX, worldSeed);
+            moisture[x] = MoistureAt(worldX, worldSeed);
+            soilDepths[x] = 5 + (int)Math.Round(
+                (ValueNoise1D(worldX * 0.011, worldSeed ^ 0x5A17UL) + 1.0) * 2.5);
         }
 
         for (int y = 0; y < context.HeightCells; y++)
@@ -1090,10 +1093,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 regionIndex,
                 y);
             long pathCenterX = location.DepthCells >= config.CampaignStartDepthCells
-                ? MainPathCenterX(y, config, Seed, mainPathOriginNoise)
+                ? MainPathCenterX(y, config, worldSeed, mainPathOriginNoise)
                 : config.MainPathEntranceX;
             TerrainRowContext rowContext = new(
-                Seed,
+                worldSeed,
                 state,
                 location,
                 pathCenterX,

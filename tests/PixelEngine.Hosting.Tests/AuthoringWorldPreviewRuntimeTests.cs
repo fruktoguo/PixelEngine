@@ -19,7 +19,12 @@ public sealed class AuthoringWorldPreviewRuntimeTests
     {
         SingleChunkSource chunks = new();
         RecordingEditApi edit = new();
-        AuthoringWorldPreviewRuntime runtime = new(chunks, new StubMaterialQuery(), edit);
+        EngineScriptConfigApi config = new(AppContext.BaseDirectory);
+        AuthoringWorldPreviewRuntime runtime = new(
+            chunks,
+            new StubMaterialQuery(),
+            config,
+            edit);
         (ScriptScene firstScene, PreviewProvider firstProvider, IReadOnlyDictionary<int, int> firstMap) =
             CreateScene(stableId: 42, contentHash: 10);
 
@@ -28,6 +33,7 @@ public sealed class AuthoringWorldPreviewRuntimeTests
         Assert.Equal(AuthoringWorldRefreshResult.Rebuilt, first);
         Assert.Equal(1, firstProvider.PopulateCount);
         Assert.Equal(0, firstProvider.AdoptCount);
+        Assert.Same(config, firstProvider.LastConfig);
         Assert.Equal(1, edit.ClearRectCount);
         Assert.Equal((0, 0, 63, 63), edit.LastClearRect);
         Assert.Equal(1, edit.PaintCellCount);
@@ -86,6 +92,7 @@ public sealed class AuthoringWorldPreviewRuntimeTests
         AuthoringWorldPreviewRuntime runtime = new(
             new SingleChunkSource(),
             new StubMaterialQuery(),
+            new EngineScriptConfigApi(AppContext.BaseDirectory),
             new RecordingEditApi());
         (ScriptScene scene, PreviewProvider provider, IReadOnlyDictionary<int, int> map) =
             CreateScene(stableId: 5, contentHash: 1, width: 65, height: 64);
@@ -123,6 +130,8 @@ public sealed class AuthoringWorldPreviewRuntimeTests
 
         public int AdoptCount { get; private set; }
 
+        public IConfigApi? LastConfig { get; private set; }
+
         public AuthoringWorldPreviewDescriptor DescribeAuthoringWorld()
         {
             return Descriptor;
@@ -131,6 +140,7 @@ public sealed class AuthoringWorldPreviewRuntimeTests
         public void PopulateAuthoringWorld(in AuthoringWorldPreviewContext context)
         {
             PopulateCount++;
+            LastConfig = context.Config;
             context.Edit.PaintCell(4, 5, new MaterialId(1));
         }
 
