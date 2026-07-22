@@ -8,10 +8,10 @@
 | 参考流程 | 参考事实 | 当前 Demo | 状态与差异 |
 |---|---|---|---|
 | Mountain / Surface | 从地表 Mountain 进入第一层，世界在主路径外仍可横向探索 | 确定性自然地表、安全出生区、无横向硬边界 | 已实现；地表固定地标与 parallel-world 入口待扩展 |
-| Mines -> Coal Pits -> Snowy Depths -> Hiisi Base -> Underground Jungle -> The Vault -> Temple of the Art -> The Laboratory | 70×48 宏观 biome map 先做二维区域分类；主区高度依次为 1024/1024/1536/1024/1536/1536/2048，层间占完整 512-cell 宏格；Laboratory 是东南侧固定 2600×1600 拼接场景 | `campaign.json` v4 仍把普通层压成统一 512 高、Holy Mountain 压成 128 高；生成器只按 Y 选区并横向铺满 | **结构不匹配，必须重构**；八区名称、地标和旧长路线只作功能基线，不再算地图 parity |
+| Mines -> Coal Pits -> Snowy Depths -> Hiisi Base -> Underground Jungle -> The Vault -> Temple of the Art -> The Laboratory | 70×48 宏观 biome map 先做二维区域分类；主区高度依次为 1024/1024/1536/1024/1536/1536/2048，层间占完整 512-cell 宏格；Laboratory 是东南侧固定 2600×1600 拼接场景 | `campaign.json` v5 已恢复可变纵深与完整 512-cell 层间跨度；`biomes.json` v4 用 98 个运行段投影主区、三类侧区、Holy Mountain、lava 与固定 Laboratory，共覆盖参考色图中本阶段支持的 479 个宏格；生成器装配时编译为 70×48 O(1) 查询表 | **宏观主路径轮廓已实现，内部细节仍不完整**；剩余 2881 个宏格暂按 solid 基线处理，特殊地表/空域/秘密区仍需逐类建模，biome 内部 Wang/BitmapCaves 也尚非参考实现 |
 | Portal Deeper | 每层底部一排 Portal 指向同一个 Holy Mountain 内部；下方 Teleportatium 眼池被抽空或污染会令 Portal 失效；进入后固定传送并短暂无敌 | 每层 3 个同目的地 Portal、横向入口大厅、真实 Teleportatium 池、逐 cell 供能检查、黑屏、材质粒子、0.04 s 无敌；Sandbox 不响应 | 已实现核心地图/交互语义；参考的 10% 随机危险液体池和 polymorph 日志未实现 |
-| Holy Mountain | 每层入口落在完整 512-cell 宏格；altar/left/right 参考材质图各为 512×282，并由 temple wall 包围 | 128-cell 高、半宽 176 的手写房间，设施语义已预留 | **比例与组合结构不匹配**；交互仍归 `DEMO-011` |
-| Laboratory | Final Holy Mountain 通向东南侧固定 boss arena；参考由 5×4 个 512-cell 分片拼成 2600×1600 场景 | 随机 Laboratory grammar + 手写 bridge landmark | **地图轮廓不匹配**；固定场景重建归当前地图任务，Sampo/Boss/结算归 `DEMO-012` |
+| Holy Mountain | 每层入口落在完整 512-cell 宏格；altar/left/right 参考材质图各为 512×282，并由 temple wall 包围 | 七层已恢复 512-cell 纵深并只在色图标记的 61 个宏格生成 Holy Mountain；现有设施房仍为自有矩形 operation | **比例与二维位置已恢复，组合结构仍不匹配**；精确 altar/left/right 语义拼片及交互归后续节点 / `DEMO-011` |
+| Laboratory | Final Holy Mountain 通向东南侧固定 boss arena；参考由 5×4 个 512-cell 分片拼成 2600×1600 场景 | 固定边界为 `X=1536..4135`、参考深度 `12288..13887`，生成独立外壳、左入口、上下桥、支撑、双 vat、平台、lava sea 与 Boss 地标；不再运行随机 Laboratory pixel-scene | **外形尺寸与终局身份已恢复，逐像素拼片尚未复现**；Sampo/Boss/结算归 `DEMO-012` |
 
 ## 2. Biome 生成矩阵
 
@@ -24,7 +24,7 @@
 | Underground Jungle | 高生物量洞穴与更多 dropshaft；东侧 Dragoncave，西侧 Lukki Lair | `jungle-dropshafts`、root room；固定 Dragoncave 与 Munkki statues，西侧跨 Jungle/Vault 的 Lukki Lair | Dragon/Munkki 交互与内部 fungal split |
 | The Vault | 废弃工厂、金属/机械、毒液与玻璃酸池；西北接 Lukki Lair | `vault-factory`、玻璃酸 vat；固定 Fungal Altar 与 Brain vat，Lukki Lair 下段连接 | Altar/Brain 交互与更多机械结构 |
 | Temple of the Art | 双层 brickwork 迷宫、沙/木阻塞、陷阱；东侧 Magical Temple，西侧 Tower，东南回 Laboratory | `temple-labyrinth`、split chamber；固定 Gate Guardian room 与 Tower portal room，东侧 Magical Temple 和 Laboratory return | Guardian/Tower 交互与完整 trap catalog |
-| The Laboratory | 横向 brickwork bridge、lava sea、Boss 双平台与上方 lava vats | `laboratory-arena`、随机 bridge scene；固定 boss bridge、双平台、lava 与晶体锚点 | Sampo、Boss、终局 Portal 与战斗交互 |
+| The Laboratory | 横向 brickwork bridge、lava sea、Boss 双平台与上方 lava vats | 固定 2600×1600 场景选择器；外壳、入口、断桥、支撑、双 vat、双平台、lava sea 与 Boss bridge 地标均为确定性实体地形，随机 encounter 被禁止 | 精确 5×4 材质拼片、Sampo、Boss、终局 Portal 与战斗交互 |
 
 ## 3. 确定性与性能
 
@@ -32,9 +32,9 @@
 |---|---|
 | `RunSeed + global cell/chunk coordinate` 决定初态 | 负坐标、跨加载顺序、跨 seed、共享 tile edge、pixel-scene 与固定 landmark anchor 测试 |
 | 修改持久化优先 | 继续复用 `DEMO-006/007` region store 与 streaming initializer 合同 |
-| 主路径可达 | 普通纵深连续；Portal 行由供能入口桥接；Holy Mountain 右侧出口回接下一层；逐点地形测试 |
+| 主路径可达 | 七个程序化主区的中心访问通道连续；Portal 行由供能入口桥接；Holy Mountain 右侧出口回接下一层；Temple 到东侧固定 Laboratory 有独立纵向回程通道；固定场景逐点材质测试 |
 | 真实流送长路线 | reference seed 经正式 `WorldStreamer` 依次装载 12 个固定地标，逐站校验 authored operation 与 256-chunk cap；首站修改跨完整纵深驱逐后由 region store 恢复 |
-| 稳态零托管分配 | 64 次八区 chunk、256 次 encounter/biome landmark/Holy Mountain landmark query allocation gate；BDN 诊断为 0-6 B 噪声 |
+| 稳态零托管分配 | 64 次八区 chunk、256 次程序化 encounter/biome landmark/Holy Mountain landmark query allocation gate；固定 Laboratory 不产生随机 encounter；既有 BDN 诊断为 0-6 B 噪声，二维拓扑节点仍需补跑新基准 |
 | 代表场景成本 | 2026-07-22 Release InProcess ShortRun：Surface/Mines/Fungal/Portal-Holy Mountain/Laboratory 为 185.0-535.6 us/chunk |
 
 ## 4. 参考来源
@@ -53,4 +53,4 @@
 
 ## 5. DEMO-008 剩余验收
 
-当前未关闭 `DEMO-008`。12 个代表性固定地标已经数据化并经正式 WorldStreamer reference-seed 长路线、resident budget 与修改持久化验证，但本机权威数据证明宏观拓扑仍不匹配。下一节点必须先实现 512-cell 二维宏格、可变主区跨度、完整高度 Holy Mountain、横向边界/侧区和固定 Laboratory；之后才能扩充 Wang/pixel-scene structure pool、取得同源参考/Player 截图并更新 evidence index。Boss、商店、谜题与 Portal 玩法交互仍分别归后续任务。
+当前未关闭 `DEMO-008`。可变主区跨度、70×48/512-cell 二维查询、98 个语义运行段、完整高度 Holy Mountain 分类、横向主/侧区/lava/solid 边界和固定 2600×1600 Laboratory 已进入实现与回归测试；独立对照 Build `17130612` 色图时，本阶段支持的 479 个语义宏格为 `Missing=0 / Wrong=0`。这仍不是完整地图复刻：2881 个剩余宏格尚未细分地表、空域、秘密区与特殊场景，Holy Mountain 仍缺 altar/left/right 精确组合，各 biome 仍需扩充 Wang/BitmapCaves 与 pixel-scene structure pool，并取得同 seed 真实截图矩阵、性能和长路线证据。Boss、商店、谜题与 Portal 玩法交互仍分别归后续任务。

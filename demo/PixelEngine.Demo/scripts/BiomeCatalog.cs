@@ -10,7 +10,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class BiomeCatalog
 {
-    internal const int CurrentSchemaVersion = 3;
+    internal const int CurrentSchemaVersion = 4;
     private const string EmbeddedResourceName = "PixelEngine.Demo.biomes.json";
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -28,6 +28,8 @@ internal sealed class BiomeCatalog
     public HolyMountainDefinition HolyMountain { get; init; } = new();
 
     public PortalNetworkDefinition PortalNetwork { get; init; } = new();
+
+    public WorldTopologyDefinition WorldTopology { get; init; } = new();
 
     public BiomeDefinition[] MainPath { get; init; } = [];
 
@@ -118,6 +120,51 @@ internal sealed class BiomeCatalog
         return -1;
     }
 
+    internal bool IsTopologyBiomeAt(
+        string biomeId,
+        long worldX,
+        long worldY,
+        CampaignConfig campaign)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(biomeId);
+        ArgumentNullException.ThrowIfNull(campaign);
+        WorldTopologyDefinition topology = WorldTopology;
+        long macroX = FloorDivide(worldX, topology.MacroCellSize);
+        long macroY = FloorDivide(worldY - campaign.SurfaceY, topology.MacroCellSize);
+        long mapX = macroX + topology.OriginMacroX;
+        long mapY = macroY + topology.OriginMacroY;
+        if ((ulong)mapX >= (uint)topology.Width || (ulong)mapY >= (uint)topology.Height)
+        {
+            CampaignDepthLocation location = campaign.ResolveLocation(worldY);
+            return location.Kind == CampaignDepthKind.Region &&
+                string.Equals(campaign.Regions[location.RegionIndex].Id, biomeId, StringComparison.Ordinal);
+        }
+
+        ReadOnlySpan<WorldTopologyPlacementDefinition> placements = topology.Placements;
+        for (int i = placements.Length - 1; i >= 0; i--)
+        {
+            WorldTopologyPlacementDefinition placement = placements[i];
+            if (macroX < placement.MacroX || macroX >= placement.MacroX + (long)placement.Width ||
+                macroY < placement.MacroY || macroY >= placement.MacroY + (long)placement.Height)
+            {
+                continue;
+            }
+
+            // fixed Laboratory 由权威 boss_arena 固定场景负责，不参与随机 pixel-scene
+            // 遭遇采样；否则会产生“锚点存在但地形未写入”的幽灵遭遇。
+            return placement.Kind == "biome" &&
+                string.Equals(placement.Biome, biomeId, StringComparison.Ordinal);
+        }
+
+        return false;
+    }
+
+    private static long FloorDivide(long value, int divisor)
+    {
+        long quotient = Math.DivRem(value, divisor, out long remainder);
+        return remainder < 0 ? quotient - 1 : quotient;
+    }
+
     private static BiomeCatalog LoadBuiltin()
     {
         using Stream stream = typeof(BiomeCatalog).Assembly.GetManifestResourceStream(EmbeddedResourceName) ??
@@ -186,6 +233,8 @@ internal sealed class BiomeCatalog
             ValidateBiome(biome, $"sideBiomes[{i}]", biomeIds);
         }
 
+        ValidateWorldTopology();
+
         HashSet<string> sceneIds = new(StringComparer.Ordinal);
         for (int i = 0; i < pixelScenes.Length; i++)
         {
@@ -234,6 +283,91 @@ internal sealed class BiomeCatalog
         return this;
     }
 
+    private void ValidateWorldTopology()
+    {
+        WorldTopologyDefinition topology = WorldTopology ??
+            throw new InvalidDataException("biomes.json 配置无效：worldTopology 不能为空。");
+        Require(topology.MacroCellSize == 512, "worldTopology.macroCellSize 必须为 512。");
+        Require(topology.Width == 70 && topology.Height == 48, "worldTopology 必须保持 70x48 宏观地图尺寸。");
+        Require(
+            topology.OriginMacroX == 35 && topology.OriginMacroY == 14,
+            "worldTopology 原点必须对应参考 map (35,14)。");
+        Require(string.Equals(topology.DefaultKind, "solid", StringComparison.Ordinal), "worldTopology.defaultKind 当前必须为 solid。");
+
+        FixedLaboratoryTopologyDefinition laboratory = topology.FixedLaboratory ??
+            throw new InvalidDataException("biomes.json 配置无效：worldTopology.fixedLaboratory 不能为空。");
+        Require(laboratory.OriginX == 1_536, "fixedLaboratory.originX 必须为参考坐标 1536。");
+        Require(laboratory.OriginDepthCells == 12_288, "fixedLaboratory.originDepthCells 必须为参考纵深 12288。");
+        Require(laboratory.WidthCells == 2_600, "fixedLaboratory.widthCells 必须为 2600。");
+        Require(laboratory.HeightCells == 1_600, "fixedLaboratory.heightCells 必须为 1600。");
+
+        WorldTopologyPlacementDefinition[] placements = topology.Placements ??
+            throw new InvalidDataException("biomes.json 配置无效：worldTopology.placements 不能为空。");
+        Require(placements.Length is >= 32 and <= 256, "worldTopology.placements 必须包含 [32,256] 项运行段。");
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        Span<int> mainBiomeCells = stackalloc int[CampaignConfig.RequiredRegionCount];
+        Span<int> sideBiomeCells = stackalloc int[SideBiomes.Length];
+        int holyMountainCells = 0;
+        int fixedLaboratoryCells = 0;
+        int lavaCells = 0;
+        for (int i = 0; i < placements.Length; i++)
+        {
+            WorldTopologyPlacementDefinition placement = placements[i] ??
+                throw new InvalidDataException($"biomes.json 配置无效：worldTopology.placements[{i}] 不能为空。");
+            string label = $"worldTopology.placements[{i}]";
+            RequireStableId(placement.Id, $"{label}.id");
+            Require(ids.Add(placement.Id), $"world topology placement id 重复：{placement.Id}。");
+            Require(
+                placement.Kind is "biome" or "holy-mountain" or "fixed-laboratory" or "lava" or "solid",
+                $"{label}.kind 不受支持：{placement.Kind}。");
+            Require(placement.Width is >= 1 and <= 70, $"{label}.width 必须位于 [1,70]。");
+            Require(placement.Height is >= 1 and <= 48, $"{label}.height 必须位于 [1,48]。");
+            long mapX = (long)placement.MacroX + topology.OriginMacroX;
+            long mapY = (long)placement.MacroY + topology.OriginMacroY;
+            Require(
+                mapX >= 0 && mapX + placement.Width <= topology.Width &&
+                mapY >= 0 && mapY + placement.Height <= topology.Height,
+                $"{label} 超出 70x48 宏观地图。");
+            int cellCount = checked(placement.Width * placement.Height);
+            if (placement.Kind == "biome")
+            {
+                RequireStableId(placement.Biome, $"{label}.biome");
+                int mainIndex = FindMainPathIndex(placement.Biome);
+                int sideIndex = FindSideBiomeIndex(placement.Biome);
+                Require(mainIndex >= 0 || sideIndex >= 0, $"{label}.biome 引用了未知 biome {placement.Biome}。");
+                if (mainIndex >= 0)
+                {
+                    mainBiomeCells[mainIndex] += cellCount;
+                }
+                else
+                {
+                    sideBiomeCells[sideIndex] += cellCount;
+                }
+
+                continue;
+            }
+
+            Require(string.IsNullOrEmpty(placement.Biome), $"{label}.biome 仅供 biome kind 使用。");
+            holyMountainCells += placement.Kind == "holy-mountain" ? cellCount : 0;
+            fixedLaboratoryCells += placement.Kind == "fixed-laboratory" ? cellCount : 0;
+            lavaCells += placement.Kind == "lava" ? cellCount : 0;
+        }
+
+        for (int i = 0; i < CampaignConfig.RequiredRegionCount - 1; i++)
+        {
+            Require(mainBiomeCells[i] > 0, $"worldTopology 缺少主路径 biome {MainPath[i].Id}。");
+        }
+
+        for (int i = 0; i < sideBiomeCells.Length; i++)
+        {
+            Require(sideBiomeCells[i] > 0, $"worldTopology 缺少侧区 biome {SideBiomes[i].Id}。");
+        }
+
+        Require(holyMountainCells >= 7, "worldTopology 必须包含七个 Holy Mountain 宏格运行段。");
+        Require(fixedLaboratoryCells >= 20, "worldTopology 必须覆盖 5x4 fixed Laboratory 宏格。");
+        Require(lavaCells > 0, "worldTopology 必须显式包含 lava sea/lake。");
+    }
+
     private void ValidateLandmarks(
         BiomeLandmarkDefinition[] landmarks,
         CampaignConfig campaign)
@@ -254,7 +388,7 @@ internal sealed class BiomeCatalog
             Require(regionIndex >= 0, $"{label}.biome 必须引用主路径 biome。");
             landmarksPerRegion[regionIndex]++;
             Require(landmarksPerRegion[regionIndex] <= 4, $"{landmark.Biome} 固定地标最多允许四项。");
-            Require(Math.Abs(landmark.OffsetCells) <= 2_048, $"{label}.offsetCells 必须位于 [-2048,2048]。");
+            Require(Math.Abs(landmark.OffsetCells) <= 4_096, $"{label}.offsetCells 必须位于 [-4096,4096]。");
             Require(landmark.WidthCells is >= 16 and <= 256, $"{label}.widthCells 必须位于 [16,256]。");
             Require(landmark.HeightCells is >= 16 and <= 192, $"{label}.heightCells 必须位于 [16,192]。");
             int halfHeight = landmark.HeightCells / 2;
@@ -588,6 +722,53 @@ internal sealed class BiomeCatalog
             throw new InvalidDataException($"biomes.json 配置无效：{message}");
         }
     }
+}
+
+internal sealed class WorldTopologyDefinition
+{
+    public int MacroCellSize { get; init; }
+
+    public int Width { get; init; }
+
+    public int Height { get; init; }
+
+    public int OriginMacroX { get; init; }
+
+    public int OriginMacroY { get; init; }
+
+    public string DefaultKind { get; init; } = string.Empty;
+
+    public FixedLaboratoryTopologyDefinition FixedLaboratory { get; init; } = new();
+
+    public WorldTopologyPlacementDefinition[] Placements { get; init; } = [];
+}
+
+internal sealed class FixedLaboratoryTopologyDefinition
+{
+    public int OriginX { get; init; }
+
+    public int OriginDepthCells { get; init; }
+
+    public int WidthCells { get; init; }
+
+    public int HeightCells { get; init; }
+}
+
+internal sealed class WorldTopologyPlacementDefinition
+{
+    public string Id { get; init; } = string.Empty;
+
+    public string Kind { get; init; } = string.Empty;
+
+    public string Biome { get; init; } = string.Empty;
+
+    public int MacroX { get; init; }
+
+    public int MacroY { get; init; }
+
+    public int Width { get; init; }
+
+    public int Height { get; init; }
 }
 
 internal sealed class BiomeExpansionStages

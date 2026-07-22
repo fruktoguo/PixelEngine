@@ -177,7 +177,7 @@
   - 依赖：`DEMO-007`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §3；`plan/13-demo-game.md` §3.17。
   - 验收：`content/biomes.json` 定义 Mines、Coal Pits、Snowy Depths、Hiisi Base、Underground Jungle、The Vault、Temple of the Art 与 The Laboratory 的材料 palette、Wang-tile/pixel-scene 地形语法、结构、危险、地标、Portal、Holy Mountain、侧区、秘密连接和捷径；参考 seed 路线通过分区拓扑与截图 parity matrix 核对，全局 seed/chunk 坐标决定生成且跨边界连续，加载顺序无关，修改持久化优先；主路径始终可达，侧区/地表/parallel-world 扩展有显式阶段状态；生成热路径、resident 预算、自动化、性能和真实窗口长路线证据通过。
-  - 当前进度：`DEMO-007` 的悬空退化碎条与武器命中可读性回归已完成复验；八区语法、Portal/Holy Mountain 语义、12 个固定地标及正式 WorldStreamer 长路线已作为功能基线提交。2026-07-22 进一步核对用户本机 Steam Noita Build `17130612` 官方解包数据后，确认当前统一 512-cell region、128-cell Holy Mountain、一维按 Y 分类、连续摆动竖井和随机 Laboratory 与参考 70×48/512-cell 二维宏图、可变 1024/1536/2048 区域、完整 512-cell 层间节点及 2600×1600 固定 Laboratory 结构不匹配；旧长路线不再冒充地图 parity。下一提交节点先完成 schema/二维拓扑/可变 span/固定终局重构及定向测试，再取得同 seed 真实截图矩阵。参考 provenance 与精确坐标见 `docs/reference-noita-build-17130612-map-topology.md`。
+  - 当前进度：`DEMO-007` 的悬空退化碎条与武器命中可读性回归已完成复验；八区语法、Portal/Holy Mountain 语义、12 个固定地标及正式 WorldStreamer 长路线已作为功能基线提交。2026-07-22 进一步核对用户本机 Steam Noita Build `17130612` 官方解包数据后，确认旧统一 512-cell region、128-cell Holy Mountain、一维按 Y 分类、连续摆动竖井和随机 Laboratory 与参考地图不匹配，旧长路线不再冒充地图 parity。当前提交节点已恢复可变 1024/1536/2048 主区、七个完整 512-cell 层间节点、70×48/512-cell 二维编译查询、98 个运行段覆盖的 479 个已支持语义宏格，以及东南侧固定 2600×1600 Laboratory；隔离解包色图反查为 `Missing=0 / Wrong=0`，Demo 全集为 193 passed / 1 explicit GL skip。`DEMO-008` 仍未完成：剩余 2881 个宏格细分、Holy Mountain 精确组合、Wang/BitmapCaves、背景/spawn marker、性能重跑和同 seed 真实截图矩阵仍待闭合。参考 provenance 与精确坐标见 `docs/reference-noita-build-17130612-map-topology.md`。
 
 - [ ] `DEMO-009` 实现 Noita Wand / Spell 数据、施法求值、库存与 Wand 编辑系统。
   - 优先级：P0。

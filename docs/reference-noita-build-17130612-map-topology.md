@@ -71,3 +71,14 @@ The Laboratory 不能建模为第八个全宽随机 biome。主世界通过 `dat
 - Demo 需要自有的语义宏观拓扑、Wang 边码、程序化场景与材料数据，不把参考 PNG/Lua/XML 原样复制进仓库。
 - 先实现 512-cell 宏格、可变 region span、X/Y 二维分类和固定 Laboratory，再扩充每个 biome 的 Wang/pixel-scene 目录。
 - 所有生成仍只由 `RunSeed + global cell/chunk coordinate` 决定，保持加载顺序无关、修改持久化优先和 64×64 chunk 热路径零稳态分配。
+
+## 6. PixelEngine 实现检查点
+
+2026-07-22 的后续实现已把上述差异拆成两个提交节点：
+
+- `campaign.json` v5 恢复主路径七个程序化区域的 `1024/1024/1536/1024/1536/1536/2048` 高度与七个 512-cell Holy Mountain，旧 v1-v4 存档配置只读迁移到新跨度。
+- `biomes.json` v4 以 98 个语义运行段表达 70×48 色图中当前目录已支持的主区、Fungal Caverns、Magical Temple、Lukki Lair、Holy Mountain、lava 与固定 Laboratory。装配后编译为 3360 项定长查询表，逐 cell 热循环不扫描 JSON 运行段。
+- 直接以隔离解包副本的 `biome_map.png + _biomes_all.xml` 反查，当前支持类别共 479 个宏格，运行段投影为 `Missing=0 / Wrong=0`；剩余 2881 个宏格保留 `solid`，不能据此宣称整张参考色图已完整实现。
+- Laboratory 以准确的 `1536,12288,2600,1600` 边界选择固定确定性几何；随机 Laboratory encounter 被禁用，材质温度也服从二维拓扑覆盖，而不再被重叠的 Final Holy Mountain 纵深误写成 20°C。
+
+此检查点只闭合宏观地图身份。Holy Mountain 原始组合、每个 biome 的 Wang/BitmapCaves、背景层、spawn marker、特殊地表/空域和截图 parity 仍是 `DEMO-008` 的未完成项。

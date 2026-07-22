@@ -428,8 +428,8 @@ public sealed class CampaignConfig
             RegionHeightCells = 512,
             HolyMountainHeightCells = 512,
             MainPathHalfWidthCells = 22,
-            MainPathEntranceX = 96,
-            MainPathWanderCells = 176,
+            MainPathEntranceX = 0,
+            MainPathWanderCells = 0,
             HolyMountainHalfWidthCells = 176,
             Regions =
             [

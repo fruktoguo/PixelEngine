@@ -7,8 +7,8 @@
   "regionHeightCells": 512,
   "holyMountainHeightCells": 512,
   "mainPathHalfWidthCells": 22,
-  "mainPathEntranceX": 96,
-  "mainPathWanderCells": 176,
+  "mainPathEntranceX": 0,
+  "mainPathWanderCells": 0,
   "holyMountainHalfWidthCells": 176,
   "regions": [
     {

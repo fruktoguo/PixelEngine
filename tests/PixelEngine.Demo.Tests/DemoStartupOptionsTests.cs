@@ -308,9 +308,10 @@ public sealed class DemoStartupOptionsTests
             Assert.True(materials.TryGetId("stone", out ushort stone));
             Assert.True(materials.TryGetId("dirt", out ushort dirt));
             Assert.True(materials.TryGetId("sand", out ushort sand));
-            Assert.Equal(empty, grid.MaterialAt(0, PlayableCavernWorldGenerator.SafeSurfaceY - 1));
+            const int SafeGroundProbeX = 64;
+            Assert.Equal(empty, grid.MaterialAt(SafeGroundProbeX, PlayableCavernWorldGenerator.SafeSurfaceY - 1));
             Assert.Contains(
-                grid.MaterialAt(0, PlayableCavernWorldGenerator.SafeSurfaceY),
+                grid.MaterialAt(SafeGroundProbeX, PlayableCavernWorldGenerator.SafeSurfaceY),
                 new[] { stone, dirt, sand });
             Assert.False(PlayableCavernWorldGenerator.IsCaveAt(
                 0,
@@ -585,9 +586,10 @@ public sealed class DemoStartupOptionsTests
             CellGrid grid = engine.Context.GetService<CellGrid>();
             IMaterialQuery materials = engine.Context.GetService<IMaterialQuery>();
             ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
+            const int EditedX = 64;
             int editedY = PlayableCavernWorldGenerator.SafeSurfaceY;
-            Assert.NotEqual(materials.Resolve("empty").Value, grid.MaterialAt(0, editedY));
-            edit.PaintCell(0, editedY, materials.Resolve("empty").Value);
+            Assert.NotEqual(materials.Resolve("empty").Value, grid.MaterialAt(EditedX, editedY));
+            edit.PaintCell(EditedX, editedY, materials.Resolve("empty").Value);
 
             long frame = 1;
             long[] focusX = [-8_192, 8_192, 0];
@@ -605,7 +607,7 @@ public sealed class DemoStartupOptionsTests
                 Assert.True(world.Chunks.Contains(world.Camera.FocusChunk));
             }
 
-            Assert.Equal(materials.Resolve("empty").Value, grid.MaterialAt(0, editedY));
+            Assert.Equal(materials.Resolve("empty").Value, grid.MaterialAt(EditedX, editedY));
             Assert.InRange(world.MemoryBudget.ResidentBytes, 0, capBytes);
         }
         finally
