@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v9";
+    public const string PersistenceKey = "showcase-campaign-v10";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -53,10 +53,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         BiomeCatalog biomes = request.Config is null
             ? currentState?.Biomes ?? BiomeCatalog.BuiltinDefault
             : BiomeCatalog.Load(request.Config, config);
+        NoitaWangTerrainCatalog wangTerrain = request.Config is null
+            ? currentState?.WangTerrain ?? NoitaWangTerrainCatalog.BuiltinDefault
+            : NoitaWangTerrainCatalog.Load(request.Config);
         ulong worldSeed = request.WorldSeedOverride ?? config.InitialRunSeed;
         if (request.Materials is not null)
         {
-            Volatile.Write(ref _state, CreateGenerationState(request.Materials, config, biomes, worldSeed));
+            Volatile.Write(ref _state, CreateGenerationState(request.Materials, config, biomes, wangTerrain, worldSeed));
         }
 
         return ProceduralWorldDescriptor.CreateInfinite(
@@ -76,6 +79,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 context.Materials,
                 CampaignConfig.BuiltinDefault,
                 BiomeCatalog.BuiltinDefault,
+                NoitaWangTerrainCatalog.BuiltinDefault,
                 context.WorldSeed);
             state = Interlocked.CompareExchange(ref _state, created, null) ?? created;
         }
@@ -99,7 +103,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         Span<Half> temperatureCells,
         ulong worldSeed = Seed,
         CampaignConfig? config = null,
-        BiomeCatalog? biomes = null)
+        BiomeCatalog? biomes = null,
+        NoitaWangTerrainCatalog? wangTerrain = null)
     {
         const int SizeCells = 64;
         const int TemperatureSizeCells = 16;
@@ -118,6 +123,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             materials,
             resolvedConfig,
             biomes ?? BiomeCatalog.BuiltinDefault,
+            wangTerrain ?? NoitaWangTerrainCatalog.BuiltinDefault,
             worldSeed);
         PopulateChunkCore(
             state,
@@ -416,36 +422,38 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         TerrainMaterialPalette palette = row.Palette;
         return topologyCell.Kind switch
         {
-            CompiledTopologyCellKind.MainBiome => SelectBiomeMaterial(
+            CompiledTopologyCellKind.MainBiome => SelectWangBiomeMaterial(
                 worldX,
                 worldY,
                 protectedSpawn,
                 state.MainBiomes[topologyCell.BiomeIndex],
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 in row),
-            CompiledTopologyCellKind.SideBiome => SelectBiomeMaterial(
+            CompiledTopologyCellKind.SideBiome => SelectWangBiomeMaterial(
                 worldX,
                 worldY,
                 protectedSpawn: false,
                 state.SideBiomes[topologyCell.BiomeIndex],
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 in row),
             CompiledTopologyCellKind.Solid => palette.BoundaryStone,
             CompiledTopologyCellKind.Lava => palette.Lava,
             CompiledTopologyCellKind.HolyMountain => SelectHolyMountainReferenceMaterial(
                 worldX,
                 topologyDepthCells,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 in palette),
             CompiledTopologyCellKind.Empty => palette.Empty,
             CompiledTopologyCellKind.Water => palette.Water,
             CompiledTopologyCellKind.Clouds => SelectCloudMaterial(
                 worldX,
                 worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 in palette),
             CompiledTopologyCellKind.SurfaceHills => SelectReferenceCaveMaterial(
                 worldX,
                 worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 palette.Dirt,
                 palette.Stone,
                 palette.Gravel,
@@ -453,7 +461,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             CompiledTopologyCellKind.SurfaceDesert => SelectReferenceCaveMaterial(
                 worldX,
                 worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 palette.Sand,
                 palette.Stone,
                 palette.Gravel,
@@ -461,7 +469,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             CompiledTopologyCellKind.SurfaceWinter => SelectReferenceCaveMaterial(
                 worldX,
                 worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 palette.Ice,
                 palette.Stone,
                 palette.Gravel,
@@ -469,12 +477,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             CompiledTopologyCellKind.Mountain => SelectMountainMaterial(
                 worldX,
                 topologyDepthCells,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 in palette),
             CompiledTopologyCellKind.GenericCave => SelectReferenceCaveMaterial(
                 worldX,
                 worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 palette.Stone,
                 palette.Gravel,
                 palette.Crystal,
@@ -483,7 +491,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 worldX,
                 worldY,
                 topologyDepthCells,
-                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 in palette),
             CompiledTopologyCellKind.FixedLaboratory => SelectFixedLaboratoryMaterial(
                 worldX,
@@ -857,16 +865,60 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         CompiledBiome biome,
         in TerrainRowContext row)
     {
+        return TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial)
+            ? sceneMaterial
+            : IsBiomeOpenAt(worldX, worldY, biome, row.WorldSeed)
+                ? row.Palette.Empty
+                : SelectBiomeSolidMaterial(worldX, worldY, protectedSpawn, biome, in row);
+    }
+
+    private static ushort SelectWangBiomeMaterial(
+        long worldX,
+        long worldY,
+        bool protectedSpawn,
+        CompiledBiome biome,
+        in CompiledReferenceBiome referenceBiome,
+        in TerrainRowContext row)
+    {
         if (TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial))
         {
             return sceneMaterial;
         }
 
-        if (IsBiomeOpenAt(worldX, worldY, biome, row.WorldSeed))
-        {
-            return row.Palette.Empty;
-        }
+        DecodedNoitaWangTerrainSet wangTerrain = referenceBiome.WangTerrain ??
+            throw new InvalidOperationException("主区或侧区缺少已编译的 Noita Wang 模板。");
+        byte semantic = wangTerrain.Sample(worldX, worldY, row.WorldSeed, referenceBiome.Salt);
+        bool empty = semantic == (byte)NoitaWangTerrainSemantic.Empty ||
+            DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
+            (semantic == (byte)NoitaWangTerrainSemantic.RandomBinary &&
+                !DecodedNoitaWangTerrainSet.IsRandomBinarySolid(worldX, worldY, row.WorldSeed, referenceBiome.Salt));
+        return empty
+            ? row.Palette.Empty
+            : semantic switch
+            {
+                (byte)NoitaWangTerrainSemantic.Primary or
+                (byte)NoitaWangTerrainSemantic.RandomBinary => SelectBiomeSolidMaterial(
+                    worldX,
+                    worldY,
+                    protectedSpawn,
+                    biome,
+                    in row),
+                (byte)NoitaWangTerrainSemantic.Secondary => biome.Secondary,
+                (byte)NoitaWangTerrainSemantic.Loose => biome.Loose,
+                (byte)NoitaWangTerrainSemantic.Structure => biome.Structure,
+                (byte)NoitaWangTerrainSemantic.Hazard => protectedSpawn ? biome.Primary : biome.Hazard,
+                (byte)NoitaWangTerrainSemantic.Pool => biome.Pool,
+                _ => throw new InvalidOperationException($"未知 Noita Wang terrain semantic：{semantic}。"),
+            };
+    }
 
+    private static ushort SelectBiomeSolidMaterial(
+        long worldX,
+        long worldY,
+        bool protectedSpawn,
+        CompiledBiome biome,
+        in TerrainRowContext row)
+    {
         double strata = Fractal2D(
             worldX * biome.Grammar.HorizontalScale * 1.9,
             worldY * biome.Grammar.VerticalScale * 1.9,
@@ -1416,11 +1468,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     {
         CampaignConfig config = CampaignConfig.Load(context.Config);
         BiomeCatalog biomes = BiomeCatalog.Load(context.Config, config);
+        NoitaWangTerrainCatalog wangTerrain = NoitaWangTerrainCatalog.Load(context.Config);
         ulong worldSeed = config.InitialRunSeed;
         TerrainGenerationState state = CreateGenerationState(
             context.Materials,
             config,
             biomes,
+            wangTerrain,
             worldSeed);
         TerrainMaterialPalette palette = state.Palette;
         _ = context.Edit.ClearRect(0, 0, context.WidthCells - 1, context.HeightCells - 1);
@@ -1534,6 +1588,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         IMaterialQuery materials,
         CampaignConfig config,
         BiomeCatalog biomes,
+        NoitaWangTerrainCatalog wangTerrain,
         ulong worldSeed)
     {
         CompiledPixelScene[] pixelScenes = CompilePixelScenes(materials, biomes);
@@ -1547,7 +1602,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             biomes.SideBiomes,
             biomes,
             pixelScenes);
-        CompiledWorldTopology worldTopology = CompileWorldTopology(biomes);
+        CompiledWorldTopology worldTopology = CompileWorldTopology(biomes, wangTerrain);
         CompiledConnection[] connections = CompileConnections(
             materials,
             biomes);
@@ -1569,6 +1624,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         return new TerrainGenerationState(
             config,
             biomes,
+            wangTerrain,
             ResolvePalette(materials),
             mainBiomes,
             sideBiomes,
@@ -1595,7 +1651,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             ResolveRequired(materials, "crystal"));
     }
 
-    private static CompiledWorldTopology CompileWorldTopology(BiomeCatalog biomes)
+    private static CompiledWorldTopology CompileWorldTopology(
+        BiomeCatalog biomes,
+        NoitaWangTerrainCatalog wangTerrain)
     {
         WorldTopologyDefinition definition = biomes.WorldTopology;
         CompiledTopologyCell[] cells = new CompiledTopologyCell[checked(definition.Width * definition.Height)];
@@ -1625,7 +1683,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     "ice" => ReferenceTerrainMaskAccent.Ice,
                     "gravel" or null => ReferenceTerrainMaskAccent.Gravel,
                     _ => throw new InvalidOperationException($"未编译的参考地形掩码强调材质：{source.ReferenceTerrainMask.Accent}。"),
-                });
+                },
+                source.Terrain is "main-biome" or "side-biome"
+                    ? wangTerrain.FindForReferenceBiome(source.Id)
+                    : null);
         }
 
         for (int mapY = 0; mapY < definition.Height; mapY++)
@@ -1659,7 +1720,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     : kind == CompiledTopologyCellKind.SideBiome
                         ? biomes.FindSideBiomeIndex(source.GameplayBiome)
                         : referenceIndex;
-                cells[cellRow + mapX] = new CompiledTopologyCell(kind, index);
+                cells[cellRow + mapX] = new CompiledTopologyCell(kind, index, referenceIndex);
             }
         }
 
@@ -1677,7 +1738,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             cells.AsSpan((mapY * definition.Width) + mapX, laboratoryMacroWidth).Fill(
                 new CompiledTopologyCell(
                     CompiledTopologyCellKind.FixedLaboratory,
-                    CampaignConfig.RequiredRegionCount - 1));
+                    CampaignConfig.RequiredRegionCount - 1,
+                    -1));
         }
 
         return new CompiledWorldTopology(
@@ -2355,6 +2417,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     private sealed class TerrainGenerationState(
         CampaignConfig config,
         BiomeCatalog biomes,
+        NoitaWangTerrainCatalog wangTerrain,
         TerrainMaterialPalette palette,
         CompiledBiome[] mainBiomes,
         CompiledBiome[] sideBiomes,
@@ -2368,6 +2431,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public CampaignConfig Config { get; } = config;
 
         public BiomeCatalog Biomes { get; } = biomes;
+
+        public NoitaWangTerrainCatalog WangTerrain { get; } = wangTerrain;
 
         public TerrainMaterialPalette Palette { get; } = palette;
 
@@ -2494,7 +2559,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             long mapX = FloorDivide(worldX, macroCellSize) + originMacroX;
             long mapY = FloorDivide(depthCells, macroCellSize) + originMacroY;
             return (ulong)mapX >= (uint)width || (ulong)mapY >= (uint)height
-                ? new CompiledTopologyCell(CompiledTopologyCellKind.Legacy, -1)
+                ? new CompiledTopologyCell(CompiledTopologyCellKind.Legacy, -1, -1)
                 : cells[checked(((int)mapY * width) + (int)mapX)];
         }
     }
@@ -2677,13 +2742,15 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
     private readonly record struct CompiledTopologyCell(
         CompiledTopologyCellKind Kind,
-        int BiomeIndex);
+        int BiomeIndex,
+        int ReferenceBiomeIndex);
 
     private readonly record struct CompiledReferenceBiome(
         ulong Salt,
         ReferenceMountainKind Mountain,
         byte[] TerrainMask,
-        ReferenceTerrainMaskAccent MaskAccent);
+        ReferenceTerrainMaskAccent MaskAccent,
+        DecodedNoitaWangTerrainSet? WangTerrain);
 
     private enum ReferenceTerrainMaskAccent : byte
     {

@@ -613,7 +613,7 @@ public sealed class CampaignWorldTests
 
         PlayableCavernWorldGenerator.PopulateAuthoringWorld(in context);
 
-        Assert.Equal(["campaign.json", "biomes.json"], config.ReadPaths);
+        Assert.Equal(["campaign.json", "biomes.json", "noita-wang-terrain.json"], config.ReadPaths);
         Assert.Equal(1, edit.ClearRectCount);
         Assert.True(edit.PaintedCellCount > 0);
     }
@@ -984,6 +984,64 @@ public sealed class CampaignWorldTests
         Assert.InRange(encounterAllocated, 0, 1_024);
         Assert.InRange(biomeLandmarkAllocated, 0, 1_024);
         Assert.InRange(landmarkAllocated, 0, 1_024);
+    }
+
+    /// <summary>
+    /// 验证主区与侧区的实际 chunk 开/实轮廓来自各自绑定的 Noita Wang 模板，
+    /// 防止目录仍在但运行时悄然退回通用噪声洞穴。
+    /// </summary>
+    [Fact]
+    public void MainAndSideBiomeChunksFollowTheirBoundNoitaWangMasks()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(campaign);
+        NoitaWangTerrainCatalog wang = NoitaWangTerrainCatalog.Load(new EngineScriptConfigApi(ContentRoot()));
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, biomes, campaign.InitialRunSeed);
+        ushort empty = ResolveRequired(materials, "empty");
+        (string ReferenceBiomeId, long OriginX, long OriginY)[] cases =
+        [
+            ("coalmine", 256, 832),
+            ("fungicave", -3_456, 1_920),
+        ];
+
+        foreach ((string referenceBiomeId, long originX, long originY) in cases)
+        {
+            DecodedNoitaWangTerrainSet set = wang.FindForReferenceBiome(referenceBiomeId);
+            ulong salt = StableReferenceSalt(referenceBiomeId);
+            int matches = 0;
+            int openCells = 0;
+            int solidCells = 0;
+            const int SampleSide = 128;
+            for (int localY = 0; localY < SampleSide; localY++)
+            {
+                long worldY = originY + localY;
+                for (int localX = 0; localX < SampleSide; localX++)
+                {
+                    long worldX = originX + localX;
+                    byte semantic = set.Sample(worldX, worldY, campaign.InitialRunSeed, salt);
+                    bool expectedOpen = semantic == (byte)NoitaWangTerrainSemantic.Empty ||
+                        DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
+                        (semantic == (byte)NoitaWangTerrainSemantic.RandomBinary &&
+                            !DecodedNoitaWangTerrainSet.IsRandomBinarySolid(
+                                worldX,
+                                worldY,
+                                campaign.InitialRunSeed,
+                                salt));
+                    bool actualOpen = probe.MaterialAt(worldX, worldY) == empty;
+                    matches += expectedOpen == actualOpen ? 1 : 0;
+                    openCells += expectedOpen ? 1 : 0;
+                    solidCells += expectedOpen ? 0 : 1;
+                }
+            }
+
+            int samples = SampleSide * SampleSide;
+            Assert.InRange(openCells, 1_024, samples - 1_024);
+            Assert.InRange(solidCells, 1_024, samples - 1_024);
+            Assert.True(
+                matches >= samples * 9 / 10,
+                $"{referenceBiomeId} 实际 chunk 与绑定 Wang 开/实掩码只匹配 {matches}/{samples} cells。");
+        }
     }
 
     /// <summary>
@@ -1508,6 +1566,18 @@ public sealed class CampaignWorldTests
             long quotient = Math.DivRem(coordinate, ChunkSize, out long remainder);
             return checked((int)(remainder < 0 ? quotient - 1 : quotient));
         }
+    }
+
+    private static ulong StableReferenceSalt(string value)
+    {
+        ulong hash = 14_695_981_039_346_656_037UL;
+        for (int i = 0; i < value.Length; i++)
+        {
+            hash ^= value[i];
+            hash *= 1_099_511_628_211UL;
+        }
+
+        return hash;
     }
 
     private sealed record ChunkSample(ushort[] Materials, Half[] Temperatures);

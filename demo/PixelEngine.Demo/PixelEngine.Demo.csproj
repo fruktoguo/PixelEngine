@@ -15,5 +15,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <EmbeddedResource Include="content\biomes.json" LogicalName="PixelEngine.Demo.biomes.json" />
+    <EmbeddedResource Include="content\noita-wang-terrain.json" LogicalName="PixelEngine.Demo.noita-wang-terrain.json" />
   </ItemGroup>
 </Project>
