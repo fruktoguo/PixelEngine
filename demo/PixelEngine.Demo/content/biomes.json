@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "expansionStages": {
     "surface": "active",
     "sideBiomes": "active",
@@ -259,6 +259,126 @@
         { "kind": "carveEllipse", "material": "empty", "x": 3, "y": 3, "width": 36, "height": 32 },
         { "kind": "fillRect", "material": "acid", "x": 10, "y": 30, "width": 22, "height": 5 },
         { "kind": "fillRect", "material": "wood", "x": 19, "y": 8, "width": 4, "height": 20 }
+      ]
+    }
+  ],
+  "landmarks": [
+    {
+      "id": "mines-lava-lake-overlook", "displayName": "Lava Lake Overlook", "stage": "active", "biome": "mines", "placement": "fixed-offset", "offsetCells": 300, "localDepthCells": 160, "widthCells": 128, "heightCells": 64, "encounterId": "mines-lava-lake-route",
+      "operations": [
+        { "kind": "fillRect", "material": "stone", "x": 0, "y": 0, "width": 128, "height": 64 },
+        { "kind": "carveEllipse", "material": "empty", "x": 4, "y": 4, "width": 120, "height": 54 },
+        { "kind": "fillRect", "material": "lava", "x": 8, "y": 48, "width": 112, "height": 12 },
+        { "kind": "fillRect", "material": "wood", "x": 20, "y": 38, "width": 36, "height": 4 },
+        { "kind": "fillRect", "material": "wood", "x": 72, "y": 38, "width": 36, "height": 4 }
+      ]
+    },
+    {
+      "id": "coal-fungal-threshold", "displayName": "Fungal Caverns Threshold", "stage": "active", "biome": "coal-pits", "placement": "fixed-offset", "offsetCells": -300, "localDepthCells": 224, "widthCells": 96, "heightCells": 64, "encounterId": "coal-fungal-threshold-room",
+      "operations": [
+        { "kind": "fillRect", "material": "dirt", "x": 0, "y": 0, "width": 96, "height": 64 },
+        { "kind": "carveEllipse", "material": "empty", "x": 4, "y": 4, "width": 88, "height": 56 },
+        { "kind": "fillRect", "material": "metal", "x": 8, "y": 8, "width": 4, "height": 46 },
+        { "kind": "fillRect", "material": "wood", "x": 18, "y": 46, "width": 60, "height": 5 },
+        { "kind": "fillRect", "material": "acid", "x": 34, "y": 52, "width": 28, "height": 6 }
+      ]
+    },
+    {
+      "id": "snowy-buried-eye", "displayName": "Buried Eye", "stage": "active", "biome": "snowy-depths", "placement": "fixed-offset", "offsetCells": -280, "localDepthCells": 224, "widthCells": 96, "heightCells": 72, "encounterId": "snowy-buried-eye-room",
+      "operations": [
+        { "kind": "fillRect", "material": "ice", "x": 0, "y": 0, "width": 96, "height": 72 },
+        { "kind": "carveEllipse", "material": "empty", "x": 5, "y": 5, "width": 86, "height": 62 },
+        { "kind": "fillRect", "material": "stone", "x": 28, "y": 20, "width": 40, "height": 38 },
+        { "kind": "carveEllipse", "material": "empty", "x": 34, "y": 25, "width": 28, "height": 24 },
+        { "kind": "fillRect", "material": "teleportatium", "x": 38, "y": 45, "width": 20, "height": 7 }
+      ]
+    },
+    {
+      "id": "hiisi-spell-shop", "displayName": "Hiisi Spell Shop", "stage": "active", "biome": "hiisi-base", "placement": "fixed-offset", "offsetCells": -300, "localDepthCells": 160, "widthCells": 96, "heightCells": 64, "encounterId": "hiisi-shop-room",
+      "operations": [
+        { "kind": "fillRect", "material": "metal", "x": 0, "y": 0, "width": 96, "height": 64 },
+        { "kind": "carveRect", "material": "empty", "x": 6, "y": 7, "width": 84, "height": 50 },
+        { "kind": "fillRect", "material": "glass", "x": 46, "y": 7, "width": 4, "height": 24 },
+        { "kind": "fillRect", "material": "metal", "x": 12, "y": 40, "width": 72, "height": 4 },
+        { "kind": "fillRect", "material": "crystal", "x": 28, "y": 34, "width": 5, "height": 6 }
+      ]
+    },
+    {
+      "id": "hiisi-anvil", "displayName": "Hiisi Anvil", "stage": "active", "biome": "hiisi-base", "placement": "fixed-offset", "offsetCells": 300, "localDepthCells": 440, "widthCells": 72, "heightCells": 48, "encounterId": "hiisi-anvil-room",
+      "operations": [
+        { "kind": "fillRect", "material": "ice", "x": 0, "y": 0, "width": 72, "height": 48 },
+        { "kind": "carveRect", "material": "empty", "x": 5, "y": 5, "width": 62, "height": 38 },
+        { "kind": "fillRect", "material": "metal", "x": 24, "y": 30, "width": 24, "height": 6 },
+        { "kind": "fillRect", "material": "metal", "x": 30, "y": 22, "width": 12, "height": 8 }
+      ]
+    },
+    {
+      "id": "jungle-dragoncave", "displayName": "Dragoncave", "stage": "active", "biome": "underground-jungle", "placement": "fixed-offset", "offsetCells": 340, "localDepthCells": 240, "widthCells": 144, "heightCells": 96, "encounterId": "jungle-dragoncave-arena",
+      "operations": [
+        { "kind": "fillRect", "material": "boundary_stone", "x": 0, "y": 0, "width": 144, "height": 96 },
+        { "kind": "carveEllipse", "material": "empty", "x": 8, "y": 8, "width": 128, "height": 80 },
+        { "kind": "fillRect", "material": "stone", "x": 18, "y": 72, "width": 108, "height": 7 },
+        { "kind": "fillRect", "material": "crystal", "x": 68, "y": 60, "width": 8, "height": 12 }
+      ]
+    },
+    {
+      "id": "jungle-munkki-statues", "displayName": "Munkki Statues", "stage": "active", "biome": "underground-jungle", "placement": "fixed-offset", "offsetCells": 180, "localDepthCells": 100, "widthCells": 96, "heightCells": 64, "encounterId": "jungle-munkki-statues",
+      "operations": [
+        { "kind": "fillRect", "material": "dirt", "x": 0, "y": 0, "width": 96, "height": 64 },
+        { "kind": "carveEllipse", "material": "empty", "x": 5, "y": 5, "width": 86, "height": 54 },
+        { "kind": "fillRect", "material": "stone", "x": 20, "y": 30, "width": 10, "height": 24 },
+        { "kind": "fillRect", "material": "stone", "x": 43, "y": 24, "width": 10, "height": 30 },
+        { "kind": "fillRect", "material": "stone", "x": 66, "y": 28, "width": 10, "height": 26 }
+      ]
+    },
+    {
+      "id": "vault-fungal-altar", "displayName": "Fungal Altar", "stage": "active", "biome": "the-vault", "placement": "fixed-offset", "offsetCells": 96, "localDepthCells": 430, "widthCells": 80, "heightCells": 56, "encounterId": "vault-fungal-altar",
+      "operations": [
+        { "kind": "fillRect", "material": "stone", "x": 0, "y": 0, "width": 80, "height": 56 },
+        { "kind": "carveRect", "material": "empty", "x": 5, "y": 5, "width": 70, "height": 46 },
+        { "kind": "fillRect", "material": "metal", "x": 14, "y": 40, "width": 52, "height": 5 },
+        { "kind": "fillRect", "material": "wood", "x": 34, "y": 28, "width": 12, "height": 12 },
+        { "kind": "fillRect", "material": "crystal", "x": 38, "y": 20, "width": 4, "height": 8 }
+      ]
+    },
+    {
+      "id": "vault-brain-vat", "displayName": "Brain Vat", "stage": "active", "biome": "the-vault", "placement": "fixed-offset", "offsetCells": 280, "localDepthCells": 220, "widthCells": 96, "heightCells": 64, "encounterId": "vault-brain-vat",
+      "operations": [
+        { "kind": "fillRect", "material": "metal", "x": 0, "y": 0, "width": 96, "height": 64 },
+        { "kind": "carveRect", "material": "empty", "x": 5, "y": 5, "width": 86, "height": 54 },
+        { "kind": "fillRect", "material": "glass", "x": 18, "y": 28, "width": 60, "height": 26 },
+        { "kind": "fillRect", "material": "water", "x": 22, "y": 36, "width": 52, "height": 14 },
+        { "kind": "fillRect", "material": "crystal", "x": 44, "y": 32, "width": 8, "height": 8 }
+      ]
+    },
+    {
+      "id": "temple-gate-guardian", "displayName": "Gate Guardian Arena", "stage": "active", "biome": "temple-of-the-art", "placement": "fixed-offset", "offsetCells": 280, "localDepthCells": 360, "widthCells": 128, "heightCells": 80, "encounterId": "temple-gate-guardian-arena",
+      "operations": [
+        { "kind": "fillRect", "material": "boundary_stone", "x": 0, "y": 0, "width": 128, "height": 80 },
+        { "kind": "carveRect", "material": "empty", "x": 8, "y": 8, "width": 112, "height": 64 },
+        { "kind": "fillRect", "material": "crystal", "x": 40, "y": 26, "width": 8, "height": 28 },
+        { "kind": "fillRect", "material": "crystal", "x": 80, "y": 26, "width": 8, "height": 28 }
+      ]
+    },
+    {
+      "id": "temple-tower-portal-room", "displayName": "Tower Portal Room", "stage": "active", "biome": "temple-of-the-art", "placement": "fixed-offset", "offsetCells": -420, "localDepthCells": 240, "widthCells": 112, "heightCells": 72, "encounterId": "temple-tower-portal-room",
+      "operations": [
+        { "kind": "fillRect", "material": "boundary_stone", "x": 0, "y": 0, "width": 112, "height": 72 },
+        { "kind": "carveEllipse", "material": "empty", "x": 8, "y": 8, "width": 96, "height": 56 },
+        { "kind": "fillRect", "material": "stone", "x": 28, "y": 42, "width": 56, "height": 8 },
+        { "kind": "fillRect", "material": "teleportatium", "x": 42, "y": 48, "width": 28, "height": 8 }
+      ]
+    },
+    {
+      "id": "laboratory-boss-bridge", "displayName": "Kolmisilma Bridge", "stage": "active", "biome": "the-laboratory", "placement": "fixed-offset", "offsetCells": 220, "localDepthCells": 240, "widthCells": 160, "heightCells": 80, "encounterId": "laboratory-boss-bridge",
+      "operations": [
+        { "kind": "fillRect", "material": "boundary_stone", "x": 0, "y": 0, "width": 160, "height": 80 },
+        { "kind": "carveRect", "material": "empty", "x": 5, "y": 5, "width": 150, "height": 52 },
+        { "kind": "fillRect", "material": "stone", "x": 5, "y": 53, "width": 150, "height": 6 },
+        { "kind": "fillRect", "material": "lava", "x": 5, "y": 64, "width": 150, "height": 12 },
+        { "kind": "fillRect", "material": "metal", "x": 28, "y": 45, "width": 28, "height": 8 },
+        { "kind": "fillRect", "material": "metal", "x": 104, "y": 45, "width": 28, "height": 8 },
+        { "kind": "fillRect", "material": "crystal", "x": 77, "y": 43, "width": 6, "height": 10 }
       ]
     }
   ],

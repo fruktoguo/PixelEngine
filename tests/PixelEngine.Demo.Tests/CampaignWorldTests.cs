@@ -44,6 +44,7 @@ public sealed class CampaignWorldTests
         Assert.Equal(CampaignConfig.RequiredRegionCount, biomes.MainPath.Length);
         Assert.Equal(3, biomes.SideBiomes.Length);
         Assert.Equal(11, biomes.PixelScenes.Length);
+        Assert.Equal(12, biomes.Landmarks.Length);
         Assert.Equal(6, biomes.Connections.Length);
         Assert.Equal("active", biomes.ExpansionStages.SideBiomes);
         Assert.Equal("active", biomes.ExpansionStages.SecretConnections);
@@ -86,6 +87,10 @@ public sealed class CampaignWorldTests
             Assert.True(materials.Resolve(biome.Palette.Structure).IsValid, $"区域 {region.Id} 缺少 structure 材质。");
             Assert.True(materials.Resolve(biome.Palette.Hazard).IsValid, $"区域 {region.Id} 缺少 hazard 材质。");
             Assert.True(materials.Resolve(biome.Palette.Pool).IsValid, $"区域 {region.Id} 缺少 pool 材质。");
+            Assert.InRange(
+                biomes.Landmarks.Count(landmark => string.Equals(landmark.Biome, region.Id, StringComparison.Ordinal)),
+                1,
+                4);
         }
 
         Assert.False(config.TryResolveRegionIndex("unknown-biome", out int missingIndex));
@@ -294,6 +299,35 @@ public sealed class CampaignWorldTests
             () => BiomeCatalog.Parse(invalidScene.ToJsonString(), campaign));
         Assert.Contains("超出 scene 宽度", sceneError.Message, StringComparison.Ordinal);
 
+        JsonObject invalidLandmark = ParseObject(source);
+        JsonArray landmarks = Assert.IsType<JsonArray>(invalidLandmark["landmarks"]);
+        JsonObject landmark = Assert.IsType<JsonObject>(landmarks[0]);
+        JsonArray landmarkOperations = Assert.IsType<JsonArray>(landmark["operations"]);
+        Assert.IsType<JsonObject>(landmarkOperations[0])["width"] = 4_096;
+        InvalidDataException landmarkBoundsError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidLandmark.ToJsonString(), campaign));
+        Assert.Contains("超出 landmark 宽度", landmarkBoundsError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidLandmarkOperation = ParseObject(source);
+        JsonArray invalidOperationLandmarks = Assert.IsType<JsonArray>(invalidLandmarkOperation["landmarks"]);
+        JsonObject invalidOperationLandmark = Assert.IsType<JsonObject>(invalidOperationLandmarks[0]);
+        JsonArray invalidLandmarkOperations = Assert.IsType<JsonArray>(invalidOperationLandmark["operations"]);
+        Assert.IsType<JsonObject>(invalidLandmarkOperations[0])["kind"] = "unsupported";
+        InvalidDataException landmarkOperationError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidLandmarkOperation.ToJsonString(), campaign));
+        Assert.Contains("kind 不受支持", landmarkOperationError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidLandmarkCarve = ParseObject(source);
+        JsonArray invalidCarveLandmarks = Assert.IsType<JsonArray>(invalidLandmarkCarve["landmarks"]);
+        JsonObject invalidCarveLandmark = Assert.IsType<JsonObject>(invalidCarveLandmarks[0]);
+        JsonArray invalidCarveOperations = Assert.IsType<JsonArray>(invalidCarveLandmark["operations"]);
+        JsonObject invalidCarveOperation = Assert.IsType<JsonObject>(invalidCarveOperations[0]);
+        invalidCarveOperation["kind"] = "carveRect";
+        invalidCarveOperation["material"] = "stone";
+        InvalidDataException landmarkCarveError = Assert.Throws<InvalidDataException>(
+            () => BiomeCatalog.Parse(invalidLandmarkCarve.ToJsonString(), campaign));
+        Assert.Contains("carve 操作必须使用 empty", landmarkCarveError.Message, StringComparison.Ordinal);
+
         JsonObject invalidConnection = ParseObject(source);
         JsonArray connections = Assert.IsType<JsonArray>(invalidConnection["connections"]);
         Assert.IsType<JsonObject>(connections[0])["to"] = "missing-side-biome";
@@ -347,6 +381,26 @@ public sealed class CampaignWorldTests
                 campaign,
                 catalog));
         Assert.Contains("missing-material", materialError.Message, StringComparison.Ordinal);
+
+        JsonObject invalidLandmarkMaterial = ParseObject(source);
+        JsonArray missingMaterialLandmarks = Assert.IsType<JsonArray>(invalidLandmarkMaterial["landmarks"]);
+        JsonObject missingMaterialLandmark = Assert.IsType<JsonObject>(missingMaterialLandmarks[0]);
+        JsonArray missingMaterialOperations = Assert.IsType<JsonArray>(missingMaterialLandmark["operations"]);
+        Assert.IsType<JsonObject>(missingMaterialOperations[0])["material"] = "missing-landmark-material";
+        BiomeCatalog invalidLandmarkMaterialCatalog = BiomeCatalog.Parse(
+            invalidLandmarkMaterial.ToJsonString(),
+            campaign);
+        InvalidOperationException landmarkMaterialError = Assert.Throws<InvalidOperationException>(
+            () => PlayableCavernWorldGenerator.PopulateChunkForVerification(
+                LoadMaterials(),
+                0,
+                4,
+                materialCells,
+                temperatureCells,
+                campaign.InitialRunSeed,
+                campaign,
+                invalidLandmarkMaterialCatalog));
+        Assert.Contains("missing-landmark-material", landmarkMaterialError.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -407,6 +461,72 @@ public sealed class CampaignWorldTests
                 ResolveRequired(materials, topOperation.Material),
                 probe.MaterialAt(operationX, operationY));
         }
+    }
+
+    /// <summary>
+    /// 验证八个主路径 biome 的参考固定地标以同 seed 产生同一锚点，且 authored operation 真正写入地形，
+    /// 同时主路径保护优先级不会被大型地标封死。
+    /// </summary>
+    [Fact]
+    public void BiomeFixedLandmarksMaterializeAndExposeDeterministicRouteAnchors()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog catalog = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, catalog, campaign.InitialRunSeed);
+        BiomeLandmarkAnchor[] first = new BiomeLandmarkAnchor[4];
+        BiomeLandmarkAnchor[] repeated = new BiomeLandmarkAnchor[4];
+        ushort empty = ResolveRequired(materials, "empty");
+        int total = 0;
+
+        for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
+        {
+            int count = PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                first);
+            int repeatedCount = PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                repeated);
+
+            Assert.InRange(count, 1, first.Length);
+            Assert.Equal(count, repeatedCount);
+            Assert.True(first.AsSpan(0, count).SequenceEqual(repeated.AsSpan(0, repeatedCount)));
+            total += count;
+            foreach (BiomeLandmarkAnchor anchor in first[..count])
+            {
+                int landmarkIndex = catalog.FindLandmarkIndex(anchor.LandmarkId);
+                Assert.InRange(landmarkIndex, 0, catalog.Landmarks.Length - 1);
+                BiomeLandmarkDefinition landmark = catalog.Landmarks[landmarkIndex];
+                Assert.Equal(regionIndex, anchor.RegionIndex);
+                Assert.Equal(landmark.DisplayName, anchor.DisplayName);
+                Assert.Equal(landmark.EncounterId, anchor.EncounterId);
+                Assert.Equal(landmark.WidthCells, anchor.WidthCells);
+                Assert.Equal(landmark.HeightCells, anchor.HeightCells);
+
+                BiomePixelSceneOperationDefinition topOperation = landmark.Operations[^1];
+                long operationX = anchor.WorldX - (anchor.WidthCells / 2L) +
+                    topOperation.X + (topOperation.Width / 2L);
+                long operationY = anchor.WorldY - (anchor.HeightCells / 2L) +
+                    topOperation.Y + (topOperation.Height / 2L);
+                Assert.Equal(
+                    ResolveRequired(materials, topOperation.Material),
+                    probe.MaterialAt(operationX, operationY));
+
+                long pathX = PlayableCavernWorldGenerator.MainPathCenterX(
+                    anchor.WorldY,
+                    campaign,
+                    campaign.InitialRunSeed);
+                Assert.Equal(empty, probe.MaterialAt(pathX, anchor.WorldY));
+            }
+        }
+
+        Assert.Equal(catalog.Landmarks.Length, total);
     }
 
     /// <summary>
@@ -656,7 +776,7 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
-    /// 验证目录已经在 Describe 阶段编译，之后八区 chunk 与固定容量 encounter 查询不产生稳态托管分配。
+    /// 验证目录已经在 Describe 阶段编译，之后八区 chunk、encounter 与地图地标查询不产生稳态托管分配。
     /// </summary>
     [Fact]
     public void BiomeChunkAndEncounterGenerationRemainAllocationFreeAfterWarmup()
@@ -674,6 +794,7 @@ public sealed class CampaignWorldTests
         ushort[] materialCells = new ushort[ChunkSize * ChunkSize];
         Half[] temperatureCells = new Half[TemperatureSize * TemperatureSize];
         BiomeEncounterAnchor[] anchors = new BiomeEncounterAnchor[32];
+        BiomeLandmarkAnchor[] biomeLandmarks = new BiomeLandmarkAnchor[4];
         HolyMountainLandmarkAnchor[] holyMountainLandmarks = new HolyMountainLandmarkAnchor[16];
 
         for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount; regionIndex++)
@@ -695,6 +816,12 @@ public sealed class CampaignWorldTests
                 1_024,
                 campaign.RegionStartCellY(regionIndex) + campaign.RegionHeightCells - 1L,
                 anchors);
+            _ = PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
+                catalog,
+                campaign,
+                regionIndex,
+                campaign.InitialRunSeed,
+                biomeLandmarks);
             if (regionIndex < CampaignConfig.RequiredRegionCount - 1)
             {
                 _ = PlayableCavernWorldGenerator.CollectHolyMountainLandmarkAnchors(
@@ -739,6 +866,18 @@ public sealed class CampaignWorldTests
         }
 
         long encounterAllocated = GC.GetAllocatedBytesForCurrentThread() - encounterBefore;
+        long biomeLandmarkBefore = GC.GetAllocatedBytesForCurrentThread();
+        for (int iteration = 0; iteration < 256; iteration++)
+        {
+            checksum ^= PlayableCavernWorldGenerator.CollectBiomeLandmarkAnchors(
+                catalog,
+                campaign,
+                iteration & 7,
+                campaign.InitialRunSeed,
+                biomeLandmarks);
+        }
+
+        long biomeLandmarkAllocated = GC.GetAllocatedBytesForCurrentThread() - biomeLandmarkBefore;
         long landmarkBefore = GC.GetAllocatedBytesForCurrentThread();
         for (int iteration = 0; iteration < 256; iteration++)
         {
@@ -754,6 +893,7 @@ public sealed class CampaignWorldTests
         GC.KeepAlive(checksum);
         Assert.InRange(chunkAllocated, 0, 1_024);
         Assert.InRange(encounterAllocated, 0, 1_024);
+        Assert.InRange(biomeLandmarkAllocated, 0, 1_024);
         Assert.InRange(landmarkAllocated, 0, 1_024);
     }
 

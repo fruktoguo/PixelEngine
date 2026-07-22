@@ -10,7 +10,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class BiomeCatalog
 {
-    internal const int CurrentSchemaVersion = 2;
+    internal const int CurrentSchemaVersion = 3;
     private const string EmbeddedResourceName = "PixelEngine.Demo.biomes.json";
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -34,6 +34,8 @@ internal sealed class BiomeCatalog
     public BiomeDefinition[] SideBiomes { get; init; } = [];
 
     public BiomePixelSceneDefinition[] PixelScenes { get; init; } = [];
+
+    public BiomeLandmarkDefinition[] Landmarks { get; init; } = [];
 
     public BiomeConnectionDefinition[] Connections { get; init; } = [];
 
@@ -103,6 +105,19 @@ internal sealed class BiomeCatalog
         return -1;
     }
 
+    internal int FindLandmarkIndex(string id)
+    {
+        for (int i = 0; i < Landmarks.Length; i++)
+        {
+            if (string.Equals(Landmarks[i].Id, id, StringComparison.Ordinal))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     private static BiomeCatalog LoadBuiltin()
     {
         using Stream stream = typeof(BiomeCatalog).Assembly.GetManifestResourceStream(EmbeddedResourceName) ??
@@ -138,11 +153,14 @@ internal sealed class BiomeCatalog
             throw new InvalidDataException("biomes.json 配置无效：sideBiomes 不能为空。");
         BiomePixelSceneDefinition[] pixelScenes = PixelScenes ??
             throw new InvalidDataException("biomes.json 配置无效：pixelScenes 不能为空。");
+        BiomeLandmarkDefinition[] landmarks = Landmarks ??
+            throw new InvalidDataException("biomes.json 配置无效：landmarks 不能为空。");
         BiomeConnectionDefinition[] connections = Connections ??
             throw new InvalidDataException("biomes.json 配置无效：connections 不能为空。");
         Require(mainPath.Length == CampaignConfig.RequiredRegionCount, "mainPath 必须恰好包含八个主路径 biome。");
         Require(sideBiomes.Length >= 3, "sideBiomes 必须至少声明 Fungal Caverns、Magical Temple 与 Lukki Lair。");
         Require(pixelScenes.Length >= mainPath.Length, "pixelScenes 必须至少为每个主路径 biome 提供一份 authored scene。");
+        Require(landmarks.Length is >= 8 and <= 24, "landmarks 必须包含 [8,24] 项参考固定地标。");
         Require(connections.Length >= 4, "connections 必须同时覆盖侧区、秘密连接与跨区捷径。");
         Require(connections.Length <= 8, "connections 最多允许八项，以满足每行固定容量的零分配生成约束。");
 
@@ -193,6 +211,8 @@ internal sealed class BiomeCatalog
             Require(referencedSceneIds.Contains(sceneId), $"pixel scene {sceneId} 未被任何 biome 使用。");
         }
 
+        ValidateLandmarks(landmarks, campaign);
+
         HashSet<string> connectionIds = new(StringComparer.Ordinal);
         bool hasSideBiome = false;
         bool hasSecret = false;
@@ -212,6 +232,65 @@ internal sealed class BiomeCatalog
         Require(hasSecret, "connections 缺少 active secret-side-biome。 ");
         Require(hasShortcut, "connections 缺少 active vertical-shortcut。 ");
         return this;
+    }
+
+    private void ValidateLandmarks(
+        BiomeLandmarkDefinition[] landmarks,
+        CampaignConfig campaign)
+    {
+        HashSet<string> ids = new(StringComparer.Ordinal);
+        Span<int> landmarksPerRegion = stackalloc int[CampaignConfig.RequiredRegionCount];
+        for (int i = 0; i < landmarks.Length; i++)
+        {
+            BiomeLandmarkDefinition landmark = landmarks[i] ??
+                throw new InvalidDataException($"biomes.json 配置无效：landmarks[{i}] 不能为空。");
+            string label = $"landmarks[{i}]";
+            RequireStableId(landmark.Id, $"{label}.id");
+            Require(ids.Add(landmark.Id), $"landmark id 重复：{landmark.Id}。");
+            Require(!string.IsNullOrWhiteSpace(landmark.DisplayName), $"{label}.displayName 不能为空。");
+            Require(string.Equals(landmark.Stage, "active", StringComparison.Ordinal), $"{label}.stage 当前必须为 active。");
+            Require(string.Equals(landmark.Placement, "fixed-offset", StringComparison.Ordinal), $"{label}.placement 必须为 fixed-offset。");
+            int regionIndex = FindMainPathIndex(landmark.Biome);
+            Require(regionIndex >= 0, $"{label}.biome 必须引用主路径 biome。");
+            landmarksPerRegion[regionIndex]++;
+            Require(landmarksPerRegion[regionIndex] <= 4, $"{landmark.Biome} 固定地标最多允许四项。");
+            Require(Math.Abs(landmark.OffsetCells) <= 2_048, $"{label}.offsetCells 必须位于 [-2048,2048]。");
+            Require(landmark.WidthCells is >= 16 and <= 256, $"{label}.widthCells 必须位于 [16,256]。");
+            Require(landmark.HeightCells is >= 16 and <= 192, $"{label}.heightCells 必须位于 [16,192]。");
+            int halfHeight = landmark.HeightCells / 2;
+            Require(
+                landmark.LocalDepthCells - halfHeight >= 0 &&
+                landmark.LocalDepthCells + (landmark.HeightCells - halfHeight) <= campaign.RegionHeightCells,
+                $"{label} 必须完整位于所属 biome 纵深内。");
+            RequireStableId(landmark.EncounterId, $"{label}.encounterId");
+
+            BiomePixelSceneOperationDefinition[] operations = landmark.Operations ??
+                throw new InvalidDataException($"biomes.json 配置无效：{label}.operations 不能为空。");
+            Require(operations.Length is >= 2 and <= 32, $"{label}.operations 必须包含 [2,32] 项。");
+            for (int operationIndex = 0; operationIndex < operations.Length; operationIndex++)
+            {
+                BiomePixelSceneOperationDefinition operation = operations[operationIndex] ??
+                    throw new InvalidDataException($"biomes.json 配置无效：{label}.operations[{operationIndex}] 不能为空。");
+                string operationLabel = $"{label}.operations[{operationIndex}]";
+                Require(operation.Kind is "fillRect" or "carveRect" or "carveEllipse", $"{operationLabel}.kind 不受支持。");
+                RequireMaterialKey(operation.Material, $"{operationLabel}.material");
+                Require(operation.X >= 0 && operation.Y >= 0, $"{operationLabel} 坐标不能为负。");
+                Require(operation.Width >= 1 && operation.Height >= 1, $"{operationLabel} 尺寸必须为正。");
+                Require(operation.X + operation.Width <= landmark.WidthCells, $"{operationLabel} 超出 landmark 宽度。");
+                Require(operation.Y + operation.Height <= landmark.HeightCells, $"{operationLabel} 超出 landmark 高度。");
+                if (operation.Kind is "carveRect" or "carveEllipse")
+                {
+                    Require(string.Equals(operation.Material, "empty", StringComparison.Ordinal), $"{operationLabel} carve 操作必须使用 empty。");
+                }
+            }
+        }
+
+        for (int regionIndex = 0; regionIndex < landmarksPerRegion.Length; regionIndex++)
+        {
+            Require(
+                landmarksPerRegion[regionIndex] > 0,
+                $"mainPath[{regionIndex}] 缺少 active 固定地标。");
+        }
     }
 
     private void ValidateHolyMountain(CampaignConfig campaign)
@@ -660,6 +739,31 @@ internal sealed class BiomePixelSceneDefinition
     public int HeightCells { get; init; }
 
     public double SpawnChance { get; init; }
+
+    public string EncounterId { get; init; } = string.Empty;
+
+    public BiomePixelSceneOperationDefinition[] Operations { get; init; } = [];
+}
+
+internal sealed class BiomeLandmarkDefinition
+{
+    public string Id { get; init; } = string.Empty;
+
+    public string DisplayName { get; init; } = string.Empty;
+
+    public string Stage { get; init; } = string.Empty;
+
+    public string Biome { get; init; } = string.Empty;
+
+    public string Placement { get; init; } = string.Empty;
+
+    public int OffsetCells { get; init; }
+
+    public int LocalDepthCells { get; init; }
+
+    public int WidthCells { get; init; }
+
+    public int HeightCells { get; init; }
 
     public string EncounterId { get; init; } = string.Empty;
 

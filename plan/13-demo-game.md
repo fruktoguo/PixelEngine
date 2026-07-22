@@ -206,6 +206,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 第二个实现节点把 `campaign.json` 升至 v4 并将最后两项 Holy Mountain 材质权威迁入 `biomes.json` v2；v1–v3 仍可只读升级。地图生成 7 排三入口 Portal chamber、可被移走/污染而失效的 Teleportatium 供能池，以及 authored Holy Mountain 双水池、shop/perk 平台、Worm Crystal 房、训练雕像和右侧出口回接路线。`CampaignPortalNetwork` 只在 Campaign 探索态经公开 cell/character/particle/overlay/light API 工作，提供固定目的地、黑屏与短暂无敌，不影响 InfiniteSandbox；准星材质说明同步解释 Teleportatium 的作用。Portal 行在 row context 预分类，普通 chunk 保持原热循环；七场景 Release ShortRun 为 204.6–559.8 us/chunk、0–7 B 诊断噪声。参考事实、已实现边界与未实现差异记录在 `docs/PixelEngine-Noita地图Parity矩阵.md`；参考 seed 长路线和真实截图仍未验收，因此 `DEMO-008` 继续保持 `[~]`。
 
+第三个实现节点把 `biomes.json` 升至 v3，以严格 schema 声明 12 个固定地标：Mines Lava Lake overlook、Coal Pits fungal threshold、Snowy Buried Eye、Hiisi spell shop / Anvil、Jungle Dragoncave / Munkki statues、Vault Fungal Altar / Brain vat、Temple Gate / Tower portal room 与 Laboratory boss bridge。生成器在 `Describe` 阶段编译材质和世界坐标，每行只构造固定容量 unmanaged segment；主通路 carve 的优先级高于 landmark，landmark 又高于侧区/随机 grammar，既允许参考地标覆盖区域底材，也不封死纵深路线。固定容量 anchor API、逐 operation 地形采样、严格坏数据拒绝、加载顺序与分配回归均通过；Demo Release 为 186 passed / 1 explicit GL skip，七场景 Release InProcess ShortRun 为 185.0–535.6 us/chunk、0–6 B 诊断噪声。地标的 Boss、商店和谜题交互不冒充本节点完成，reference seed 长路线和真实截图仍未验收，故 `DEMO-008` 继续保持 `[~]`。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。

@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v4";
+    public const string PersistenceKey = "showcase-campaign-v5";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -40,6 +40,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     private const long SafeInnerRadius = 112;
     private const long SafeOuterRadius = 320;
     private const int MaximumConnectionSegmentsPerRow = 16;
+    private const int MaximumBiomeLandmarkSegmentsPerRow = 8;
     private const double Inverse53Bit = 1.0 / 9_007_199_254_740_992.0;
 
     /// <inheritdoc />
@@ -179,6 +180,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         double mainPathOriginNoise = MainPathOriginNoise(worldSeed);
         Span<ConnectionRowSegment> connectionSegments =
             stackalloc ConnectionRowSegment[MaximumConnectionSegmentsPerRow];
+        Span<BiomeLandmarkRowSegment> landmarkSegments =
+            stackalloc BiomeLandmarkRowSegment[MaximumBiomeLandmarkSegmentsPerRow];
         for (int localX = 0; localX < sizeCells; localX++)
         {
             long worldX = originCellX + localX;
@@ -198,6 +201,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 state,
                 worldY,
                 connectionSegments);
+            int landmarkSegmentCount = BuildBiomeLandmarkRowSegments(
+                state,
+                regionIndex,
+                worldY,
+                landmarkSegments);
             PortalRowContext portalRow = BuildPortalRowContext(
                 state,
                 location,
@@ -215,6 +223,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 biome,
                 palette,
                 portalRow,
+                landmarkSegments[..landmarkSegmentCount],
                 connectionSegments[..connectionSegmentCount]);
             int row = localY * sizeCells;
             if (portalRow.Kind == PortalRowKind.None)
@@ -354,6 +363,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             {
                 return row.Palette.Empty;
             }
+        }
+
+        if (!row.BiomeLandmarkSegments.IsEmpty &&
+            TrySelectBiomeLandmarkMaterial(worldX, in row, out ushort landmarkMaterial))
+        {
+            return landmarkMaterial;
         }
 
         if (TrySelectConnectionMaterial(worldX, worldY, in row, out ushort connectionMaterial))
@@ -656,6 +671,72 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         }
 
         return count;
+    }
+
+    private static int BuildBiomeLandmarkRowSegments(
+        TerrainGenerationState state,
+        int regionIndex,
+        long worldY,
+        Span<BiomeLandmarkRowSegment> destination)
+    {
+        int count = 0;
+        ReadOnlySpan<ResolvedBiomeLandmark> landmarks = state.BiomeLandmarks;
+        for (int i = 0; i < landmarks.Length; i++)
+        {
+            ResolvedBiomeLandmark landmark = landmarks[i];
+            if (landmark.RegionIndex != regionIndex ||
+                worldY < landmark.MinimumY ||
+                worldY > landmark.MaximumY)
+            {
+                continue;
+            }
+
+            if ((uint)count >= (uint)destination.Length)
+            {
+                throw new InvalidOperationException(
+                    $"单行 biome landmark segment 超过固定容量 {destination.Length}。 ");
+            }
+
+            destination[count++] = new BiomeLandmarkRowSegment(
+                i,
+                checked((int)(worldY - landmark.MinimumY)),
+                landmark.MinimumX,
+                landmark.MaximumX);
+        }
+
+        return count;
+    }
+
+    private static bool TrySelectBiomeLandmarkMaterial(
+        long worldX,
+        in TerrainRowContext row,
+        out ushort material)
+    {
+        ReadOnlySpan<BiomeLandmarkRowSegment> segments = row.BiomeLandmarkSegments;
+        for (int segmentIndex = 0; segmentIndex < segments.Length; segmentIndex++)
+        {
+            BiomeLandmarkRowSegment segment = segments[segmentIndex];
+            if (worldX < segment.MinimumX || worldX > segment.MaximumX)
+            {
+                continue;
+            }
+
+            ResolvedBiomeLandmark landmark = row.State.BiomeLandmarks[segment.LandmarkIndex];
+            int localX = checked((int)(worldX - segment.MinimumX));
+            ReadOnlySpan<CompiledPixelSceneOperation> operations = landmark.Operations;
+            for (int operationIndex = operations.Length - 1; operationIndex >= 0; operationIndex--)
+            {
+                CompiledPixelSceneOperation operation = operations[operationIndex];
+                if (operation.Contains(localX, segment.LocalY))
+                {
+                    material = operation.Material;
+                    return true;
+                }
+            }
+        }
+
+        material = default;
+        return false;
     }
 
     private static void AddSideBiomeSegment(
@@ -978,6 +1059,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         double mainPathOriginNoise = MainPathOriginNoise(Seed);
         Span<ConnectionRowSegment> connectionSegments =
             stackalloc ConnectionRowSegment[MaximumConnectionSegmentsPerRow];
+        Span<BiomeLandmarkRowSegment> landmarkSegments =
+            stackalloc BiomeLandmarkRowSegment[MaximumBiomeLandmarkSegmentsPerRow];
         long previewOriginX = -(context.WidthCells / 2L);
         for (int x = 0; x < context.WidthCells; x++)
         {
@@ -996,6 +1079,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 state,
                 y,
                 connectionSegments);
+            int landmarkSegmentCount = BuildBiomeLandmarkRowSegments(
+                state,
+                regionIndex,
+                y,
+                landmarkSegments);
             PortalRowContext portalRow = BuildPortalRowContext(
                 state,
                 location,
@@ -1013,6 +1101,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 biome,
                 palette,
                 portalRow,
+                landmarkSegments[..landmarkSegmentCount],
                 connectionSegments[..connectionSegmentCount]);
             int runStart = 0;
             ushort runMaterial = SelectMaterialIncludingPortal(
@@ -1093,6 +1182,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             config,
             worldSeed,
             connections);
+        ResolvedBiomeLandmark[] biomeLandmarks = CompileAndResolveBiomeLandmarks(
+            materials,
+            biomes,
+            config,
+            worldSeed);
         CompiledHolyMountain holyMountain = CompileHolyMountain(materials, biomes.HolyMountain);
         CompiledPortalNetwork portalNetwork = CompilePortalNetwork(materials, biomes.PortalNetwork);
         CampaignPortalAnchor[] portalAnchors = ResolvePortalAnchors(
@@ -1106,6 +1200,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             mainBiomes,
             sideBiomes,
             resolvedConnections,
+            biomeLandmarks,
             holyMountain,
             portalNetwork,
             portalAnchors);
@@ -1248,6 +1343,51 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 HazardThreshold(definition.HazardFrequency),
                 StableIdSalt(definition.Id),
                 scenes);
+        }
+
+        return result;
+    }
+
+    private static ResolvedBiomeLandmark[] CompileAndResolveBiomeLandmarks(
+        IMaterialQuery materials,
+        BiomeCatalog catalog,
+        CampaignConfig config,
+        ulong worldSeed)
+    {
+        ResolvedBiomeLandmark[] result = new ResolvedBiomeLandmark[catalog.Landmarks.Length];
+        double mainPathOriginNoise = MainPathOriginNoise(worldSeed);
+        for (int landmarkIndex = 0; landmarkIndex < result.Length; landmarkIndex++)
+        {
+            BiomeLandmarkDefinition source = catalog.Landmarks[landmarkIndex];
+            int regionIndex = catalog.FindMainPathIndex(source.Biome);
+            long centerY = config.RegionStartCellY(regionIndex) + source.LocalDepthCells;
+            long centerX = MainPathCenterX(centerY, config, worldSeed, mainPathOriginNoise) +
+                source.OffsetCells;
+            long minimumX = centerX - (source.WidthCells / 2L);
+            long minimumY = centerY - (source.HeightCells / 2L);
+            CompiledPixelSceneOperation[] operations =
+                new CompiledPixelSceneOperation[source.Operations.Length];
+            for (int operationIndex = 0; operationIndex < operations.Length; operationIndex++)
+            {
+                BiomePixelSceneOperationDefinition operation = source.Operations[operationIndex];
+                operations[operationIndex] = new CompiledPixelSceneOperation(
+                    operation.Kind == "carveEllipse"
+                        ? CompiledPixelSceneOperationKind.Ellipse
+                        : CompiledPixelSceneOperationKind.Rectangle,
+                    ResolveRequired(materials, operation.Material),
+                    operation.X,
+                    operation.Y,
+                    operation.Width,
+                    operation.Height);
+            }
+
+            result[landmarkIndex] = new ResolvedBiomeLandmark(
+                regionIndex,
+                minimumX,
+                minimumY,
+                minimumX + source.WidthCells - 1L,
+                minimumY + source.HeightCells - 1L,
+                operations);
         }
 
         return result;
@@ -1460,6 +1600,56 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 landmark.Kind,
                 worldX,
                 worldY);
+        }
+
+        return count;
+    }
+
+    /// <summary>
+    /// 收集给定主路径 biome 的数据化固定地标；调用方提供固定容量目标，热路径不分配。
+    /// </summary>
+    internal static int CollectBiomeLandmarkAnchors(
+        BiomeCatalog catalog,
+        CampaignConfig config,
+        int regionIndex,
+        ulong worldSeed,
+        Span<BiomeLandmarkAnchor> destination)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(config);
+        if ((uint)regionIndex >= CampaignConfig.RequiredRegionCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(regionIndex));
+        }
+
+        int count = 0;
+        long regionStartY = config.RegionStartCellY(regionIndex);
+        string biomeId = catalog.MainPath[regionIndex].Id;
+        ReadOnlySpan<BiomeLandmarkDefinition> landmarks = catalog.Landmarks;
+        for (int i = 0; i < landmarks.Length; i++)
+        {
+            BiomeLandmarkDefinition landmark = landmarks[i];
+            if (!string.Equals(landmark.Biome, biomeId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (count == destination.Length)
+            {
+                return count;
+            }
+
+            long worldY = regionStartY + landmark.LocalDepthCells;
+            long worldX = MainPathCenterX(worldY, config, worldSeed) + landmark.OffsetCells;
+            destination[count++] = new BiomeLandmarkAnchor(
+                regionIndex,
+                landmark.Id,
+                landmark.DisplayName,
+                landmark.EncounterId,
+                worldX,
+                worldY,
+                landmark.WidthCells,
+                landmark.HeightCells);
         }
 
         return count;
@@ -1679,6 +1869,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         CompiledBiome[] mainBiomes,
         CompiledBiome[] sideBiomes,
         ResolvedConnection[] connections,
+        ResolvedBiomeLandmark[] biomeLandmarks,
         CompiledHolyMountain holyMountain,
         CompiledPortalNetwork portalNetwork,
         CampaignPortalAnchor[] portalAnchors)
@@ -1694,6 +1885,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public CompiledBiome[] SideBiomes { get; } = sideBiomes;
 
         public ResolvedConnection[] Connections { get; } = connections;
+
+        public ResolvedBiomeLandmark[] BiomeLandmarks { get; } = biomeLandmarks;
 
         public CompiledHolyMountain HolyMountain { get; } = holyMountain;
 
@@ -1711,6 +1904,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         CompiledBiome biome,
         TerrainMaterialPalette palette,
         PortalRowContext portalRow,
+        ReadOnlySpan<BiomeLandmarkRowSegment> biomeLandmarkSegments,
         ReadOnlySpan<ConnectionRowSegment> connectionSegments)
     {
         public ulong WorldSeed { get; } = worldSeed;
@@ -1728,6 +1922,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public TerrainMaterialPalette Palette { get; } = palette;
 
         public PortalRowContext PortalRow { get; } = portalRow;
+
+        public ReadOnlySpan<BiomeLandmarkRowSegment> BiomeLandmarkSegments { get; } = biomeLandmarkSegments;
 
         public ReadOnlySpan<ConnectionRowSegment> ConnectionSegments { get; } = connectionSegments;
     }
@@ -1869,6 +2065,20 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort GateMaterial,
         int SideBiomeIndex);
 
+    private readonly record struct ResolvedBiomeLandmark(
+        int RegionIndex,
+        long MinimumX,
+        long MinimumY,
+        long MaximumX,
+        long MaximumY,
+        CompiledPixelSceneOperation[] Operations);
+
+    private readonly record struct BiomeLandmarkRowSegment(
+        int LandmarkIndex,
+        int LocalY,
+        long MinimumX,
+        long MaximumX);
+
     private readonly record struct PortalRowContext(
         PortalRowKind Kind,
         int FirstPortalIndex,
@@ -1948,6 +2158,16 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 internal readonly record struct BiomeEncounterAnchor(
     string BiomeId,
     string PixelSceneId,
+    string EncounterId,
+    long WorldX,
+    long WorldY,
+    int WidthCells,
+    int HeightCells);
+
+internal readonly record struct BiomeLandmarkAnchor(
+    int RegionIndex,
+    string LandmarkId,
+    string DisplayName,
     string EncounterId,
     long WorldX,
     long WorldY,
