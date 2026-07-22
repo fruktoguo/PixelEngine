@@ -1,8 +1,8 @@
 # DEMO-007 Noita 战役基线与完整换局生命周期完成证据
 
 taskIds: `DEMO-007`
-implementationCommit: `614d65d1dc5692df2ad7822239a3618dd8d7ff31`
-runSessionId: `local-20260722-demo007-final-614d65d1`
+implementationCommit: `e4491e90e77a85d14ad80a7090d391240ca5a7e5`
+runSessionId: `local-20260722-demo007-regression-e4491e90`
 evidenceState: `complete`
 
 ## 结论
@@ -32,6 +32,8 @@ Demo 已从单一无限沙盒扩展为默认 Campaign 与可选 InfiniteSandbox 
 | `d5531f00` | 在脚本安全相位原子重建所有 Behaviour，隔离私有运行态 |
 | `fa8be8e1` | 修复换局后 HUD 同步与 RunSummary 文本/控件重叠 |
 | `614d65d1` | 清理跨 Play session 的 pending restart 与状态泄漏 |
+| `7a7b7892` | 按真实游玩反馈重开退化悬空碎条与武器命中可读性验收 |
+| `e4491e90` | 将无 2x2 实心核的脱离碎条转为 debris，并数据化射程、强化弹着/爆炸反馈 |
 
 ## 战役与世界合同
 
@@ -67,7 +69,7 @@ Demo 已从单一无限沙盒扩展为默认 Campaign 与可选 InfiniteSandbox 
 
 ## 构建与测试
 
-权威 clean worktree HEAD 为 `614d65d1dc5692df2ad7822239a3618dd8d7ff31`，tracked status 为空；submodule 固定为 Box2D `8c661469`、FreeType `0a0221a1`、RmlUi `22b93ae9`。`dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1` 返回 0 warning / 0 error。
+原始完成证据的 clean worktree HEAD 为 `614d65d1dc5692df2ad7822239a3618dd8d7ff31`，tracked status 为空；submodule 固定为 Box2D `8c661469`、FreeType `0a0221a1`、RmlUi `22b93ae9`。`dotnet build PixelEngine.sln -c Release --no-restore --disable-build-servers -m:1` 返回 0 warning / 0 error。真实游玩回归修复后的新 clean HEAD 与复验结果见下节。
 
 | 测试项目 | 结果 |
 |---|---|
@@ -104,6 +106,16 @@ Campaign 结算截图为 1280x720、3,686,454 bytes、SHA256 `4b1cd1120f950438f5
 初始为 InfiniteSandbox / Exploring、seed `504958454C534248`、health 100、damage 0、respawn 0、Combat、brush available。经公共 runtime Inspector 启用 hazard 后，bounded poll 观察到 `RespawnCount=1`，立即以当前 revision 关闭 hazard。最终仍为同一 Play session、同一 seed、Exploring，`ResultReason` 为空、`IsRestartRequested=false`、health `46.231865`、damage events 451、respawns 1、Main 0 / HUD 2 / Modal 0，相关 Behaviour 无 fault；Console 0 warning / 0 error。性能快照为 119.75 FPS、p99 12.3749 ms、1% low 80.81 FPS、sim 60 Hz，particles/bodies/pending damage/task bridge faults 均 0。
 
 Sandbox 截图为 1280x720、3,686,454 bytes、SHA256 `d6bca37909fafa45520652959b497dbb84d38d65737418026cb3643392bf1cbf`；画面显示 InfiniteSandbox HUD、仍为正值的受损 health，且没有 RunSummary modal。Stop 与 workspace exit 均通过，Editor 进程退出、discovery 为空。
+
+## 2026-07-22 退化悬空碎条与命中反馈回归复验
+
+真实游玩复现了此前测试未覆盖的边界：一个脱离地形的连通块可能达到 8-pixel 刚体下限，却只有一像素厚、没有任何 2x2 实心核。旧扫描会尝试 `CreateFromRegion`，随后以 `degenerate` 拒绝并把原 cell 永久留在静态网格。`e4491e90e77a85d14ad80a7090d391240ca5a7e5` 改为在每次扫描的 256-pixel 硬预算内把这类无合法刚体面积的碎条转成带重力和有限寿命的 debris；预算耗尽会显式报告，不再把退化失败当作已处理。新增测试同时覆盖直接扫描和真实 `Input -> Damage -> WorldMutationEvent -> topology scan` 路径，12x1 stone strip 均完整离开权威静态网格。
+
+同一提交移除了武器控制器的 180/220-cell 隐式固定射程：`weapons.json` 现在为六种武器声明 280–520 cell 射程，一号枪为 420 cell；弹道只在真实 solid 命中时显示亮色命中点/描边，射程截止显示暗色叉号，并记录命中材质稳定键。爆炸 flash 增加八向射线、双层轮廓和核心，弹着/手雷/爆炸补充有界彩色 streak、粒子核心和点光；HUD 原本被 CSS 隐藏的材质用途说明恢复显示。
+
+复验使用外部 detached clean worktree，HEAD/tracked status 为 `e4491e90`/空。Editor Shell 与 Demo Release build 均为 0 warning / 0 error。`PixelEngine.Demo.Tests` 的最终 clean 全套为 190 passed / 1 显式 native GL 条件 skipped / 0 failed；其中退化碎条真实事件测试与 180-cell 之外一号枪命中测试均执行。第一次 clean 全套曾出现一次既有长路线用例在 2400 帧卡于起点右侧通道；该用例随后独立连续 6/6 通过，完整 clean 全套重跑也通过，本报告保留这次瞬时失败而不把它改写成首次即绿。
+
+公共 `pixelengine-editor` skill/CLI 连接 PID `131432`、instance `36721f3feb5a41cc965b3fdc364c3f87`；ping、capability/UI matrix digest `e70c5275bd56501b0934049e6d59478adf81c159e0bf82f8de54af5bb3011f10`、revision-safe Play 与 workspace exit 均通过，Console 为 0 warning / 0 error。Scene artifact 为 652x590、SHA256 `c0eb91feda0cd7ff9b2fc9e329a296505d8eff906579d304d52a73058f04c330`；Play 主菜单 artifact 为 1280x720、SHA256 `ca79629d540355af8f78a23bc9b5e14d1a3476e41551488b2b23759a6fef12cc`，两者均由 server/local 重算长度与 SHA256。由于该 clean commit 不含另一个工作树尚未提交的 UI semantic-click 扩展，战斗态没有借用脏代码点击按钮；改由同一 clean commit 的正式 Demo 真窗口 `--scripted-window-demo` 自动走公开玩法输入并捕获 1080x720 framebuffer，SHA256 `28463d7a7f60a800640610d8f226ac564d3c1427404093d416cd9230f0e47f65`。画面实际显示 `石 / Stone` 与“可被冲击、破碎后成为砂砾”的用途说明，以及手雷爆炸核心、射线和粒子层。
 
 ## 最终输出与 packaged Player
 

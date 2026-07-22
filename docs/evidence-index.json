@@ -966,14 +966,14 @@
       "entryId": "demo-007-noita-campaign-foundation-20260722",
       "taskIds": ["DEMO-007"],
       "evidenceState": "complete",
-      "commit": "614d65d1dc5692df2ad7822239a3618dd8d7ff31",
-      "runSessionId": "local-20260722-demo007-final-614d65d1",
+      "commit": "e4491e90e77a85d14ad80a7090d391240ca5a7e5",
+      "runSessionId": "local-20260722-demo007-regression-e4491e90",
       "runIdentityStatus": "captured_clean_commit_bound_build_and_live_editor_player_runs",
       "hardware": "Microsoft Windows 11 专业版 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT driver 32.0.31021.5001; PowerShell 7.6.3; .NET SDK 10.0.108; win-x64; real Win32 dpi=144 (150%)",
-      "command": "detached clean 614d65d1 solution Release build and Scripting/Demo/Hosting full tests; authenticated pixelengine-editor public CLI Campaign death/RunSummary/new-seed restart and InfiniteSandbox same-seed respawn with verified artifacts; tools/update-final-output-fast.ps1 win-x64 Release RmlUi; independently verify 186 package checksums and MSI database; run clean and promoted-root packaged PixelEngine Demo.exe for 1080x720 RmlUi framebuffer/window/UI probes",
+      "command": "original detached clean 614d65d1 solution Release build, Scripting/Demo/Hosting tests, Editor lifecycle and packaged Player verification; regression detached clean e4491e90 Editor Shell/Demo Release builds and Demo 190 passed plus 1 native GL skipped; authenticated pixelengine-editor discover/ping/matrix/revision-safe Play/verified Scene and Game artifacts/Console/exit; same-commit scripted real Demo window 1080x720 framebuffer capture",
       "reportPath": "docs/evidence-2026-07-22-demo-007-noita-campaign-foundation.md",
-      "sha256": "a77ef1e028aa73af1d1dee0d00d43250f6958cbf650a2e613fb882e5449f7263",
-      "notes": "Campaign and InfiniteSandbox now have isolated lifecycle semantics: Campaign permanent death reaches RunSummary then atomically rebuilds a new seed and all script/runtime state, while Sandbox respawns in the same world without a modal. Eight Noita main-path biome names and seven Holy Mountain anchors are deterministic and bounded; all terrain destruction feeds topology dirty regions, disconnected fragments are bounded rigid/free-particle conversions, input has one owner, and HUD exposes mode/seed/biome/depth/equipment/material identity. Clean build and full tests pass; real Editor sessions have zero Console warnings/errors; promoted packaged Player uses active RmlUi with no fallback or stderr. Fast-output verified=false remains honest and is not used to claim the separate full release verifier."
+      "sha256": "9f6ec28c20d75786b48925a2b17c07023460711deda98ad7b9e7ef439a0e1889",
+      "notes": "Campaign and InfiniteSandbox keep isolated lifecycle semantics and deterministic eight-biome/seven-Holy-Mountain topology. The e4491e90 regression closes the real-play edge case where detached strips met the rigid pixel threshold but had no 2x2 area: they now become bounded finite debris through both direct and real Damage/WorldMutation paths. Weapon ranges are data-driven, pistol hits beyond the legacy 180-cell cap, hit/range feedback is distinct, material purpose text is visible, and impact/explosion visuals are layered. Clean build/tests and real Editor/Player captures pass with zero Console warnings/errors; the earlier packaged-player and installer evidence remains recorded, and fast-output verified=false is not promoted into a full release claim."
     }
   ]
 }
