@@ -74,11 +74,12 @@ The Laboratory 不能建模为第八个全宽随机 biome。主世界通过 `dat
 
 ## 6. PixelEngine 实现检查点
 
-2026-07-22 的后续实现已把上述差异拆成两个提交节点：
+2026-07-22 的后续实现按连续提交节点推进：
 
 - `campaign.json` v5 恢复主路径七个程序化区域的 `1024/1024/1536/1024/1536/1536/2048` 高度与七个 512-cell Holy Mountain，旧 v1-v4 存档配置只读迁移到新跨度。
-- `biomes.json` v4 以 98 个语义运行段表达 70×48 色图中当前目录已支持的主区、Fungal Caverns、Magical Temple、Lukki Lair、Holy Mountain、lava 与固定 Laboratory。装配后编译为 3360 项定长查询表，逐 cell 热循环不扫描 JSON 运行段。
-- 直接以隔离解包副本的 `biome_map.png + _biomes_all.xml` 反查，当前支持类别共 479 个宏格，运行段投影为 `Missing=0 / Wrong=0`；剩余 2881 个宏格保留 `solid`，不能据此宣称整张参考色图已完整实现。
-- Laboratory 以准确的 `1536,12288,2600,1600` 边界选择固定确定性几何；随机 Laboratory encounter 被禁用，材质温度也服从二维拓扑覆盖，而不再被重叠的 Final Holy Mountain 纵深误写成 20°C。
+- 早期 `biomes.json` v4 节点只用 98 个运行段覆盖 479 个已支持语义宏格，其余 2881 个格保持 `solid`；该状态是迁移检查点，不再代表当前实现。
+- `biomes.json` v6 现记录主图实际使用的全部 129 种颜色/biome、来源 XML 标识与 48 行 row-major 索引。逐格对照隔离解包副本 `biome_map.png` 的 3360 个像素为 `Mismatches=0`，运行时不再构造旧连续摆动竖井。
+- 固定地形不把 PNG 原文件装入产品包：left entrance / hall / right / top / floating island 与四个 temple altar 变体按 Demo 的 empty/soft/solid/accent 语义压缩，并同时记录来源 SHA256 与解码后 SHA256；生成器在 `Describe` 阶段一次解码，chunk 热循环只做定长索引。
+- Laboratory 保持准确的 `1536,12288,2600,1600` 边界，并把 `boss_arena.png` 的 416 万来源像素映射为 4-bit/8 类 Demo 材质掩码；随机 Laboratory encounter 与原手写矩形替代均被禁用，材质温度服从二维拓扑覆盖。
 
-此检查点只闭合宏观地图身份。Holy Mountain 原始组合、每个 biome 的 Wang/BitmapCaves、背景层、spawn marker、特殊地表/空域和截图 parity 仍是 `DEMO-008` 的未完成项。
+此检查点闭合完整宏观色图、关键固定山体、Holy Mountain 大尺度组合和 Laboratory 地形轮廓。每个普通 biome 的 Wang/BitmapCaves、背景层、spawn marker、其余固定场景、实体生态和全区域截图 parity 仍是 `DEMO-008` 的未完成项。

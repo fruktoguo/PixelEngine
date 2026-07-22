@@ -308,11 +308,13 @@ public sealed class DemoStartupOptionsTests
             Assert.True(materials.TryGetId("stone", out ushort stone));
             Assert.True(materials.TryGetId("dirt", out ushort dirt));
             Assert.True(materials.TryGetId("sand", out ushort sand));
-            const int SafeGroundProbeX = 64;
-            Assert.Equal(empty, grid.MaterialAt(SafeGroundProbeX, PlayableCavernWorldGenerator.SafeSurfaceY - 1));
+            Assert.True(materials.TryGetId("boundary_stone", out ushort boundaryStone));
+            const int ReferenceSpawnX = 227;
+            const int ReferenceSpawnY = PlayableCavernWorldGenerator.SafeSurfaceY - 85;
+            Assert.Equal(empty, grid.MaterialAt(ReferenceSpawnX, ReferenceSpawnY));
             Assert.Contains(
-                grid.MaterialAt(SafeGroundProbeX, PlayableCavernWorldGenerator.SafeSurfaceY),
-                new[] { stone, dirt, sand });
+                grid.MaterialAt(ReferenceSpawnX, PlayableCavernWorldGenerator.SafeSurfaceY - 70),
+                new[] { stone, dirt, sand, boundaryStone });
             Assert.False(PlayableCavernWorldGenerator.IsCaveAt(
                 0,
                 PlayableCavernWorldGenerator.SafeSurfaceY + 48,
@@ -586,10 +588,10 @@ public sealed class DemoStartupOptionsTests
             CellGrid grid = engine.Context.GetService<CellGrid>();
             IMaterialQuery materials = engine.Context.GetService<IMaterialQuery>();
             ISimulationEditApi edit = engine.Context.GetService<ISimulationEditApi>();
-            const int EditedX = 64;
-            int editedY = PlayableCavernWorldGenerator.SafeSurfaceY;
-            Assert.NotEqual(materials.Resolve("empty").Value, grid.MaterialAt(EditedX, editedY));
-            edit.PaintCell(EditedX, editedY, materials.Resolve("empty").Value);
+            const int EditedX = 227;
+            const int EditedY = PlayableCavernWorldGenerator.SafeSurfaceY - 70;
+            Assert.NotEqual(materials.Resolve("empty").Value, grid.MaterialAt(EditedX, EditedY));
+            edit.PaintCell(EditedX, EditedY, materials.Resolve("empty").Value);
 
             long frame = 1;
             long[] focusX = [-8_192, 8_192, 0];
@@ -607,7 +609,7 @@ public sealed class DemoStartupOptionsTests
                 Assert.True(world.Chunks.Contains(world.Camera.FocusChunk));
             }
 
-            Assert.Equal(materials.Resolve("empty").Value, grid.MaterialAt(EditedX, editedY));
+            Assert.Equal(materials.Resolve("empty").Value, grid.MaterialAt(EditedX, EditedY));
             Assert.InRange(world.MemoryBudget.ResidentBytes, 0, capBytes);
         }
         finally

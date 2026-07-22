@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v7";
+    public const string PersistenceKey = "showcase-campaign-v9";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -28,12 +28,12 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 默认玩家出生 X。
     /// </summary>
-    public const float PlayerSpawnX = 0f;
+    public const float PlayerSpawnX = 227f;
 
     /// <summary>
     /// 默认玩家出生 Y；玩家会短距离落到安全地表。
     /// </summary>
-    public const float PlayerSpawnY = SafeSurfaceY - 32f;
+    public const float PlayerSpawnY = SafeSurfaceY - 85f;
 
     internal const ulong Seed = 0x5049_5845_4C53_4248;
     internal const int SeaLevelY = 242;
@@ -62,7 +62,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         return ProceduralWorldDescriptor.CreateInfinite(
             worldSeed,
             initialFocusX: (long)PlayerSpawnX,
-            initialFocusY: config.SurfaceY - 16,
+            initialFocusY: config.SurfaceY - 85,
             persistenceKey: PersistenceKey);
     }
 
@@ -340,6 +340,43 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         in TerrainRowContext row)
     {
         CampaignConfig config = row.State.Config;
+        long topologyDepthCells = worldY - config.SurfaceY;
+        CompiledTopologyCell topologyCell = row.State.WorldTopology.Resolve(
+            worldX,
+            topologyDepthCells);
+
+        if (topologyCell.Kind != CompiledTopologyCellKind.Legacy)
+        {
+            return topologyCell.Kind == CompiledTopologyCellKind.HolyMountain &&
+                row.Location.Kind == CampaignDepthKind.HolyMountain &&
+                TrySelectHolyMountainMaterial(worldX, in row, out ushort holyMountainMaterial)
+                    ? holyMountainMaterial
+                    : TrySelectConnectionMaterial(
+                        worldX,
+                        worldY,
+                        sideBiomeOnly: false,
+                        in row,
+                        out ushort connectionMaterial)
+                            ? connectionMaterial
+                            : !row.BiomeLandmarkSegments.IsEmpty &&
+                                TrySelectBiomeLandmarkMaterial(worldX, in row, out ushort landmarkMaterial)
+                                    ? landmarkMaterial
+                                    : TrySelectConnectionMaterial(
+                                        worldX,
+                                        worldY,
+                                        sideBiomeOnly: true,
+                                        in row,
+                                        out connectionMaterial)
+                                            ? connectionMaterial
+                                            : SelectTopologyMaterial(
+                                                worldX,
+                                                worldY,
+                                                topologyDepthCells,
+                                                protectedSpawn: false,
+                                                topologyCell,
+                                                in row);
+        }
+
         long depth = worldY - surfaceY;
         if (depth < 0)
         {
@@ -347,55 +384,6 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             return lakeColumn && worldY >= SeaLevelY && Math.Abs((double)worldX) >= SafeInnerRadius
                 ? row.Palette.Water
                 : row.Palette.Empty;
-        }
-
-        long topologyDepthCells = worldY - config.SurfaceY;
-        CompiledTopologyCell topologyCell = row.State.WorldTopology.Resolve(
-            worldX,
-            topologyDepthCells);
-
-        if (topologyCell.Kind == CompiledTopologyCellKind.HolyMountain &&
-            row.Location.Kind == CampaignDepthKind.HolyMountain)
-        {
-            if (TrySelectHolyMountainMaterial(worldX, in row, out ushort holyMountainMaterial))
-            {
-                return holyMountainMaterial;
-            }
-        }
-
-        if (row.Location.DepthCells >= config.CampaignStartDepthCells &&
-            TopologyCellAllowsMainPath(topologyCell.Kind))
-        {
-            if (Math.Abs(worldX - row.PathCenterX) <= config.MainPathHalfWidthCells)
-            {
-                return row.Palette.Empty;
-            }
-        }
-
-        if (TrySelectConnectionMaterial(
-                worldX,
-                worldY,
-                sideBiomeOnly: false,
-                in row,
-                out ushort connectionMaterial))
-        {
-            return connectionMaterial;
-        }
-
-        if (!row.BiomeLandmarkSegments.IsEmpty &&
-            TrySelectBiomeLandmarkMaterial(worldX, in row, out ushort landmarkMaterial))
-        {
-            return landmarkMaterial;
-        }
-
-        if (TrySelectConnectionMaterial(
-                worldX,
-                worldY,
-                sideBiomeOnly: true,
-                in row,
-                out connectionMaterial))
-        {
-            return connectionMaterial;
         }
 
         if (depth <= soilDepth)
@@ -413,23 +401,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         }
 
         bool protectedSpawn = Math.Abs((double)worldX) < SafeOuterRadius && depth < 160;
-        return SelectTopologyMaterial(
-            worldX,
-            worldY,
-            topologyDepthCells,
-            protectedSpawn,
-            topologyCell,
-            in row);
-    }
-
-    private static bool TopologyCellAllowsMainPath(CompiledTopologyCellKind kind)
-    {
-        return kind is
-            CompiledTopologyCellKind.Legacy or
-            CompiledTopologyCellKind.MainBiome or
-            CompiledTopologyCellKind.SideBiome or
-            CompiledTopologyCellKind.HolyMountain or
-            CompiledTopologyCellKind.FixedLaboratory;
+        return SelectBiomeMaterial(worldX, worldY, protectedSpawn, row.Biome, in row);
     }
 
     private static ushort SelectTopologyMaterial(
@@ -458,7 +430,61 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 in row),
             CompiledTopologyCellKind.Solid => palette.BoundaryStone,
             CompiledTopologyCellKind.Lava => palette.Lava,
-            CompiledTopologyCellKind.HolyMountain => palette.BoundaryStone,
+            CompiledTopologyCellKind.HolyMountain => SelectHolyMountainReferenceMaterial(
+                worldX,
+                topologyDepthCells,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                in palette),
+            CompiledTopologyCellKind.Empty => palette.Empty,
+            CompiledTopologyCellKind.Water => palette.Water,
+            CompiledTopologyCellKind.Clouds => SelectCloudMaterial(
+                worldX,
+                worldY,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                in palette),
+            CompiledTopologyCellKind.SurfaceHills => SelectReferenceCaveMaterial(
+                worldX,
+                worldY,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                palette.Dirt,
+                palette.Stone,
+                palette.Gravel,
+                in palette),
+            CompiledTopologyCellKind.SurfaceDesert => SelectReferenceCaveMaterial(
+                worldX,
+                worldY,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                palette.Sand,
+                palette.Stone,
+                palette.Gravel,
+                in palette),
+            CompiledTopologyCellKind.SurfaceWinter => SelectReferenceCaveMaterial(
+                worldX,
+                worldY,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                palette.Ice,
+                palette.Stone,
+                palette.Gravel,
+                in palette),
+            CompiledTopologyCellKind.Mountain => SelectMountainMaterial(
+                worldX,
+                topologyDepthCells,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                in palette),
+            CompiledTopologyCellKind.GenericCave => SelectReferenceCaveMaterial(
+                worldX,
+                worldY,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                palette.Stone,
+                palette.Gravel,
+                palette.Crystal,
+                in palette),
+            CompiledTopologyCellKind.GenericStructure => SelectReferenceStructureMaterial(
+                worldX,
+                worldY,
+                topologyDepthCells,
+                state.WorldTopology.ReferenceBiome(topologyCell.BiomeIndex),
+                in palette),
             CompiledTopologyCellKind.FixedLaboratory => SelectFixedLaboratoryMaterial(
                 worldX,
                 topologyDepthCells,
@@ -472,6 +498,209 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 row.Biome,
                 in row),
             _ => throw new InvalidOperationException($"未知 world topology kind：{topologyCell.Kind}。"),
+        };
+    }
+
+    private static ushort SelectCloudMaterial(
+        long worldX,
+        long worldY,
+        in CompiledReferenceBiome biome,
+        in TerrainMaterialPalette palette)
+    {
+        double cloud = Fractal2D(
+            worldX * 0.0065,
+            worldY * 0.008,
+            biome.Salt ^ 0xC10D_5EEDUL,
+            3);
+        return cloud > 0.76 ? palette.Water : palette.Empty;
+    }
+
+    private static ushort SelectReferenceCaveMaterial(
+        long worldX,
+        long worldY,
+        in CompiledReferenceBiome biome,
+        ushort primary,
+        ushort secondary,
+        ushort accent,
+        in TerrainMaterialPalette palette)
+    {
+        double chambers = Fractal2D(
+            worldX * 0.0075,
+            worldY * 0.0085,
+            biome.Salt ^ 0xCA7E_512UL,
+            4);
+        double tunnels = Math.Abs(Fractal2D(
+            worldX * 0.0035,
+            worldY * 0.0045,
+            biome.Salt ^ 0x71A9_512UL,
+            2));
+        if (chambers - (tunnels * 0.22) > 0.18)
+        {
+            return palette.Empty;
+        }
+
+        double strata = Fractal2D(
+            worldX * 0.018,
+            worldY * 0.021,
+            biome.Salt ^ 0x57A7_AUL,
+            2);
+        return strata > 0.52
+            ? accent
+            : strata < -0.44
+                ? secondary
+                : primary;
+    }
+
+    private static ushort SelectReferenceStructureMaterial(
+        long worldX,
+        long worldY,
+        long depthCells,
+        in CompiledReferenceBiome biome,
+        in TerrainMaterialPalette palette)
+    {
+        int localX = FloorRemainder(worldX, 64);
+        int localY = FloorRemainder(depthCells, 64);
+        bool room = localX is >= 8 and < 56 && localY is >= 8 and < 56;
+        bool doorway = (localX is >= 27 and < 37 && (localY < 12 || localY >= 52)) ||
+            (localY is >= 27 and < 37 && (localX < 12 || localX >= 52));
+        if (room || doorway)
+        {
+            double debris = HashUnit(
+                FloorDivide(worldX, 8),
+                FloorDivide(worldY, 8),
+                biome.Salt ^ 0x57A0_C7UL);
+            return debris > 0.94 ? palette.Crystal : palette.Empty;
+        }
+
+        return (localX < 4 || localY < 4) ? palette.BoundaryStone : palette.Stone;
+    }
+
+    private static ushort SelectMountainMaterial(
+        long worldX,
+        long depthCells,
+        in CompiledReferenceBiome biome,
+        in TerrainMaterialPalette palette)
+    {
+        int localX = FloorRemainder(worldX, 512);
+        int localY = FloorRemainder(depthCells, 512);
+        if (biome.TerrainMask.Length > 0)
+        {
+            return SelectReferenceTerrainMaskMaterial(localX, localY, biome, in palette);
+        }
+
+        switch (biome.Mountain)
+        {
+            case ReferenceMountainKind.LeftEntrance:
+                {
+                    int groundY = 438 + (int)Math.Round(
+                        Fractal1D(worldX * 0.015, biome.Salt ^ 0x6A0DUL, 2) * 7.0);
+                    bool entrancePassage = localX >= 342 && localY is >= 286 and < 452;
+                    bool dropShaft = localX >= 452 && localY >= 394;
+                    if (entrancePassage || dropShaft)
+                    {
+                        return palette.Empty;
+                    }
+
+                    bool rightCliff = localX >= 334 && localY < 350 - ((localX - 334) / 3);
+                    return rightCliff
+                        ? palette.Stone
+                        : localY >= groundY
+                            ? localY < groundY + 10 ? palette.Dirt : palette.Stone
+                            : palette.Empty;
+                }
+            case ReferenceMountainKind.Hall:
+                {
+                    bool upperRoom = localX is >= 8 and < 504 && localY is >= 230 and < 438;
+                    bool lowerShaft = localX is >= 64 and < 160 && localY >= 392;
+                    bool mineEntrance = localX is >= 196 and < 348 && localY >= 416;
+                    if (upperRoom || lowerShaft || mineEntrance)
+                    {
+                        bool platform = localY is >= 394 and < 402 && localX is >= 168 and < 404;
+                        return platform ? palette.Stone : palette.Empty;
+                    }
+
+                    return palette.BoundaryStone;
+                }
+            case ReferenceMountainKind.Right:
+                {
+                    bool hallExit = localX < 96 && localY is >= 248 and < 420;
+                    bool lowerGallery = localY is >= 402 and < 466 && localX < 384;
+                    return hallExit || lowerGallery ? palette.Empty : palette.Stone;
+                }
+            case ReferenceMountainKind.Top:
+                {
+                    int distance = Math.Abs(localX - 256);
+                    int surface = Math.Clamp(54 + (distance * 7 / 5), 54, 470);
+                    return localY >= surface ? palette.Stone : palette.Empty;
+                }
+            case ReferenceMountainKind.LeftStub:
+                return localX >= 360 && localY >= 120 + ((511 - localX) / 2)
+                    ? palette.Stone
+                    : palette.Empty;
+            case ReferenceMountainKind.RightStub:
+                return localX < 152 && localY >= 120 + (localX / 2)
+                    ? palette.Stone
+                    : palette.Empty;
+            case ReferenceMountainKind.FloatingIsland:
+                {
+                    long dx = localX - 256L;
+                    long dy = localY - 300L;
+                    return ((dx * dx * 4L) + (dy * dy * 16L)) <= 150L * 150L * 4L
+                        ? palette.Stone
+                        : palette.Empty;
+                }
+            case ReferenceMountainKind.Lake:
+                return localY >= 250 ? palette.Water : palette.Empty;
+            case ReferenceMountainKind.Generic:
+                return SelectReferenceCaveMaterial(
+                    worldX,
+                    depthCells,
+                    biome,
+                    palette.Dirt,
+                    palette.Stone,
+                    palette.Gravel,
+                    in palette);
+            default:
+                throw new InvalidOperationException($"未知的参考山体类型：{biome.Mountain}。");
+        }
+    }
+
+    private static ushort SelectHolyMountainReferenceMaterial(
+        long worldX,
+        long depthCells,
+        in CompiledReferenceBiome biome,
+        in TerrainMaterialPalette palette)
+    {
+        return biome.TerrainMask.Length == 0
+            ? palette.BoundaryStone
+            : SelectReferenceTerrainMaskMaterial(
+                FloorRemainder(worldX, 512),
+                FloorRemainder(depthCells, 512),
+                biome,
+                in palette);
+    }
+
+    private static ushort SelectReferenceTerrainMaskMaterial(
+        int localX,
+        int localY,
+        in CompiledReferenceBiome biome,
+        in TerrainMaterialPalette palette)
+    {
+        int pixelIndex = (localY * 512) + localX;
+        int maskKind = (biome.TerrainMask[pixelIndex >> 2] >> ((pixelIndex & 3) * 2)) & 3;
+        return maskKind switch
+        {
+            0 => palette.Empty,
+            1 => palette.Dirt,
+            2 => palette.BoundaryStone,
+            3 => biome.MaskAccent switch
+            {
+                ReferenceTerrainMaskAccent.Water => palette.Water,
+                ReferenceTerrainMaskAccent.Ice => palette.Ice,
+                ReferenceTerrainMaskAccent.Gravel => palette.Gravel,
+                _ => throw new InvalidOperationException($"未知的参考地形掩码强调材质：{biome.MaskAccent}。"),
+            },
+            _ => throw new InvalidOperationException($"未知的参考地形掩码值：{maskKind}。"),
         };
     }
 
@@ -490,53 +719,20 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             return palette.BoundaryStone;
         }
 
-        const int ShellThickness = 24;
-        bool leftEntrance = localX < ShellThickness && localY is >= 420 and < 548;
-        bool outerShell = localX < ShellThickness ||
-            localX >= topology.LaboratoryWidthCells - ShellThickness ||
-            localY < ShellThickness ||
-            localY >= topology.LaboratoryHeightCells - ShellThickness;
-        if (outerShell && !leftEntrance)
+        int pixelIndex = checked(((int)localY * topology.LaboratoryWidthCells) + (int)localX);
+        int maskKind = (topology.LaboratoryTerrainMask[pixelIndex >> 1] >> ((pixelIndex & 1) * 4)) & 0x0F;
+        return maskKind switch
         {
-            return palette.BoundaryStone;
-        }
-
-        int lavaTop = topology.LaboratoryHeightCells - 252;
-        if (localY >= lavaTop)
-        {
-            bool leftPlatform = localX is >= 360 and < 940 && localY < lavaTop + 28;
-            bool rightPlatform = localX is >= 1_660 and < 2_240 && localY < lavaTop + 28;
-            return leftPlatform || rightPlatform ? laboratory.Structure : laboratory.Hazard;
-        }
-
-        bool mainBridge = localY is >= 760 and < 776 &&
-            localX is >= 112 and < 2_488 &&
-            !(localX is >= 1_120 and < 1_480);
-        bool lowerBridge = localY is >= 1_176 and < 1_192 &&
-            (localX is >= 320 and < 1_040 || localX is >= 1_560 and < 2_280);
-        bool support = localY is >= 776 and < 1_176 &&
-            (localX is >= 420 and < 452 ||
-             localX is >= 900 and < 932 ||
-             localX is >= 1_668 and < 1_700 ||
-             localX is >= 2_148 and < 2_180);
-        if (mainBridge || lowerBridge || support)
-        {
-            return laboratory.Structure;
-        }
-
-        bool upperVatShell = localY is >= 176 and < 424 &&
-            (localX is >= 420 and < 760 || localX is >= 1_840 and < 2_180);
-        if (upperVatShell)
-        {
-            bool vatInterior = localY is >= 208 and < 392 &&
-                (localX is >= 452 and < 728 || localX is >= 1_872 and < 2_148);
-            return vatInterior
-                ? localY >= 328 ? laboratory.Pool : palette.Empty
-                : laboratory.Secondary;
-        }
-
-        bool centralPedestal = localX is >= 1_244 and < 1_356 && localY is >= 1_040 and < 1_176;
-        return centralPedestal ? laboratory.Primary : palette.Empty;
+            0 => palette.Empty,
+            1 => palette.BoundaryStone,
+            2 => laboratory.Structure,
+            3 => laboratory.Hazard,
+            4 => palette.Water,
+            5 => palette.Dirt,
+            6 => palette.Crystal,
+            7 => palette.Stone,
+            _ => throw new InvalidOperationException($"未知的 Laboratory 参考地形掩码值：{maskKind}。"),
+        };
     }
 
     private static bool TrySelectHolyMountainMaterial(
@@ -1402,49 +1598,88 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     private static CompiledWorldTopology CompileWorldTopology(BiomeCatalog biomes)
     {
         WorldTopologyDefinition definition = biomes.WorldTopology;
-        CompiledTopologyCell defaultCell = definition.DefaultKind == "solid"
-            ? new CompiledTopologyCell(CompiledTopologyCellKind.Solid, -1)
-            : new CompiledTopologyCell(CompiledTopologyCellKind.Legacy, -1);
         CompiledTopologyCell[] cells = new CompiledTopologyCell[checked(definition.Width * definition.Height)];
-        Array.Fill(cells, defaultCell);
-        ReadOnlySpan<WorldTopologyPlacementDefinition> placements = definition.Placements;
-        for (int placementIndex = 0; placementIndex < placements.Length; placementIndex++)
+        ReferenceBiomeDefinition[] sources = definition.ReferenceBiomes;
+        CompiledReferenceBiome[] referenceBiomes = new CompiledReferenceBiome[sources.Length];
+        for (int i = 0; i < sources.Length; i++)
         {
-            WorldTopologyPlacementDefinition placement = placements[placementIndex];
-            CompiledTopologyCell cell;
-            if (placement.Kind == "biome")
-            {
-                int mainIndex = biomes.FindMainPathIndex(placement.Biome);
-                cell = mainIndex >= 0
-                    ? new CompiledTopologyCell(CompiledTopologyCellKind.MainBiome, mainIndex)
-                    : new CompiledTopologyCell(
-                        CompiledTopologyCellKind.SideBiome,
-                        biomes.FindSideBiomeIndex(placement.Biome));
-            }
-            else
-            {
-                cell = placement.Kind switch
+            ReferenceBiomeDefinition source = sources[i];
+            referenceBiomes[i] = new CompiledReferenceBiome(
+                StableIdSalt(source.Id),
+                source.Id switch
                 {
-                    "holy-mountain" => new CompiledTopologyCell(CompiledTopologyCellKind.HolyMountain, -1),
-                    "fixed-laboratory" => new CompiledTopologyCell(
-                        CompiledTopologyCellKind.FixedLaboratory,
-                        CampaignConfig.RequiredRegionCount - 1),
-                    "lava" => new CompiledTopologyCell(CompiledTopologyCellKind.Lava, -1),
-                    "solid" => new CompiledTopologyCell(CompiledTopologyCellKind.Solid, -1),
-                    _ => throw new InvalidOperationException($"未编译的 world topology kind：{placement.Kind}。"),
-                };
-            }
+                    "mountain-left-entrance" => ReferenceMountainKind.LeftEntrance,
+                    "mountain-hall" => ReferenceMountainKind.Hall,
+                    "mountain-right" => ReferenceMountainKind.Right,
+                    "mountain-top" => ReferenceMountainKind.Top,
+                    "mountain-left-stub" => ReferenceMountainKind.LeftStub,
+                    "mountain-right-stub" => ReferenceMountainKind.RightStub,
+                    "mountain-floating-island" => ReferenceMountainKind.FloatingIsland,
+                    "mountain-lake" => ReferenceMountainKind.Lake,
+                    _ => ReferenceMountainKind.Generic,
+                },
+                source.DecodedReferenceTerrainMask,
+                source.ReferenceTerrainMask?.Accent switch
+                {
+                    "water" => ReferenceTerrainMaskAccent.Water,
+                    "ice" => ReferenceTerrainMaskAccent.Ice,
+                    "gravel" or null => ReferenceTerrainMaskAccent.Gravel,
+                    _ => throw new InvalidOperationException($"未编译的参考地形掩码强调材质：{source.ReferenceTerrainMask.Accent}。"),
+                });
+        }
 
-            int mapX = placement.MacroX + definition.OriginMacroX;
-            int mapY = placement.MacroY + definition.OriginMacroY;
-            for (int y = 0; y < placement.Height; y++)
+        for (int mapY = 0; mapY < definition.Height; mapY++)
+        {
+            string row = definition.MacroRows[mapY];
+            int cellRow = mapY * definition.Width;
+            for (int mapX = 0; mapX < definition.Width; mapX++)
             {
-                int row = (mapY + y) * definition.Width;
-                cells.AsSpan(row + mapX, placement.Width).Fill(cell);
+                int referenceIndex = BiomeCatalog.DecodeReferenceBiomeIndex(row, mapX);
+                ReferenceBiomeDefinition source = sources[referenceIndex];
+                CompiledTopologyCellKind kind = source.Terrain switch
+                {
+                    "main-biome" => CompiledTopologyCellKind.MainBiome,
+                    "side-biome" => CompiledTopologyCellKind.SideBiome,
+                    "holy-mountain" => CompiledTopologyCellKind.HolyMountain,
+                    "lava" => CompiledTopologyCellKind.Lava,
+                    "solid" => CompiledTopologyCellKind.Solid,
+                    "empty" => CompiledTopologyCellKind.Empty,
+                    "water" => CompiledTopologyCellKind.Water,
+                    "clouds" => CompiledTopologyCellKind.Clouds,
+                    "surface-hills" => CompiledTopologyCellKind.SurfaceHills,
+                    "surface-desert" => CompiledTopologyCellKind.SurfaceDesert,
+                    "surface-winter" => CompiledTopologyCellKind.SurfaceWinter,
+                    "mountain" => CompiledTopologyCellKind.Mountain,
+                    "generic-cave" => CompiledTopologyCellKind.GenericCave,
+                    "generic-structure" => CompiledTopologyCellKind.GenericStructure,
+                    _ => throw new InvalidOperationException($"未编译的 reference terrain：{source.Terrain}。"),
+                };
+                int index = kind == CompiledTopologyCellKind.MainBiome
+                    ? biomes.FindMainPathIndex(source.GameplayBiome)
+                    : kind == CompiledTopologyCellKind.SideBiome
+                        ? biomes.FindSideBiomeIndex(source.GameplayBiome)
+                        : referenceIndex;
+                cells[cellRow + mapX] = new CompiledTopologyCell(kind, index);
             }
         }
 
         FixedLaboratoryTopologyDefinition laboratory = definition.FixedLaboratory;
+        int laboratoryMacroX = checked((int)FloorDivide(laboratory.OriginX, definition.MacroCellSize));
+        int laboratoryMacroY = checked((int)FloorDivide(laboratory.OriginDepthCells, definition.MacroCellSize));
+        int laboratoryMacroWidth = checked(
+            (laboratory.WidthCells + definition.MacroCellSize - 1) / definition.MacroCellSize);
+        int laboratoryMacroHeight = checked(
+            (laboratory.HeightCells + definition.MacroCellSize - 1) / definition.MacroCellSize);
+        for (int y = 0; y < laboratoryMacroHeight; y++)
+        {
+            int mapY = laboratoryMacroY + y + definition.OriginMacroY;
+            int mapX = laboratoryMacroX + definition.OriginMacroX;
+            cells.AsSpan((mapY * definition.Width) + mapX, laboratoryMacroWidth).Fill(
+                new CompiledTopologyCell(
+                    CompiledTopologyCellKind.FixedLaboratory,
+                    CampaignConfig.RequiredRegionCount - 1));
+        }
+
         return new CompiledWorldTopology(
             definition.MacroCellSize,
             definition.Width,
@@ -1455,7 +1690,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             laboratory.OriginDepthCells,
             laboratory.WidthCells,
             laboratory.HeightCells,
-            cells);
+            laboratory.DecodedReferenceTerrainMask,
+            cells,
+            referenceBiomes);
     }
 
     private static CompiledHolyMountain CompileHolyMountain(
@@ -2233,7 +2470,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         int laboratoryOriginDepthCells,
         int laboratoryWidthCells,
         int laboratoryHeightCells,
-        CompiledTopologyCell[] cells)
+        byte[] laboratoryTerrainMask,
+        CompiledTopologyCell[] cells,
+        CompiledReferenceBiome[] referenceBiomes)
     {
         public int LaboratoryOriginX { get; } = laboratoryOriginX;
 
@@ -2242,6 +2481,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public int LaboratoryWidthCells { get; } = laboratoryWidthCells;
 
         public int LaboratoryHeightCells { get; } = laboratoryHeightCells;
+
+        public byte[] LaboratoryTerrainMask { get; } = laboratoryTerrainMask;
+
+        public ref readonly CompiledReferenceBiome ReferenceBiome(int index)
+        {
+            return ref referenceBiomes[index];
+        }
 
         public CompiledTopologyCell Resolve(long worldX, long depthCells)
         {
@@ -2418,11 +2664,46 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         Lava,
         HolyMountain,
         FixedLaboratory,
+        Empty,
+        Water,
+        Clouds,
+        SurfaceHills,
+        SurfaceDesert,
+        SurfaceWinter,
+        Mountain,
+        GenericCave,
+        GenericStructure,
     }
 
     private readonly record struct CompiledTopologyCell(
         CompiledTopologyCellKind Kind,
         int BiomeIndex);
+
+    private readonly record struct CompiledReferenceBiome(
+        ulong Salt,
+        ReferenceMountainKind Mountain,
+        byte[] TerrainMask,
+        ReferenceTerrainMaskAccent MaskAccent);
+
+    private enum ReferenceTerrainMaskAccent : byte
+    {
+        Gravel,
+        Water,
+        Ice,
+    }
+
+    private enum ReferenceMountainKind : byte
+    {
+        Generic,
+        LeftEntrance,
+        Hall,
+        Right,
+        Top,
+        LeftStub,
+        RightStub,
+        FloatingIsland,
+        Lake,
+    }
 
     private enum ConnectionRowSegmentKind : byte
     {

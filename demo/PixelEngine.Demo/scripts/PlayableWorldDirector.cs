@@ -67,7 +67,8 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
     protected override void OnStart()
     {
         CampaignConfig config = CampaignConfig.Load(Context.Config);
-        PlayerSpawnY = config.SurfaceY - 32f;
+        PlayerSpawnX = PlayableCavernWorldGenerator.PlayerSpawnX;
+        PlayerSpawnY = config.SurfaceY - 85f;
         RegisterEntityBuildSystem();
     }
 

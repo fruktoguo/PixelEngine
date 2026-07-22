@@ -214,6 +214,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 第六个实现节点先把 `campaign.json` 升至 v5，恢复七个程序化主区与七个完整 512-cell Holy Mountain 的参考纵深；随后把 `biomes.json` 升至 v4，以 98 个运行段覆盖 70×48 色图中当前目录支持的 479 个主区、三类侧区、Holy Mountain、lava 与固定 Laboratory 宏格。生成器在 `Describe` 阶段将运行段编译为 3360 项定长二维查询表，默认未映射宏格为 boundary solid；普通/侧区才运行各自 grammar，lava 与 Holy Mountain 不再被横向铺满。不兼容的初始地形身份同步升级为 `showcase-campaign-v7`，旧 region store 不会污染新拓扑。Laboratory 使用 `X=1536..4135`、参考深度 `12288..13887` 的固定 2600×1600 选择器生成外壳、入口、上下桥、支撑、双 vat、平台与 lava sea，随机 Laboratory encounter 禁用；温度跟随二维覆盖，修复固定终局与 Final Holy Mountain 重叠时错误继承 20°C。独立对照隔离解包色图为 479 个支持宏格 `Missing=0 / Wrong=0`，但剩余 2881 个特殊/实心宏格、Holy Mountain 精确组合、Wang/BitmapCaves、背景/spawn marker 和真实截图仍未闭合，故 `DEMO-008` 保持进行中。
 
+第七个实现节点针对真实窗口仍呈现“平地、直墙和伪终局”的回归继续纠正：`biomes.json` 升至 v6，完整保存 Build `17130612` 色图实际使用的 129 种颜色/biome 与 48 行索引，全部 3360 个宏格逐格对照为零差异；旧主路径直筒 carve 删除，出生点恢复为参考 `(227,-85)`。left entrance / hall / right / top / floating island 与四个 temple altar 变体使用来源 hash 锁定的 512×512 四分类语义掩码；Laboratory 直接使用 `boss_arena` 2600×1600 的 4-bit/8 类材质轮廓，删除手写外壳、桥、vat 与 lava sea 替代。掩码只在 `Describe` 阶段解压，chunk 热循环定长索引，初始地形身份升级为 `showcase-campaign-v9`。普通 biome 的 Wang/BitmapCaves、背景/spawn marker、其余固定场景、实体生态和全区域截图矩阵仍未闭合，故 `DEMO-008` 保持 `[~]`。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。

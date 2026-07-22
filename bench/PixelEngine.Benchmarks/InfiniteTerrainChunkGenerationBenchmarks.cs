@@ -100,8 +100,7 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
                 (16, ChunkCoordinate(config.RegionStartCellY(0) + (config.RegionHeightCells / 2L))),
             TerrainGenerationScenario.FungalCaverns => ResolveFungalCaverns(config, catalog),
             TerrainGenerationScenario.PortalAndHolyMountain => ResolveFirstPortal(config, catalog),
-            TerrainGenerationScenario.LaboratoryDeep =>
-                (23, ChunkCoordinate(config.RegionStartCellY(7) + (config.RegionHeightCells / 2L))),
+            TerrainGenerationScenario.LaboratoryDeep => ResolveLaboratory(config, catalog),
             _ => throw new ArgumentOutOfRangeException(nameof(Scenario)),
         };
     }
@@ -129,6 +128,15 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
             portalIndex: catalog.PortalNetwork.PortalsPerHolyMountain / 2,
             worldSeed: config.InitialRunSeed);
         return (ChunkCoordinate(portal.SourceX), ChunkCoordinate(portal.SourceY));
+    }
+
+    private static (int X, int Y) ResolveLaboratory(CampaignConfig config, BiomeCatalog catalog)
+    {
+        FixedLaboratoryTopologyDefinition laboratory = catalog.WorldTopology.FixedLaboratory;
+        return (
+            ChunkCoordinate(laboratory.OriginX + (laboratory.WidthCells / 2L)),
+            ChunkCoordinate(
+                config.SurfaceY + laboratory.OriginDepthCells + (laboratory.HeightCells / 2L)));
     }
 
     private static int ChunkCoordinate(long worldCell)

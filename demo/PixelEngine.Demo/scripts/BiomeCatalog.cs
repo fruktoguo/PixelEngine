@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -10,7 +12,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class BiomeCatalog
 {
-    internal const int CurrentSchemaVersion = 4;
+    internal const int CurrentSchemaVersion = 6;
     private const string EmbeddedResourceName = "PixelEngine.Demo.biomes.json";
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
@@ -140,23 +142,11 @@ internal sealed class BiomeCatalog
                 string.Equals(campaign.Regions[location.RegionIndex].Id, biomeId, StringComparison.Ordinal);
         }
 
-        ReadOnlySpan<WorldTopologyPlacementDefinition> placements = topology.Placements;
-        for (int i = placements.Length - 1; i >= 0; i--)
-        {
-            WorldTopologyPlacementDefinition placement = placements[i];
-            if (macroX < placement.MacroX || macroX >= placement.MacroX + (long)placement.Width ||
-                macroY < placement.MacroY || macroY >= placement.MacroY + (long)placement.Height)
-            {
-                continue;
-            }
-
-            // fixed Laboratory 由权威 boss_arena 固定场景负责，不参与随机 pixel-scene
-            // 遭遇采样；否则会产生“锚点存在但地形未写入”的幽灵遭遇。
-            return placement.Kind == "biome" &&
-                string.Equals(placement.Biome, biomeId, StringComparison.Ordinal);
-        }
-
-        return false;
+        int referenceBiomeIndex = DecodeReferenceBiomeIndex(topology.MacroRows[(int)mapY], (int)mapX);
+        return string.Equals(
+            topology.ReferenceBiomes[referenceBiomeIndex].GameplayBiome,
+            biomeId,
+            StringComparison.Ordinal);
     }
 
     private static long FloorDivide(long value, int divisor)
@@ -292,7 +282,18 @@ internal sealed class BiomeCatalog
         Require(
             topology.OriginMacroX == 35 && topology.OriginMacroY == 14,
             "worldTopology 原点必须对应参考 map (35,14)。");
-        Require(string.Equals(topology.DefaultKind, "solid", StringComparison.Ordinal), "worldTopology.defaultKind 当前必须为 solid。");
+        Require(
+            string.Equals(topology.ReferenceBuildId, "17130612", StringComparison.Ordinal),
+            "worldTopology.referenceBuildId 必须绑定已校验的 17130612。");
+        Require(
+            string.Equals(
+                topology.ReferenceVersionHash,
+                "9dbd52ced019a643169a2db02f46c77f8766c6e5",
+                StringComparison.Ordinal),
+            "worldTopology.referenceVersionHash 与权威解包版本不一致。");
+        Require(
+            string.Equals(topology.OutsideKind, "legacy", StringComparison.Ordinal),
+            "worldTopology.outsideKind 当前必须为 legacy。");
 
         FixedLaboratoryTopologyDefinition laboratory = topology.FixedLaboratory ??
             throw new InvalidDataException("biomes.json 配置无效：worldTopology.fixedLaboratory 不能为空。");
@@ -300,72 +301,206 @@ internal sealed class BiomeCatalog
         Require(laboratory.OriginDepthCells == 12_288, "fixedLaboratory.originDepthCells 必须为参考纵深 12288。");
         Require(laboratory.WidthCells == 2_600, "fixedLaboratory.widthCells 必须为 2600。");
         Require(laboratory.HeightCells == 1_600, "fixedLaboratory.heightCells 必须为 1600。");
+        ReferenceLaboratoryTerrainMaskDefinition laboratoryMask = laboratory.ReferenceTerrainMask ??
+            throw new InvalidDataException("biomes.json 配置无效：fixedLaboratory.referenceTerrainMask 不能为空。");
+        laboratory.DecodedReferenceTerrainMask = DecodeReferenceLaboratoryTerrainMask(
+            laboratoryMask,
+            "worldTopology.fixedLaboratory.referenceTerrainMask");
 
-        WorldTopologyPlacementDefinition[] placements = topology.Placements ??
-            throw new InvalidDataException("biomes.json 配置无效：worldTopology.placements 不能为空。");
-        Require(placements.Length is >= 32 and <= 256, "worldTopology.placements 必须包含 [32,256] 项运行段。");
+        ReferenceBiomeDefinition[] referenceBiomes = topology.ReferenceBiomes ??
+            throw new InvalidDataException("biomes.json 配置无效：worldTopology.referenceBiomes 不能为空。");
+        Require(referenceBiomes.Length == 129, "worldTopology.referenceBiomes 必须覆盖色图实际使用的 129 种颜色。");
         HashSet<string> ids = new(StringComparer.Ordinal);
-        Span<int> mainBiomeCells = stackalloc int[CampaignConfig.RequiredRegionCount];
-        Span<int> sideBiomeCells = stackalloc int[SideBiomes.Length];
-        int holyMountainCells = 0;
-        int fixedLaboratoryCells = 0;
-        int lavaCells = 0;
-        for (int i = 0; i < placements.Length; i++)
+        HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
+        Span<int> useCounts = stackalloc int[129];
+        for (int i = 0; i < referenceBiomes.Length; i++)
         {
-            WorldTopologyPlacementDefinition placement = placements[i] ??
-                throw new InvalidDataException($"biomes.json 配置无效：worldTopology.placements[{i}] 不能为空。");
-            string label = $"worldTopology.placements[{i}]";
-            RequireStableId(placement.Id, $"{label}.id");
-            Require(ids.Add(placement.Id), $"world topology placement id 重复：{placement.Id}。");
+            ReferenceBiomeDefinition biome = referenceBiomes[i] ??
+                throw new InvalidDataException($"biomes.json 配置无效：worldTopology.referenceBiomes[{i}] 不能为空。");
+            string label = $"worldTopology.referenceBiomes[{i}]";
+            RequireStableId(biome.Id, $"{label}.id");
+            Require(ids.Add(biome.Id), $"reference biome id 重复：{biome.Id}。");
             Require(
-                placement.Kind is "biome" or "holy-mountain" or "fixed-laboratory" or "lava" or "solid",
-                $"{label}.kind 不受支持：{placement.Kind}。");
-            Require(placement.Width is >= 1 and <= 70, $"{label}.width 必须位于 [1,70]。");
-            Require(placement.Height is >= 1 and <= 48, $"{label}.height 必须位于 [1,48]。");
-            long mapX = (long)placement.MacroX + topology.OriginMacroX;
-            long mapY = (long)placement.MacroY + topology.OriginMacroY;
+                biome.ReferenceColor.Length == 8 && biome.ReferenceColor.StartsWith("ff", StringComparison.OrdinalIgnoreCase) &&
+                uint.TryParse(biome.ReferenceColor, System.Globalization.NumberStyles.HexNumber, null, out _),
+                $"{label}.referenceColor 必须为 8 位 ARGB hex。");
+            Require(colors.Add(biome.ReferenceColor), $"reference biome color 重复：{biome.ReferenceColor}。");
             Require(
-                mapX >= 0 && mapX + placement.Width <= topology.Width &&
-                mapY >= 0 && mapY + placement.Height <= topology.Height,
-                $"{label} 超出 70x48 宏观地图。");
-            int cellCount = checked(placement.Width * placement.Height);
-            if (placement.Kind == "biome")
+                biome.ReferencePath.StartsWith("data/biome", StringComparison.Ordinal) &&
+                biome.ReferencePath.EndsWith(".xml", StringComparison.Ordinal),
+                $"{label}.referencePath 必须是只读 Noita biome 来源标识。");
+            Require(
+                biome.Terrain is "main-biome" or "side-biome" or "holy-mountain" or "lava" or "solid" or
+                    "empty" or "water" or "clouds" or "surface-hills" or "surface-desert" or
+                    "surface-winter" or "mountain" or "generic-cave" or "generic-structure",
+                $"{label}.terrain 不受支持：{biome.Terrain}。");
+            if (biome.Terrain == "main-biome")
             {
-                RequireStableId(placement.Biome, $"{label}.biome");
-                int mainIndex = FindMainPathIndex(placement.Biome);
-                int sideIndex = FindSideBiomeIndex(placement.Biome);
-                Require(mainIndex >= 0 || sideIndex >= 0, $"{label}.biome 引用了未知 biome {placement.Biome}。");
-                if (mainIndex >= 0)
-                {
-                    mainBiomeCells[mainIndex] += cellCount;
-                }
-                else
-                {
-                    sideBiomeCells[sideIndex] += cellCount;
-                }
-
-                continue;
+                Require(FindMainPathIndex(biome.GameplayBiome) >= 0, $"{label}.gameplayBiome 必须引用主路径 biome。");
+            }
+            else if (biome.Terrain == "side-biome")
+            {
+                Require(FindSideBiomeIndex(biome.GameplayBiome) >= 0, $"{label}.gameplayBiome 必须引用侧区 biome。");
+            }
+            else
+            {
+                Require(string.IsNullOrEmpty(biome.GameplayBiome), $"{label}.gameplayBiome 仅供 main/side biome 使用。");
             }
 
-            Require(string.IsNullOrEmpty(placement.Biome), $"{label}.biome 仅供 biome kind 使用。");
-            holyMountainCells += placement.Kind == "holy-mountain" ? cellCount : 0;
-            fixedLaboratoryCells += placement.Kind == "fixed-laboratory" ? cellCount : 0;
-            lavaCells += placement.Kind == "lava" ? cellCount : 0;
+            if (biome.ReferenceTerrainMask is not null)
+            {
+                biome.DecodedReferenceTerrainMask = DecodeReferenceTerrainMask(
+                    biome.ReferenceTerrainMask,
+                    $"{label}.referenceTerrainMask");
+            }
+
+            if (string.Equals(biome.Id, "mountain-left-entrance", StringComparison.Ordinal))
+            {
+                Require(
+                    biome.ReferenceTerrainMask is not null,
+                    "mountain-left-entrance 必须携带经来源 hash 固化的 512x512 地形掩码。");
+            }
         }
 
-        for (int i = 0; i < CampaignConfig.RequiredRegionCount - 1; i++)
+        string[] rows = topology.MacroRows ??
+            throw new InvalidDataException("biomes.json 配置无效：worldTopology.macroRows 不能为空。");
+        Require(rows.Length == topology.Height, "worldTopology.macroRows 必须恰好包含 48 行。");
+        for (int y = 0; y < rows.Length; y++)
         {
-            Require(mainBiomeCells[i] > 0, $"worldTopology 缺少主路径 biome {MainPath[i].Id}。");
+            string row = rows[y] ?? string.Empty;
+            Require(row.Length == topology.Width * 2, $"worldTopology.macroRows[{y}] 必须包含 140 个 hex 字符。");
+            for (int x = 0; x < topology.Width; x++)
+            {
+                int index = DecodeReferenceBiomeIndex(row, x);
+                Require(index < referenceBiomes.Length, $"worldTopology.macroRows[{y}] 在 X={x} 引用了越界 biome index {index}。");
+                useCounts[index]++;
+            }
         }
 
-        for (int i = 0; i < sideBiomeCells.Length; i++)
+        for (int i = 0; i < useCounts.Length; i++)
         {
-            Require(sideBiomeCells[i] > 0, $"worldTopology 缺少侧区 biome {SideBiomes[i].Id}。");
+            Require(useCounts[i] > 0, $"worldTopology.referenceBiomes[{i}] 未被 70x48 色图使用。");
+        }
+    }
+
+    internal static int DecodeReferenceBiomeIndex(string row, int mapX)
+    {
+        int offset = checked(mapX * 2);
+        int high = HexValue(row[offset]);
+        int low = HexValue(row[offset + 1]);
+        return (high | low) < 0
+            ? throw new InvalidDataException($"biomes.json 配置无效：macroRows 含非 hex 字符，X={mapX}。")
+            : (high << 4) | low;
+    }
+
+    private static int HexValue(char value)
+    {
+        return value is >= '0' and <= '9'
+            ? value - '0'
+            : value is >= 'a' and <= 'f'
+                ? value - 'a' + 10
+                : value is >= 'A' and <= 'F'
+                    ? value - 'A' + 10
+            : -1;
+    }
+
+    private static byte[] DecodeReferenceTerrainMask(
+        ReferenceTerrainMaskDefinition mask,
+        string label)
+    {
+        const int Width = 512;
+        const int Height = 512;
+        const int DecodedLength = Width * Height / 4;
+        Require(mask.Width == Width && mask.Height == Height, $"{label} 必须为 512x512。");
+        Require(
+            string.Equals(mask.Encoding, "brotli-2bit-v1", StringComparison.Ordinal),
+            $"{label}.encoding 必须为 brotli-2bit-v1。");
+        Require(mask.Accent is "water" or "ice" or "gravel", $"{label}.accent 必须为 water、ice 或 gravel。");
+        Require(
+            mask.SourcePath.StartsWith("data/biome_impl/", StringComparison.Ordinal) &&
+            mask.SourcePath.EndsWith(".png", StringComparison.Ordinal),
+            $"{label}.sourcePath 必须是只读 Noita biome_impl PNG 来源标识。");
+        Require(IsSha256(mask.SourceSha256), $"{label}.sourceSha256 必须为 64 位 SHA256 hex。");
+        Require(IsSha256(mask.DecodedSha256), $"{label}.decodedSha256 必须为 64 位 SHA256 hex。");
+        return DecodeBrotliMask(mask.Data, mask.DecodedSha256, DecodedLength, label);
+    }
+
+    private static byte[] DecodeReferenceLaboratoryTerrainMask(
+        ReferenceLaboratoryTerrainMaskDefinition mask,
+        string label)
+    {
+        const int Width = 2_600;
+        const int Height = 1_600;
+        const int DecodedLength = Width * Height / 2;
+        Require(mask.Width == Width && mask.Height == Height, $"{label} 必须为 2600x1600。");
+        Require(
+            string.Equals(mask.Encoding, "brotli-4bit-v1", StringComparison.Ordinal),
+            $"{label}.encoding 必须为 brotli-4bit-v1。");
+        Require(
+            string.Equals(mask.SourcePath, "data/biome_impl/spliced/boss_arena.png", StringComparison.Ordinal),
+            $"{label}.sourcePath 必须绑定 boss_arena.png。");
+        Require(IsSha256(mask.SourceSha256), $"{label}.sourceSha256 必须为 64 位 SHA256 hex。");
+        Require(IsSha256(mask.DecodedSha256), $"{label}.decodedSha256 必须为 64 位 SHA256 hex。");
+        return DecodeBrotliMask(mask.Data, mask.DecodedSha256, DecodedLength, label);
+    }
+
+    private static byte[] DecodeBrotliMask(
+        string data,
+        string expectedDecodedSha256,
+        int decodedLength,
+        string label)
+    {
+        byte[] compressed;
+        try
+        {
+            compressed = Convert.FromBase64String(data);
+        }
+        catch (FormatException exception)
+        {
+            throw new InvalidDataException($"biomes.json 配置无效：{label}.data 不是合法 Base64。", exception);
         }
 
-        Require(holyMountainCells >= 7, "worldTopology 必须包含七个 Holy Mountain 宏格运行段。");
-        Require(fixedLaboratoryCells >= 20, "worldTopology 必须覆盖 5x4 fixed Laboratory 宏格。");
-        Require(lavaCells > 0, "worldTopology 必须显式包含 lava sea/lake。");
+        Require(compressed.Length > 0, $"{label}.data 不能为空。");
+        byte[] decoded = new byte[decodedLength];
+        using MemoryStream source = new(compressed, writable: false);
+        using BrotliStream brotli = new(source, CompressionMode.Decompress, leaveOpen: false);
+        int offset = 0;
+        while (offset < decoded.Length)
+        {
+            int read = brotli.Read(decoded, offset, decoded.Length - offset);
+            if (read == 0)
+            {
+                break;
+            }
+
+            offset += read;
+        }
+
+        Require(offset == decoded.Length && brotli.ReadByte() < 0, $"{label}.data 解压后必须恰好为 {decodedLength} 字节。");
+        string decodedSha256 = Convert.ToHexString(SHA256.HashData(decoded));
+        Require(
+            string.Equals(decodedSha256, expectedDecodedSha256, StringComparison.OrdinalIgnoreCase),
+            $"{label}.decodedSha256 与解码内容不一致。");
+        return decoded;
+    }
+
+    private static bool IsSha256(string value)
+    {
+        if (value.Length != 64)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < value.Length; i++)
+        {
+            char character = value[i];
+            if (character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f') and not (>= 'A' and <= 'F'))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void ValidateLandmarks(
@@ -736,11 +871,17 @@ internal sealed class WorldTopologyDefinition
 
     public int OriginMacroY { get; init; }
 
-    public string DefaultKind { get; init; } = string.Empty;
+    public string ReferenceBuildId { get; init; } = string.Empty;
+
+    public string ReferenceVersionHash { get; init; } = string.Empty;
+
+    public string OutsideKind { get; init; } = string.Empty;
 
     public FixedLaboratoryTopologyDefinition FixedLaboratory { get; init; } = new();
 
-    public WorldTopologyPlacementDefinition[] Placements { get; init; } = [];
+    public ReferenceBiomeDefinition[] ReferenceBiomes { get; init; } = [];
+
+    public string[] MacroRows { get; init; } = [];
 }
 
 internal sealed class FixedLaboratoryTopologyDefinition
@@ -752,23 +893,65 @@ internal sealed class FixedLaboratoryTopologyDefinition
     public int WidthCells { get; init; }
 
     public int HeightCells { get; init; }
+
+    public ReferenceLaboratoryTerrainMaskDefinition? ReferenceTerrainMask { get; init; }
+
+    [JsonIgnore]
+    internal byte[] DecodedReferenceTerrainMask { get; set; } = [];
 }
 
-internal sealed class WorldTopologyPlacementDefinition
+internal sealed class ReferenceLaboratoryTerrainMaskDefinition
 {
-    public string Id { get; init; } = string.Empty;
-
-    public string Kind { get; init; } = string.Empty;
-
-    public string Biome { get; init; } = string.Empty;
-
-    public int MacroX { get; init; }
-
-    public int MacroY { get; init; }
-
     public int Width { get; init; }
 
     public int Height { get; init; }
+
+    public string Encoding { get; init; } = string.Empty;
+
+    public string SourcePath { get; init; } = string.Empty;
+
+    public string SourceSha256 { get; init; } = string.Empty;
+
+    public string DecodedSha256 { get; init; } = string.Empty;
+
+    public string Data { get; init; } = string.Empty;
+}
+
+internal sealed class ReferenceBiomeDefinition
+{
+    public string Id { get; init; } = string.Empty;
+
+    public string ReferenceColor { get; init; } = string.Empty;
+
+    public string ReferencePath { get; init; } = string.Empty;
+
+    public string Terrain { get; init; } = string.Empty;
+
+    public string GameplayBiome { get; init; } = string.Empty;
+
+    public ReferenceTerrainMaskDefinition? ReferenceTerrainMask { get; init; }
+
+    [JsonIgnore]
+    internal byte[] DecodedReferenceTerrainMask { get; set; } = [];
+}
+
+internal sealed class ReferenceTerrainMaskDefinition
+{
+    public int Width { get; init; }
+
+    public int Height { get; init; }
+
+    public string Encoding { get; init; } = string.Empty;
+
+    public string Accent { get; init; } = string.Empty;
+
+    public string SourcePath { get; init; } = string.Empty;
+
+    public string SourceSha256 { get; init; } = string.Empty;
+
+    public string DecodedSha256 { get; init; } = string.Empty;
+
+    public string Data { get; init; } = string.Empty;
 }
 
 internal sealed class BiomeExpansionStages
