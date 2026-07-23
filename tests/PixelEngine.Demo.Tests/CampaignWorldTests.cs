@@ -987,8 +987,8 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
-    /// 验证主区与侧区的实际 chunk 开/实轮廓来自各自绑定的 Noita Wang 模板，
-    /// 防止目录仍在但运行时悄然退回通用噪声洞穴。
+    /// 验证主区与侧区的实际 chunk 开/实轮廓来自各自绑定的 Noita BitmapCaves + Wang 模板，
+    /// 防止目录仍在但运行时悄然退回通用噪声洞穴或只采样一半参考语法。
     /// </summary>
     [Fact]
     public void MainAndSideBiomeChunksFollowTheirBoundNoitaWangMasks()
@@ -1007,7 +1007,7 @@ public sealed class CampaignWorldTests
 
         foreach ((string referenceBiomeId, long originX, long originY) in cases)
         {
-            DecodedNoitaWangTerrainSet set = wang.FindForReferenceBiome(referenceBiomeId);
+            NoitaWangTerrainSetDefinition set = wang.FindDefinitionForReferenceBiome(referenceBiomeId);
             ulong salt = StableReferenceSalt(referenceBiomeId);
             int matches = 0;
             int openCells = 0;
@@ -1019,7 +1019,12 @@ public sealed class CampaignWorldTests
                 for (int localX = 0; localX < SampleSide; localX++)
                 {
                     long worldX = originX + localX;
-                    byte semantic = set.Sample(worldX, worldY, campaign.InitialRunSeed, salt);
+                    byte semantic = SampleReferenceTerrain(
+                        set,
+                        worldX,
+                        worldY,
+                        campaign.InitialRunSeed,
+                        salt);
                     bool expectedOpen = semantic == (byte)NoitaWangTerrainSemantic.Empty ||
                         DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
                         (semantic == (byte)NoitaWangTerrainSemantic.RandomBinary &&
@@ -1042,6 +1047,190 @@ public sealed class CampaignWorldTests
                 matches >= samples * 9 / 10,
                 $"{referenceBiomeId} 实际 chunk 与绑定 Wang 开/实掩码只匹配 {matches}/{samples} cells。");
         }
+    }
+
+    /// <summary>
+    /// 验证 Wang tile 中从 Noita Lua / 内建颜色导出的 marker 不再只被当作空地丢弃，
+    /// 而是能稳定暴露为后续实体、道具、背景 pixel-scene 加载使用的世界锚点。
+    /// </summary>
+    [Fact]
+    public void NoitaWangMarkersMaterializeAsDeterministicEmptySpawnAnchors()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(campaign);
+        NoitaWangTerrainCatalog wang = NoitaWangTerrainCatalog.Load(new EngineScriptConfigApi(ContentRoot()));
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, biomes, campaign.InitialRunSeed);
+        ushort empty = ResolveRequired(materials, "empty");
+        NoitaWangMarkerAnchor[] first = new NoitaWangMarkerAnchor[128];
+        NoitaWangMarkerAnchor[] repeated = new NoitaWangMarkerAnchor[128];
+
+        int count = PlayableCavernWorldGenerator.CollectWangMarkerAnchors(
+            biomes,
+            wang,
+            campaign,
+            campaign.InitialRunSeed,
+            minimumX: -512,
+            minimumY: campaign.SurfaceY,
+            maximumX: 1_024,
+            maximumY: campaign.SurfaceY + 1_024,
+            first);
+        int repeatedCount = PlayableCavernWorldGenerator.CollectWangMarkerAnchors(
+            biomes,
+            wang,
+            campaign,
+            campaign.InitialRunSeed,
+            minimumX: -512,
+            minimumY: campaign.SurfaceY,
+            maximumX: 1_024,
+            maximumY: campaign.SurfaceY + 1_024,
+            repeated);
+
+        Assert.True(count > 0, "Mines / surface Wang 采样窗口必须暴露至少一个 Noita marker 锚点。");
+        Assert.Equal(count, repeatedCount);
+        Assert.True(first.AsSpan(0, count).SequenceEqual(repeated.AsSpan(0, repeatedCount)));
+        int materializableCount = 0;
+        bool hasLuaMaterializableMarker = false;
+        for (int i = 0; i < count; i++)
+        {
+            NoitaWangMarkerAnchor anchor = first[i];
+            NoitaWangTerrainSetDefinition set = wang.FindDefinitionForReferenceBiome(anchor.ReferenceBiomeId);
+            int markerIndex = anchor.Semantic - NoitaWangTerrainCatalog.MarkerSemanticBase;
+            Assert.InRange(markerIndex, 0, set.Markers.Length - 1);
+            NoitaWangMarkerDefinition marker = set.Markers[markerIndex];
+            Assert.Equal(set.Id, anchor.WangSetId);
+            Assert.Equal(marker.Color, anchor.MarkerColor);
+            Assert.Equal(marker.Function, anchor.Function);
+            Assert.Equal(marker.Origin, anchor.Origin);
+            Assert.Equal(
+                anchor.Semantic,
+                SampleReferenceTerrain(
+                    set,
+                    anchor.WorldX,
+                    anchor.WorldY,
+                    campaign.InitialRunSeed,
+                    StableReferenceSalt(anchor.ReferenceBiomeId)));
+            Assert.Equal(empty, probe.MaterialAt(anchor.WorldX, anchor.WorldY));
+            if (NoitaWangMarkerVisualProfile.TryCreate(anchor, out NoitaWangMarkerVisualProfile profile))
+            {
+                materializableCount++;
+                hasLuaMaterializableMarker |= string.Equals(anchor.Origin, "lua", StringComparison.Ordinal);
+                Assert.True(profile.LightRadiusCells > 0f);
+                Assert.True(profile.LightIntensity > 0f);
+                Assert.InRange(profile.BurstCount, 1, 48);
+                Assert.NotEqual(0u, profile.CoreColorBgra);
+                Assert.NotEqual(0u, profile.TrailColorBgra);
+                if (profile.GameplayKind != NoitaWangMarkerGameplayKind.None)
+                {
+                    Assert.False(string.IsNullOrWhiteSpace(profile.GameplayMaterialName));
+                    Assert.True(
+                        materials.Resolve(profile.GameplayMaterialName).IsValid,
+                        $"marker gameplay material {profile.GameplayMaterialName} 必须存在于 Demo materials.json。");
+                }
+            }
+        }
+
+        Assert.True(materializableCount > 0, "至少一个 Noita marker 必须能转成 Demo 可见 prop。");
+        Assert.True(hasLuaMaterializableMarker, "至少一个 Lua 来源 Noita marker 必须能进入实体/特效 materialization 管线。");
+    }
+
+    /// <summary>
+    /// 验证代表性的 Noita Lua marker 已经映射到真实 Demo 脚本实体，而不只是 overlay 占位。
+    /// </summary>
+    [Theory]
+    [InlineData("load_oiltank", "Hazard", "MaterialEmitter", "oil")]
+    [InlineData("load_acidtank_left", "Hazard", "MaterialEmitter", "acid")]
+    [InlineData("load_gunpowderpool_01", "Hazard", "MaterialEmitter", "fire")]
+    [InlineData("spawn_vines", "Plant", "SparkEmitter", "smoke")]
+    [InlineData("spawn_lamp2", "Machine", "SparkEmitter", "fire")]
+    [InlineData("spawn_chest", "Treasure", "SparkEmitter", "crystal")]
+    [InlineData("load_pixel_scene4", "SceneLoad", "None", "")]
+    public void NoitaWangMarkerProfilesMapReferenceFunctionsToGameplayEntities(
+        string function,
+        string expectedKindName,
+        string expectedGameplayKindName,
+        string expectedGameplayMaterial)
+    {
+        NoitaWangMarkerVisualKind expectedKind = Enum.Parse<NoitaWangMarkerVisualKind>(expectedKindName);
+        NoitaWangMarkerGameplayKind expectedGameplayKind =
+            Enum.Parse<NoitaWangMarkerGameplayKind>(expectedGameplayKindName);
+        NoitaWangMarkerAnchor anchor = new(
+            "coalmine",
+            "coalmine",
+            "ff55ff8c",
+            function,
+            "lua",
+            NoitaWangTerrainCatalog.MarkerSemanticBase,
+            128,
+            256);
+
+        Assert.True(NoitaWangMarkerVisualProfile.TryCreate(anchor, out NoitaWangMarkerVisualProfile profile));
+        Assert.Equal(expectedKind, profile.Kind);
+        Assert.Equal(expectedGameplayKind, profile.GameplayKind);
+        Assert.Equal(expectedGameplayMaterial, profile.GameplayMaterialName);
+        if (expectedGameplayKind != NoitaWangMarkerGameplayKind.None)
+        {
+            Assert.True(LoadMaterials().Resolve(expectedGameplayMaterial).IsValid);
+        }
+    }
+
+    /// <summary>
+    /// 验证 marker gameplay 实体只在真实探索阶段创建，主菜单、启动、死亡和结算不会污染粒子池。
+    /// </summary>
+    [Theory]
+    [InlineData(CampaignRunState.MainMenu, false)]
+    [InlineData(CampaignRunState.StartingRun, false)]
+    [InlineData(CampaignRunState.Exploring, true)]
+    [InlineData(CampaignRunState.HolyMountain, true)]
+    [InlineData(CampaignRunState.Laboratory, true)]
+    [InlineData(CampaignRunState.Dead, false)]
+    [InlineData(CampaignRunState.Completed, false)]
+    [InlineData(CampaignRunState.RunSummary, false)]
+    public void NoitaWangMarkerGameplayIsGatedToActiveExploration(
+        CampaignRunState state,
+        bool expected)
+    {
+        Assert.Equal(expected, NoitaWangMarkerContentSystem.IsMarkerGameplayState(state));
+    }
+
+    /// <summary>
+    /// 冷启动按真实 frame dt 累积，而不是只在 0.35 秒 marker 扫描帧推进。
+    /// </summary>
+    [Fact]
+    public void NoitaWangMarkerGameplayWarmupUsesEveryFrameElapsedTime()
+    {
+        float elapsed = 0f;
+        const float frameDt = 1f / 60f;
+        for (int frame = 0; frame < 29; frame++)
+        {
+            elapsed = NoitaWangMarkerContentSystem.AdvanceGameplayElapsed(
+                elapsed,
+                CampaignRunState.Exploring,
+                frameDt);
+        }
+
+        Assert.True(elapsed < NoitaWangMarkerContentSystem.GameplayWarmupSeconds);
+        for (int frame = 29; frame < 60; frame++)
+        {
+            elapsed = NoitaWangMarkerContentSystem.AdvanceGameplayElapsed(
+                elapsed,
+                CampaignRunState.Exploring,
+                frameDt);
+        }
+
+        Assert.Equal(NoitaWangMarkerContentSystem.GameplayWarmupSeconds, elapsed);
+        Assert.Equal(
+            0f,
+            NoitaWangMarkerContentSystem.AdvanceGameplayElapsed(
+                elapsed,
+                CampaignRunState.Dead,
+                frameDt));
+        Assert.Equal(
+            0f,
+            NoitaWangMarkerContentSystem.AdvanceGameplayElapsed(
+                float.NaN,
+                CampaignRunState.MainMenu,
+                float.PositiveInfinity));
     }
 
     /// <summary>
@@ -1578,6 +1767,19 @@ public sealed class CampaignWorldTests
         }
 
         return hash;
+    }
+
+    private static byte SampleReferenceTerrain(
+        NoitaWangTerrainSetDefinition set,
+        long worldX,
+        long worldY,
+        ulong worldSeed,
+        ulong salt)
+    {
+        return set.DecodedBitmapCaves is not null &&
+            set.DecodedBitmapCaves.TrySample(worldX, worldY, worldSeed, salt, out byte semantic)
+                ? semantic
+                : set.Decoded.Sample(worldX, worldY, worldSeed, salt);
     }
 
     private sealed record ChunkSample(ushort[] Materials, Half[] Temperatures);

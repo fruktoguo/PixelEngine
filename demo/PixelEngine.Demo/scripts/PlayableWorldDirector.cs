@@ -156,6 +156,7 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         _ = playerEntity.AddComponent<PlayableHud>();
         _ = playerEntity.AddComponent<PauseMenu>();
         _ = playerEntity.AddComponent<GameUiDemoController>();
+        Context.Scene.RegisterSystem(new NoitaWangMarkerContentSystem());
         _entitiesBuilt = true;
     }
 

@@ -335,6 +335,17 @@ function Get-TileColors(
     return $colors
 }
 
+function Get-ImageColors($Image) {
+    $colors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    for ($y = 0; $y -lt $Image.height; $y++) {
+        for ($x = 0; $x -lt $Image.width; $x++) {
+            [void]$colors.Add((Format-Color (Get-PixelArgb $Image $x $y)))
+        }
+    }
+
+    return $colors
+}
+
 function Read-SpawnFunctions([string] $Path) {
     $functions = @{}
     foreach ($line in [IO.File]::ReadLines($Path)) {
@@ -393,6 +404,30 @@ function Read-NoitaBiomeXml([string] $Path) {
 
         return [xml]$sanitized
     }
+}
+
+function Get-XmlIntAttribute($Node, [string] $Name) {
+    $attribute = $Node.Attributes[$Name]
+    if ($null -eq $attribute) {
+        return 0
+    }
+
+    return [int]::Parse(
+        $attribute.Value,
+        [Globalization.NumberStyles]::Integer,
+        [Globalization.CultureInfo]::InvariantCulture)
+}
+
+function Get-XmlDoubleAttribute($Node, [string] $Name) {
+    $attribute = $Node.Attributes[$Name]
+    if ($null -eq $attribute) {
+        return 0.0
+    }
+
+    return [double]::Parse(
+        $attribute.Value,
+        [Globalization.NumberStyles]::Float,
+        [Globalization.CultureInfo]::InvariantCulture)
 }
 
 function Get-SemanticName([int] $Semantic) {
@@ -491,9 +526,42 @@ foreach ($specification in $specifications) {
     $header = Read-WangHeader $image
     $tiles = Get-CornerTemplateTiles $header $image
     $tileColors = Get-TileColors $image $tiles.horizontal $tiles.vertical $header.shortSide
+    $semanticSourceColors = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    foreach ($colorText in $tileColors) {
+        [void]$semanticSourceColors.Add($colorText)
+    }
+
+    $bitmapCavesNode = $topology.SelectSingleNode('./BitmapCaves')
+    $bitmapStructureSources = [System.Collections.Generic.List[object]]::new()
+    if ($null -ne $bitmapCavesNode) {
+        foreach ($structureNode in $bitmapCavesNode.SelectNodes('./structures/CaveStructure')) {
+            $sourceImagePath = [string]$structureNode.image_file
+            if ([string]::IsNullOrWhiteSpace($sourceImagePath) -or
+                -not $sourceImagePath.StartsWith('data/', [StringComparison]::Ordinal)) {
+                throw "Biome '$($specification.id)' CaveStructure has invalid image_file '$sourceImagePath'."
+            }
+
+            $sourceImageFile = Join-Path $resolvedDataRoot $sourceImagePath.Substring(5)
+            if (-not (Test-Path -LiteralPath $sourceImageFile -PathType Leaf)) {
+                throw "Biome '$($specification.id)' CaveStructure image not found: '$sourceImageFile'."
+            }
+
+            $structureImage = Read-Bitmap $sourceImageFile
+            foreach ($colorText in (Get-ImageColors $structureImage)) {
+                [void]$semanticSourceColors.Add($colorText)
+            }
+
+            $bitmapStructureSources.Add([pscustomobject]@{
+                node = $structureNode
+                sourceImagePath = $sourceImagePath
+                sourceImageFile = $sourceImageFile
+                image = $structureImage
+            })
+        }
+    }
 
     $markerCandidates = @{}
-    foreach ($colorText in $tileColors) {
+    foreach ($colorText in $semanticSourceColors) {
         $color = Convert-HexColor $colorText
         $rgb = Format-Rgb $color
         if ($rgb -eq '000000' -or $randomInputs.ContainsKey($rgb) -or $materialAliases.ContainsKey($rgb)) {
@@ -516,7 +584,7 @@ foreach ($specification in $specifications) {
         }
     }
 
-    foreach ($colorText in $tileColors) {
+    foreach ($colorText in $semanticSourceColors) {
         $normalizedColor = $colorText.ToLowerInvariant()
         if ($spawnFunctions.ContainsKey($normalizedColor) -and -not $markerCandidates.ContainsKey($normalizedColor)) {
             $markerCandidates[$normalizedColor] = [pscustomobject]@{
@@ -571,6 +639,69 @@ foreach ($specification in $specifications) {
         }
 
         throw "Unclassified color '$colorText' in '$($specification.id)'."
+    }
+
+    $bitmapCavesDefinition = $null
+    if ($null -ne $bitmapCavesNode) {
+        $bitmapStructureDefinitions = [System.Collections.Generic.List[object]]::new()
+        foreach ($source in $bitmapStructureSources) {
+            $structureImage = $source.image
+            $semanticPixels = [byte[]]::new($structureImage.width * $structureImage.height)
+            for ($y = 0; $y -lt $structureImage.height; $y++) {
+                for ($x = 0; $x -lt $structureImage.width; $x++) {
+                    $semanticPixels[($y * $structureImage.width) + $x] =
+                        [byte](Resolve-Semantic (Get-PixelArgb $structureImage $x $y))
+                }
+            }
+
+            $compressedStructure = Compress-Brotli $semanticPixels
+            $structureNode = $source.node
+            $bitmapStructureDefinitions.Add([ordered]@{
+                sourceImagePath = $source.sourceImagePath
+                sourceImageSha256 = Get-Sha256 $source.sourceImageFile
+                sourceWidth = $structureImage.width
+                sourceHeight = $structureImage.height
+                aabbMinX = Get-XmlIntAttribute $structureNode 'aabb_min_x'
+                aabbMaxX = Get-XmlIntAttribute $structureNode 'aabb_max_x'
+                aabbMinY = Get-XmlIntAttribute $structureNode 'aabb_min_y'
+                aabbMaxY = Get-XmlIntAttribute $structureNode 'aabb_max_y'
+                countMin = Get-XmlIntAttribute $structureNode 'count_min'
+                countMax = Get-XmlIntAttribute $structureNode 'count_max'
+                strengthMin = Get-XmlDoubleAttribute $structureNode 'strength_min'
+                strengthMax = Get-XmlDoubleAttribute $structureNode 'strength_max'
+                encoding = 'brotli-pebitmap-v1'
+                decodedLength = $semanticPixels.Length
+                decodedSha256 = Get-ByteSha256 $semanticPixels
+                data = [Convert]::ToBase64String($compressedStructure)
+            })
+        }
+
+        $bitmapCavesDefinition = [ordered]@{
+            sizeX = Get-XmlIntAttribute $bitmapCavesNode 'size_x'
+            sizeY = Get-XmlIntAttribute $bitmapCavesNode 'size_y'
+            spawnPercent = Get-XmlDoubleAttribute $bitmapCavesNode 'spawn_percent'
+            blobCavesCountMin = Get-XmlIntAttribute $bitmapCavesNode 'blob_caves_count_min'
+            blobCavesCountMax = Get-XmlIntAttribute $bitmapCavesNode 'blob_caves_count_max'
+            blobCavesRadiusMin = Get-XmlDoubleAttribute $bitmapCavesNode 'blob_caves_radius_min'
+            blobCavesRadiusMax = Get-XmlDoubleAttribute $bitmapCavesNode 'blob_caves_radius_max'
+            blobCavesStrengthMin = Get-XmlDoubleAttribute $bitmapCavesNode 'blob_caves_strength_min'
+            blobCavesStrengthMax = Get-XmlDoubleAttribute $bitmapCavesNode 'blob_caves_strength_max'
+            caveChildsMin = Get-XmlIntAttribute $bitmapCavesNode 'cave_childs_min'
+            caveChildsMax = Get-XmlIntAttribute $bitmapCavesNode 'cave_childs_max'
+            caveCountMin = Get-XmlIntAttribute $bitmapCavesNode 'cave_count_min'
+            caveCountMax = Get-XmlIntAttribute $bitmapCavesNode 'cave_count_max'
+            caveStrengthMin = Get-XmlDoubleAttribute $bitmapCavesNode 'cave_strength_min'
+            caveStrengthMax = Get-XmlDoubleAttribute $bitmapCavesNode 'cave_strength_max'
+            mountainCountMin = Get-XmlIntAttribute $bitmapCavesNode 'mountain_count_min'
+            mountainCountMax = Get-XmlIntAttribute $bitmapCavesNode 'mountain_count_max'
+            mountainSizeMin = Get-XmlDoubleAttribute $bitmapCavesNode 'mountain_size_min'
+            mountainSizeMax = Get-XmlDoubleAttribute $bitmapCavesNode 'mountain_size_max'
+            surfaceCaveChildsMin = Get-XmlIntAttribute $bitmapCavesNode 'surface_cave_childs_min'
+            surfaceCaveChildsMax = Get-XmlIntAttribute $bitmapCavesNode 'surface_cave_childs_max'
+            surfaceCavesCountMin = Get-XmlIntAttribute $bitmapCavesNode 'surface_caves_count_min'
+            surfaceCavesCountMax = Get-XmlIntAttribute $bitmapCavesNode 'surface_caves_count_max'
+            structures = @($bitmapStructureDefinitions)
+        }
     }
 
     $horizontal = @($tiles.horizontal | Sort-Object key, ordinal)
@@ -651,6 +782,7 @@ foreach ($specification in $specifications) {
         randomBinaryColors = @($randomInputs.Keys | Sort-Object | ForEach-Object { 'ff' + $_ })
         materialMappings = $mappingDefinitions
         markers = @($markerDefinitions)
+        bitmapCaves = $bitmapCavesDefinition
         encoding = 'brotli-pewh-v1'
         decodedLength = $decoded.Length
         decodedSha256 = Get-ByteSha256 $decoded

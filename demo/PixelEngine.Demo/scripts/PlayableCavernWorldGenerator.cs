@@ -18,7 +18,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v10";
+    public const string PersistenceKey = "showcase-campaign-v11";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -887,7 +887,16 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
         DecodedNoitaWangTerrainSet wangTerrain = referenceBiome.WangTerrain ??
             throw new InvalidOperationException("主区或侧区缺少已编译的 Noita Wang 模板。");
-        byte semantic = wangTerrain.Sample(worldX, worldY, row.WorldSeed, referenceBiome.Salt);
+        if (referenceBiome.BitmapCaves is null ||
+            !referenceBiome.BitmapCaves.TrySample(
+                worldX,
+                worldY,
+                row.WorldSeed,
+                referenceBiome.Salt,
+                out byte semantic))
+        {
+            semantic = wangTerrain.Sample(worldX, worldY, row.WorldSeed, referenceBiome.Salt);
+        }
         bool empty = semantic == (byte)NoitaWangTerrainSemantic.Empty ||
             DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
             (semantic == (byte)NoitaWangTerrainSemantic.RandomBinary &&
@@ -1662,6 +1671,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         for (int i = 0; i < sources.Length; i++)
         {
             ReferenceBiomeDefinition source = sources[i];
+            NoitaWangTerrainSetDefinition? terrainSet = source.Terrain is "main-biome" or "side-biome"
+                ? wangTerrain.FindDefinitionForReferenceBiome(source.Id)
+                : null;
             referenceBiomes[i] = new CompiledReferenceBiome(
                 StableIdSalt(source.Id),
                 source.Id switch
@@ -1684,9 +1696,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     "gravel" or null => ReferenceTerrainMaskAccent.Gravel,
                     _ => throw new InvalidOperationException($"未编译的参考地形掩码强调材质：{source.ReferenceTerrainMask.Accent}。"),
                 },
-                source.Terrain is "main-biome" or "side-biome"
-                    ? wangTerrain.FindForReferenceBiome(source.Id)
-                    : null);
+                terrainSet?.Decoded,
+                terrainSet?.DecodedBitmapCaves);
         }
 
         for (int mapY = 0; mapY < definition.Height; mapY++)
@@ -2295,6 +2306,117 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         return count;
     }
 
+    /// <summary>
+    /// 收集 Noita Wang tile 中由 Lua / 内建颜色导出的 marker 锚点；调用方提供固定容量目标，
+    /// 用于后续将参考地图的 spawn/load marker 转成 Demo 自己的数据化实体、道具与背景场景。
+    /// </summary>
+    internal static int CollectWangMarkerAnchors(
+        BiomeCatalog catalog,
+        NoitaWangTerrainCatalog wangTerrain,
+        CampaignConfig config,
+        ulong worldSeed,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY,
+        Span<NoitaWangMarkerAnchor> destination)
+    {
+        ArgumentNullException.ThrowIfNull(catalog);
+        ArgumentNullException.ThrowIfNull(wangTerrain);
+        ArgumentNullException.ThrowIfNull(config);
+        if (minimumX > maximumX || minimumY > maximumY)
+        {
+            throw new ArgumentException("Wang marker 查询矩形无效。");
+        }
+
+        if (destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        int count = 0;
+        string lastReferenceBiomeId = string.Empty;
+        NoitaWangTerrainSetDefinition? lastSet = null;
+        ulong lastSalt = 0UL;
+        for (long worldY = minimumY; worldY <= maximumY; worldY++)
+        {
+            for (long worldX = minimumX; worldX <= maximumX; worldX++)
+            {
+                if (!TryResolveWangReferenceBiome(catalog, config, worldX, worldY, out ReferenceBiomeDefinition referenceBiome))
+                {
+                    continue;
+                }
+
+                NoitaWangTerrainSetDefinition set;
+                ulong salt;
+                if (lastSet is not null && string.Equals(lastReferenceBiomeId, referenceBiome.Id, StringComparison.Ordinal))
+                {
+                    set = lastSet;
+                    salt = lastSalt;
+                }
+                else
+                {
+                    set = wangTerrain.FindDefinitionForReferenceBiome(referenceBiome.Id);
+                    lastSet = set;
+                    lastReferenceBiomeId = referenceBiome.Id;
+                    lastSalt = StableIdSalt(referenceBiome.Id);
+                    salt = lastSalt;
+                }
+
+                if (set.DecodedBitmapCaves is null ||
+                    !set.DecodedBitmapCaves.TrySample(worldX, worldY, worldSeed, salt, out byte semantic))
+                {
+                    semantic = set.Decoded.Sample(worldX, worldY, worldSeed, salt);
+                }
+                if (!DecodedNoitaWangTerrainSet.IsMarker(semantic))
+                {
+                    continue;
+                }
+
+                int markerIndex = semantic - NoitaWangTerrainCatalog.MarkerSemanticBase;
+                NoitaWangMarkerDefinition marker = set.Markers[markerIndex];
+                destination[count++] = new NoitaWangMarkerAnchor(
+                    referenceBiome.Id,
+                    set.Id,
+                    marker.Color,
+                    marker.Function,
+                    marker.Origin,
+                    semantic,
+                    worldX,
+                    worldY);
+                if (count == destination.Length)
+                {
+                    return count;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static bool TryResolveWangReferenceBiome(
+        BiomeCatalog catalog,
+        CampaignConfig config,
+        long worldX,
+        long worldY,
+        out ReferenceBiomeDefinition referenceBiome)
+    {
+        WorldTopologyDefinition topology = catalog.WorldTopology;
+        long macroX = FloorDivide(worldX, topology.MacroCellSize);
+        long macroY = FloorDivide(worldY - config.SurfaceY, topology.MacroCellSize);
+        long mapX = macroX + topology.OriginMacroX;
+        long mapY = macroY + topology.OriginMacroY;
+        if ((ulong)mapX >= (uint)topology.Width || (ulong)mapY >= (uint)topology.Height)
+        {
+            referenceBiome = null!;
+            return false;
+        }
+
+        int referenceBiomeIndex = BiomeCatalog.DecodeReferenceBiomeIndex(topology.MacroRows[(int)mapY], (int)mapX);
+        referenceBiome = topology.ReferenceBiomes[referenceBiomeIndex];
+        return referenceBiome.Terrain is "main-biome" or "side-biome";
+    }
+
     private static long MainPathCenterX(
         long worldY,
         CampaignConfig config,
@@ -2750,7 +2872,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ReferenceMountainKind Mountain,
         byte[] TerrainMask,
         ReferenceTerrainMaskAccent MaskAccent,
-        DecodedNoitaWangTerrainSet? WangTerrain);
+        DecodedNoitaWangTerrainSet? WangTerrain,
+        DecodedNoitaBitmapCaves? BitmapCaves);
 
     private enum ReferenceTerrainMaskAccent : byte
     {
@@ -2836,5 +2959,15 @@ internal readonly record struct HolyMountainLandmarkAnchor(
     int HolyMountainIndex,
     string Id,
     string Kind,
+    long WorldX,
+    long WorldY);
+
+internal readonly record struct NoitaWangMarkerAnchor(
+    string ReferenceBiomeId,
+    string WangSetId,
+    string MarkerColor,
+    string Function,
+    string Origin,
+    byte Semantic,
     long WorldX,
     long WorldY);

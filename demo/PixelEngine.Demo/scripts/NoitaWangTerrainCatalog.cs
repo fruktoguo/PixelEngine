@@ -103,6 +103,11 @@ internal sealed class NoitaWangTerrainCatalog
 
     internal DecodedNoitaWangTerrainSet FindForReferenceBiome(string referenceBiomeId)
     {
+        return FindDefinitionForReferenceBiome(referenceBiomeId).Decoded;
+    }
+
+    internal NoitaWangTerrainSetDefinition FindDefinitionForReferenceBiome(string referenceBiomeId)
+    {
         ArgumentException.ThrowIfNullOrWhiteSpace(referenceBiomeId);
         NoitaWangTerrainSetDefinition[] sets = Sets;
         for (int setIndex = 0; setIndex < sets.Length; setIndex++)
@@ -112,7 +117,7 @@ internal sealed class NoitaWangTerrainCatalog
             {
                 if (string.Equals(referenceBiomeIds[biomeIndex], referenceBiomeId, StringComparison.Ordinal))
                 {
-                    return sets[setIndex].Decoded;
+                    return sets[setIndex];
                 }
             }
         }
@@ -225,6 +230,9 @@ internal sealed class NoitaWangTerrainCatalog
         ValidateColors(set.RandomBinaryColors, $"{label}.randomBinaryColors");
         ValidateMaterialMappings(set.MaterialMappings, $"{label}.materialMappings");
         ValidateMarkers(set.Markers, $"{label}.markers");
+        set.DecodedBitmapCaves = set.BitmapCaves is null
+            ? null
+            : DecodedNoitaBitmapCaves.Decode(set.BitmapCaves, set.Markers.Length, $"{label}.bitmapCaves");
         Require(string.Equals(set.Encoding, "brotli-pewh-v1", StringComparison.Ordinal), $"{label}.encoding 必须为 brotli-pewh-v1。");
         Require(set.DecodedLength > BinaryHeaderLength, $"{label}.decodedLength 非法。");
         Require(IsSha256(set.DecodedSha256), $"{label}.decodedSha256 必须为 64 位 SHA256 hex。");
@@ -550,6 +558,8 @@ internal sealed class NoitaWangTerrainSetDefinition
 
     public NoitaWangMarkerDefinition[] Markers { get; init; } = [];
 
+    public NoitaBitmapCavesDefinition? BitmapCaves { get; init; }
+
     public string Encoding { get; init; } = string.Empty;
 
     public int DecodedLength { get; init; }
@@ -560,6 +570,9 @@ internal sealed class NoitaWangTerrainSetDefinition
 
     [JsonIgnore]
     internal DecodedNoitaWangTerrainSet Decoded { get; set; } = null!;
+
+    [JsonIgnore]
+    internal DecodedNoitaBitmapCaves? DecodedBitmapCaves { get; set; }
 }
 
 internal sealed class NoitaWangMaterialMappingDefinition
