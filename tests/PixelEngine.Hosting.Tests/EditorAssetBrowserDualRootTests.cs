@@ -548,7 +548,7 @@ public sealed class EditorAssetBrowserDualRootTests
         AssetBrowserItem script = Find("ScriptSource/LevelDirector.cs");
 
         Assert.Contains("CA 材质", materials.Descriptor?.Purpose, StringComparison.Ordinal);
-        Assert.Contains("材质目录：21", materials.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("材质目录：22", materials.PreviewSummary, StringComparison.Ordinal);
         Assert.Equal("材质反应规则", reactions.Descriptor?.TypeLabel);
         Assert.Contains("反应规则：9", reactions.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("启动场景", startup.Descriptor?.Purpose, StringComparison.Ordinal);
