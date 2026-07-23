@@ -123,6 +123,8 @@ public sealed class ScriptSimulationContextTests
         Assert.True((info.Properties & MaterialProperty.Diggable) != 0);
         Assert.Equal(stone, fixture.Context.Cells.GetMaterial(4, 4));
         Assert.Equal(new CellView(stone, 7, 9, 29), fixture.Context.Cells.Sample(4, 4));
+        Assert.True(fixture.Context.Cells.IsResident(4, 4));
+        Assert.False(fixture.Context.Cells.IsResident(4096, 4096));
         Assert.True(fixture.Context.Cells.IsSolid(4, 4));
         Assert.False(fixture.Context.Cells.IsRigidOwned(4, 4));
         Assert.True(fixture.Context.Solids.SampleSolidAabb(3.5f, 3.5f, 2, 2));

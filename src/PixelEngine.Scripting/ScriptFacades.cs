@@ -126,6 +126,14 @@ public interface IScriptContext
 public interface IWorldCellAccess
 {
     /// <summary>
+    /// 判断指定世界坐标所属 chunk 当前是否驻留；该查询不读取 cell 内容，也不会触发 streaming。
+    /// </summary>
+    /// <param name="x">世界 X 坐标。</param>
+    /// <param name="y">世界 Y 坐标。</param>
+    /// <returns>目标 chunk 当前驻留时返回 true。</returns>
+    bool IsResident(int x, int y);
+
+    /// <summary>
     /// 即时读取指定世界坐标的材质；脚本可在相位 1 调用，读取上帧末一致状态。
     /// </summary>
     /// <param name="x">世界 X 坐标。</param>

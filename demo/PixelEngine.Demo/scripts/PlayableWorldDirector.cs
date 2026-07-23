@@ -148,7 +148,9 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         explosive.TerrainEffectScale = 1f;
 
         _ = playerEntity.AddComponent<MaterialBrush>();
-        _ = playerEntity.AddComponent<WeaponController>();
+        WeaponController legacyWeapons = playerEntity.AddComponent<WeaponController>();
+        legacyWeapons.InputEnabled = false;
+        _ = playerEntity.AddComponent<WandController>();
         PlayerInputModeController inputMode = playerEntity.AddComponent<PlayerInputModeController>();
         inputMode.RestrictBrushToSandbox = true;
 

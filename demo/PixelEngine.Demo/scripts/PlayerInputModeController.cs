@@ -11,6 +11,7 @@ public sealed class PlayerInputModeController : Behaviour
     private WeaponController? _weapons;
     private PlayableProjectileTool? _projectile;
     private ExplosiveTool? _explosive;
+    private WandController? _wand;
     private CampaignRunDirector? _runDirector;
     private PlayerInputMode _appliedMode = (PlayerInputMode)byte.MaxValue;
     private bool _appliedBrushAvailability;
@@ -84,6 +85,7 @@ public sealed class PlayerInputModeController : Behaviour
         _weapons ??= Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
         _projectile ??= Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _explosive ??= Entity.TryGetComponent(out ExplosiveTool explosive) ? explosive : null;
+        _wand ??= Entity.TryGetComponent(out WandController wand) ? wand : null;
         _runDirector ??= Entity.TryGetComponent(out CampaignRunDirector runDirector) ? runDirector : null;
     }
 
@@ -110,12 +112,17 @@ public sealed class PlayerInputModeController : Behaviour
 
         if (_weapons is { } weapons)
         {
-            weapons.InputEnabled = !brushOwnsInput;
+            weapons.InputEnabled = !brushOwnsInput && _wand is null;
         }
 
         if (_projectile is { } projectile)
         {
-            projectile.InputEnabled = !brushOwnsInput && _weapons is null;
+            projectile.InputEnabled = !brushOwnsInput && _weapons is null && _wand is null;
+        }
+
+        if (_wand is { } wand)
+        {
+            wand.InputEnabled = !brushOwnsInput;
         }
 
         if (_explosive is { } explosive)

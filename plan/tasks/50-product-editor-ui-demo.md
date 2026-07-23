@@ -182,7 +182,8 @@
   - `DEMO-008` 仍未完成：背景 scene loader、marker prop 升级为真实敌人/可拾取道具/物理陷阱、剩余 fixed/random pixel scene、完整材料/生态、Noita 原始 RNG 序列、同 seed 全区域截图矩阵和组合后无软锁长路线仍待闭合；本检查点没有新增 framebuffer，不据此宣称视觉 parity 完成。
 
 - [~] `DEMO-009` 实现 Noita Wand / Spell 数据、施法求值、库存与 Wand 编辑系统。
-  - 当前进度（2026-07-23 启动）：按总目标顺序（残留 root cause 已复验闭合→法杖/法术）开始本任务；正在进行 Noita `data/scripts/gun/` 参考清点与 Demo 现有六武器/库存/输入现状 diff，随后落 catalog schema、有界 evaluator、库存/编辑与测试。
+  - 当前进度（2026-07-23 Wand core 检查点）：已锁定 Noita Build `17130612` 的五个 gun/action 来源 SHA256 与 491-action 分类清单；Demo 自有 `wand-spells.json` 定义 25 个九类 Spell、四把独立 Wand 和完整属性，加载期 fail-closed。固定容量 evaluator 已支持 ordered/shuffle、modifier/draw/repeat、hit/timer/death payload、material/utility/passive/limited-use，容量失败原子回滚且 4096-cast 分配 gate 与四场景 BDN 均为零分配。运行时通过 256 槽预热 pool 执行 projectile、材质/挖掘/传送、粒子/光照/音频，越出 resident world 即回收；inventory v2、HUD、数字键/滚轮选择和 16 槽点击编辑已接真实控制器。Demo 全套 229 passed / 1 explicit GL skip，solution warnings-as-errors 0 warning / 0 error。参考：`docs/reference-noita-build-17130612-wand-spells.md`。
+  - 未完成：四个 item slot、Wand/item 世界拾取/交换/拖放/丢弃、Spell 移动而非仅循环、权威 run save/load、491 action 逐项 parity 与真实 Player 输入/截图证据；本检查点不把 25 个代表 Spell 冒充完整目录覆盖，因此任务保持 `[~]`。
   - 优先级：P0。
   - 依赖：`DEMO-007`、`BASE-011`、`BASE-014`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §5；`docs/PixelEngine-架构与需求设计.md` §1.5；`plan/13-demo-game.md` §3.18。

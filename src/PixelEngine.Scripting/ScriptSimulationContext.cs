@@ -580,6 +580,11 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         CellGrid grid,
         WorldMutationAccumulator mutations) : IWorldCellAccess
     {
+        public bool IsResident(int x, int y)
+        {
+            return grid.TryGetMaterial(x, y, out _);
+        }
+
         public MaterialId GetMaterial(int x, int y)
         {
             return new MaterialId(grid.GetMaterial(x, y));

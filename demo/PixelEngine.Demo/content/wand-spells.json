@@ -1,0 +1,371 @@
+{
+  "schemaVersion": 1,
+  "reference": {
+    "buildId": "17130612",
+    "versionHash": "9dbd52ced019a643169a2db02f46c77f8766c6e5",
+    "sourceFiles": [
+      { "path": "data/scripts/gun/gun.lua", "sha256": "30b1cfae774978950ce4a8b595d98e7475799689df42ff2d165ccb6257b3b96c" },
+      { "path": "data/scripts/gun/gun_actions.lua", "sha256": "09a034b16fbacbe330b76f47bf66a05919d8d3301c1030263851ab95b5c8c532" },
+      { "path": "data/scripts/gun/gun_enums.lua", "sha256": "31ddde97d0ad8a3ec33e5922ca51c663431b882d52090696721610eca6c9c469" },
+      { "path": "data/scripts/gun/gunaction_generated.lua", "sha256": "13d8e7825acb61610e8f742af856cbb559ad5cfee3a35980b6c3712ba842e460" },
+      { "path": "data/scripts/gun/gun_extra_modifiers.lua", "sha256": "9ed222afa98ea98d81953209afee1594285936e81a4c97e54d03e8bc7af66f66" }
+    ],
+    "actionInventory": {
+      "total": 491,
+      "projectile": 144,
+      "staticProjectile": 46,
+      "modifier": 179,
+      "drawMany": 14,
+      "material": 35,
+      "other": 43,
+      "utility": 25,
+      "passive": 5
+    }
+  },
+  "limits": {
+    "maxDrawsPerCast": 64,
+    "maxRecursionDepth": 8,
+    "maxProjectilesPerCast": 32,
+    "maxWandCapacity": 16,
+    "maxAlwaysCast": 4
+  },
+  "spells": [
+    {
+      "id": "ember-bolt",
+      "displayName": "Ember Bolt",
+      "description": "A quick bolt that leaves a hot impact.",
+      "category": "projectile",
+      "manaCost": 5,
+      "maxUses": -1,
+      "castDelaySeconds": 0.04,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "bolt", "damage": 42, "terrainDamage": 18, "speed": 420, "lifetimeSeconds": 2, "gravity": 0, "bounces": 0, "spreadDegrees": 0 }
+    },
+    {
+      "id": "stone-orb",
+      "displayName": "Stone Orb",
+      "description": "A heavy sphere that can ricochet through a cavern.",
+      "category": "projectile",
+      "manaCost": 18,
+      "maxUses": -1,
+      "castDelaySeconds": 0.12,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "orb", "damage": 105, "terrainDamage": 70, "speed": 250, "lifetimeSeconds": 3, "gravity": 160, "bounces": 2, "spreadDegrees": 1 }
+    },
+    {
+      "id": "crystal-lance",
+      "displayName": "Crystal Lance",
+      "description": "A narrow, fast crystal projectile with strong terrain bite.",
+      "category": "projectile",
+      "manaCost": 24,
+      "maxUses": -1,
+      "castDelaySeconds": 0.16,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "bolt", "damage": 160, "terrainDamage": 150, "speed": 720, "lifetimeSeconds": 1.5, "gravity": 0, "bounces": 0, "spreadDegrees": 0 }
+    },
+    {
+      "id": "spark-burst",
+      "displayName": "Spark Burst",
+      "description": "A short-range cluster of bright sparks.",
+      "category": "projectile",
+      "manaCost": 12,
+      "maxUses": -1,
+      "castDelaySeconds": 0.08,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "orb", "damage": 36, "terrainDamage": 12, "speed": 360, "lifetimeSeconds": 1.2, "gravity": 40, "bounces": 1, "spreadDegrees": 4 }
+    },
+    {
+      "id": "damage-rune",
+      "displayName": "Damage Rune",
+      "description": "Adds force to the next projectile drawn by this cast.",
+      "category": "modifier",
+      "manaCost": 8,
+      "maxUses": -1,
+      "castDelaySeconds": 0.06,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "modifier", "damageAdd": 55, "terrainDamageAdd": 90 }
+    },
+    {
+      "id": "speed-rune",
+      "displayName": "Speed Rune",
+      "description": "Accelerates the next projectile and shortens its flight.",
+      "category": "modifier",
+      "manaCost": 6,
+      "maxUses": -1,
+      "castDelaySeconds": 0.03,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "modifier", "speedMultiplier": 1.65, "lifetimeMultiplier": 0.82 }
+    },
+    {
+      "id": "precision-rune",
+      "displayName": "Precision Rune",
+      "description": "Tightens the spread of the next cast branch.",
+      "category": "modifier",
+      "manaCost": 4,
+      "maxUses": -1,
+      "castDelaySeconds": 0.02,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "modifier", "spreadDegrees": -8 }
+    },
+    {
+      "id": "heavy-rune",
+      "displayName": "Heavy Rune",
+      "description": "Trades speed for a much harder impact.",
+      "category": "modifier",
+      "manaCost": 10,
+      "maxUses": -1,
+      "castDelaySeconds": 0.09,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "modifier", "damageAdd": 120, "terrainDamageAdd": 180, "speedMultiplier": 0.68, "gravityAdd": 90 }
+    },
+    {
+      "id": "bouncy-rune",
+      "displayName": "Bouncy Rune",
+      "description": "Gives the next projectile two additional ricochets.",
+      "category": "modifier",
+      "manaCost": 7,
+      "maxUses": -1,
+      "castDelaySeconds": 0.05,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "modifier", "bouncesAdd": 2, "speedMultiplier": 0.94 }
+    },
+    {
+      "id": "gravity-rune",
+      "displayName": "Gravity Rune",
+      "description": "Bends the next projectile down into the terrain.",
+      "category": "modifier",
+      "manaCost": 5,
+      "maxUses": -1,
+      "castDelaySeconds": 0.04,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "modifier", "gravityAdd": 260 }
+    },
+    {
+      "id": "twin-weave",
+      "displayName": "Twin Weave",
+      "description": "Draws two subsequent spells into this cast.",
+      "category": "draw",
+      "manaCost": 12,
+      "maxUses": -1,
+      "castDelaySeconds": 0.10,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "draw", "drawCount": 2 }
+    },
+    {
+      "id": "triple-weave",
+      "displayName": "Triple Weave",
+      "description": "Draws three subsequent spells into this cast.",
+      "category": "draw",
+      "manaCost": 24,
+      "maxUses": -1,
+      "castDelaySeconds": 0.20,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "draw", "drawCount": 3 }
+    },
+    {
+      "id": "scatter-weave",
+      "displayName": "Scatter Weave",
+      "description": "Draws three spells with a wide, deterministic spread.",
+      "category": "draw",
+      "manaCost": 18,
+      "maxUses": -1,
+      "castDelaySeconds": 0.14,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "draw", "drawCount": 3, "spreadDegrees": 14 }
+    },
+    {
+      "id": "impact-trigger",
+      "displayName": "Impact Trigger",
+      "description": "The payload fires when the projectile meets terrain.",
+      "category": "trigger",
+      "manaCost": 14,
+      "maxUses": -1,
+      "castDelaySeconds": 0.08,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "bolt", "trigger": "hit", "triggerDraw": 1, "damage": 58, "terrainDamage": 24, "speed": 380, "lifetimeSeconds": 2.5, "gravity": 0, "bounces": 0 }
+    },
+    {
+      "id": "timed-trigger",
+      "displayName": "Timed Trigger",
+      "description": "The payload fires after a short timer.",
+      "category": "trigger",
+      "manaCost": 16,
+      "maxUses": -1,
+      "castDelaySeconds": 0.10,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "orb", "trigger": "timer", "triggerDraw": 1, "triggerDelaySeconds": 0.32, "damage": 46, "terrainDamage": 18, "speed": 300, "lifetimeSeconds": 2.4, "gravity": 90, "bounces": 1 }
+    },
+    {
+      "id": "dying-trigger",
+      "displayName": "Dying Trigger",
+      "description": "The payload is released when the projectile expires or is destroyed.",
+      "category": "trigger",
+      "manaCost": 20,
+      "maxUses": -1,
+      "castDelaySeconds": 0.14,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "orb", "trigger": "death", "triggerDraw": 1, "damage": 72, "terrainDamage": 40, "speed": 280, "lifetimeSeconds": 2.8, "gravity": 120, "bounces": 0 }
+    },
+    {
+      "id": "water-stream",
+      "displayName": "Water Stream",
+      "description": "A material projectile that wets terrain and extinguishes heat.",
+      "category": "material",
+      "manaCost": 9,
+      "maxUses": -1,
+      "castDelaySeconds": 0.05,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "material", "projectile": "material", "material": "water", "materialRadius": 3, "damage": 6, "terrainDamage": 4, "speed": 330, "lifetimeSeconds": 2.2, "gravity": 120, "bounces": 0 }
+    },
+    {
+      "id": "oil-stream",
+      "displayName": "Oil Stream",
+      "description": "Leaves a flammable oil stain along its impact path.",
+      "category": "material",
+      "manaCost": 11,
+      "maxUses": -1,
+      "castDelaySeconds": 0.07,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "material", "projectile": "material", "material": "oil", "materialRadius": 3, "damage": 8, "terrainDamage": 6, "speed": 300, "lifetimeSeconds": 2.6, "gravity": 100, "bounces": 0 }
+    },
+    {
+      "id": "acid-orb",
+      "displayName": "Acid Orb",
+      "description": "Corrosive material eats a small pocket on impact.",
+      "category": "material",
+      "manaCost": 22,
+      "maxUses": -1,
+      "castDelaySeconds": 0.16,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "material", "projectile": "material", "material": "acid", "materialRadius": 4, "damage": 32, "terrainDamage": 260, "speed": 250, "lifetimeSeconds": 3, "gravity": 80, "bounces": 0 }
+    },
+    {
+      "id": "tunnel-bolt",
+      "displayName": "Tunnel Bolt",
+      "description": "A utility bolt whose impact drills a controlled passage.",
+      "category": "utility",
+      "manaCost": 15,
+      "maxUses": -1,
+      "castDelaySeconds": 0.09,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "dig", "damage": 10, "terrainDamage": 420, "speed": 460, "lifetimeSeconds": 1.8, "gravity": 0, "bounces": 0, "explosionRadius": 7 }
+    },
+    {
+      "id": "blink-bolt",
+      "displayName": "Blink Bolt",
+      "description": "A utility bolt that relocates the caster at impact.",
+      "category": "utility",
+      "manaCost": 28,
+      "maxUses": -1,
+      "castDelaySeconds": 0.20,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "teleport", "damage": 1, "terrainDamage": 1, "speed": 520, "lifetimeSeconds": 1.4, "gravity": 0, "bounces": 0 }
+    },
+    {
+      "id": "mana-coil",
+      "displayName": "Mana Coil",
+      "description": "A passive coil improves the held Wand's mana charge.",
+      "category": "passive",
+      "manaCost": 0,
+      "maxUses": -1,
+      "castDelaySeconds": 0,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "passive", "manaChargeMultiplier": 1.30 }
+    },
+    {
+      "id": "torch-aura",
+      "displayName": "Torch Aura",
+      "description": "A passive light follows every projectile from this Wand.",
+      "category": "passive",
+      "manaCost": 0,
+      "maxUses": -1,
+      "castDelaySeconds": 0,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "passive", "lightRadius": 42, "lightIntensity": 0.75 }
+    },
+    {
+      "id": "demolition-charge",
+      "displayName": "Demolition Charge",
+      "description": "A limited-use heavy explosive that reshapes terrain.",
+      "category": "limitedUse",
+      "manaCost": 45,
+      "maxUses": 3,
+      "castDelaySeconds": 0.35,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "launch", "projectile": "grenade", "damage": 240, "terrainDamage": 2400, "speed": 260, "lifetimeSeconds": 2.2, "gravity": 420, "bounces": 1, "explosionRadius": 22 }
+    },
+    {
+      "id": "echo-rune",
+      "displayName": "Echo Rune",
+      "description": "Repeats the most recent projectile branch once.",
+      "category": "special",
+      "manaCost": 12,
+      "maxUses": -1,
+      "castDelaySeconds": 0.10,
+      "rechargeSeconds": 0,
+      "effect": { "kind": "repeat", "repeatCount": 1 }
+    }
+  ],
+  "wands": [
+    {
+      "id": "apprentice-wand",
+      "displayName": "Apprentice Wand",
+      "shuffle": false,
+      "spellsPerCast": 1,
+      "castDelaySeconds": 0.16,
+      "rechargeSeconds": 0.85,
+      "manaMax": 220,
+      "manaChargePerSecond": 55,
+      "capacity": 8,
+      "spreadDegrees": 2,
+      "speedMultiplier": 1,
+      "alwaysCast": ["torch-aura"],
+      "deck": ["mana-coil", "damage-rune", "ember-bolt", "twin-weave", "stone-orb", "precision-rune", "echo-rune"]
+    },
+    {
+      "id": "trigger-wand",
+      "displayName": "Trigger Wand",
+      "shuffle": false,
+      "spellsPerCast": 1,
+      "castDelaySeconds": 0.22,
+      "rechargeSeconds": 1.05,
+      "manaMax": 300,
+      "manaChargePerSecond": 48,
+      "capacity": 10,
+      "spreadDegrees": 3,
+      "speedMultiplier": 1,
+      "alwaysCast": ["precision-rune"],
+      "deck": ["impact-trigger", "timed-trigger", "acid-orb", "speed-rune", "bouncy-rune", "demolition-charge", "water-stream", "heavy-rune"]
+    },
+    {
+      "id": "chaos-wand",
+      "displayName": "Chaos Wand",
+      "shuffle": true,
+      "spellsPerCast": 2,
+      "castDelaySeconds": 0.12,
+      "rechargeSeconds": 1.35,
+      "manaMax": 420,
+      "manaChargePerSecond": 62,
+      "capacity": 12,
+      "spreadDegrees": 6,
+      "speedMultiplier": 1.08,
+      "alwaysCast": ["mana-coil"],
+      "deck": ["triple-weave", "scatter-weave", "dying-trigger", "oil-stream", "tunnel-bolt", "blink-bolt", "crystal-lance", "spark-burst", "gravity-rune"]
+    },
+    {
+      "id": "geomancer-wand",
+      "displayName": "Geomancer Wand",
+      "shuffle": false,
+      "spellsPerCast": 1,
+      "castDelaySeconds": 0.18,
+      "rechargeSeconds": 1.15,
+      "manaMax": 360,
+      "manaChargePerSecond": 50,
+      "capacity": 10,
+      "spreadDegrees": 1,
+      "speedMultiplier": 0.95,
+      "alwaysCast": ["torch-aura"],
+      "deck": ["gravity-rune", "spark-burst", "water-stream", "tunnel-bolt", "acid-orb", "echo-rune", "crystal-lance", "demolition-charge"]
+    }
+  ]
+}

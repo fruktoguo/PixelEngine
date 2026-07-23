@@ -113,9 +113,31 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.InventoryScreen,
-            "demo.webfirst.inventory/v1",
-            [],
-            ["back_main"]);
+            "demo.webfirst.inventory/v2",
+            GameUiDemoController.InventoryModelPathNames.ToArray(),
+            [
+                "back_main",
+                "cycle_spell_1",
+                "cycle_spell_2",
+                "cycle_spell_3",
+                "cycle_spell_4",
+                "cycle_spell_5",
+                "cycle_spell_6",
+                "cycle_spell_7",
+                "cycle_spell_8",
+                "cycle_spell_9",
+                "cycle_spell_10",
+                "cycle_spell_11",
+                "cycle_spell_12",
+                "cycle_spell_13",
+                "cycle_spell_14",
+                "cycle_spell_15",
+                "cycle_spell_16",
+                "select_wand_1",
+                "select_wand_2",
+                "select_wand_3",
+                "select_wand_4",
+            ]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.DialogScreen,
@@ -291,25 +313,27 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证背包与对话屏幕绑定默认六武器目录和无限沙盒提示，不退回固定出口路线。
+    /// 验证库存与对话屏幕绑定四 Wand 目录和无限沙盒提示，不退回旧六武器或固定出口路线。
     /// </summary>
     [Fact]
-    public void DemoInventoryAndDialogTextMatchesDefaultWeaponCatalogAndSandbox()
+    public void DemoInventoryAndDialogTextMatchesWandCatalogAndSandbox()
     {
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
-        WeaponCatalog catalog = LoadDefaultWeaponCatalog();
+        WandSpellCatalog catalog = WandSpellCatalog.Load(new EngineScriptConfigApi(
+            Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content")));
         string[] inventoryText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.InventoryScreen).FullPath);
         string[] dialogText = UiVisibleText(manifest.GetRequiredScreen(GameUiDemoController.DialogScreen).FullPath);
 
-        Assert.Equal(6, catalog.Weapons.Length);
-        for (int i = 0; i < catalog.Weapons.Length; i++)
+        Assert.Equal(4, catalog.Wands.Length);
+        for (int i = 0; i < catalog.Wands.Length; i++)
         {
-            string expectedPrefix = $"{i + 1} {catalog.Weapons[i].DisplayName}";
+            string expectedPrefix = $"{i + 1} {catalog.Wands[i].DisplayName}";
             Assert.Contains(inventoryText, text => text.StartsWith(expectedPrefix, StringComparison.Ordinal));
         }
 
-        Assert.Contains(inventoryText, text => text.Contains("开路与触发坍塌", StringComparison.Ordinal));
-        Assert.Contains(inventoryText, text => text.Contains("改变局部地形", StringComparison.Ordinal));
+        Assert.Contains(inventoryText, text => text.Contains("Mana Coil", StringComparison.Ordinal));
+        Assert.Contains(inventoryText, text => text.Contains("Damage Rune", StringComparison.Ordinal));
+        Assert.Contains(inventoryText, text => text.Contains("点击槽位更换法术", StringComparison.Ordinal));
         Assert.Contains("山脊、湖盆和洞穴由同一个世界 seed 延展。", dialogText);
         Assert.Contains("走过的地形会保留挖掘、爆破与建造结果。", dialogText);
         Assert.DoesNotContain(dialogText, text => text.Contains("出口", StringComparison.Ordinal));
@@ -408,7 +432,7 @@ public sealed class DemoUiContentTests
         // Assert：验证预期结果
         Assert.Contains("无限沙盒", gui.Context.Buttons);
         Assert.Contains("设置", gui.Context.Texts);
-        Assert.Contains("背包", gui.Context.Texts);
+        Assert.Contains("法杖与法术 / Wands & Spells", gui.Context.Texts);
         Assert.Contains("勘探记录", gui.Context.Texts);
         Assert.Contains("HUD", gui.Context.Texts);
         Assert.Contains("运行诊断", gui.Context.Texts);
@@ -601,6 +625,44 @@ public sealed class DemoUiContentTests
         AssertHudPathWritten(ui, "hud.bodies");
         AssertHudPathWritten(ui, "hud.fx");
         Assert.DoesNotContain(GameUiDemoController.ResultScreen, ui.PushedScreens);
+    }
+
+    /// <summary>
+    /// 验证 inventory v2 从真实 WandController 发布四把 Wand，并把选择/换卡事件写回运行时 deck。
+    /// </summary>
+    [Fact]
+    public void DemoInventorySelectsWandsAndEditsSpellSlotsThroughScriptUi()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out _);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 20f;
+        player.SpawnY = 42f;
+        WandController wand = entity.AddComponent<WandController>();
+        _ = entity.AddComponent<GameUiDemoController>();
+
+        engine.RunHeadlessTicks(2, realDeltaSeconds: 1.0 / 60.0);
+        ui.Raise(GameUiDemoController.Action("open_inventory"));
+
+        Assert.Contains("> 1 Apprentice Wand", GetUiText(ui, "inventory.wand_1"), StringComparison.Ordinal);
+        Assert.Equal("Apprentice Wand", GetUiText(ui, "inventory.selected_name"));
+        Assert.Contains("Ordered", GetUiText(ui, "inventory.stats"), StringComparison.Ordinal);
+        Assert.Contains("Mana Coil", GetUiText(ui, "inventory.slot_1"), StringComparison.Ordinal);
+        Assert.Contains("可编辑", GetUiText(ui, "inventory.edit_state"), StringComparison.Ordinal);
+
+        ui.Raise(GameUiDemoController.Action("select_wand_2"));
+
+        Assert.Equal(1, wand.SelectedIndex);
+        Assert.Equal("Trigger Wand", GetUiText(ui, "inventory.selected_name"));
+        Assert.Contains("Impact Trigger", GetUiText(ui, "inventory.slot_1"), StringComparison.Ordinal);
+
+        ui.Raise(GameUiDemoController.Action("cycle_spell_1"));
+
+        Assert.Equal("timed-trigger", wand.SpellSlotId(1, 0));
+        Assert.Contains("Timed Trigger", GetUiText(ui, "inventory.slot_1"), StringComparison.Ordinal);
+        Assert.False(wand.Faulted, wand.LastException?.ToString());
     }
 
     /// <summary>

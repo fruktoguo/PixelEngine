@@ -53,6 +53,33 @@ public sealed class GameUiDemoController : Behaviour
         "menu.mode_text",
     ];
 
+    private static readonly string[] InventoryModelPaths =
+    [
+        "inventory.wand_1",
+        "inventory.wand_2",
+        "inventory.wand_3",
+        "inventory.wand_4",
+        "inventory.selected_name",
+        "inventory.stats",
+        "inventory.edit_state",
+        "inventory.slot_1",
+        "inventory.slot_2",
+        "inventory.slot_3",
+        "inventory.slot_4",
+        "inventory.slot_5",
+        "inventory.slot_6",
+        "inventory.slot_7",
+        "inventory.slot_8",
+        "inventory.slot_9",
+        "inventory.slot_10",
+        "inventory.slot_11",
+        "inventory.slot_12",
+        "inventory.slot_13",
+        "inventory.slot_14",
+        "inventory.slot_15",
+        "inventory.slot_16",
+    ];
+
     private static readonly string[] TelemetryModelPaths =
     [
         "hud.weapon",
@@ -92,6 +119,8 @@ public sealed class GameUiDemoController : Behaviour
 
     internal static ReadOnlySpan<string> HudModelPathNames => HudModelPaths;
 
+    internal static ReadOnlySpan<string> InventoryModelPathNames => InventoryModelPaths;
+
     internal static ReadOnlySpan<string> TelemetryModelPathNames => TelemetryModelPaths;
 
     internal static ReadOnlySpan<string> ResultModelPathNames => ResultModelPaths;
@@ -111,6 +140,32 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiActionId QuitGameAction = Action("quit_game");
     private static readonly UiActionId ToggleAudioAction = Action("toggle_audio");
     private static readonly UiActionId ToggleVSyncAction = Action("toggle_vsync");
+    private static readonly UiActionId[] SelectWandActions =
+    [
+        Action("select_wand_1"),
+        Action("select_wand_2"),
+        Action("select_wand_3"),
+        Action("select_wand_4"),
+    ];
+    private static readonly UiActionId[] CycleSpellActions =
+    [
+        Action("cycle_spell_1"),
+        Action("cycle_spell_2"),
+        Action("cycle_spell_3"),
+        Action("cycle_spell_4"),
+        Action("cycle_spell_5"),
+        Action("cycle_spell_6"),
+        Action("cycle_spell_7"),
+        Action("cycle_spell_8"),
+        Action("cycle_spell_9"),
+        Action("cycle_spell_10"),
+        Action("cycle_spell_11"),
+        Action("cycle_spell_12"),
+        Action("cycle_spell_13"),
+        Action("cycle_spell_14"),
+        Action("cycle_spell_15"),
+        Action("cycle_spell_16"),
+    ];
     private static readonly UiPathId SettingsAudioPath = Path("settings.audio");
     private static readonly UiPathId SettingsVSyncPath = Path("settings.vsync");
     private static readonly UiPathId MenuCampaignSelectedPath = Path("menu.campaign_selected");
@@ -166,12 +221,42 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId ResultRegionTextPath = Path("result.region_text");
     private static readonly UiPathId ResultDepthCellsPath = Path("result.depth_cells");
     private static readonly UiPathId ResultElapsedSecondsPath = Path("result.elapsed_seconds");
+    private static readonly UiPathId InventorySelectedNamePath = Path("inventory.selected_name");
+    private static readonly UiPathId InventoryStatsPath = Path("inventory.stats");
+    private static readonly UiPathId InventoryEditStatePath = Path("inventory.edit_state");
+    private static readonly UiPathId[] InventoryWandPaths =
+    [
+        Path("inventory.wand_1"),
+        Path("inventory.wand_2"),
+        Path("inventory.wand_3"),
+        Path("inventory.wand_4"),
+    ];
+    private static readonly UiPathId[] InventorySlotPaths =
+    [
+        Path("inventory.slot_1"),
+        Path("inventory.slot_2"),
+        Path("inventory.slot_3"),
+        Path("inventory.slot_4"),
+        Path("inventory.slot_5"),
+        Path("inventory.slot_6"),
+        Path("inventory.slot_7"),
+        Path("inventory.slot_8"),
+        Path("inventory.slot_9"),
+        Path("inventory.slot_10"),
+        Path("inventory.slot_11"),
+        Path("inventory.slot_12"),
+        Path("inventory.slot_13"),
+        Path("inventory.slot_14"),
+        Path("inventory.slot_15"),
+        Path("inventory.slot_16"),
+    ];
 
     private IGameUiService? _ui;
     private IRuntimeControlApi? _runtime;
     private PlayerHealth? _health;
     private PlayerController? _player;
     private WeaponController? _weapons;
+    private WandController? _wand;
     private MaterialBrush? _brush;
     private PlayerInputModeController? _inputMode;
     private ExplosiveTool? _explosive;
@@ -387,6 +472,7 @@ public sealed class GameUiDemoController : Behaviour
         _health = null;
         _player = null;
         _weapons = null;
+        _wand = null;
         _brush = null;
         _inputMode = null;
         _explosive = null;
@@ -525,13 +611,38 @@ public sealed class GameUiDemoController : Behaviour
 
         if (uiEvent.Action == OpenInventoryAction)
         {
+            ResolveHudSources();
             OpenModal(InventoryScreen);
+            PublishInventoryState();
             return;
         }
 
         if (uiEvent.Action == OpenDialogAction)
         {
             OpenModal(DialogScreen);
+            return;
+        }
+
+        int wandActionIndex = IndexOfAction(SelectWandActions, uiEvent.Action);
+        if (wandActionIndex >= 0)
+        {
+            if (_wand?.SelectWand(wandActionIndex) == true)
+            {
+                PublishInventoryState();
+                InvalidateHudModelCache();
+            }
+
+            return;
+        }
+
+        int spellActionIndex = IndexOfAction(CycleSpellActions, uiEvent.Action);
+        if (spellActionIndex >= 0)
+        {
+            if (_wand?.CycleCurrentSpellSlot(spellActionIndex) == true)
+            {
+                PublishInventoryState();
+            }
+
             return;
         }
 
@@ -604,6 +715,12 @@ public sealed class GameUiDemoController : Behaviour
 
     private void ResolveHudSources()
     {
+        // StartForService 支持不挂入 Scene 的 ManagedFallback 单元测试；此时只发布默认模型。
+        if (Entity is null)
+        {
+            return;
+        }
+
         if (_runDirector is null && Entity.TryGetComponent(out CampaignRunDirector runDirector))
         {
             _runDirector = runDirector;
@@ -622,6 +739,11 @@ public sealed class GameUiDemoController : Behaviour
         if (_weapons is null && Entity.TryGetComponent(out WeaponController weapons))
         {
             _weapons = weapons;
+        }
+
+        if (_wand is null && Entity.TryGetComponent(out WandController wand))
+        {
+            _wand = wand;
         }
 
         if (_brush is null && Entity.TryGetComponent(out MaterialBrush brush))
@@ -679,6 +801,11 @@ public sealed class GameUiDemoController : Behaviour
             _weapons = sceneWeapons;
         }
 
+        if (_wand is null && Context.Scene.TryGetFirstComponent(out WandController? sceneWand))
+        {
+            _wand = sceneWand;
+        }
+
         if (_brush is null && Context.Scene.TryGetFirstComponent(out MaterialBrush? sceneBrush))
         {
             _brush = sceneBrush;
@@ -721,7 +848,7 @@ public sealed class GameUiDemoController : Behaviour
     {
         return _health is not null &&
             _player is not null &&
-            _weapons is not null &&
+            (_wand is not null || _weapons is not null) &&
             _brush is not null &&
             _explosive is not null &&
             _projectile is not null &&
@@ -744,6 +871,29 @@ public sealed class GameUiDemoController : Behaviour
 
     private void PublishWeapon()
     {
+        if (_wand?.Catalog is { Wands.Length: > 0 } wandCatalog &&
+            _wand.CurrentWand is { } currentWand)
+        {
+            int selectedWand = Math.Clamp(_wand.SelectedIndex, 0, wandCatalog.Wands.Length - 1);
+            SetTelemetryValue(
+                HudWeaponPath,
+                wandCatalog.Wands.Length <= 1 ? 0.0 : Ratio(selectedWand, wandCatalog.Wands.Length - 1));
+            SetHudValue(HudAmmoPath, _wand.ManaFraction);
+            SetHudValue(
+                HudCooldownPath,
+                1.0 - Ratio(
+                    _wand.CastDelayRemaining,
+                    Math.Max(0.01f, currentWand.CastDelaySeconds + 0.5f)));
+            SetHudValue(HudHeatPath, Ratio(_wand.ActiveProjectileCount, 32.0));
+            SetHudValue(
+                HudReloadPath,
+                1.0 - Ratio(
+                    _wand.RechargeRemaining,
+                    Math.Max(0.01f, currentWand.RechargeSeconds)));
+            SetTelemetryValue(HudOverheatedPath, 0.0);
+            return;
+        }
+
         if (_weapons?.Catalog is not { Weapons.Length: > 0 } catalog)
         {
             SetTelemetryValue(HudWeaponPath, 0.0);
@@ -780,7 +930,9 @@ public sealed class GameUiDemoController : Behaviour
         }
 
         SetTelemetryValue(HudExplosionsPath, _explosive is null ? 0.0 : Ratio(_explosive.ExplosionCount, 10.0));
-        SetTelemetryValue(HudShotsPath, Ratio(_weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0, 10.0));
+        SetTelemetryValue(
+            HudShotsPath,
+            Ratio(_wand?.CastCount ?? _weapons?.PrimaryFireCount ?? _projectile?.ShotsFired ?? 0, 10.0));
         if (_projectile is null)
         {
             SetTelemetryValue(HudCollapseIslandsPath, 0.0);
@@ -792,6 +944,69 @@ public sealed class GameUiDemoController : Behaviour
         double scanCapacity = ((scanRadius * 2) + 1) * ((scanRadius * 2) + 1);
         SetTelemetryValue(HudCollapseIslandsPath, Ratio(_projectile.CollapsedFloatingIslands, 10.0));
         SetTelemetryValue(HudCollapseScanPath, Ratio(_projectile.LastCollapseSolidCandidates, scanCapacity));
+    }
+
+    private void PublishInventoryState()
+    {
+        if (ModalScreen.Value == 0 || _modalScreenId != InventoryScreen)
+        {
+            return;
+        }
+
+        ResolveHudSources();
+        if (_wand?.Catalog is not { Wands.Length: > 0 } catalog ||
+            _wand.CurrentWand is not { } wand)
+        {
+            SetScreenText(ModalScreen, InventorySelectedNamePath, "Wand unavailable");
+            SetScreenText(ModalScreen, InventoryStatsPath, string.Empty);
+            SetScreenText(ModalScreen, InventoryEditStatePath, "当前场景没有 WandController");
+            for (int i = 0; i < InventoryWandPaths.Length; i++)
+            {
+                SetScreenText(ModalScreen, InventoryWandPaths[i], $"{i + 1} --");
+            }
+
+            for (int i = 0; i < InventorySlotPaths.Length; i++)
+            {
+                SetScreenText(ModalScreen, InventorySlotPaths[i], $"{i + 1:00}  --");
+            }
+
+            return;
+        }
+
+        for (int i = 0; i < InventoryWandPaths.Length; i++)
+        {
+            string label = i < catalog.Wands.Length
+                ? $"{(i == _wand.SelectedIndex ? ">" : " ")} {i + 1} {catalog.Wands[i].DisplayName}"
+                : $"{i + 1} --";
+            SetScreenText(ModalScreen, InventoryWandPaths[i], label);
+        }
+
+        SetScreenText(ModalScreen, InventorySelectedNamePath, wand.DisplayName);
+        SetScreenText(
+            ModalScreen,
+            InventoryStatsPath,
+            $"{(wand.Shuffle ? "Shuffle" : "Ordered")}  Draw {wand.SpellsPerCast}  Mana {wand.ManaMax:0}/{wand.ManaChargePerSecond:0}/s  Cast {wand.CastDelaySeconds:0.00}s  Recharge {wand.RechargeSeconds:0.00}s  Spread {wand.SpreadDegrees:0.#}");
+        SetScreenText(
+            ModalScreen,
+            InventoryEditStatePath,
+            _wand.CanEditWand
+                ? "可编辑：点击槽位循环法术"
+                : "仅可在 Holy Mountain 或 Infinite Sandbox 编辑");
+        for (int i = 0; i < InventorySlotPaths.Length; i++)
+        {
+            string label;
+            if (i < wand.DeckSpellIndices.Length)
+            {
+                WandSpellDefinition spell = catalog.Spells[wand.DeckSpellIndices[i]];
+                label = $"{i + 1:00}  {spell.DisplayName}  [{spell.Category}]";
+            }
+            else
+            {
+                label = $"{i + 1:00}  -- empty --";
+            }
+
+            SetScreenText(ModalScreen, InventorySlotPaths[i], label);
+        }
     }
 
     private void PublishContextReadout()
@@ -854,7 +1069,14 @@ public sealed class GameUiDemoController : Behaviour
 
         if (_weapons?.Catalog is not { Weapons.Length: > 0 } catalog)
         {
-            return "未装备 / None";
+            return _wand is { SelectedWandDisplayName.Length: > 0 } wand
+                ? wand.SelectedWandDisplayName
+                : "未装备 / None";
+        }
+
+        if (_wand is { SelectedWandDisplayName.Length: > 0 } selectedWand)
+        {
+            return selectedWand.SelectedWandDisplayName;
         }
 
         int selected = Math.Clamp(_weapons.SelectedIndex, 0, catalog.Weapons.Length - 1);
@@ -1620,6 +1842,19 @@ public sealed class GameUiDemoController : Behaviour
         {
             return null;
         }
+    }
+
+    private static int IndexOfAction(UiActionId[] actions, UiActionId action)
+    {
+        for (int i = 0; i < actions.Length; i++)
+        {
+            if (actions[i] == action)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     internal static UiActionId Action(string id)

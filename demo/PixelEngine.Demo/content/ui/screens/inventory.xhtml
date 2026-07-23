@@ -1,24 +1,64 @@
-<rml title="背包" data-screen="inventory" data-contract="demo.webfirst.inventory/v1" style="left: 344px; top: 114px; width: 340px; height: 286px">
+<rml title="法杖与法术" data-screen="inventory" data-contract="demo.webfirst.inventory/v2" style="left: 152px; top: 32px; width: 720px; height: 536px">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #edf4ff; background-color: transparent; }
-      #inventory_panel { position: absolute; left: 344px; top: 114px; width: 308px; height: 254px; padding: 16px; background-color: rgba(17, 24, 20, 236); border-width: 1px; border-color: #4e7058; }
-      #inventory_title { color: #9ee7c5; font-size: 21px; }
-      #inventory_slot_1, #inventory_slot_2, #inventory_slot_3, #inventory_slot_4, #inventory_slot_5, #inventory_slot_6 { color: #c8d6ce; }
-      button { width: 124px; height: 28px; margin-top: 10px; background-color: #3f7048; color: #ffffff; border-width: 1px; border-color: #679270; }
-      button:hover { background-color: #52845c; }
-      p { margin: 4px 0px; }
+      body { margin: 0px; font-family: "Noto Sans SC"; color: #edf2f7; background-color: transparent; }
+      #inventory_panel { position: absolute; left: 0px; top: 0px; width: 682px; height: 498px; padding: 18px; background-color: rgba(10, 13, 17, 244); border-width: 1px; border-color: #58616d; }
+      #inventory_title { position: absolute; left: 18px; top: 12px; margin: 0px; color: #f0c766; font-size: 19px; }
+      #inventory_subtitle { position: absolute; left: 18px; top: 36px; margin: 0px; color: #8f9dab; font-size: 10px; }
+      button { color: #e8edf2; background-color: #222a31; border-width: 1px; border-color: #495661; }
+      button:hover { color: #ffffff; background-color: #32414b; border-color: #75a2b5; }
+      .wand_button { position: absolute; top: 58px; width: 158px; height: 30px; font-size: 11px; }
+      #inventory_wand_1 { left: 18px; }
+      #inventory_wand_2 { left: 184px; }
+      #inventory_wand_3 { left: 350px; }
+      #inventory_wand_4 { left: 516px; }
+      #inventory_selected { position: absolute; left: 18px; top: 99px; margin: 0px; color: #82d5b2; font-size: 15px; }
+      #inventory_stats { position: absolute; left: 18px; top: 122px; width: 660px; margin: 0px; color: #bdc8d2; font-size: 10px; }
+      #inventory_edit_state { position: absolute; left: 18px; top: 142px; width: 660px; margin: 0px; color: #d6a963; font-size: 10px; }
+      #inventory_divider { position: absolute; left: 18px; top: 164px; width: 646px; height: 1px; background-color: #414b55; }
+      .spell_slot { position: absolute; width: 316px; height: 30px; font-size: 10px; text-align: left; padding-left: 8px; background-color: #1b2228; }
+      #inventory_slot_1, #inventory_slot_2 { top: 176px; }
+      #inventory_slot_3, #inventory_slot_4 { top: 210px; }
+      #inventory_slot_5, #inventory_slot_6 { top: 244px; }
+      #inventory_slot_7, #inventory_slot_8 { top: 278px; }
+      #inventory_slot_9, #inventory_slot_10 { top: 312px; }
+      #inventory_slot_11, #inventory_slot_12 { top: 346px; }
+      #inventory_slot_13, #inventory_slot_14 { top: 380px; }
+      #inventory_slot_15, #inventory_slot_16 { top: 414px; }
+      #inventory_slot_1, #inventory_slot_3, #inventory_slot_5, #inventory_slot_7, #inventory_slot_9, #inventory_slot_11, #inventory_slot_13, #inventory_slot_15 { left: 18px; }
+      #inventory_slot_2, #inventory_slot_4, #inventory_slot_6, #inventory_slot_8, #inventory_slot_10, #inventory_slot_12, #inventory_slot_14, #inventory_slot_16 { left: 348px; }
+      #inventory_back { position: absolute; left: 18px; top: 462px; width: 132px; height: 30px; background-color: #365d46; border-color: #5d876b; }
+      #inventory_back:hover { background-color: #467558; }
     </style>
   </head>
   <body>
     <div id="inventory_panel">
-      <p id="inventory_title">背包</p>
-      <p id="inventory_slot_1">1 Pistol：开路与触发坍塌</p>
-      <p id="inventory_slot_2">2 Laser Cannon：熔切金属与岩层</p>
-      <p id="inventory_slot_3">3 Grenade：拆除厚石地形</p>
-      <p id="inventory_slot_4">4 Bomb：大范围爆破</p>
-      <p id="inventory_slot_5">5 Excavator：挖掘通道</p>
-      <p id="inventory_slot_6">6 Builder：改变局部地形</p>
+      <p id="inventory_title">法杖与法术 / Wands &amp; Spells</p>
+      <p id="inventory_subtitle">选择法杖后点击槽位更换法术</p>
+      <button id="inventory_wand_1" class="wand_button" data-event-click="select_wand_1"><span path="inventory.wand_1">1 Apprentice Wand</span></button>
+      <button id="inventory_wand_2" class="wand_button" data-event-click="select_wand_2"><span path="inventory.wand_2">2 Trigger Wand</span></button>
+      <button id="inventory_wand_3" class="wand_button" data-event-click="select_wand_3"><span path="inventory.wand_3">3 Chaos Wand</span></button>
+      <button id="inventory_wand_4" class="wand_button" data-event-click="select_wand_4"><span path="inventory.wand_4">4 Geomancer Wand</span></button>
+      <p id="inventory_selected" path="inventory.selected_name">Apprentice Wand</p>
+      <p id="inventory_stats" path="inventory.stats">Ordered  Draw 1  Mana 220/55/s</p>
+      <p id="inventory_edit_state" path="inventory.edit_state">可编辑：点击槽位循环法术</p>
+      <div id="inventory_divider"></div>
+      <button id="inventory_slot_1" class="spell_slot" data-event-click="cycle_spell_1"><span path="inventory.slot_1">01 Mana Coil [Passive]</span></button>
+      <button id="inventory_slot_2" class="spell_slot" data-event-click="cycle_spell_2"><span path="inventory.slot_2">02 Damage Rune [Modifier]</span></button>
+      <button id="inventory_slot_3" class="spell_slot" data-event-click="cycle_spell_3"><span path="inventory.slot_3">03 Ember Bolt [Projectile]</span></button>
+      <button id="inventory_slot_4" class="spell_slot" data-event-click="cycle_spell_4"><span path="inventory.slot_4">04 Twin Weave [Draw]</span></button>
+      <button id="inventory_slot_5" class="spell_slot" data-event-click="cycle_spell_5"><span path="inventory.slot_5">05 Stone Orb [Projectile]</span></button>
+      <button id="inventory_slot_6" class="spell_slot" data-event-click="cycle_spell_6"><span path="inventory.slot_6">06 Precision Rune [Modifier]</span></button>
+      <button id="inventory_slot_7" class="spell_slot" data-event-click="cycle_spell_7"><span path="inventory.slot_7">07 Echo Rune [Special]</span></button>
+      <button id="inventory_slot_8" class="spell_slot" data-event-click="cycle_spell_8"><span path="inventory.slot_8">08 -- empty --</span></button>
+      <button id="inventory_slot_9" class="spell_slot" data-event-click="cycle_spell_9"><span path="inventory.slot_9">09 -- empty --</span></button>
+      <button id="inventory_slot_10" class="spell_slot" data-event-click="cycle_spell_10"><span path="inventory.slot_10">10 -- empty --</span></button>
+      <button id="inventory_slot_11" class="spell_slot" data-event-click="cycle_spell_11"><span path="inventory.slot_11">11 -- empty --</span></button>
+      <button id="inventory_slot_12" class="spell_slot" data-event-click="cycle_spell_12"><span path="inventory.slot_12">12 -- empty --</span></button>
+      <button id="inventory_slot_13" class="spell_slot" data-event-click="cycle_spell_13"><span path="inventory.slot_13">13 -- empty --</span></button>
+      <button id="inventory_slot_14" class="spell_slot" data-event-click="cycle_spell_14"><span path="inventory.slot_14">14 -- empty --</span></button>
+      <button id="inventory_slot_15" class="spell_slot" data-event-click="cycle_spell_15"><span path="inventory.slot_15">15 -- empty --</span></button>
+      <button id="inventory_slot_16" class="spell_slot" data-event-click="cycle_spell_16"><span path="inventory.slot_16">16 -- empty --</span></button>
       <button id="inventory_back" data-event-click="back_main">返回</button>
     </div>
   </body>
