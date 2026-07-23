@@ -1,7 +1,7 @@
 {
   "schema": "pixelengine.evidence-index/v1",
   "generatedAt": "2026-07-23",
-  "generatedFromCommit": "d2abcfd61fee35cc731322cbae83d385c8ab94a9",
+  "generatedFromCommit": "9fa14e871dbc951dcc3d672ba3fec67f0fc86489",
   "purpose": "稳定登记可长期保留的验证报告；volatile artifacts 只作为报告引用的原始输出，不作为唯一证据。",
   "pathPolicy": {
     "authoritativeRoots": ["docs/", "plan/"],
@@ -1000,6 +1000,19 @@
       "reportPath": "docs/evidence-2026-07-23-demo-008-noita-wang-terrain.md",
       "sha256": "00c6e9589556b6dac2eaea08de326c1733bdefefc534fe8a1642c4964193aa3c",
       "notes": "The product embeds 15 source-hash-locked STB Herringbone Wang sets and 20 exact main/side reference-biome bindings, validates the compressed PWH1 catalog fail-closed, and performs deterministic allocation-free global-coordinate sampling while keeping authored pixel scenes above Wang. The detached implementation commit passes native/solution builds, 197 tests plus one explicit GL skip, a real Player capture and seven-scenario clean benchmark. The deeper Mines/Fungal Game captures used the public automation API but also contained unrelated uncommitted Editor/Hosting work and are explicitly supplemental, not clean-commit evidence. DEMO-008 stays active for BitmapCaves, backgrounds, marker entities, remaining scenes/ecology, Noita RNG sequence and the all-region route/capture matrix."
+    },
+    {
+      "entryId": "demo-008-noita-bitmap-caves-20260723",
+      "taskIds": ["DEMO-008"],
+      "evidenceState": "checkpoint_bitmap_caves_marker_materialization_and_hot_path_complete_task_active",
+      "commit": "9fa14e871dbc951dcc3d672ba3fec67f0fc86489",
+      "runSessionId": "local-20260723-demo008-bitmapcaves-9fa14e87",
+      "runIdentityStatus": "captured_clean_commit_bound_source_extraction_native_build_solution_tests_and_benchmarks",
+      "hardware": "Microsoft Windows 11 build 26100.8457; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; .NET SDK 10.0.108 / runtime 10.0.8; win-x64",
+      "command": "detached clean 9fa14e87 submodule materialization and tools/build-native.ps1 win-x64 Release; full solution Release build; full Demo tests; reproducible extraction from D:/SteamLibrary/steamapps/common/Noita Build 17130612 with byte-identical catalog SHA; BenchmarkDotNet NoitaBitmapCavesBenchmarks and InfiniteTerrainChunkGenerationBenchmarks InProcess ShortRun",
+      "reportPath": "docs/evidence-2026-07-23-demo-008-noita-bitmap-caves.md",
+      "sha256": "edc50d35dc3729736af6c1216731108d6d50e9936b3b713a426ddeb064dc96e1",
+      "notes": "Eight enabled, three explicitly disabled and four absent BitmapCaves configurations plus Coal Mine danger-room semantics are source-hash locked and layered between authored pixel scenes and Wang terrain. Marker anchors now materialize as bounded Demo props, VFX, lights and gated gameplay emitters without cell-grid residue. A fixed 16-slot thread-local pre-rasterized block cache reaches 1.702 ms cold compile, 5.612 ns hot lookup and 120.424 us gameplay marker-window scan with no steady-state managed allocation. Clean native/solution builds and 218 tests plus one explicit GL skip pass. DEMO-008 remains active for background scenes, real enemy/item/trap marker categories, remaining scenes/ecology, Noita RNG parity, visual matrix and long-route closure."
     }
   ]
 }
