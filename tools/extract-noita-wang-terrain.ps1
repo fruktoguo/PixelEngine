@@ -817,6 +817,6 @@ $document = [ordered]@{
 
 $resolvedOutput = [IO.Path]::GetFullPath($OutputPath)
 [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($resolvedOutput))
-$json = $document | ConvertTo-Json -Depth 12
-[IO.File]::WriteAllText($resolvedOutput, $json + [Environment]::NewLine, [Text.UTF8Encoding]::new($false))
+$json = ($document | ConvertTo-Json -Depth 12).Replace("`r`n", "`n")
+[IO.File]::WriteAllText($resolvedOutput, $json + "`n", [Text.UTF8Encoding]::new($false))
 Write-Host "Wrote $resolvedOutput"
