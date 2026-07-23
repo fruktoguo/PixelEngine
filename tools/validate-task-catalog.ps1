@@ -3,6 +3,10 @@ param()
 
 $ErrorActionPreference = 'Stop'
 
+# git show 输出为 UTF-8；GBK 控制台下按系统代码页解码会把多字节序列与换行错并，导致摘要漂移假阳性。
+$previousOutputEncoding = [Console]::OutputEncoding
+[Console]::OutputEncoding = [Text.Encoding]::UTF8
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $taskRoot = Join-Path $repoRoot 'plan/tasks'
 $coveragePath = Join-Path $taskRoot 'source-coverage.json'

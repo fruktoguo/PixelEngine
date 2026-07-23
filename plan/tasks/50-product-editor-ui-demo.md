@@ -172,7 +172,7 @@
   - 2026-07-22 回归重开：真实游玩发现大范围破坏后仍可能留下无 2x2 实心核、却达到刚体像素下限的退化悬空碎条；现有扫描把它们标记为 `degenerate` 后留在权威网格，违反本任务“不再留下永久静态悬空颗粒”的验收条件。同时一号枪沿用固定 180-cell 射程且未提供射程截止/高硬度累积伤害的明确反馈，导致镜头内远处可破坏前景被误读成不可交互背景。解除条件：补退化碎条 debris 降级、数据化射程与命中反馈回归测试，取得真实 Editor/Player 复验并更新同源证据后重新完成。
   - 2026-07-22 回归复验完成：`e4491e90` 将达到刚体像素下限但无 2x2 实心核的脱离细条按扫描预算转为有限寿命 debris，新增直接扫描与真实 Damage/WorldMutation 事件回归；六武器射程数据化，一号枪覆盖旧 180-cell 上限之外的可见前景，命中与射程截止反馈可区分，材质用途说明恢复可见，爆炸/弹着 streak、核心与点光增强。detached clean Demo 为 190 passed / 1 native GL skipped / 0 failed；真实 Editor matrix、Console 0 warning/error、双重 SHA256 artifact 与同 commit scripted Player framebuffer 复验通过，详情并入同源证据报告。
 
-- [~] `DEMO-008` 复现 Noita 八个主路径 biome、程序化遭遇点、侧区、秘密连接和跨区捷径。
+- [ ] `DEMO-008` 复现 Noita 八个主路径 biome、程序化遭遇点、侧区、秘密连接和跨区捷径。（进行中暂停：Wang/BitmapCaves/宏图检查点已入库，剩余项见下；按总目标顺序先推进 DEMO-009）
   - 优先级：P0。
   - 依赖：`DEMO-007`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §3；`plan/13-demo-game.md` §3.17。
@@ -181,7 +181,8 @@
   - 2026-07-23 BitmapCaves 检查点：`c9ebe0d8` 从相同来源提取 4 个缺失、3 个全零与 8 个启用配置并接入 `pixel scene > BitmapCaves > Wang` 优先级，锁定 Coal Mine 8x8 danger room semantic；`4990983d` 将提取输出固定为 UTF-8 no-BOM + LF，clean 重提取与仓库目录 SHA256 同为 `EDB357A...16B78`；`9fa14e87` 以 16-slot thread-local fixed-capacity block cache、完整预栅格化、spatial bin 和 last-block fast path 将热采样压到 `5.612 ns`，冷 block `1.702 ms`，实际 marker 窗口 `120.424 us`。detached clean `9fa14e87` 通过 native build、solution 0 warning / 0 error、Demo 218 passed / 1 explicit GL skip；七场景为 `90.88–814.66 us/chunk`、MemoryDiagnoser `0–7 B`。证据：`docs/evidence-2026-07-23-demo-008-noita-full-map-topology.md`、`docs/evidence-2026-07-23-demo-008-noita-wang-terrain.md`、`docs/evidence-2026-07-23-demo-008-noita-bitmap-caves.md`。
   - `DEMO-008` 仍未完成：背景 scene loader、marker prop 升级为真实敌人/可拾取道具/物理陷阱、剩余 fixed/random pixel scene、完整材料/生态、Noita 原始 RNG 序列、同 seed 全区域截图矩阵和组合后无软锁长路线仍待闭合；本检查点没有新增 framebuffer，不据此宣称视觉 parity 完成。
 
-- [ ] `DEMO-009` 实现 Noita Wand / Spell 数据、施法求值、库存与 Wand 编辑系统。
+- [~] `DEMO-009` 实现 Noita Wand / Spell 数据、施法求值、库存与 Wand 编辑系统。
+  - 当前进度（2026-07-23 启动）：按总目标顺序（残留 root cause 已复验闭合→法杖/法术）开始本任务；正在进行 Noita `data/scripts/gun/` 参考清点与 Demo 现有六武器/库存/输入现状 diff，随后落 catalog schema、有界 evaluator、库存/编辑与测试。
   - 优先级：P0。
   - 依赖：`DEMO-007`、`BASE-011`、`BASE-014`。
   - 设计来源：`docs/PixelEngine-原创Roguelite战役设计.md` §5；`docs/PixelEngine-架构与需求设计.md` §1.5；`plan/13-demo-game.md` §3.18。
