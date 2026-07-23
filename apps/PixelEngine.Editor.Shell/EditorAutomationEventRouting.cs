@@ -72,6 +72,11 @@ internal static class EditorAutomationEventRouting
                 break;
             case "game":
                 eventTypes.Add(AutomationProtocolConstants.GameChangedEventType);
+                if (method.Contains(".ui.", StringComparison.Ordinal))
+                {
+                    eventTypes.Add(AutomationProtocolConstants.RuntimeChangedEventType);
+                }
+
                 break;
             case "settings":
                 eventTypes.Add(AutomationProtocolConstants.SettingsChangedEventType);

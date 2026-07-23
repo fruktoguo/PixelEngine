@@ -254,6 +254,7 @@ namespace PixelEngine.Editor.Automation.Protocol;
 [JsonSerializable(typeof(AutomationPixelRect))]
 [JsonSerializable(typeof(AutomationGamePresentationSnapshot))]
 [JsonSerializable(typeof(AutomationGamePresentationSetRequest))]
+[JsonSerializable(typeof(AutomationGameUiActionInvokeRequest))]
 [JsonSerializable(typeof(AutomationProfilerSample))]
 [JsonSerializable(typeof(AutomationProfilerSample[]))]
 [JsonSerializable(typeof(AutomationProfilerHistorySample))]

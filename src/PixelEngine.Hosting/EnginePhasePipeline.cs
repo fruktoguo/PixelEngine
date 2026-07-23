@@ -14,7 +14,7 @@ namespace PixelEngine.Hosting;
 public sealed class EnginePhasePipeline
 {
     private const int PhaseCount = 12;
-    private readonly List<EnginePhaseAction>[] _actions;
+    private readonly List<PhaseActionRegistration>[] _actions;
     private readonly EngineCommandQueue _commands;
 
     /// <summary>
@@ -24,7 +24,7 @@ public sealed class EnginePhasePipeline
     {
         ArgumentNullException.ThrowIfNull(commands);
         _commands = commands;
-        _actions = new List<EnginePhaseAction>[PhaseCount];
+        _actions = new List<PhaseActionRegistration>[PhaseCount];
         for (int i = 0; i < _actions.Length; i++)
         {
             _actions[i] = [];
@@ -36,9 +36,19 @@ public sealed class EnginePhasePipeline
     /// </summary>
     public void Register(EnginePhase phase, EnginePhaseAction action)
     {
-        ValidatePhase(phase);
-        ArgumentNullException.ThrowIfNull(action);
-        _actions[(int)phase].Add(action);
+        Register(phase, action, PhaseActionMode.NormalOnly);
+    }
+
+    /// <summary>注册在普通帧与 Paused render-only 帧都可运行的 phase 1 hook。</summary>
+    internal void RegisterPausedSafe(EnginePhase phase, EnginePhaseAction action)
+    {
+        Register(phase, action, PhaseActionMode.NormalAndPaused);
+    }
+
+    /// <summary>注册只在 Paused render-only 帧运行的 phase 1 hook。</summary>
+    internal void RegisterPausedOnly(EnginePhase phase, EnginePhaseAction action)
+    {
+        Register(phase, action, PhaseActionMode.PausedOnly);
     }
 
     /// <summary>
@@ -60,9 +70,8 @@ public sealed class EnginePhasePipeline
         for (int raw = 0; raw < PhaseCount; raw++)
         {
             EnginePhase phase = (EnginePhase)raw;
-            // Edit 暂停态不跑脚本与 sim 命令，但保留输入采样与渲染相位以维持编辑器交互。
-            if ((engine.Mode is EngineExecutionMode.Edit or EngineExecutionMode.Paused) &&
-                phase == EnginePhase.GameLogicAndScripts)
+            // Edit 没有 Play session，仍整体跳过脚本；Paused 只运行显式标记的 UI/event 安全 hook。
+            if (engine.Mode == EngineExecutionMode.Edit && phase == EnginePhase.GameLogicAndScripts)
             {
                 continue;
             }
@@ -75,14 +84,42 @@ public sealed class EnginePhasePipeline
             EngineTickContext context = new(engine, engine.Context, timing, phase);
             using (engine.Context.Profiler.Measure(ToFramePhase(phase)))
             {
-                _ = _commands.Flush(context);
-                List<EnginePhaseAction> actions = _actions[raw];
+                bool pausedGameLogic = engine.Mode == EngineExecutionMode.Paused &&
+                    phase == EnginePhase.GameLogicAndScripts;
+                // Paused 不 flush 延迟 sim 命令；它们留到 Resume/Step 的真实 phase 1 安全点。
+                if (!pausedGameLogic)
+                {
+                    _ = _commands.Flush(context);
+                }
+
+                List<PhaseActionRegistration> actions = _actions[raw];
                 for (int i = 0; i < actions.Count; i++)
                 {
-                    actions[i](context);
+                    PhaseActionRegistration registration = actions[i];
+                    if (pausedGameLogic
+                        ? registration.Mode != PhaseActionMode.NormalOnly
+                        : registration.Mode != PhaseActionMode.PausedOnly)
+                    {
+                        registration.Action(context);
+                    }
                 }
             }
         }
+    }
+
+    private void Register(
+        EnginePhase phase,
+        EnginePhaseAction action,
+        PhaseActionMode mode)
+    {
+        ValidatePhase(phase);
+        ArgumentNullException.ThrowIfNull(action);
+        if (mode != PhaseActionMode.NormalOnly && phase != EnginePhase.GameLogicAndScripts)
+        {
+            throw new ArgumentException("Paused-safe hook 只能注册到 GameLogicAndScripts。", nameof(phase));
+        }
+
+        _actions[(int)phase].Add(new PhaseActionRegistration(action, mode));
     }
 
     /// <summary>
@@ -114,5 +151,16 @@ public sealed class EnginePhasePipeline
     {
         ValidatePhase(phase);
         return (FramePhase)phase;
+    }
+
+    private readonly record struct PhaseActionRegistration(
+        EnginePhaseAction Action,
+        PhaseActionMode Mode);
+
+    private enum PhaseActionMode : byte
+    {
+        NormalOnly,
+        NormalAndPaused,
+        PausedOnly,
     }
 }

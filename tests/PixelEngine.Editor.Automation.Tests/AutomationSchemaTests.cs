@@ -120,6 +120,7 @@ public sealed class AutomationSchemaTests
             "brushStrokeResult",
             "runtimeTransformSetRequest",
             "runtimeComponentFieldSetRequest",
+            "gameUiActionInvokeRequest",
             "runtimeBody",
             "runtimeBodyListResponse",
             "runtimeBodyRequest",
@@ -707,6 +708,33 @@ public sealed class AutomationSchemaTests
             simulation,
             AutomationJsonContext.Default.AutomationRuntimeSimulationSetRequest);
         Assert.Equal(30, simulationJson.GetProperty("simulationHz").GetDouble());
+    }
+
+    /// <summary>Game UI action 请求保留稳定 action、screen handle 与严格标量 payload。</summary>
+    [Fact]
+    public void GameUiActionInvokeRequestRoundTripsStrictScalarPayload()
+    {
+        AutomationGameUiActionInvokeRequest request = new()
+        {
+            ScreenHandle = 7,
+            Action = "start_game",
+            Payload = JsonSerializer.SerializeToElement(42L),
+        };
+        JsonElement json = JsonSerializer.SerializeToElement(
+            request,
+            AutomationJsonContext.Default.AutomationGameUiActionInvokeRequest);
+        AutomationGameUiActionInvokeRequest roundTrip = json.Deserialize(
+            AutomationJsonContext.Default.AutomationGameUiActionInvokeRequest)
+            ?? throw new InvalidOperationException("Game UI action 请求未反序列化。");
+
+        Assert.Equal(request.ScreenHandle, roundTrip.ScreenHandle);
+        Assert.Equal(request.Action, roundTrip.Action);
+        Assert.Equal(42L, roundTrip.Payload?.GetInt64());
+        _ = Assert.Throws<JsonException>(() => JsonSerializer.Deserialize(
+            """
+            {"schemaVersion":1,"screenHandle":7,"action":"start_game","method":"StartSelectedRun"}
+            """,
+            AutomationJsonContext.Default.AutomationGameUiActionInvokeRequest));
     }
 
     /// <summary>Runtime 诊断与调参 DTO 必须完整、严格并使用稳定 enum 名。</summary>

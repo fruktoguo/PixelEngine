@@ -461,6 +461,9 @@ public static class AutomationProtocolConstants
     /// <summary>原子替换 Game View presentation、preset 与显示状态。</summary>
     public const string GamePresentationSetMethod = "game.presentation.set";
 
+    /// <summary>向当前 Play session 的可见 Game UI 屏幕投递稳定 action。</summary>
+    public const string GameUiActionInvokeMethod = "game.ui.action.invoke";
+
     /// <summary>捕获 Scene View 可见 authoring viewport 为图片制品。</summary>
     public const string SceneCaptureMethod = "scene.capture";
 

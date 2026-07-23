@@ -844,6 +844,42 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证 Paused 帧只派发脚本事件并更新 Game UI，不执行 Behaviour Update/Fixed 或延迟结束。
+    /// </summary>
+    [Fact]
+    public void PausedFrameKeepsGameUiInteractiveWithoutAdvancingGameplayScripts()
+    {
+        RecordingEventDispatcher events = new();
+        RecordingScriptRuntime runtime = new();
+        RecordingGameUiBackend backend = new();
+        using GameUi.GameUiHost host = new(backend);
+        host.Initialize(new GameUi.UiBackendInitializeInfo(
+            new GameUi.UiViewport(0, 0, 320, 180, 1f),
+            GameUi.UiBackendKind.ManagedFallback));
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(new ScriptingPhaseDriver(
+                runtime,
+                new FakeScriptContext(new ScriptScene(), events)))
+            .AddPhaseDriver(new GameUiPhaseDriver(host))
+            .Build();
+
+        _ = engine.RunOneTick(realDeltaSeconds: 1.0 / 60.0);
+        engine.EnterPauseMode();
+        FrameTiming paused = engine.RunOneTick(realDeltaSeconds: 1.0 / 60.0);
+
+        Assert.False(paused.RunSim);
+        Assert.Equal(EngineExecutionMode.Paused, engine.Mode);
+        Assert.Equal(1, events.DrainCount);
+        Assert.Equal(1, runtime.BeginCount);
+        Assert.Equal(1, runtime.UpdateCount);
+        Assert.Equal(1, runtime.FixedCount);
+        Assert.Equal(1, runtime.EndCount);
+        Assert.Equal(2, backend.UpdateCount);
+        Assert.Equal(3, engine.Phases.Count(EnginePhase.GameLogicAndScripts));
+    }
+
+    /// <summary>
     /// 验证过载降级记录 Game UI paint cadence 偏好，但不跳过 final composite、UI update 或 event drain。
     /// </summary>
     [Fact]
@@ -946,7 +982,8 @@ public sealed class EnginePhaseDriverTests
         Assert.True(engine.Context.IsServiceAvailable(EngineServiceRole.Scripting));
         Assert.Same(runtime, engine.Context.GetService<IScriptRuntime>());
         Assert.Same(context, engine.Context.GetService<IScriptContext>());
-        Assert.Equal(1, engine.Phases.Count(EnginePhase.GameLogicAndScripts));
+        // ScriptingPhaseDriver 现在注册两条 hook：常规 RunScripts + PausedOnly 事件派发。
+        Assert.Equal(2, engine.Phases.Count(EnginePhase.GameLogicAndScripts));
         Assert.Equal(1, runtime.InitializeCount);
         Assert.Equal(2, runtime.UpdateCount);
         Assert.Equal(1, runtime.FixedCount);
@@ -1414,7 +1451,7 @@ public sealed class EnginePhaseDriverTests
         }
     }
 
-    private sealed class FakeScriptContext(ScriptScene scene) : IScriptContext
+    private sealed class FakeScriptContext(ScriptScene scene, IEventBus? events = null) : IScriptContext
     {
         public IWorldCellAccess Cells => throw new NotSupportedException();
 
@@ -1438,7 +1475,7 @@ public sealed class EnginePhaseDriverTests
 
         public IDiagnosticsApi Diagnostics => throw new NotSupportedException();
 
-        public IEventBus Events => NoopEventBus.Instance;
+        public IEventBus Events { get; } = events ?? NoopEventBus.Instance;
 
         public IAudioApi Audio => throw new NotSupportedException();
 
@@ -1455,6 +1492,23 @@ public sealed class EnginePhaseDriverTests
             where TEvent : unmanaged
         {
             return NoopSubscription.Instance;
+        }
+    }
+
+    private sealed class RecordingEventDispatcher : IEventBus, IScriptEventDispatcher
+    {
+        public int DrainCount { get; private set; }
+
+        public IDisposable Subscribe<TEvent>(Action<TEvent> handler)
+            where TEvent : unmanaged
+        {
+            ArgumentNullException.ThrowIfNull(handler);
+            return NoopSubscription.Instance;
+        }
+
+        public void DrainEvents()
+        {
+            DrainCount++;
         }
     }
 

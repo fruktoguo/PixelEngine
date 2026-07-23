@@ -4,8 +4,10 @@ using CoreEventBus = PixelEngine.Core.Events.EventBus;
 
 namespace PixelEngine.Scripting;
 
-internal interface IScriptEventDispatcher
+/// <summary>由 Hosting 在脚本 phase 安全点排空待派发事件的运行时合同。</summary>
+public interface IScriptEventDispatcher
 {
+    /// <summary>排空所有已订阅事件通道。</summary>
     void DrainEvents();
 }
 

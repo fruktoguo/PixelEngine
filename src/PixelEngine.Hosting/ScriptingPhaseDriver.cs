@@ -28,6 +28,7 @@ public sealed class ScriptingPhaseDriver(IScriptRuntime runtime, IScriptContext 
         ArgumentNullException.ThrowIfNull(phases);
         Runtime.Initialize(ScriptContext);
         phases.Register(EnginePhase.GameLogicAndScripts, RunScripts);
+        phases.RegisterPausedOnly(EnginePhase.GameLogicAndScripts, DispatchPausedEvents);
     }
 
     // 相位 1：Update 用渲染帧 dt（含 TimeScale），FixedSimTick 仅在 RunSim 帧执行一次。
@@ -41,6 +42,16 @@ public sealed class ScriptingPhaseDriver(IScriptRuntime runtime, IScriptContext 
         }
 
         Runtime.EndFrame();
+    }
+
+    // Paused 不执行 Behaviour Update/Fixed/EndFrame，只派发 UI 等已入队事件以保持菜单可交互。
+    private void DispatchPausedEvents(EngineTickContext context)
+    {
+        _ = context;
+        if (ScriptContext.Events is IScriptEventDispatcher dispatcher)
+        {
+            dispatcher.DrainEvents();
+        }
     }
 
     private static double ResolveUpdateDeltaSeconds(EngineTickContext context)

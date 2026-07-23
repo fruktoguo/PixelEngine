@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace PixelEngine.Editor.Automation.Protocol;
@@ -163,6 +164,19 @@ public sealed record AutomationGamePresentationSetRequest
     public required bool Maximized { get; init; }
     /// <summary>完整替换的自定义 fixed-resolution presets。</summary>
     public AutomationGameViewPreset[] CustomPresets { get; init; } = [];
+}
+
+/// <summary>向当前 Play session 的可见 Game UI 屏幕投递稳定 action。</summary>
+public sealed record AutomationGameUiActionInvokeRequest
+{
+    /// <summary>DTO schema 版本。</summary>
+    public int SchemaVersion { get; init; } = AutomationProtocolConstants.WireSchemaVersion;
+    /// <summary>由 runtime Inspector 读取的正整数屏幕实例句柄。</summary>
+    public required int ScreenHandle { get; init; }
+    /// <summary>XHTML data-event-* 声明的稳定 action 字符串。</summary>
+    public required string Action { get; init; }
+    /// <summary>可选标量载荷；支持 null、Boolean、Int64 与有限 Double。</summary>
+    public JsonElement? Payload { get; init; }
 }
 
 /// <summary>分页读取当前 session 的 artifacts。</summary>

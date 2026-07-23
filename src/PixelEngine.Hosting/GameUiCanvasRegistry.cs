@@ -364,6 +364,30 @@ public sealed class GameUiCanvasRegistry :
         return false;
     }
 
+    /// <summary>读取一个全局可见屏幕所属的运行时 Canvas。</summary>
+    /// <param name="screen">全局屏幕实例句柄。</param>
+    /// <param name="canvas">解析成功时所属 Canvas。</param>
+    /// <returns>屏幕与 Canvas 均仍有效时为 <see langword="true"/>。</returns>
+    public bool TryGetScreenCanvas(
+        ScriptUi.UiScreenHandle screen,
+        out ScriptUi.UiCanvasHandle canvas)
+    {
+        ThrowIfDisposed();
+        int bindingIndex = FindScreenBindingIndex(screen);
+        if (bindingIndex >= 0)
+        {
+            ScreenBinding binding = _screenBindings[bindingIndex];
+            if (FindSlotIndex(binding.Canvas) >= 0)
+            {
+                canvas = binding.Canvas;
+                return true;
+            }
+        }
+
+        canvas = default;
+        return false;
+    }
+
     /// <summary>调用全局屏幕实例上的动作。</summary>
     public bool Invoke(
         ScriptUi.UiScreenHandle screen,

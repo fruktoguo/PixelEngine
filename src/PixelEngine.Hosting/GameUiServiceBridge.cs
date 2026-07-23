@@ -336,6 +336,76 @@ public sealed class GameUiServiceBridge : ScriptUi.IGameUiService, IGameUiEventS
     }
 
     /// <summary>
+    /// 验证并应用一个真实 UI action，再把同一事件排入脚本事件总线。
+    /// </summary>
+    /// <param name="screen">当前可见屏幕实例。</param>
+    /// <param name="action">稳定 action id。</param>
+    /// <param name="payload">标量 action 载荷。</param>
+    /// <param name="diagnostic">成功或失败诊断。</param>
+    /// <returns>action 存在且事件已排入脚本分发路径时为 <see langword="true"/>。</returns>
+    public bool TryDispatchAction(
+        ScriptUi.UiScreenHandle screen,
+        ScriptUi.UiActionId action,
+        in ScriptUi.UiValue payload,
+        out string diagnostic)
+    {
+        if (_scriptEvents is null && _directHandlers is null)
+        {
+            diagnostic = "Game UI action 没有已连接的脚本事件接收器。";
+            return false;
+        }
+
+        ScriptUi.UiCanvasHandle canvas;
+        bool invoked;
+        if (_registry is not null)
+        {
+            if (!_registry.TryGetScreenCanvas(screen, out canvas))
+            {
+                diagnostic = $"Game UI 屏幕 {screen.Value} 已失效。";
+                return false;
+            }
+
+            RuntimeUi.UiValue runtimePayload = ToRuntimeValue(in payload);
+            invoked = _registry.Invoke(
+                screen,
+                new RuntimeUi.UiActionId(action.Value),
+                in runtimePayload);
+        }
+        else
+        {
+            canvas = LegacyCanvasHandle;
+            RuntimeUi.UiValue runtimePayload = ToRuntimeValue(in payload);
+            invoked = _host!.InvokeAction(
+                new RuntimeUi.UiScreenHandle(screen.Value),
+                new RuntimeUi.UiActionId(action.Value),
+                in runtimePayload);
+        }
+
+        if (!invoked)
+        {
+            diagnostic = $"Game UI 屏幕 {screen.Value} 未绑定 action: {action.Value}";
+            return false;
+        }
+
+        ScriptUi.UiEvent scriptEvent = new(canvas, screen, default, action, payload);
+        if (_scriptEvents is not null)
+        {
+            if (!_scriptEvents.TryPublish(in scriptEvent))
+            {
+                diagnostic = "Game UI 脚本事件队列已满。";
+                return false;
+            }
+        }
+        else
+        {
+            _directHandlers!(scriptEvent);
+        }
+
+        diagnostic = $"Game UI action {action.Value} 已排入 screen {screen.Value} 的脚本事件队列。";
+        return true;
+    }
+
+    /// <summary>
     /// 接收运行时 UI 后端 drain 出来的事件并转换为脚本事件。
     /// </summary>
     /// <param name="events">运行时 UI 事件。</param>

@@ -149,13 +149,12 @@ public sealed class GameUiServiceBridgeTests
             };
 
             ScriptUi.UiScreenHandle screen = bridge.ShowScreen("main");
-            bridge.OnGameUiEvents([
-                new RuntimeUi.UiEvent(
-                    backend.LastDocument,
-                    new RuntimeUi.UiElementId(3),
-                    new RuntimeUi.UiActionId(5),
-                    RuntimeUi.UiValue.FromBoolean(true)),
-            ]);
+            ScriptUi.UiValue actionPayload = ScriptUi.UiValue.FromBoolean(true);
+            Assert.True(bridge.TryDispatchAction(
+                screen,
+                new ScriptUi.UiActionId(5),
+                in actionPayload,
+                out string diagnostic), diagnostic);
 
             // Assert：验证预期结果
             Assert.Equal(0, eventCount);
@@ -164,7 +163,7 @@ public sealed class GameUiServiceBridgeTests
 
             Assert.Equal(1, eventCount);
             Assert.Equal(screen, received.Screen);
-            Assert.Equal(new ScriptUi.UiElementId(3), received.Element);
+            Assert.Equal(default, received.Element);
             Assert.Equal(new ScriptUi.UiActionId(5), received.Action);
             Assert.True(received.Payload.AsBoolean());
         }

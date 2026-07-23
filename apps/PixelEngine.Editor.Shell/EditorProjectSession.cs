@@ -374,6 +374,26 @@ internal sealed class EditorProjectSession : IDisposable
         return _editorHost.TryApplyAutomationGameViewState(state, out diagnostic);
     }
 
+    internal bool TryInvokeAutomationGameUiAction(
+        int screenHandle,
+        int actionValue,
+        in UiValue payload,
+        out string diagnostic)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!Engine.Context.TryGetService(out GameUiServiceBridge gameUi))
+        {
+            diagnostic = "Game UI service 尚未注册。";
+            return false;
+        }
+
+        return gameUi.TryDispatchAction(
+            new UiScreenHandle(screenHandle),
+            new UiActionId(actionValue),
+            in payload,
+            out diagnostic);
+    }
+
     internal bool TryApplyAutomationRuntimeTransform(
         string handle,
         float x,

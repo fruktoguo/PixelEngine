@@ -1833,11 +1833,40 @@ public sealed class EditorAutomationCaptureE2ETests
             await ExerciseWorldInspectorAsync(client);
             AutomationInvocationResult playGet = await client.InvokeDetailedAsync(
                 AutomationProtocolConstants.PlayGetMethod);
-            AutomationInvocationResult entered = await EnterPlayAsync(
+            _ = await EnterPlayAsync(
                 client,
                 playGet.Revision,
                 "runtime-e2e-enter-first");
-            (AutomationRuntimeEntity[] entities, _) = await WaitForRuntimeEntitiesAsync(client);
+            (AutomationRuntimeEntity[] entities, AutomationRevisionSnapshot runtimeRevision) =
+                await WaitForRuntimeEntitiesAsync(client);
+            AutomationRuntimeComponent gameUi = Assert.Single(
+                entities.SelectMany(static entity => entity.Components),
+                component => component.TypeName.EndsWith(
+                    ".GameUiDemoController",
+                    StringComparison.Ordinal));
+            int mainScreenHandle = ParseUiScreenHandle(Assert.Single(
+                gameUi.Fields,
+                field => string.Equals(field.Name, "MainScreen", StringComparison.Ordinal)).Value);
+            Assert.True(mainScreenHandle > 0);
+            AutomationInvocationResult actionInvocation = await client.InvokeDetailedAsync(
+                AutomationProtocolConstants.GameUiActionInvokeMethod,
+                JsonSerializer.SerializeToElement(
+                    new AutomationGameUiActionInvokeRequest
+                    {
+                        ScreenHandle = mainScreenHandle,
+                        Action = "start_game",
+                    },
+                    AutomationJsonContext.Default.AutomationGameUiActionInvokeRequest),
+                new AutomationInvocationOptions
+                {
+                    ExpectedRevision = ToResourcePrecondition(runtimeRevision),
+                    IdempotencyKey = "runtime-e2e-start-campaign",
+                });
+            AutomationCommandResult actionResult = actionInvocation.Payload?.Deserialize(
+                AutomationJsonContext.Default.AutomationCommandResult)
+                ?? throw new InvalidOperationException("game.ui.action.invoke 未返回 commandResult。");
+            Assert.True(actionResult.Succeeded, actionResult.Diagnostic);
+            (entities, runtimeRevision) = await WaitForCampaignGameplayAsync(client);
             AutomationInvocationResult bodiesResult = await client.InvokeDetailedAsync(
                 AutomationProtocolConstants.RuntimeBodyListMethod,
                 JsonSerializer.SerializeToElement(
@@ -1920,7 +1949,7 @@ public sealed class EditorAutomationCaptureE2ETests
                     AutomationJsonContext.Default.AutomationRuntimeTransformSetRequest),
                 new AutomationInvocationOptions
                 {
-                    ExpectedRevision = ToResourcePrecondition(entered.Revision),
+                    ExpectedRevision = ToResourcePrecondition(runtimeRevision),
                     IdempotencyKey = "runtime-e2e-transform",
                 });
             AutomationRuntimeEntity transformedEntity = transformed.Payload?.Deserialize(
@@ -2163,6 +2192,61 @@ public sealed class EditorAutomationCaptureE2ETests
         }
 
         throw new TimeoutException("30 秒内 Play session 未产生 runtime entities。");
+    }
+
+    private static async Task<(AutomationRuntimeEntity[] Entities, AutomationRevisionSnapshot Revision)>
+        WaitForCampaignGameplayAsync(EditorAutomationClient client)
+    {
+        DateTimeOffset deadline = DateTimeOffset.UtcNow.AddSeconds(30);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            (AutomationRuntimeEntity[] entities, AutomationRevisionSnapshot revision) =
+                await WaitForRuntimeEntitiesAsync(client);
+            AutomationRuntimeComponent? director = entities
+                .SelectMany(static entity => entity.Components)
+                .FirstOrDefault(component => component.TypeName.EndsWith(
+                    ".CampaignRunDirector",
+                    StringComparison.Ordinal));
+            AutomationRuntimeComponent? gameUi = entities
+                .SelectMany(static entity => entity.Components)
+                .FirstOrDefault(component => component.TypeName.EndsWith(
+                    ".GameUiDemoController",
+                    StringComparison.Ordinal));
+            string? state = director?.Fields.FirstOrDefault(
+                field => string.Equals(field.Name, "State", StringComparison.Ordinal))?.Value;
+            string? hudHandle = gameUi?.Fields.FirstOrDefault(
+                field => string.Equals(field.Name, "HudScreenHandle", StringComparison.Ordinal))?.Value;
+            if (string.Equals(state, "Exploring", StringComparison.Ordinal) &&
+                hudHandle is not null &&
+                ParseUiScreenHandle(hudHandle) > 0)
+            {
+                return (entities, revision);
+            }
+
+            await Task.Delay(100);
+        }
+
+        throw new TimeoutException("30 秒内 Game UI action 未把 Campaign 切换到 Exploring/HUD。");
+    }
+
+    private static int ParseUiScreenHandle(string value)
+    {
+        const string marker = "Value = ";
+        int start = value.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            throw new FormatException($"无法从 runtime Inspector 值读取 UI screen handle：{value}");
+        }
+
+        start += marker.Length;
+        int end = value.IndexOf('}', start);
+        ReadOnlySpan<char> digits = end < 0
+            ? value.AsSpan(start)
+            : value.AsSpan(start, end - start);
+        return int.Parse(
+            digits,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture);
     }
 
     private static async Task SetProjectRootsAndUndoAsync(

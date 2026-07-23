@@ -241,6 +241,24 @@ public sealed class EditorAutomationRuntimeTests
                         "panel.inspector.runtime.field",
                         StringComparer.Ordinal));
                 Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.GameUiActionInvokeMethod &&
+                    descriptor.Domain == "game" &&
+                    descriptor.RequestSchema == "#/$defs/gameUiActionInvokeRequest" &&
+                    descriptor.ResponseSchema == "#/$defs/commandResult" &&
+                    descriptor.ExecutionPhase == AutomationExecutionPhase.EngineInputAndTime &&
+                    descriptor.OperationKind == AutomationOperationKind.Command &&
+                    descriptor.TransactionMode == AutomationTransactionMode.Forbidden &&
+                    descriptor.RequiresExpectedRevision &&
+                    descriptor.RequiresIdempotencyKey &&
+                    descriptor.RequiredScopes.SequenceEqual([AutomationScopes.EditorControl]) &&
+                    descriptor.SupportedModes.SequenceEqual(["play", "paused"]) &&
+                    descriptor.EventTypes.Contains(
+                        AutomationProtocolConstants.GameChangedEventType,
+                        StringComparer.Ordinal) &&
+                    descriptor.EventTypes.Contains(
+                        AutomationProtocolConstants.RuntimeChangedEventType,
+                        StringComparer.Ordinal));
+                Assert.Contains(capabilities.Items, descriptor =>
                     descriptor.Id == AutomationProtocolConstants.RuntimeBodyListMethod &&
                     descriptor.ResponseSchema == "#/$defs/runtimeBodyListResponse" &&
                     descriptor.ExecutionPhase == AutomationExecutionPhase.EnginePhysicsSync &&

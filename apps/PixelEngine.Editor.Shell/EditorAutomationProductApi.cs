@@ -35,6 +35,7 @@ internal sealed partial class EditorAutomationAuthoringApi
     private const string LightingResource = "editor:runtime:lighting";
     private const string RuntimeSavesResource = "editor:runtime:saves";
     private const string GamePresentationResource = "editor:game:presentation";
+    private const string GameUiResource = "editor:game:ui";
     private const string ProfilerResource = "editor:profiler";
     private const string DebugOverlayResource = "editor:debug-overlays";
     private const string PreferencesResource = "editor:preferences";
@@ -661,6 +662,16 @@ internal sealed partial class EditorAutomationAuthoringApi
                 SetGamePresentation,
                 [AutomationScopes.EditorControl],
                 AllModes),
+            ProductCommand(
+                AutomationProtocolConstants.GameUiActionInvokeMethod,
+                "game",
+                "gameUiActionInvokeRequest",
+                "commandResult",
+                [AutomationScopes.EditorControl],
+                ["play", "paused"],
+                [],
+                InvokeGameUiAction,
+                AutomationExecutionPhase.EngineInputAndTime),
             ProductRead(
                 AutomationProtocolConstants.SceneCaptureMethod,
                 "scene",
@@ -3355,6 +3366,84 @@ internal sealed partial class EditorAutomationAuthoringApi
             response,
             AutomationJsonContext.Default.AutomationGamePresentationSnapshot,
             [GamePresentationResource]);
+    }
+
+    private AutomationOperationResult InvokeGameUiAction(
+        AutomationScheduledContext context,
+        JsonElement? payload)
+    {
+        AutomationGameUiActionInvokeRequest request = Deserialize(
+            payload,
+            AutomationJsonContext.Default.AutomationGameUiActionInvokeRequest,
+            AutomationProtocolConstants.GameUiActionInvokeMethod);
+        ValidateSchema(request.SchemaVersion, AutomationProtocolConstants.GameUiActionInvokeMethod);
+        if (request.ScreenHandle <= 0)
+        {
+            throw Invalid("screenHandle 必须是正整数运行时句柄。");
+        }
+
+        string action = ValidateIdentifier(request.Action, "action", 256);
+        PixelEngine.Scripting.UiValue actionPayload = ToGameUiActionPayload(request.Payload);
+        int actionValue = UiStableId.Hash(action);
+        EditorProjectSession session = RequireRuntimeSession();
+        if (!session.TryInvokeAutomationGameUiAction(
+            request.ScreenHandle,
+            actionValue,
+            in actionPayload,
+            out string diagnostic))
+        {
+            throw StateUnavailable(diagnostic);
+        }
+
+        string[] resources = [.. RuntimeResources(session), GameUiResource];
+        AutomationCommandResult response = new()
+        {
+            Succeeded = true,
+            Diagnostic = diagnostic,
+            ResourceIds = resources,
+        };
+        JsonElement serialized = JsonSerializer.SerializeToElement(
+            response,
+            AutomationJsonContext.Default.AutomationCommandResult);
+        return ChangedCommand(context, serialized, resources);
+    }
+
+    private static PixelEngine.Scripting.UiValue ToGameUiActionPayload(JsonElement? payload)
+    {
+        if (payload is null || payload.Value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return default;
+        }
+
+        JsonElement value = payload.Value;
+        if (value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+        {
+            return PixelEngine.Scripting.UiValue.FromBoolean(value.GetBoolean());
+        }
+
+        if (value.ValueKind != JsonValueKind.Number)
+        {
+            throw Invalid("Game UI action payload 只支持 null、Boolean、Int64 或有限 Double。");
+        }
+
+        if (value.TryGetInt64(out long integer))
+        {
+            return new PixelEngine.Scripting.UiValue(integer);
+        }
+
+        double number;
+        try
+        {
+            number = value.GetDouble();
+        }
+        catch (Exception exception) when (exception is FormatException or OverflowException)
+        {
+            throw Invalid($"Game UI action payload 数值无效：{exception.Message}");
+        }
+
+        return double.IsFinite(number)
+            ? new PixelEngine.Scripting.UiValue(number)
+            : throw Invalid("Game UI action payload 必须是有限 Double。");
     }
 
     private AutomationOperationResult CaptureScene(

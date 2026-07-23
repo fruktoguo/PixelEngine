@@ -3048,6 +3048,17 @@
         }
       }
     },
+    "gameUiActionInvokeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "screenHandle", "action"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "screenHandle": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "action": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "payload": { "type": ["null", "boolean", "number"] }
+      }
+    },
     "profilerSample": {
       "type": "object",
       "additionalProperties": false,

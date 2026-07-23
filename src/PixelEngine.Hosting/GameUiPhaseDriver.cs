@@ -85,7 +85,7 @@ public sealed class GameUiPhaseDriver : IEnginePhaseDriver
     public void RegisterPhases(EnginePhasePipeline phases)
     {
         ArgumentNullException.ThrowIfNull(phases);
-        phases.Register(EnginePhase.GameLogicAndScripts, RunUi);
+        phases.RegisterPausedSafe(EnginePhase.GameLogicAndScripts, RunUi);
     }
 
     private void RunUi(EngineTickContext context)
