@@ -239,11 +239,15 @@ internal sealed class DecodedNoitaBitmapCaves
             return false;
         }
 
-        long blockX = FloorDivide(worldX, _definition.SizeX, out int localX);
-        long blockY = FloorDivide(worldY, _definition.SizeY, out int localY);
-        ulong blockSeed = HashCoordinates(blockX, blockY, worldSeed, biomeSalt);
+        BitmapCavesBlockCacheEntry? block = _threadCache?.LastEntry;
+        if (block is null ||
+            !block.Contains(this, worldX, worldY, worldSeed, biomeSalt, out int localX, out int localY))
+        {
+            long blockX = FloorDivide(worldX, _definition.SizeX, out localX);
+            long blockY = FloorDivide(worldY, _definition.SizeY, out localY);
+            block = GetCompiledBlock(blockX, blockY, worldSeed, biomeSalt);
+        }
 
-        BitmapCavesBlockCacheEntry block = GetCompiledBlock(blockX, blockY, worldSeed, biomeSalt, blockSeed);
         int cellIndex = (localY * _definition.SizeX) + localX;
         ulong bit = 1UL << (cellIndex & 63);
         if ((block.OverrideBits[cellIndex >> 6] & bit) != 0UL)
@@ -344,8 +348,7 @@ internal sealed class DecodedNoitaBitmapCaves
         long blockX,
         long blockY,
         ulong worldSeed,
-        ulong biomeSalt,
-        ulong blockSeed)
+        ulong biomeSalt)
     {
         BitmapCavesThreadCache cache = _threadCache ??= new BitmapCavesThreadCache(CachedBlocksPerThread);
         BitmapCavesBlockCacheEntry? entry = cache.LastEntry;
@@ -367,6 +370,7 @@ internal sealed class DecodedNoitaBitmapCaves
 
         entry = entries[cache.NextReplacementIndex];
         cache.NextReplacementIndex = (cache.NextReplacementIndex + 1) & (CachedBlocksPerThread - 1);
+        ulong blockSeed = HashCoordinates(blockX, blockY, worldSeed, biomeSalt);
         CompileBlock(entry, blockX, blockY, worldSeed, biomeSalt, blockSeed);
         cache.LastEntry = entry;
         return entry;
@@ -1017,6 +1021,41 @@ internal sealed class DecodedNoitaBitmapCaves
                 _blockY == blockY &&
                 _worldSeed == worldSeed &&
                 _biomeSalt == biomeSalt;
+        }
+
+        internal bool Contains(
+            DecodedNoitaBitmapCaves owner,
+            long worldX,
+            long worldY,
+            ulong worldSeed,
+            ulong biomeSalt,
+            out int localX,
+            out int localY)
+        {
+            if (!ReferenceEquals(_owner, owner) ||
+                _worldSeed != worldSeed ||
+                _biomeSalt != biomeSalt)
+            {
+                localX = 0;
+                localY = 0;
+                return false;
+            }
+
+            long blockOriginX = unchecked(_blockX * owner._definition.SizeX);
+            long blockOriginY = unchecked(_blockY * owner._definition.SizeY);
+            long offsetX = unchecked(worldX - blockOriginX);
+            long offsetY = unchecked(worldY - blockOriginY);
+            if ((ulong)offsetX >= (uint)owner._definition.SizeX ||
+                (ulong)offsetY >= (uint)owner._definition.SizeY)
+            {
+                localX = 0;
+                localY = 0;
+                return false;
+            }
+
+            localX = (int)offsetX;
+            localY = (int)offsetY;
+            return true;
         }
 
         internal void SetIdentity(
