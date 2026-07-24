@@ -1,8 +1,13 @@
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory = $true)]
+    [string] $SourceDataRoot,
+
     [string] $CatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-catalog.json'),
     [string] $WangCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-wang-terrain.json'),
-    [string] $MaterialsPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\materials.json')
+    [string] $MaterialsPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\materials.json'),
+    [string] $TextureDirectory = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\textures'),
+    [string] $TextureCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-textures.json')
 )
 
 Set-StrictMode -Version Latest
@@ -63,9 +68,19 @@ function Get-Graphics($Declaration, $ResolvedParent) {
     return [xml]$source[0]
 }
 
+function Get-Sha256([string] $Path) {
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
 $wangCatalog = Get-Content -LiteralPath $WangCatalogPath -Raw | ConvertFrom-Json
 $materialsDocument = Get-Content -LiteralPath $MaterialsPath -Raw | ConvertFrom-Json
+$resolvedSourceDataRoot = (Resolve-Path -LiteralPath $SourceDataRoot).Path
+$resolvedTextureDirectory = [IO.Path]::GetFullPath($TextureDirectory)
+[IO.Directory]::CreateDirectory($resolvedTextureDirectory) | Out-Null
+foreach ($generatedTexture in Get-ChildItem -LiteralPath $resolvedTextureDirectory -Filter '*_noita_*.png' -File) {
+    Remove-Item -LiteralPath $generatedTexture.FullName -Force
+}
 
 $declarations = @{}
 foreach ($declaration in $catalog.declarations) {
@@ -98,13 +113,67 @@ function Resolve-Declaration([string] $Name) {
 
 $requiredNames = @($wangCatalog.sets.materialMappings.material | Sort-Object -Unique)
 $reusedNames = @('lava', 'oil', 'sand', 'water')
+$materialsDocument.materials = @(
+    $materialsDocument.materials |
+        Where-Object { $_.name -notin $requiredNames -or $_.name -in $reusedNames })
 $existingByName = @{}
 foreach ($material in $materialsDocument.materials) {
     $existingByName[$material.name] = $material
 }
-$materialsDocument.materials = @(
+$maxTextureId = @(
     $materialsDocument.materials |
-        Where-Object { $_.name -notin $requiredNames -or $_.name -in $reusedNames })
+        Where-Object { $null -ne $_.PSObject.Properties['textureId'] } |
+        ForEach-Object { [int]$_.PSObject.Properties['textureId'].Value } |
+        Measure-Object -Maximum).Maximum
+if ($null -eq $maxTextureId) {
+    $maxTextureId = -1
+}
+
+$textureSources = @{}
+foreach ($name in $requiredNames) {
+    if ($name -in $reusedNames) {
+        continue
+    }
+    $source = Resolve-Declaration $name
+    $graphicsElement = if ($null -eq $source.Graphics) { $null } else { $source.Graphics.DocumentElement }
+    if ($null -eq $graphicsElement -or -not $graphicsElement.HasAttribute('texture_file')) {
+        continue
+    }
+    $sourcePath = $graphicsElement.GetAttribute('texture_file').Replace('/', [IO.Path]::DirectorySeparatorChar)
+    if (-not $sourcePath.StartsWith("data$([IO.Path]::DirectorySeparatorChar)", [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Noita material '$name' has unsupported texture path '$sourcePath'."
+    }
+    $relativePath = $sourcePath.Substring(5)
+    $sourceFile = Join-Path $resolvedSourceDataRoot $relativePath
+    if (-not (Test-Path -LiteralPath $sourceFile -PathType Leaf)) {
+        throw "Noita material texture not found: '$sourceFile'."
+    }
+    if (-not $textureSources.ContainsKey($sourcePath)) {
+        $textureSources[$sourcePath] = [System.Collections.Generic.List[string]]::new()
+    }
+    $textureSources[$sourcePath].Add($name)
+}
+
+$textureBySource = @{}
+$textureDefinitions = [System.Collections.Generic.List[object]]::new()
+$nextTextureId = [int]$maxTextureId + 1
+foreach ($sourcePath in @($textureSources.Keys | Sort-Object)) {
+    $relativePath = $sourcePath.Substring(5).Replace('/', [IO.Path]::DirectorySeparatorChar)
+    $sourceFile = Join-Path $resolvedSourceDataRoot $relativePath
+    $fileName = '{0:D2}_noita_{1}' -f $nextTextureId, [IO.Path]::GetFileName($sourceFile)
+    $contentFile = Join-Path $resolvedTextureDirectory $fileName
+    Copy-Item -LiteralPath $sourceFile -Destination $contentFile -Force
+    $textureBySource[$sourcePath] = $nextTextureId
+    $textureDefinitions.Add([ordered]@{
+        textureId = $nextTextureId
+        sourcePath = $sourcePath.Replace([IO.Path]::DirectorySeparatorChar, '/')
+        sourceSha256 = Get-Sha256 $sourceFile
+        contentPath = 'textures/' + $fileName
+        contentSha256 = Get-Sha256 $contentFile
+        materials = @($textureSources[$sourcePath] | Sort-Object)
+    })
+    $nextTextureId++
+}
 $existingByName = @{}
 foreach ($material in $materialsDocument.materials) {
     $existingByName[$material.name] = $material
@@ -141,6 +210,13 @@ foreach ($name in $requiredNames) {
         [string](Get-Attribute $attributes 'wang_color' 'ff808080')
     }
     $baseColor = Convert-ArgbToBgraUInt $colorText
+    $textureId = -1
+    if ($null -ne $graphicsElement -and $graphicsElement.HasAttribute('texture_file')) {
+        $textureSource = $graphicsElement.GetAttribute('texture_file').Replace('/', [IO.Path]::DirectorySeparatorChar)
+        if ($textureBySource.ContainsKey($textureSource)) {
+            $textureId = [int]$textureBySource[$textureSource]
+        }
+    }
     $opacity = [byte](($baseColor -shr 24) -band 0xff)
     $density = [Math]::Clamp(
         [int][Math]::Round([double](Get-Attribute $attributes 'density' '10') * 10.0),
@@ -201,6 +277,7 @@ foreach ($name in $requiredNames) {
         highlightColor = 0
         displayName = $name.Replace('_', ' ')
         legendVisible = $false
+        textureId = $textureId
         baseColor = $baseColor
         colorNoise = [Math]::Clamp([int][Math]::Round([double](Get-Attribute $attributes 'wang_noise_percent' '0') * 32.0), 0, 32)
         tags = $runtimeTags.ToArray()
@@ -215,9 +292,22 @@ $json = ($materialsDocument | ConvertTo-Json -Depth 20).Replace("`r`n", "`n") + 
     $json,
     [Text.UTF8Encoding]::new($false))
 
+$textureCatalog = [ordered]@{
+    schemaVersion = 1
+    referenceBuildId = [string]$catalog.reference.buildId
+    referenceVersionHash = [string]$catalog.reference.versionHash
+    files = @($textureDefinitions)
+}
+$textureJson = ($textureCatalog | ConvertTo-Json -Depth 10).Replace("`r`n", "`n") + "`n"
+[IO.File]::WriteAllText(
+    [IO.Path]::GetFullPath($TextureCatalogPath),
+    $textureJson,
+    [Text.UTF8Encoding]::new($false))
+
 [pscustomobject]@{
     RequiredWangMaterials = $requiredNames.Count
     ExistingMaterialsReused = $requiredNames.Count - $generated.Count
     GeneratedMaterials = $generated.Count
+    GeneratedTextures = $textureDefinitions.Count
     TotalRuntimeMaterials = $materialsDocument.materials.Count
 }

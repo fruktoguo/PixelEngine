@@ -3337,7 +3337,7 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
-    /// 验证可玩 Demo 导演每帧揭示整个视口，避免真实游玩画面退化成点光源圆形可见范围。
+    /// 验证可玩 Demo 导演每帧以稳定环境亮度揭示整个视口，避免退化成点光源圆形黑边。
     /// </summary>
     [Fact]
     public void PlayableWorldDirectorRevealsFullViewport()
@@ -3349,10 +3349,10 @@ public sealed class PlayerControllerIntegrationTests
         ScriptLightingSynchronizer lighting = engine.Context.GetService<ScriptLightingSynchronizer>();
         Assert.Equal(40, lighting.FogOfWar.ViewportCellWidth);
         Assert.Equal(20, lighting.FogOfWar.ViewportCellHeight);
-        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(0, 0));
-        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(39, 0));
-        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(0, 19));
-        Assert.Equal(byte.MaxValue, lighting.FogOfWar.RevealAlpha(39, 19));
+        Assert.Equal((byte)112, lighting.FogOfWar.RevealAlpha(0, 0));
+        Assert.Equal((byte)112, lighting.FogOfWar.RevealAlpha(39, 0));
+        Assert.Equal((byte)112, lighting.FogOfWar.RevealAlpha(0, 19));
+        Assert.Equal((byte)112, lighting.FogOfWar.RevealAlpha(39, 19));
     }
 
     /// <summary>

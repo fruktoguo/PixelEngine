@@ -12,6 +12,7 @@ public sealed class PlayableWorldDirector :
     IAuthoringWorldPreviewProvider,
     IWorldVisualLayerProvider
 {
+    private const byte AmbientViewportRevealAlpha = 112;
     private static readonly PlayableCavernWorldGenerator WorldGenerator = new();
     private bool _entitiesBuilt;
     private bool _entityBuildSystemRegistered;
@@ -108,7 +109,7 @@ public sealed class PlayableWorldDirector :
     {
         _ = dt;
         // 揭示视口光照，并确保实体构建系统在首帧后完成装配
-        Context.Lighting.RevealViewport();
+        Context.Lighting.RevealViewport(AmbientViewportRevealAlpha);
         RegisterEntityBuildSystem();
     }
 

@@ -19,6 +19,7 @@
     <PackageReference Include="Silk.NET.OpenGL" />
     <PackageReference Include="Vortice.Direct3D11" />
     <PackageReference Include="Vortice.D3DCompiler" />
+    <PackageReference Include="StbImageSharp" />
     <PackageReference Include="ComputeSharp" Condition="'$(EnableComputeSharpBackend)' == 'true'" />
   </ItemGroup>
 </Project>

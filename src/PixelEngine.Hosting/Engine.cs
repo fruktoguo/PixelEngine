@@ -790,6 +790,8 @@ public sealed class Engine : IDisposable
             presentation,
             window,
             Context.Options.ContentRoot);
+        DirectoryMaterialTextureProvider? materialTextures = DirectoryMaterialTextureProvider.TryLoad(
+            Path.Combine(Context.Options.ContentRoot, "textures"));
         RenderPhaseDriver driver = new(
             Context.GetService<IChunkSource>(),
             simulation.Materials,
@@ -799,6 +801,7 @@ public sealed class Engine : IDisposable
             lighting,
             sink,
             Context.Jobs,
+            textures: materialTextures,
             kernel: simulation.Kernel,
             physics: Context.TryGetService(out PhysicsSystem physics) ? physics : null,
             scriptOverlays: Context.TryGetService(out ScriptOverlayApi overlays) ? overlays : null,

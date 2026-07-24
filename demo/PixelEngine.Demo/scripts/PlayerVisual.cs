@@ -51,6 +51,11 @@ public sealed class PlayerVisual : Behaviour
     /// </summary>
     public bool RevealFullViewport { get; set; } = true;
 
+    /// <summary>
+    /// 全视口 fog 可见度；局部点光源会在 Rendering 阶段继续提亮玩家附近。
+    /// </summary>
+    public byte ViewportRevealAlpha { get; set; } = 112;
+
     /// <inheritdoc />
     protected override void OnStart()
     {
@@ -216,7 +221,7 @@ public sealed class PlayerVisual : Behaviour
             return;
         }
 
-        Context.Lighting.RevealViewport();
+        Context.Lighting.RevealViewport(ViewportRevealAlpha);
     }
 
     private static bool ContainsViewport(float x, float y, RectF viewport)

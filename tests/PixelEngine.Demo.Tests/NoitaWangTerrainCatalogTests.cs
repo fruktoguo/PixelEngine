@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using System.Security.Cryptography;
 using PixelEngine.Content;
 using PixelEngine.Hosting;
 using Xunit;
@@ -106,6 +107,49 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal(41, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.True(runtime.Materials.TryGetId(name, out _), name));
         Assert.Equal(62, runtime.Materials.Count);
+    }
+
+    /// <summary>
+    /// 验证 Wang 材质纹理全部进入 Demo 内容包，来源/内容 hash 与运行时 TextureId 一致。
+    /// </summary>
+    [Fact]
+    public void ExactWangMaterialTexturesArePackagedWithVerifiedProvenance()
+    {
+        string contentRoot = ContentRoot();
+        MaterialContentLoadResult runtime = MaterialContentLoader.Load(
+            File.ReadAllText(Path.Combine(contentRoot, "materials.json")),
+            File.ReadAllText(Path.Combine(contentRoot, "reactions.json")));
+        JsonObject catalog = ParseObject(File.ReadAllText(Path.Combine(contentRoot, "noita-material-textures.json")));
+        Assert.Equal(1, catalog["schemaVersion"]!.GetValue<int>());
+        Assert.Equal("17130612", catalog["referenceBuildId"]!.GetValue<string>());
+        Assert.Equal("9dbd52ced019a643169a2db02f46c77f8766c6e5", catalog["referenceVersionHash"]!.GetValue<string>());
+
+        JsonArray files = Assert.IsType<JsonArray>(catalog["files"]);
+        Assert.Equal(28, files.Count);
+        HashSet<int> textureIds = [];
+        foreach (JsonNode? fileNode in files)
+        {
+            JsonObject file = Assert.IsType<JsonObject>(fileNode);
+            int textureId = file["textureId"]!.GetValue<int>();
+            Assert.True(textureIds.Add(textureId));
+            string relativePath = file["contentPath"]!.GetValue<string>().Replace('/', Path.DirectorySeparatorChar);
+            string path = Path.Combine(contentRoot, relativePath);
+            Assert.True(File.Exists(path), relativePath);
+            string actualHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant();
+            Assert.Equal(file["contentSha256"]!.GetValue<string>(), actualHash);
+            Assert.Equal(64, file["sourceSha256"]!.GetValue<string>().Length);
+
+            JsonArray materials = Assert.IsType<JsonArray>(file["materials"]);
+            Assert.NotEmpty(materials);
+            foreach (JsonNode? materialNode in materials)
+            {
+                string materialName = materialNode!.GetValue<string>();
+                Assert.True(runtime.Materials.TryGetId(materialName, out ushort materialId), materialName);
+                Assert.Equal(textureId, runtime.Materials.Get(materialId).TextureId);
+            }
+        }
+
+        Assert.Equal(Enumerable.Range(19, 28), textureIds.Order());
     }
 
     /// <summary>
