@@ -1026,6 +1026,19 @@
       "reportPath": "docs/evidence-2026-07-25-demo-008-global-pixel-scenes.md",
       "sha256": "0d937e19be05b2cd159ef93dec3369db3c6e41dccc017c65979535d6fad6f7f7",
       "notes": "Thirty material Pixel Scenes now override authoritative cells at source-pixel scale, six backgrounds and twenty-two colors layers render at source world coordinates, and all forty-three non-material marker pixels compile to pure C# anchors. The live db9063b6 Player materialized spawn_forge_check at (1537,6042), captured a verified 1280x720 framebuffer and reported zero Console logs/warnings/errors. Follow-up da840bf0 replaces the 128-slot historical accumulation with bounded active-window residency; its long-route Player regression remains pending. The generic cyan Machine/VFX marker, dense Wang terrain and bright material edges remain visibly non-parity, so DEMO-008 stays active."
+    },
+    {
+      "entryId": "demo-008-snowcastle-random-pixel-scenes-20260725",
+      "taskIds": ["DEMO-008"],
+      "evidenceState": "checkpoint_snowcastle_random_pixel_scene_material_and_visual_composition_complete_task_active",
+      "commit": "129ce294d98530d4a5c8a246f1b6946087e42dee",
+      "runSessionId": "local-20260725-demo008-snowcastle-scenes-129ce294",
+      "runIdentityStatus": "captured_commit_bound_targeted_tests_benchmark_and_editor_lifecycle_with_visual_location_gap_disclosed",
+      "hardware": "Microsoft Windows 11 build 26100.8457; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; .NET SDK 10.0.108 / runtime 10.0.8; win-x64",
+      "command": "Demo targeted Snowcastle/Wang/persistence tests; Hosting world visual layer test; Editor Shell Release build; tools/run-benchmark.ps1 isolated eight-scenario InfiniteTerrainChunkGenerationBenchmarks InProcess ShortRun; authenticated pixelengine-editor TemporarySnapshot lifecycle and verified framebuffer; task/evidence catalog validation",
+      "reportPath": "docs/evidence-2026-07-25-demo-008-snowcastle-random-pixel-scenes.md",
+      "sha256": "8a4d59616c9b6b7a3170f2ececac9f4bb72a30277a5c66d35b4886704fe976be",
+      "notes": "Twelve source-weighted Snowcastle random Pixel Scenes now write 25 stable materials into authoritative chunks and render ten background/visual assets through viewport-dependent world layers, while suppressing the old purple placeholder. Targeted tests and Release build pass; Snowcastle generation measures 2.603 ms/chunk with 26 B reported allocation. The live Editor run verified lifecycle and capture integrity but did not relocate the initialized player to Snowcastle, so it is explicitly not claimed as deep visual parity evidence. DEMO-008 remains active for other biome random scenes, vegetation, real marker entities, RNG parity and route/capture closure."
     }
   ]
 }
