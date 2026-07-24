@@ -1013,6 +1013,19 @@
       "reportPath": "docs/evidence-2026-07-23-demo-008-noita-bitmap-caves.md",
       "sha256": "edc50d35dc3729736af6c1216731108d6d50e9936b3b713a426ddeb064dc96e1",
       "notes": "Eight enabled, three explicitly disabled and four absent BitmapCaves configurations plus Coal Mine danger-room semantics are source-hash locked and layered between authored pixel scenes and Wang terrain. Marker anchors now materialize as bounded Demo props, VFX, lights and gated gameplay emitters without cell-grid residue. A fixed 16-slot thread-local pre-rasterized block cache reaches 1.702 ms cold compile, 5.612 ns hot lookup and 120.424 us gameplay marker-window scan with no steady-state managed allocation. Clean native/solution builds and 218 tests plus one explicit GL skip pass. DEMO-008 remains active for background scenes, real enemy/item/trap marker categories, remaining scenes/ecology, Noita RNG parity, visual matrix and long-route closure."
+    },
+    {
+      "entryId": "demo-008-global-pixel-scenes-20260725",
+      "taskIds": ["DEMO-008"],
+      "evidenceState": "checkpoint_global_pixel_scene_terrain_visuals_and_markers_connected_task_active",
+      "commit": "db9063b6",
+      "runSessionId": "local-20260725-demo008-global-scenes-db9063b6",
+      "runIdentityStatus": "captured_commit_bound_targeted_tests_and_live_editor_player_runtime",
+      "hardware": "Microsoft Windows 11 build 26100; AMD Ryzen 7 5800X 8c/16t; AMD Radeon RX 7900 XT; .NET SDK 10.0.108; win-x64",
+      "command": "reproducible Build 17130612 material/colors/background/marker extraction; two targeted Demo tests; canonical task validation; PixelEngine Editor Release build; authenticated pixelengine-editor CurrentState Play, game UI start, revision-safe runtime relocation, runtime entity inspection, Console counts and verified Game capture",
+      "reportPath": "docs/evidence-2026-07-25-demo-008-global-pixel-scenes.md",
+      "sha256": "b427c8323d2d0a68addf340da9a4923a03a0d70c42d3938a51084c633293b950",
+      "notes": "Thirty material Pixel Scenes now override authoritative cells at source-pixel scale, six backgrounds and twenty-two colors layers render at source world coordinates, and all forty-three non-material marker pixels compile to pure C# anchors. The live db9063b6 Player materialized spawn_forge_check at (1537,6042), captured a verified 1280x720 framebuffer and reported zero Console logs/warnings/errors. The generic cyan Machine/VFX marker, dense Wang terrain and bright material edges remain visibly non-parity, so DEMO-008 stays active."
     }
   ]
 }
