@@ -3,7 +3,7 @@ using System.Numerics;
 namespace PixelEngine.Editor.Shell.Settings;
 
 /// <summary>
-/// Project/Player Settings 浮动窗口的响应式布局结果。
+/// Editor 辅助浮动窗口的响应式布局结果。
 /// </summary>
 internal readonly record struct EditorSettingsWindowPlacement(
     Vector2 Position,
@@ -16,13 +16,44 @@ internal readonly record struct EditorSettingsWindowPlacement(
 /// </summary>
 internal static class EditorSettingsWindowLayout
 {
-    private static readonly Vector2 PreferredSize = new(780f, 540f);
-    private static readonly Vector2 MinimumUsableSize = new(460f, 320f);
+    private static readonly Vector2 SettingsPreferredSize = new(780f, 540f);
+    private static readonly Vector2 SettingsMinimumUsableSize = new(460f, 320f);
+    private static readonly Vector2 BuildPreferredSize = new(980f, 680f);
+    private static readonly Vector2 BuildMinimumUsableSize = new(620f, 420f);
 
     public static EditorSettingsWindowPlacement Resolve(
         Vector2 workPosition,
         Vector2 workSize,
         float uiScale)
+    {
+        return Resolve(
+            workPosition,
+            workSize,
+            uiScale,
+            SettingsPreferredSize,
+            SettingsMinimumUsableSize);
+    }
+
+    /// <summary>解析 Build Settings 首次出现时的独立浮动窗口位置与尺寸。</summary>
+    public static EditorSettingsWindowPlacement ResolveBuildSettings(
+        Vector2 workPosition,
+        Vector2 workSize,
+        float uiScale)
+    {
+        return Resolve(
+            workPosition,
+            workSize,
+            uiScale,
+            BuildPreferredSize,
+            BuildMinimumUsableSize);
+    }
+
+    private static EditorSettingsWindowPlacement Resolve(
+        Vector2 workPosition,
+        Vector2 workSize,
+        float uiScale,
+        Vector2 preferredSize,
+        Vector2 minimumUsableSize)
     {
         float scale = EditorUiScale.Normalize(uiScale);
         float edgeMargin = EditorUiScale.Scale(16f, scale);
@@ -30,9 +61,9 @@ internal static class EditorSettingsWindowLayout
             MathF.Max(1f, workSize.X - edgeMargin),
             MathF.Max(1f, workSize.Y - edgeMargin));
         Vector2 minimumSize = new(
-            MathF.Min(EditorUiScale.Scale(MinimumUsableSize.X, scale), maximumSize.X),
-            MathF.Min(EditorUiScale.Scale(MinimumUsableSize.Y, scale), maximumSize.Y));
-        Vector2 size = EditorUiScale.FitWindow(PreferredSize, scale, workSize);
+            MathF.Min(EditorUiScale.Scale(minimumUsableSize.X, scale), maximumSize.X),
+            MathF.Min(EditorUiScale.Scale(minimumUsableSize.Y, scale), maximumSize.Y));
+        Vector2 size = EditorUiScale.FitWindow(preferredSize, scale, workSize);
         size = Vector2.Clamp(size, minimumSize, maximumSize);
         Vector2 position = workPosition + ((workSize - size) * 0.5f);
         return new EditorSettingsWindowPlacement(position, size, minimumSize, maximumSize);

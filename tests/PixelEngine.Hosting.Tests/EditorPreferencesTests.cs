@@ -20,7 +20,7 @@ public sealed class EditorPreferencesTests
     {
         using TempDir temp = new();
         string path = System.IO.Path.Combine(temp.Path, "preferences.json");
-        EditorPreferencesStore store = EditorPreferencesStore.Load(path);
+        EditorPreferencesStore store = EditorPreferencesStore.Load(path, static () => 1f);
 
         bool saved = store.TryUpdate(
             store.Current with
@@ -45,27 +45,43 @@ public sealed class EditorPreferencesTests
         Assert.Empty(Directory.GetFiles(temp.Path, "*.tmp"));
     }
 
+    /// <summary>首次启动按显示分辨率选择倍率并立即持久化，后续启动尊重用户文件。</summary>
+    [Fact]
+    public void FirstLaunchPersistsAutomaticUiScaleWithoutOverridingExistingPreference()
+    {
+        using TempDir temp = new();
+        string path = System.IO.Path.Combine(temp.Path, "preferences.json");
+
+        EditorPreferencesStore first = EditorPreferencesStore.Load(path, static () => 1.5f);
+        EditorPreferencesStore reloaded = EditorPreferencesStore.Load(path, static () => 2f);
+
+        Assert.True(first.LoadedFromDisk, first.LastDiagnostic);
+        Assert.True(File.Exists(path));
+        Assert.Equal(1.5f, first.Current.UiScale);
+        Assert.Equal(1.5f, reloaded.Current.UiScale);
+    }
+
     /// <summary>相同 Preferences 不重复写盘或发布 Changed，实际变化与显式修复只发布一次。</summary>
     [Fact]
     public void PreferencesChangedEventIgnoresNoChangeUpdates()
     {
         using TempDir temp = new();
         string path = System.IO.Path.Combine(temp.Path, "preferences.json");
-        EditorPreferencesStore store = EditorPreferencesStore.Load(path);
+        EditorPreferencesStore store = EditorPreferencesStore.Load(path, static () => 1f);
         int changedCount = 0;
         store.Changed += () => changedCount++;
 
         Assert.True(store.TryUpdate(store.Current, out string repairedDiagnostic), repairedDiagnostic);
-        Assert.Equal(1, changedCount);
+        Assert.Equal(0, changedCount);
         DateTime repairedTimestamp = File.GetLastWriteTimeUtc(path);
         Assert.True(store.TryUpdate(store.Current, out string unchangedDiagnostic), unchangedDiagnostic);
-        Assert.Equal(1, changedCount);
+        Assert.Equal(0, changedCount);
         Assert.Equal(repairedTimestamp, File.GetLastWriteTimeUtc(path));
 
         Assert.True(store.TryUpdate(
             store.Current with { UiScale = 1.5f },
             out string changedDiagnostic), changedDiagnostic);
-        Assert.Equal(2, changedCount);
+        Assert.Equal(1, changedCount);
     }
 
     /// <summary>
@@ -81,7 +97,7 @@ public sealed class EditorPreferencesTests
         Assert.Equal(expected, EditorUiScale.Normalize(input));
     }
 
-    /// <summary>首次启动倍率按有效分辨率分档，并同时支持横屏与竖屏。</summary>
+    /// <summary>首次启动倍率按显示分辨率分档，并同时支持横屏与竖屏。</summary>
     [Theory]
     [InlineData(1920, 1080, 1f)]
     [InlineData(2560, 1440, 1.5f)]
@@ -107,6 +123,25 @@ public sealed class EditorPreferencesTests
         Assert.Equal(1.5f, EditorUiScale.GetScaleRatio(1.5f, 1f));
         Assert.Equal(2f / 3f, EditorUiScale.GetScaleRatio(1f, 1.5f), precision: 5);
         Assert.Equal(new Vector2(1216f, 656f), EditorUiScale.FitWindow(new Vector2(820f, 540f), 2f, new Vector2(1280f, 720f)));
+    }
+
+    /// <summary>Build Settings 使用比 Project/Player Settings 更大的独立浮动窗口方案。</summary>
+    [Fact]
+    public void BuildSettingsFloatingWindowUsesDedicatedResponsivePlacement()
+    {
+        EditorSettingsWindowPlacement settings = EditorSettingsWindowLayout.Resolve(
+            Vector2.Zero,
+            new Vector2(1920f, 1080f),
+            1f);
+        EditorSettingsWindowPlacement build = EditorSettingsWindowLayout.ResolveBuildSettings(
+            Vector2.Zero,
+            new Vector2(1920f, 1080f),
+            1f);
+
+        Assert.True(build.Size.X > settings.Size.X);
+        Assert.True(build.Size.Y > settings.Size.Y);
+        Assert.Equal(new Vector2(980f, 680f), build.Size);
+        Assert.Equal(new Vector2(470f, 200f), build.Position);
     }
 
     /// <summary>

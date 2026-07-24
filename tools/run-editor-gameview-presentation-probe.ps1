@@ -311,7 +311,7 @@ $scenarios = @(
   [ordered]@{ Name = 'aspect-9-16'; PresetId = 'aspect-9-16'; ExpectedSource = 'EditorAspectRatio'; RatioA = 9; RatioB = 16; MaximizeOnPlay = $false },
   [ordered]@{ Name = 'resolution-1920-1080'; PresetId = 'resolution-1920-1080'; ExpectedSource = 'EditorFixedResolution'; ExpectedWidth = 1920; ExpectedHeight = 1080; MaximizeOnPlay = $false },
   [ordered]@{ Name = 'maximize-on-play'; PresetId = 'player-default'; ExpectedSource = 'PlayerDefault'; MaximizeOnPlay = $true },
-  [ordered]@{ Name = 'narrow-toolbar'; PresetId = 'aspect-16-9'; ExpectedSource = 'EditorAspectRatio'; RatioA = 16; RatioB = 9; MaximizeOnPlay = $false; WindowWidth = 360; WindowHeight = 720; ExpectedToolbarDensity = 'Narrow'; ExpectDockChrome = $false }
+  [ordered]@{ Name = 'narrow-toolbar'; PresetId = 'aspect-16-9'; ExpectedSource = 'EditorAspectRatio'; RatioA = 16; RatioB = 9; MaximizeOnPlay = $false; WindowWidth = 360; WindowHeight = 720; ExpectedToolbarDensity = 'OverflowOnly'; ExpectDockChrome = $false }
 )
 $scenarioResults = [Collections.Generic.List[object]]::new()
 

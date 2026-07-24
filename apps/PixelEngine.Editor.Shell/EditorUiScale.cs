@@ -61,11 +61,7 @@ internal static partial class EditorUiScale
         {
             int width = GetSystemMetrics(0);
             int height = GetSystemMetrics(1);
-            uint dpi = GetDpiForSystem();
-            float systemScale = dpi >= 96 ? dpi / 96f : 1f;
-            int effectiveWidth = Math.Max(1, (int)MathF.Round(width / systemScale));
-            int effectiveHeight = Math.Max(1, (int)MathF.Round(height / systemScale));
-            return RecommendedForResolution(effectiveWidth, effectiveHeight);
+            return RecommendedForResolution(width, height);
         }
         catch (Exception exception) when (
             exception is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException)
@@ -89,8 +85,6 @@ internal static partial class EditorUiScale
     [LibraryImport("user32.dll")]
     private static partial int GetSystemMetrics(int index);
 
-    [LibraryImport("user32.dll")]
-    private static partial uint GetDpiForSystem();
 }
 
 /// <summary>

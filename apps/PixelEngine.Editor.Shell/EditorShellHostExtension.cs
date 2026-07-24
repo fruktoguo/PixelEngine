@@ -1947,7 +1947,8 @@ internal sealed class EditorShellHostExtension :
             _project,
             console: _app.ConsoleStore,
             prepareScene: _app.PrepareSceneForBuild,
-            playerProcesses: _playerProcessManager);
+            playerProcesses: _playerProcessManager,
+            uiScaleProvider: () => _app.UiScale);
         _projectSettingsPanel.SettingsApplied += () => _app.NotifyAutomationSettingsChanged(
             "settings.project.changed",
             ["editor:project", "editor:project-settings"]);

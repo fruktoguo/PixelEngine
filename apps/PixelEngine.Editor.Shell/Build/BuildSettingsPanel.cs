@@ -29,6 +29,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
     private readonly IEditorConsoleSink? _console;
     private readonly Func<BuildScenePreparationResult> _prepareScene;
     private readonly EditorPlayerProcessManager _playerProcesses;
+    private readonly Func<float> _uiScaleProvider;
     private readonly bool _ownsPlayerProcesses;
     private readonly ConcurrentQueue<PendingBuildEvent> _pendingEvents = new();
     private readonly BuildLog _log = new();
@@ -49,6 +50,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
     private bool _autoScroll = true;
     private bool _scriptedOpenActionsOverflow;
     private int _disposed;
+    private float _lastWindowScale = float.NaN;
     private ScriptedBuildSettingsFooterProbeSnapshot _lastFooterProbe = new();
 
     public BuildSettingsPanel(
@@ -56,7 +58,8 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         IPlayerBuildService? buildService = null,
         IEditorConsoleSink? console = null,
         Func<BuildScenePreparationResult>? prepareScene = null,
-        EditorPlayerProcessManager? playerProcesses = null)
+        EditorPlayerProcessManager? playerProcesses = null,
+        Func<float>? uiScaleProvider = null)
     {
         ArgumentNullException.ThrowIfNull(project);
         _project = project;
@@ -66,6 +69,7 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
         _prepareScene = prepareScene ?? (static () => new BuildScenePreparationResult(true, string.Empty));
         _ownsPlayerProcesses = playerProcesses is null;
         _playerProcesses = playerProcesses ?? new EditorPlayerProcessManager();
+        _uiScaleProvider = uiScaleProvider ?? (static () => EditorUiScale.Default);
         _settings = _store.LoadRecoverable(out _persistentSettingsDiagnostic);
         _persistedSettings = CloneProfile(_settings);
         RequiresRepair = !string.IsNullOrWhiteSpace(_persistentSettingsDiagnostic);
@@ -496,9 +500,23 @@ internal sealed class BuildSettingsPanel : IEditorPanel, IDisposable
     {
         _ = context;
         PrepareFrame();
+        float scale = EditorUiScale.Normalize(_uiScaleProvider());
+        ImGuiViewportPtr viewport = ImGui.GetMainViewport();
+        EditorSettingsWindowPlacement placement = EditorSettingsWindowLayout.ResolveBuildSettings(
+            viewport.WorkPos,
+            viewport.WorkSize,
+            scale);
+        ImGui.SetNextWindowDockID(0, ImGuiCond.Always);
+        ImGui.SetNextWindowSizeConstraints(placement.MinimumSize, placement.MaximumSize);
+        ImGuiCond placementCondition = MathF.Abs(scale - _lastWindowScale) > 0.0001f
+            ? ImGuiCond.Always
+            : ImGuiCond.Appearing;
+        ImGui.SetNextWindowPos(placement.Position, placementCondition);
+        ImGui.SetNextWindowSize(placement.Size, placementCondition);
+        _lastWindowScale = scale;
         // 构建面板主布局：设置 → 场景 → 操作 → 进度 → 日志 → 结果
         bool visible = Visible;
-        if (!ImGui.Begin(Title, ref visible))
+        if (!ImGui.Begin(Title, ref visible, ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoCollapse))
         {
             Visible = visible;
             ImGui.End();

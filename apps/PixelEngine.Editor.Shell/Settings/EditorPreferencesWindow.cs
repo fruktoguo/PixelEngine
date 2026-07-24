@@ -247,7 +247,7 @@ internal sealed class EditorPreferencesWindow(
 
         NextPreferenceHelp(EditorLocalization.Get(
             "prefs.uiScaleHelp",
-            "150% is recommended for 4K displays. Fonts, menus, spacing, scrollbars, and toolbar sizes scale together."));
+            "First launch defaults to 100% at 1080p, 150% at 2K, and 200% at 4K. Your saved preference always wins afterward."));
         NextPreferenceHelp(EditorLocalization.Get(
             "prefs.uiScaleRestartHelp",
             "Scaling applies immediately. After restart, the font atlas is rebuilt at the target pixel size for the sharpest text."));

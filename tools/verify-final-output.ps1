@@ -1029,7 +1029,7 @@ foreach ($scenario in $editorGameViewScenarios) {
   }
 
   $summary = $scenario.summary
-  $expectedToolbarDensity = if ($scenarioName -eq 'narrow-toolbar') { 'Narrow' } else { 'Full' }
+  $expectedToolbarDensity = if ($scenarioName -eq 'narrow-toolbar') { 'OverflowOnly' } else { 'Full' }
   $requiredSummaryValues = [ordered]@{
     completed = 'True'
     first_ui_stack_depth = '1'

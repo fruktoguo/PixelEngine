@@ -354,7 +354,7 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("aspect-9-16", script, StringComparison.Ordinal);
         Assert.Contains("resolution-1920-1080", script, StringComparison.Ordinal);
         Assert.Contains("narrow-toolbar", script, StringComparison.Ordinal);
-        Assert.Contains("ExpectedToolbarDensity = 'Narrow'", script, StringComparison.Ordinal);
+        Assert.Contains("ExpectedToolbarDensity = 'OverflowOnly'", script, StringComparison.Ordinal);
         Assert.Contains("MaximizeOnPlay", script, StringComparison.Ordinal);
         Assert.Contains("editor-workspace.json", script, StringComparison.Ordinal);
         Assert.Contains("presentation_synchronized", script, StringComparison.Ordinal);
@@ -1496,6 +1496,7 @@ public sealed class HostingProjectDisciplineTests
         string layout = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellLayout.cs"));
         string dockSpace = File.ReadAllText(Path.Combine(root, "src", "PixelEngine.Editor", "EditorDockSpace.cs"));
         string host = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "EditorShellHostExtension.cs"));
+        string buildPanel = File.ReadAllText(Path.Combine(root, "apps", "PixelEngine.Editor.Shell", "Build", "BuildSettingsPanel.cs"));
 
         foreach (string item in new[]
         {
@@ -1610,7 +1611,8 @@ public sealed class HostingProjectDisciplineTests
         Assert.Contains("ConsoleDiagnosticsWindowTitle = \"Console\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("UiManifestWindowTitle = \"UI Manifest\"", dockSpace, StringComparison.Ordinal);
         Assert.Contains("PerformanceHudWindowTitle = \"Profiler\"", dockSpace, StringComparison.Ordinal);
-        Assert.Contains("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
+        Assert.DoesNotContain("DockBuilderDockWindow(BuildSettingsWindowTitle", dockSpace, StringComparison.Ordinal);
+        Assert.Contains("ImGuiWindowFlags.NoDocking | ImGuiWindowFlags.NoCollapse", buildPanel, StringComparison.Ordinal);
         Assert.Contains("CreatePersistentWindowTitle(string.Empty, AssetBrowserWindowTitle), projectNode", dockSpace, StringComparison.Ordinal);
         Assert.Contains("CreatePersistentWindowTitle(string.Empty, SceneHierarchyWindowTitle), hierarchyNode", dockSpace, StringComparison.Ordinal);
         Assert.Contains("CreatePersistentWindowTitle(string.Empty, InspectorWindowTitle), inspectorNode", dockSpace, StringComparison.Ordinal);
@@ -3565,7 +3567,7 @@ public sealed class HostingProjectDisciplineTests
                     second_controller_faulted = "False",
                     second_play_ui_restored = "True",
                     presentation_synchronized = "True",
-                    toolbar_density = name == "narrow-toolbar" ? "Narrow" : "Full",
+                    toolbar_density = name == "narrow-toolbar" ? "OverflowOnly" : "Full",
                     toolbar_fits = "True",
                     toolbar_overflow_visible = "True",
                 },

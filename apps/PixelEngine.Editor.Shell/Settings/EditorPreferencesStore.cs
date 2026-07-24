@@ -139,13 +139,28 @@ internal sealed class EditorPreferencesStore
         return new EditorPreferencesStore(null, normalized, loadedFromDisk: false, string.Empty);
     }
 
-    public static EditorPreferencesStore Load(string path)
+    public static EditorPreferencesStore Load(string path, Func<float>? firstLaunchScaleResolver = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         string fullPath = System.IO.Path.GetFullPath(path);
         if (!File.Exists(fullPath))
         {
-            return new EditorPreferencesStore(fullPath, new EditorPreferencesDocument(), loadedFromDisk: false, string.Empty);
+            EditorPreferencesDocument firstLaunch = new()
+            {
+                UiScale = EditorUiScale.Normalize(
+                    (firstLaunchScaleResolver ?? EditorUiScale.ResolveAutomaticDefault)()),
+            };
+            EditorPreferencesStore store = new(fullPath, firstLaunch, loadedFromDisk: false, string.Empty);
+            if (store.TryWrite(firstLaunch, out string diagnostic))
+            {
+                store.LoadedFromDisk = true;
+            }
+            else
+            {
+                store.LastDiagnostic = diagnostic;
+            }
+
+            return store;
         }
 
         try
