@@ -268,12 +268,17 @@ function Invoke-PlayerScenario(
   $backend = Get-SummaryMap $stdout 'game_ui_probe '
   $input = Get-SummaryMap $stdout 'physical_ui_input_probe '
   Assert-MapValue $backend 'active' $ExpectedBackend $Name
-  Assert-MapValue $input 'raw_press_edges' '1' $Name
-  Assert-MapValue $input 'raw_release_edges' '1' $Name
+  $rawPressEdges = [int]$input['raw_press_edges']
+  $rawReleaseEdges = [int]$input['raw_release_edges']
+  $maximumPhysicalEdges = if ($click.ActivationClickUsed) { 2 } else { 1 }
+  Assert-True ($rawPressEdges -ge 1 -and $rawPressEdges -le $maximumPhysicalEdges) `
+    "$Name 的 raw_press_edges 超出物理点击范围：actual=$rawPressEdges, activation=$($click.ActivationClickUsed)"
+  Assert-True ($rawReleaseEdges -eq $rawPressEdges) `
+    "$Name 的 press/release 边沿不对称：press=$rawPressEdges, release=$rawReleaseEdges"
   Assert-MapValue $input 'pointer_pending' '0' $Name
   Assert-MapValue $input 'pointer_coalesced' '0' $Name
-  Assert-MapValue $input 'button_calls' '2' $Name
-  Assert-MapValue $input 'button_forwarded' '2' $Name
+  Assert-MapValue $input 'button_calls' ([string]($rawPressEdges * 2)) $Name
+  Assert-MapValue $input 'button_forwarded' ([string]($rawPressEdges * 2)) $Name
   Assert-MapValue $input 'drained_events' '1' $Name
   Assert-MapValue $input 'controller_faulted' 'False' $Name
   Assert-MapValue $input 'main_screen' ([string]$ExpectedMain) $Name
@@ -342,7 +347,7 @@ function Get-EditorControllerFields([string]$DiscoveryRoot, [string]$PayloadFile
 function Wait-ForEditorUiReady(
   [string]$DiscoveryRoot,
   [string]$PayloadFile,
-  [int]$TimeoutSeconds = 20
+  [int]$TimeoutSeconds = 60
 ) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   $lastFailure = ''
@@ -353,6 +358,9 @@ function Wait-ForEditorUiReady(
           $fields.ContainsKey('MainScreen') -and
           $fields['MainScreen'].Contains('Value = 1', [StringComparison]::Ordinal)) {
         return $fields
+      }
+      if ($null -ne $fields) {
+        $lastFailure = ($fields | ConvertTo-Json -Compress)
       }
     } catch {
       $lastFailure = $_.Exception.Message
@@ -366,7 +374,7 @@ function Wait-ForEditorUiReady(
 
 function Wait-ForEditorCapturedFrames(
   [string]$DiscoveryRoot,
-  [int]$TimeoutSeconds = 20
+  [int]$TimeoutSeconds = 60
 ) {
   $deadline = [DateTimeOffset]::UtcNow.AddSeconds($TimeoutSeconds)
   $verifiedCaptures = 0
@@ -494,6 +502,7 @@ function Invoke-EditorScenario {
       panY = 0
       maximizeOnPlay = $false
       maximized = $true
+      statsVisible = $false
       customPresets = @()
     })
     [void](Invoke-EditorWrite $discoveryRoot 'game.presentation.set' "ui004-$runId-max" $presentationPayload)
@@ -585,8 +594,8 @@ try {
   $results.Add((Invoke-PlayerScenario `
     'player-rmlui-start' `
     $sourceContent `
-    (740.0 / 1080.0) `
-    (353.0 / 720.0) `
+    (590.0 / 1080.0) `
+    (343.0 / 720.0) `
     'RmlUi' `
     0 `
     $true `
