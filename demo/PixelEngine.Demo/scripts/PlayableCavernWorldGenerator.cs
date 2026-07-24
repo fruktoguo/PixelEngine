@@ -29,8 +29,11 @@ public sealed class PlayableCavernWorldGenerator :
         "maps/noita/mountain/left_stub_background.png");
     private TerrainGenerationState? _state;
     private readonly NoitaWangMarkerAnchor[] _visualMarkerBuffer = new NoitaWangMarkerAnchor[512];
+    private readonly NoitaVegetationPlacement[] _visualVegetationBuffer = new NoitaVegetationPlacement[2048];
     [ThreadStatic]
     private static NoitaWangMarkerAnchor[]? _chunkMarkerBuffer;
+    [ThreadStatic]
+    private static NoitaVegetationPlacement[]? _chunkVegetationBuffer;
 
     /// <summary>
     /// 程序化场景键，同时也是入口 Behaviour 的完整类型名。
@@ -40,7 +43,7 @@ public sealed class PlayableCavernWorldGenerator :
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v14";
+    public const string PersistenceKey = "showcase-campaign-v15";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -189,6 +192,15 @@ public sealed class PlayableCavernWorldGenerator :
                     WorldVisualLayerKind.Decoration);
             }
         }
+
+        count += CollectVegetationVisualLayers(
+            state,
+            minimumX,
+            minimumY,
+            maximumX,
+            maximumY,
+            destination[count..],
+            _visualVegetationBuffer);
 
         return count;
     }
@@ -416,6 +428,12 @@ public sealed class PlayableCavernWorldGenerator :
             }
         }
 
+        ApplyVegetation(
+            state,
+            originCellX,
+            originCellY,
+            sizeCells,
+            materialCells);
         ApplySnowcastlePixelScenes(
             state,
             worldSeed,
@@ -432,6 +450,314 @@ public sealed class PlayableCavernWorldGenerator :
             originCellY,
             state,
             in palette);
+    }
+
+    private static void ApplyVegetation(
+        TerrainGenerationState state,
+        long originCellX,
+        long originCellY,
+        int sizeCells,
+        Span<ushort> materialCells)
+    {
+        long maximumX = originCellX + sizeCells - 1L;
+        long maximumY = originCellY + sizeCells - 1L;
+        NoitaVegetationPlacement[] placements = _chunkVegetationBuffer ??= new NoitaVegetationPlacement[2048];
+        ReadOnlySpan<NoitaVegetationLayerDefinition> definitions = NoitaVegetationCatalog.Layers;
+        for (int definitionIndex = 0; definitionIndex < definitions.Length; definitionIndex++)
+        {
+            ref readonly NoitaVegetationLayerDefinition definition = ref definitions[definitionIndex];
+            if (!definition.Enabled || definition.IsVisual || definition.Material.Length == 0 ||
+                !state.Vegetation.TryGetLayers(definition.BiomeId, out CompiledNoitaVegetationLayer[] layers))
+            {
+                continue;
+            }
+
+            CompiledNoitaVegetationLayer layer = layers[FindVegetationLayer(layers, definition.Ordinal)];
+            int placementCount = CollectVegetationPlacements(
+                state,
+                in layer,
+                originCellX - layer.MaximumWidth,
+                originCellY - layer.MaximumHeight,
+                maximumX + layer.MaximumWidth,
+                maximumY + layer.MaximumHeight,
+                placements);
+            for (int placementIndex = 0; placementIndex < placementCount; placementIndex++)
+            {
+                StampVegetation(
+                    state,
+                    in layer,
+                    in placements[placementIndex],
+                    originCellX,
+                    originCellY,
+                    sizeCells,
+                    materialCells);
+            }
+        }
+    }
+
+    private static int CollectVegetationVisualLayers(
+        TerrainGenerationState state,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY,
+        Span<WorldVisualLayerDescriptor> destination,
+        Span<NoitaVegetationPlacement> placements)
+    {
+        int count = 0;
+        ReadOnlySpan<NoitaVegetationLayerDefinition> definitions = NoitaVegetationCatalog.Layers;
+        for (int definitionIndex = 0; definitionIndex < definitions.Length && count < destination.Length; definitionIndex++)
+        {
+            ref readonly NoitaVegetationLayerDefinition definition = ref definitions[definitionIndex];
+            if (!definition.Enabled || !definition.IsVisual || definition.VariantIndices.Length == 0 ||
+                !state.Vegetation.TryGetLayers(definition.BiomeId, out CompiledNoitaVegetationLayer[] layers))
+            {
+                continue;
+            }
+
+            CompiledNoitaVegetationLayer layer = layers[FindVegetationLayer(layers, definition.Ordinal)];
+            int placementCount = CollectVegetationPlacements(
+                state,
+                in layer,
+                minimumX - layer.MaximumWidth,
+                minimumY - layer.MaximumHeight,
+                maximumX + layer.MaximumWidth,
+                maximumY + layer.MaximumHeight,
+                placements);
+            for (int placementIndex = 0; placementIndex < placementCount && count < destination.Length; placementIndex++)
+            {
+                ref readonly NoitaVegetationPlacement placement = ref placements[placementIndex];
+                ref readonly DecodedNoitaVegetationAsset asset = ref state.Vegetation.Assets[placement.VariantIndex];
+                NoitaVegetationAssetDefinition assetDefinition = asset.Definition;
+                ResolveVegetationRectangle(in layer, in assetDefinition, in placement, out float x, out float y);
+                if (x + assetDefinition.Width < minimumX || y + assetDefinition.Height < minimumY ||
+                    x > maximumX || y > maximumY)
+                {
+                    continue;
+                }
+
+                destination[count++] = new WorldVisualLayerDescriptor(
+                    assetDefinition.Asset,
+                    x,
+                    y,
+                    assetDefinition.Width,
+                    assetDefinition.Height,
+                    WorldVisualLayerKind.Decoration,
+                    layer.Definition.VisualColor);
+            }
+        }
+
+        return count;
+    }
+
+    private static int FindVegetationLayer(CompiledNoitaVegetationLayer[] layers, int ordinal)
+    {
+        for (int i = 0; i < layers.Length; i++)
+        {
+            if (layers[i].Definition.Ordinal == ordinal)
+            {
+                return i;
+            }
+        }
+
+        throw new InvalidOperationException($"Noita vegetation layer {ordinal} 未编译。");
+    }
+
+    private static int CollectVegetationPlacements(
+        TerrainGenerationState state,
+        in CompiledNoitaVegetationLayer layer,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY,
+        Span<NoitaVegetationPlacement> destination)
+    {
+        int count = 0;
+        int spacing = Math.Clamp((int)Math.Round(layer.Definition.TreeWidth), 4, 2048);
+        long minimumGridX = FloorDivide(minimumX, spacing);
+        long maximumGridX = FloorDivide(maximumX, spacing);
+        long minimumGridY = FloorDivide(minimumY, spacing);
+        long maximumGridY = FloorDivide(maximumY, spacing);
+        ulong salt = StableIdSalt(layer.Definition.BiomeId) ^
+            ((ulong)layer.Definition.Ordinal * 0x9E37_79B9_7F4A_7C15UL) ^
+            BitConverter.DoubleToUInt64Bits(layer.Definition.RandomSeed);
+        for (long gridY = minimumGridY; gridY <= maximumGridY; gridY++)
+        {
+            for (long gridX = minimumGridX; gridX <= maximumGridX; gridX++)
+            {
+                if (HashUnit(gridX, gridY, state.WorldSeed ^ salt) >= layer.Definition.Probability)
+                {
+                    continue;
+                }
+
+                long cellMinimumX = gridX * spacing;
+                long cellMinimumY = gridY * spacing;
+                int jitterRange = Math.Max(1, spacing);
+                long anchorX = cellMinimumX + (long)(HashUnit(gridX, gridY, state.WorldSeed ^ salt ^ 0x4A49_5454_4552UL) * jitterRange);
+                int startY = (int)(HashUnit(gridX, gridY, state.WorldSeed ^ salt ^ 0x5354_4152_5459UL) * jitterRange);
+                for (int scan = 0; scan < spacing; scan++)
+                {
+                    long anchorY = cellMinimumY + ((startY + scan) % spacing);
+                    if (!TryResolveVegetationBiome(state, anchorX, anchorY, out CompiledReferenceBiome referenceBiome) ||
+                        !string.Equals(referenceBiome.Id, layer.Definition.BiomeId, StringComparison.Ordinal) ||
+                        !IsVegetationOpenAt(state, anchorX, anchorY, in referenceBiome) ||
+                        (layer.Definition.IsCeiling
+                            ? IsVegetationOpenAt(state, anchorX, anchorY - 1L, in referenceBiome)
+                            : IsVegetationOpenAt(state, anchorX, anchorY + 1L, in referenceBiome)))
+                    {
+                        continue;
+                    }
+
+                    int variantIndex = layer.Definition.VariantIndices.Length == 0
+                        ? -1
+                        : layer.Definition.VariantIndices[(int)(HashUnit(
+                            gridX,
+                            gridY,
+                            state.WorldSeed ^ salt ^ 0x5641_5249_414E_54UL) * layer.Definition.VariantIndices.Length) %
+                            layer.Definition.VariantIndices.Length];
+                    if (count < destination.Length)
+                    {
+                        destination[count++] = new NoitaVegetationPlacement(anchorX, anchorY, variantIndex);
+                    }
+                    break;
+                }
+            }
+        }
+
+        return count;
+    }
+
+    private static bool TryResolveVegetationBiome(
+        TerrainGenerationState state,
+        long worldX,
+        long worldY,
+        out CompiledReferenceBiome referenceBiome)
+    {
+        CompiledTopologyCell topology = state.WorldTopology.Resolve(worldX, worldY - state.Config.SurfaceY);
+        if (topology.Kind is not (CompiledTopologyCellKind.MainBiome or CompiledTopologyCellKind.SideBiome) ||
+            topology.ReferenceBiomeIndex < 0)
+        {
+            referenceBiome = default;
+            return false;
+        }
+
+        referenceBiome = state.WorldTopology.ReferenceBiome(topology.ReferenceBiomeIndex);
+        return referenceBiome.WangTerrain is not null;
+    }
+
+    private static bool IsVegetationOpenAt(
+        TerrainGenerationState state,
+        long worldX,
+        long worldY,
+        in CompiledReferenceBiome referenceBiome)
+    {
+        if (NoitaPixelSceneCatalog.TrySample(worldX, worldY, out NoitaPixelSceneMaterial sceneMaterial))
+        {
+            return sceneMaterial == NoitaPixelSceneMaterial.Empty;
+        }
+
+        if (referenceBiome.BitmapCaves is null ||
+            !referenceBiome.BitmapCaves.TrySample(
+                worldX,
+                worldY,
+                state.WorldSeed,
+                referenceBiome.Salt,
+                out byte semantic))
+        {
+            semantic = referenceBiome.WangTerrain!.Sample(worldX, worldY, state.WorldSeed, referenceBiome.Salt);
+        }
+
+        return semantic == (byte)NoitaWangTerrainSemantic.Empty ||
+            DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
+            (semantic == (byte)NoitaWangTerrainSemantic.RandomBinary &&
+                !DecodedNoitaWangTerrainSet.IsRandomBinarySolid(worldX, worldY, state.WorldSeed, referenceBiome.Salt));
+    }
+
+    private static void StampVegetation(
+        TerrainGenerationState state,
+        in CompiledNoitaVegetationLayer layer,
+        in NoitaVegetationPlacement placement,
+        long originCellX,
+        long originCellY,
+        int sizeCells,
+        Span<ushort> materialCells)
+    {
+        if (placement.VariantIndex < 0)
+        {
+            long worldY = placement.AnchorY + (long)Math.Round(layer.Definition.ExtraY);
+            StampVegetationCell(
+                placement.AnchorX,
+                worldY,
+                layer.MaterialId,
+                state.Palette.Empty,
+                originCellX,
+                originCellY,
+                sizeCells,
+                materialCells);
+            return;
+        }
+
+        ref readonly DecodedNoitaVegetationAsset asset = ref state.Vegetation.Assets[placement.VariantIndex];
+        NoitaVegetationAssetDefinition assetDefinition = asset.Definition;
+        ResolveVegetationRectangle(in layer, in assetDefinition, in placement, out float x, out float y);
+        long worldOriginX = (long)MathF.Round(x);
+        long worldOriginY = (long)MathF.Round(y);
+        for (int assetY = 0; assetY < asset.Definition.Height; assetY++)
+        {
+            int sourceRow = assetY * asset.Definition.Width;
+            for (int assetX = 0; assetX < asset.Definition.Width; assetX++)
+            {
+                if (asset.Mask[sourceRow + assetX] == 0)
+                {
+                    continue;
+                }
+
+                StampVegetationCell(
+                    worldOriginX + assetX,
+                    worldOriginY + assetY,
+                    layer.MaterialId,
+                    state.Palette.Empty,
+                    originCellX,
+                    originCellY,
+                    sizeCells,
+                    materialCells);
+            }
+        }
+    }
+
+    private static void ResolveVegetationRectangle(
+        in CompiledNoitaVegetationLayer layer,
+        in NoitaVegetationAssetDefinition asset,
+        in NoitaVegetationPlacement placement,
+        out float x,
+        out float y)
+    {
+        x = placement.AnchorX - asset.OffsetX + (float)layer.Definition.VisualOffsetX;
+        y = placement.AnchorY - asset.OffsetY + (float)(layer.Definition.ExtraY + layer.Definition.VisualOffsetY);
+    }
+
+    private static void StampVegetationCell(
+        long worldX,
+        long worldY,
+        ushort material,
+        ushort empty,
+        long originCellX,
+        long originCellY,
+        int sizeCells,
+        Span<ushort> materialCells)
+    {
+        long localX = worldX - originCellX;
+        long localY = worldY - originCellY;
+        if ((ulong)localX >= (uint)sizeCells || (ulong)localY >= (uint)sizeCells)
+        {
+            return;
+        }
+
+        int index = checked(((int)localY * sizeCells) + (int)localX);
+        if (materialCells[index] == empty)
+        {
+            materialCells[index] = material;
+        }
     }
 
     private static void ApplySnowcastlePixelScenes(
@@ -1877,6 +2203,7 @@ public sealed class PlayableCavernWorldGenerator :
         CompiledPortalNetwork portalNetwork = CompilePortalNetwork(materials, biomes.PortalNetwork);
         CompiledNoitaSnowcastlePixelSceneCatalog snowcastlePixelScenes =
             NoitaSnowcastlePixelSceneCatalog.Compile(materials);
+        CompiledNoitaVegetationCatalog vegetation = NoitaVegetationCatalog.Compile(materials);
         CampaignPortalAnchor[] portalAnchors = ResolvePortalAnchors(
             config,
             biomes.PortalNetwork,
@@ -1895,6 +2222,7 @@ public sealed class PlayableCavernWorldGenerator :
             portalNetwork,
             portalAnchors,
             snowcastlePixelScenes,
+            vegetation,
             worldSeed);
     }
 
@@ -1938,6 +2266,7 @@ public sealed class PlayableCavernWorldGenerator :
             ushort[] wangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: false);
             ushort[] protectedWangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: true);
             referenceBiomes[i] = new CompiledReferenceBiome(
+                source.Id,
                 StableIdSalt(source.Id),
                 source.Id switch
                 {
@@ -2889,6 +3218,7 @@ public sealed class PlayableCavernWorldGenerator :
         CompiledPortalNetwork portalNetwork,
         CampaignPortalAnchor[] portalAnchors,
         CompiledNoitaSnowcastlePixelSceneCatalog snowcastlePixelScenes,
+        CompiledNoitaVegetationCatalog vegetation,
         ulong worldSeed)
     {
         public CampaignConfig Config { get; } = config;
@@ -2916,6 +3246,8 @@ public sealed class PlayableCavernWorldGenerator :
         public CampaignPortalAnchor[] PortalAnchors { get; } = portalAnchors;
 
         public CompiledNoitaSnowcastlePixelSceneCatalog SnowcastlePixelScenes { get; } = snowcastlePixelScenes;
+
+        public CompiledNoitaVegetationCatalog Vegetation { get; } = vegetation;
 
         public ulong WorldSeed { get; } = worldSeed;
     }
@@ -3213,6 +3545,7 @@ public sealed class PlayableCavernWorldGenerator :
         int ReferenceBiomeIndex);
 
     private readonly record struct CompiledReferenceBiome(
+        string Id,
         ulong Salt,
         ReferenceMountainKind Mountain,
         byte[] TerrainMask,

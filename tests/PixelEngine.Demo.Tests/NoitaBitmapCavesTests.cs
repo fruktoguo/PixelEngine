@@ -212,7 +212,7 @@ public sealed class NoitaBitmapCavesTests
         }
 
         Assert.True(changed > 0, "Coal Mine 参考区必须包含 BitmapCaves 对 Wang 基底的真实覆盖。");
-        Assert.Equal("showcase-campaign-v14", PlayableCavernWorldGenerator.PersistenceKey);
+        Assert.Equal("showcase-campaign-v15", PlayableCavernWorldGenerator.PersistenceKey);
 
         ushort[] fungalEnabled = GenerateChunk(materials, campaign, biomes, enabled, -54, 30);
         ushort[] fungalDisabled = GenerateChunk(materials, campaign, biomes, disabled, -54, 30);

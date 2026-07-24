@@ -106,7 +106,7 @@ public sealed class NoitaWangTerrainCatalogTests
         ];
         Assert.Equal(41, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.True(runtime.Materials.TryGetId(name, out _), name));
-        Assert.Equal(77, runtime.Materials.Count);
+        Assert.Equal(86, runtime.Materials.Count);
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal("9dbd52ced019a643169a2db02f46c77f8766c6e5", catalog["referenceVersionHash"]!.GetValue<string>());
 
         JsonArray files = Assert.IsType<JsonArray>(catalog["files"]);
-        Assert.Equal(36, files.Count);
+        Assert.Equal(40, files.Count);
         HashSet<int> textureIds = [];
         foreach (JsonNode? fileNode in files)
         {
@@ -149,7 +149,7 @@ public sealed class NoitaWangTerrainCatalogTests
             }
         }
 
-        Assert.Equal(Enumerable.Range(19, 36), textureIds.Order());
+        Assert.Equal(Enumerable.Range(19, 40), textureIds.Order());
     }
 
     /// <summary>

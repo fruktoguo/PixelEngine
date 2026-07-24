@@ -6,6 +6,7 @@ param(
     [string] $CatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-catalog.json'),
     [string] $WangCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-wang-terrain.json'),
     [string] $SnowcastlePixelSceneCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-snowcastle-pixel-scenes.json'),
+    [string] $VegetationCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-vegetation.json'),
     [string] $MaterialsPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\materials.json'),
     [string] $TextureDirectory = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\textures'),
     [string] $TextureCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-textures.json')
@@ -76,6 +77,7 @@ function Get-Sha256([string] $Path) {
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
 $wangCatalog = Get-Content -LiteralPath $WangCatalogPath -Raw | ConvertFrom-Json
 $snowcastlePixelSceneCatalog = Get-Content -LiteralPath $SnowcastlePixelSceneCatalogPath -Raw | ConvertFrom-Json
+$vegetationCatalog = Get-Content -LiteralPath $VegetationCatalogPath -Raw | ConvertFrom-Json
 $materialsDocument = Get-Content -LiteralPath $MaterialsPath -Raw | ConvertFrom-Json
 $resolvedSourceDataRoot = (Resolve-Path -LiteralPath $SourceDataRoot).Path
 $resolvedTextureDirectory = [IO.Path]::GetFullPath($TextureDirectory)
@@ -115,7 +117,8 @@ function Resolve-Declaration([string] $Name) {
 
 $wangRequiredNames = @($wangCatalog.sets.materialMappings.material | Sort-Object -Unique)
 $sceneRequiredNames = @($snowcastlePixelSceneCatalog.materialNames | Sort-Object -Unique)
-$requiredNames = @(($wangRequiredNames + $sceneRequiredNames) | Sort-Object -Unique)
+$vegetationRequiredNames = @($vegetationCatalog.materialNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
+$requiredNames = @(($wangRequiredNames + $sceneRequiredNames + $vegetationRequiredNames) | Sort-Object -Unique)
 $reusedNames = @('lava', 'oil', 'sand', 'water')
 $materialsDocument.materials = @(
     $materialsDocument.materials |
