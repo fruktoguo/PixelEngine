@@ -979,24 +979,38 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
             (semantic == (byte)NoitaWangTerrainSemantic.RandomBinary &&
                 !DecodedNoitaWangTerrainSet.IsRandomBinarySolid(worldX, worldY, row.WorldSeed, referenceBiome.Salt));
-        return empty
-            ? row.Palette.Empty
-            : semantic switch
-            {
-                (byte)NoitaWangTerrainSemantic.Primary or
-                (byte)NoitaWangTerrainSemantic.RandomBinary => SelectBiomeSolidMaterial(
-                    worldX,
-                    worldY,
-                    protectedSpawn,
-                    biome,
-                    in row),
-                (byte)NoitaWangTerrainSemantic.Secondary => biome.Secondary,
-                (byte)NoitaWangTerrainSemantic.Loose => biome.Loose,
-                (byte)NoitaWangTerrainSemantic.Structure => biome.Structure,
-                (byte)NoitaWangTerrainSemantic.Hazard => protectedSpawn ? biome.Primary : biome.Hazard,
-                (byte)NoitaWangTerrainSemantic.Pool => biome.Pool,
-                _ => throw new InvalidOperationException($"未知 Noita Wang terrain semantic：{semantic}。"),
-            };
+        if (empty)
+        {
+            return row.Palette.Empty;
+        }
+
+        if (DecodedNoitaWangTerrainSet.IsMaterial(semantic))
+        {
+            int materialIndex = semantic - NoitaWangTerrainCatalog.MaterialSemanticBase;
+            ReadOnlySpan<ushort> materials = protectedSpawn
+                ? referenceBiome.ProtectedWangMaterials
+                : referenceBiome.WangMaterials;
+            return (uint)materialIndex < (uint)materials.Length
+                ? materials[materialIndex]
+                : throw new InvalidOperationException($"Noita Wang 材质 semantic {semantic} 未编译。");
+        }
+
+        return semantic switch
+        {
+            (byte)NoitaWangTerrainSemantic.Primary or
+            (byte)NoitaWangTerrainSemantic.RandomBinary => SelectBiomeSolidMaterial(
+                worldX,
+                worldY,
+                protectedSpawn,
+                biome,
+                in row),
+            (byte)NoitaWangTerrainSemantic.Secondary => biome.Secondary,
+            (byte)NoitaWangTerrainSemantic.Loose => biome.Loose,
+            (byte)NoitaWangTerrainSemantic.Structure => biome.Structure,
+            (byte)NoitaWangTerrainSemantic.Hazard => protectedSpawn ? biome.Primary : biome.Hazard,
+            (byte)NoitaWangTerrainSemantic.Pool => biome.Pool,
+            _ => throw new InvalidOperationException($"未知 Noita Wang terrain semantic：{semantic}。"),
+        };
     }
 
     private static bool TrySelectGlobalPixelSceneMaterial(
@@ -1672,7 +1686,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             biomes.SideBiomes,
             biomes,
             pixelScenes);
-        CompiledWorldTopology worldTopology = CompileWorldTopology(biomes, wangTerrain);
+        CompiledWorldTopology worldTopology = CompileWorldTopology(materials, biomes, wangTerrain);
         CompiledConnection[] connections = CompileConnections(
             materials,
             biomes);
@@ -1729,6 +1743,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     }
 
     private static CompiledWorldTopology CompileWorldTopology(
+        IMaterialQuery materials,
         BiomeCatalog biomes,
         NoitaWangTerrainCatalog wangTerrain)
     {
@@ -1742,6 +1757,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             NoitaWangTerrainSetDefinition? terrainSet = source.Terrain is "main-biome" or "side-biome"
                 ? wangTerrain.FindDefinitionForReferenceBiome(source.Id)
                 : null;
+            ushort[] wangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: false);
+            ushort[] protectedWangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: true);
             referenceBiomes[i] = new CompiledReferenceBiome(
                 StableIdSalt(source.Id),
                 source.Id switch
@@ -1765,7 +1782,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     _ => throw new InvalidOperationException($"未编译的参考地形掩码强调材质：{source.ReferenceTerrainMask.Accent}。"),
                 },
                 terrainSet?.Decoded,
-                terrainSet?.DecodedBitmapCaves);
+                terrainSet?.DecodedBitmapCaves,
+                wangMaterials,
+                protectedWangMaterials);
         }
 
         for (int mapY = 0; mapY < definition.Height; mapY++)
@@ -1834,6 +1853,30 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             laboratory.DecodedReferenceTerrainMask,
             cells,
             referenceBiomes);
+    }
+
+    private static ushort[] CompileWangMaterials(
+        IMaterialQuery materials,
+        NoitaWangTerrainSetDefinition? terrainSet,
+        bool protectedSpawn)
+    {
+        if (terrainSet is null)
+        {
+            return [];
+        }
+
+        NoitaWangMaterialMappingDefinition[] mappings = terrainSet.MaterialMappings;
+        ushort[] result = new ushort[mappings.Length];
+        ushort protectedFallback = protectedSpawn ? ResolveRequired(materials, "stone") : default;
+        for (int i = 0; i < mappings.Length; i++)
+        {
+            NoitaWangMaterialMappingDefinition mapping = mappings[i];
+            result[i] = protectedSpawn && string.Equals(mapping.Semantic, "hazard", StringComparison.Ordinal)
+                ? protectedFallback
+                : ResolveRequired(materials, mapping.Material);
+        }
+
+        return result;
     }
 
     private static CompiledHolyMountain CompileHolyMountain(
@@ -2991,7 +3034,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         byte[] TerrainMask,
         ReferenceTerrainMaskAccent MaskAccent,
         DecodedNoitaWangTerrainSet? WangTerrain,
-        DecodedNoitaBitmapCaves? BitmapCaves);
+        DecodedNoitaBitmapCaves? BitmapCaves,
+        ushort[] WangMaterials,
+        ushort[] ProtectedWangMaterials);
 
     private enum ReferenceTerrainMaskAccent : byte
     {

@@ -258,33 +258,41 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         ThrowIfDisposed();
         // dirty swap 前落地：走相位 1 输入 API，使写入对本帧 CA current dirty 立即可见。
         Span<ScriptCommand> commands = Drain(ScriptCommandTarget.CellWrite);
+        int flushed = 0;
         for (int i = 0; i < commands.Length; i++)
         {
             ref readonly ScriptCommand command = ref commands[i];
             switch (command.Kind)
             {
                 case ScriptCommandKind.SetCell:
-                    if (command.Material.Value == 0)
+                    bool applied = command.Material.Value == 0
+                        ? Kernel.TryClearCellAtInputPhase(command.X, command.Y)
+                        : Kernel.TryEditCellAtInputPhase(command.X, command.Y, command.Material.Value, persistentFlags: 0);
+                    if (!applied)
                     {
-                        Kernel.ClearCellAtInputPhase(command.X, command.Y);
+                        _commands.Enqueue(ScriptCommandTarget.CellWrite, in command);
                     }
                     else
                     {
-                        Kernel.EditCellAtInputPhase(command.X, command.Y, command.Material.Value, persistentFlags: 0);
+                        flushed++;
                     }
 
                     break;
                 case ScriptCommandKind.Paint:
                     Paint(command.X, command.Y, command.Width, command.Material.Value);
+                    flushed++;
                     break;
                 case ScriptCommandKind.DamageCircle:
                     _ = Kernel.DamageCircle(command.X, command.Y, command.Width, checked((ushort)command.Height), command.A > 0f);
+                    flushed++;
                     break;
                 case ScriptCommandKind.DamageBeam:
                     _ = Kernel.DamageBeam(command.X, command.Y, command.A, command.B, command.Width, checked((ushort)command.Height));
+                    flushed++;
                     break;
                 case ScriptCommandKind.AddHeat:
                     AddHeat(command.X, command.Y, command.Width, command.A);
+                    flushed++;
                     break;
                 case ScriptCommandKind.Explode:
                 case ScriptCommandKind.SpawnParticle:
@@ -301,7 +309,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             }
         }
 
-        return commands.Length;
+        return flushed;
     }
 
     /// <summary>

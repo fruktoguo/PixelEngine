@@ -15,7 +15,8 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class NoitaWangTerrainCatalog
 {
-    internal const int CurrentSchemaVersion = 1;
+    internal const int CurrentSchemaVersion = 2;
+    internal const byte MaterialSemanticBase = 10;
     internal const byte MarkerSemanticBase = 32;
     private const string EmbeddedResourceName = "PixelEngine.Demo.noita-wang-terrain.json";
     private const string RequiredReferenceBuildId = "17130612";
@@ -240,8 +241,12 @@ internal sealed class NoitaWangTerrainCatalog
         ValidateMarkers(set.Markers, $"{label}.markers");
         set.DecodedBitmapCaves = set.BitmapCaves is null
             ? null
-            : DecodedNoitaBitmapCaves.Decode(set.BitmapCaves, set.Markers.Length, $"{label}.bitmapCaves");
-        Require(string.Equals(set.Encoding, "brotli-pewh-v1", StringComparison.Ordinal), $"{label}.encoding 必须为 brotli-pewh-v1。");
+            : DecodedNoitaBitmapCaves.Decode(
+                set.BitmapCaves,
+                set.MaterialMappings.Length,
+                set.Markers.Length,
+                $"{label}.bitmapCaves");
+        Require(string.Equals(set.Encoding, "brotli-pewh-v2", StringComparison.Ordinal), $"{label}.encoding 必须为 brotli-pewh-v2。");
         Require(set.DecodedLength > BinaryHeaderLength, $"{label}.decodedLength 非法。");
         Require(IsSha256(set.DecodedSha256), $"{label}.decodedSha256 必须为 64 位 SHA256 hex。");
         byte[] decoded = DecodeBrotli(set.Data, set.DecodedLength, set.DecodedSha256, label);
@@ -253,7 +258,7 @@ internal sealed class NoitaWangTerrainCatalog
         byte[] decoded,
         string label)
     {
-        Require(decoded.AsSpan(0, 4).SequenceEqual("PWH1"u8), $"{label}.data 缺少 PWH1 头。");
+        Require(decoded.AsSpan(0, 4).SequenceEqual("PWH2"u8), $"{label}.data 缺少 PWH2 头。");
         Require(decoded[4] == definition.ShortSide, $"{label}.data shortSide 与 JSON 不一致。");
         for (int i = 0; i < 4; i++)
         {
@@ -284,6 +289,7 @@ internal sealed class NoitaWangTerrainCatalog
             definition.CornerColors,
             [1, 2, 3, 0, 1, 2],
             definition.VaryX * definition.VaryY,
+            definition.MaterialMappings.Length,
             definition.Markers.Length,
             $"{label}.horizontal");
         ParseTileRecords(
@@ -295,6 +301,7 @@ internal sealed class NoitaWangTerrainCatalog
             definition.CornerColors,
             [0, 3, 2, 1, 0, 3],
             definition.VaryX * definition.VaryY,
+            definition.MaterialMappings.Length,
             definition.Markers.Length,
             $"{label}.vertical");
         Require(offset == decoded.Length, $"{label}.data 含未消费尾部数据。");
@@ -306,7 +313,8 @@ internal sealed class NoitaWangTerrainCatalog
             horizontalKeys,
             horizontalOffsets,
             verticalKeys,
-            verticalOffsets);
+            verticalOffsets,
+            definition.MaterialMappings);
     }
 
     private static void ParseTileRecords(
@@ -318,6 +326,7 @@ internal sealed class NoitaWangTerrainCatalog
         int[] cornerColors,
         ReadOnlySpan<int> constraintTypes,
         int expectedVariants,
+        int materialCount,
         int markerCount,
         string label)
     {
@@ -352,7 +361,7 @@ internal sealed class NoitaWangTerrainCatalog
 
             keys[i] = key;
             pixelOffsets[i] = offset;
-            ValidateSemanticPixels(decoded.AsSpan(offset, tileArea), markerCount, $"{label}[{i}]");
+            ValidateSemanticPixels(decoded.AsSpan(offset, tileArea), materialCount, markerCount, $"{label}[{i}]");
             offset += tileArea;
             previous = key;
         }
@@ -371,15 +380,17 @@ internal sealed class NoitaWangTerrainCatalog
         Require(uniqueKeys == expectedUniqueKeys, $"{label} 未覆盖全部 corner constraint 组合。");
     }
 
-    private static void ValidateSemanticPixels(ReadOnlySpan<byte> pixels, int markerCount, string label)
+    private static void ValidateSemanticPixels(ReadOnlySpan<byte> pixels, int materialCount, int markerCount, string label)
     {
         for (int i = 0; i < pixels.Length; i++)
         {
             byte semantic = pixels[i];
             bool terrainSemantic = semantic is <= (byte)NoitaWangTerrainSemantic.Pool or
                 (byte)NoitaWangTerrainSemantic.RandomBinary;
+            bool materialSemantic = semantic >= MaterialSemanticBase &&
+                semantic - MaterialSemanticBase < materialCount;
             bool markerSemantic = semantic >= MarkerSemanticBase && semantic - MarkerSemanticBase < markerCount;
-            Require(terrainSemantic || markerSemantic, $"{label} 含未知 semantic {semantic}。");
+            Require(terrainSemantic || materialSemantic || markerSemantic, $"{label} 含未知 semantic {semantic}。");
         }
     }
 
@@ -440,6 +451,7 @@ internal sealed class NoitaWangTerrainCatalog
         }
 
         HashSet<string> colors = new(StringComparer.OrdinalIgnoreCase);
+        HashSet<byte> encodedSemantics = [];
         for (int i = 0; i < mappings.Length; i++)
         {
             NoitaWangMaterialMappingDefinition mapping = mappings[i] ??
@@ -450,6 +462,10 @@ internal sealed class NoitaWangTerrainCatalog
             Require(
                 mapping.Semantic is "secondary" or "loose" or "structure" or "hazard" or "pool",
                 $"{label}[{i}].semantic 不受支持：{mapping.Semantic}。");
+            Require(
+                mapping.EncodedSemantic == MaterialSemanticBase + i,
+                $"{label}[{i}].encodedSemantic 必须连续从 {MaterialSemanticBase} 开始。");
+            Require(encodedSemantics.Add(mapping.EncodedSemantic), $"{label} encodedSemantic 重复：{mapping.EncodedSemantic}。");
             Require(mapping.Origin is "wang-color" or "graphics-color", $"{label}[{i}].origin 不受支持：{mapping.Origin}。");
         }
     }
@@ -591,6 +607,8 @@ internal sealed class NoitaWangMaterialMappingDefinition
 
     public string Semantic { get; init; } = string.Empty;
 
+    public byte EncodedSemantic { get; init; }
+
     public string Origin { get; init; } = string.Empty;
 }
 
@@ -627,7 +645,8 @@ internal sealed class DecodedNoitaWangTerrainSet(
     uint[] horizontalKeys,
     int[] horizontalOffsets,
     uint[] verticalKeys,
-    int[] verticalOffsets)
+    int[] verticalOffsets,
+    NoitaWangMaterialMappingDefinition[] materialMappings)
 {
     // Noita 的 Wang/material PNG 是逐物理像素模板：一个 source pixel 对应一个 world cell。
     // 宏观尺度由 512-cell biome map 与 BitmapCaves 提供，不能在这里再次放大模板，否则
@@ -640,6 +659,14 @@ internal sealed class DecodedNoitaWangTerrainSet(
     public string Id { get; } = id;
 
     public int ShortSide { get; } = shortSide;
+
+    public ReadOnlySpan<NoitaWangMaterialMappingDefinition> MaterialMappings => materialMappings;
+
+    public static bool IsMaterial(byte semantic)
+    {
+        return semantic is >= NoitaWangTerrainCatalog.MaterialSemanticBase and
+            < NoitaWangTerrainCatalog.MarkerSemanticBase;
+    }
 
     public ReadOnlySpan<int> CornerColors => CornerColorValues;
 

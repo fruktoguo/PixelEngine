@@ -115,6 +115,26 @@ public sealed class TemperatureFieldTests
     }
 
     /// <summary>
+    /// 验证流式加载尚未补齐 3x3 邻域时相变延后，避免 dirty 边界传播越过驻留环。
+    /// </summary>
+    [Fact]
+    public void ApplyPhaseTransitionsWaitsForCompleteResidentNeighborhood()
+    {
+        Chunk center = new(new ChunkCoord(0, 0));
+        TestChunkSource source = new(center);
+        Set(center, 30, 30, Ice);
+        center.SetCurrentDirty(new DirtyRect(30, 30, 30, 30));
+        MaterialTable materials = CreateMaterials();
+        TemperatureField field = new();
+        field.AddHeat(30, 30, 20);
+
+        field.ApplyPhaseTransitions(source, materials, CellFlags.Parity);
+
+        Assert.Equal(Ice, Get(center, 30, 30));
+        Assert.True(center.WorkingDirty.IsEmpty);
+    }
+
+    /// <summary>
     /// 验证与 active 温度块无邻接关系的 resident border chunk 保持冻结，且不执行材质相变。
     /// </summary>
     [Fact]

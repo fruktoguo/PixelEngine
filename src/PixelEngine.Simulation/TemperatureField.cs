@@ -419,7 +419,8 @@ public sealed class TemperatureField
         ICellTopologyChangeSink topologySink = topologyChangeSink ?? ICellTopologyChangeSink.Null;
         foreach (Chunk chunk in chunks.ResidentChunks)
         {
-            if (!chunks.IsSimulationActive(chunk.Coord))
+            if (!chunks.IsSimulationActive(chunk.Coord) ||
+                !chunks.ResolveNeighborhood(chunk.Coord, out _))
             {
                 continue;
             }

@@ -84,6 +84,27 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证流式边界邻 chunk 尚未驻留时保留 SetCell 命令，补环后仅落地一次。
+    /// </summary>
+    [Fact]
+    public void CellCommandFlushDefersBoundaryWriteUntilDirtyNeighborhoodIsResident()
+    {
+        using Fixture fixture = Fixture.Create();
+        MaterialId stone = fixture.Context.Materials.Resolve("stone");
+        fixture.Grid.SetMaterial(63, 32, stone.Value);
+        fixture.Context.Cells.SetCell(63, 32, default);
+
+        Assert.Equal(0, fixture.Context.FlushCellCommands());
+        Assert.Equal(stone.Value, fixture.Grid.GetMaterial(63, 32));
+
+        fixture.ChunkSource.Add(new Chunk(new ChunkCoord(1, 0)));
+
+        Assert.Equal(1, fixture.Context.FlushCellCommands());
+        Assert.Equal((ushort)0, fixture.Grid.GetMaterial(63, 32));
+        Assert.Equal(0, fixture.Context.FlushCellCommands());
+    }
+
+    /// <summary>
     /// 验证材质、cell 与固体采样 facade 直接读取真实 Simulation 后端。
     /// </summary>
     [Fact]
@@ -793,6 +814,7 @@ public sealed class ScriptSimulationContextTests
     {
         private Fixture(
             Chunk chunk,
+            TestChunkSource chunkSource,
             CellGrid grid,
             SimulationKernel kernel,
             TemperatureField temperature,
@@ -804,6 +826,7 @@ public sealed class ScriptSimulationContextTests
             JobSystem? jobs)
         {
             Chunk = chunk;
+            ChunkSource = chunkSource;
             Grid = grid;
             Kernel = kernel;
             Temperature = temperature;
@@ -816,6 +839,8 @@ public sealed class ScriptSimulationContextTests
         }
 
         public Chunk Chunk { get; }
+
+        public TestChunkSource ChunkSource { get; }
 
         public CellGrid Grid { get; }
 
@@ -869,7 +894,7 @@ public sealed class ScriptSimulationContextTests
             }
 
             ScriptSimulationContext context = new(new ScriptScene(), grid, kernel, particles, materials, temperature, scriptEvents, physics: physics, camera: camera, input: input, lighting: lighting, overlay: overlay);
-            return new Fixture(chunk, grid, kernel, temperature, particles, scriptEvents, context, materials, physics, jobs);
+            return new Fixture(chunk, chunks, grid, kernel, temperature, particles, scriptEvents, context, materials, physics, jobs);
         }
 
         public void Dispose()
@@ -1066,15 +1091,24 @@ public sealed class ScriptSimulationContextTests
 
     private sealed class TestChunkSource(params Chunk[] chunks) : IChunkSource
     {
-        public ReadOnlySpan<Chunk> ResidentChunks => chunks;
+        private Chunk[] _chunks = chunks;
+
+        public ReadOnlySpan<Chunk> ResidentChunks => _chunks;
+
+        public void Add(Chunk chunk)
+        {
+            int index = _chunks.Length;
+            Array.Resize(ref _chunks, index + 1);
+            _chunks[index] = chunk;
+        }
 
         public bool TryGetChunk(ChunkCoord coord, out Chunk chunk)
         {
-            for (int i = 0; i < chunks.Length; i++)
+            for (int i = 0; i < _chunks.Length; i++)
             {
-                if (chunks[i].Coord == coord)
+                if (_chunks[i].Coord == coord)
                 {
-                    chunk = chunks[i];
+                    chunk = _chunks[i];
                     return true;
                 }
             }

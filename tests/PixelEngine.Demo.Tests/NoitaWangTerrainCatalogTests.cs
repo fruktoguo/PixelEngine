@@ -1,4 +1,5 @@
 using System.Text.Json.Nodes;
+using PixelEngine.Content;
 using PixelEngine.Hosting;
 using Xunit;
 
@@ -68,6 +69,10 @@ public sealed class NoitaWangTerrainCatalogTests
             Assert.Equal(64, set.SpawnSourceSha256.Length);
             Assert.Equal(64, set.DecodedSha256.Length);
             Assert.NotEmpty(set.Markers);
+            Assert.InRange(set.MaterialMappings.Length, 1, 22);
+            Assert.Equal(
+                Enumerable.Range(NoitaWangTerrainCatalog.MaterialSemanticBase, set.MaterialMappings.Length),
+                set.MaterialMappings.Select(static mapping => (int)mapping.EncodedSemantic));
             Assert.Same(set.Decoded, catalog.FindForReferenceBiome(set.ReferenceBiomeIds[0]));
         });
         Assert.Equal(
@@ -76,6 +81,31 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal(
             "11b43f3a3d5653ce8529166e9b3d50e62e8a70b78bb48890a15e0d4eb632e268",
             catalog.Sets[^1].SourceWangSha256);
+    }
+
+    /// <summary>
+    /// 验证 Wang 模板引用的全部稳定材质名都进入正式运行时目录，避免再次退化为代表材质。
+    /// </summary>
+    [Fact]
+    public void ExactWangMaterialsArePresentInRuntimeMaterialCatalog()
+    {
+        NoitaWangTerrainCatalog catalog = LoadCatalog();
+        string contentRoot = ContentRoot();
+        MaterialContentLoadResult runtime = MaterialContentLoader.Load(
+            File.ReadAllText(Path.Combine(contentRoot, "materials.json")),
+            File.ReadAllText(Path.Combine(contentRoot, "reactions.json")));
+
+        string[] requiredNames =
+        [
+            .. catalog.Sets
+                .SelectMany(static set => set.MaterialMappings)
+                .Select(static mapping => mapping.Material)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+        Assert.Equal(41, requiredNames.Length);
+        Assert.All(requiredNames, name => Assert.True(runtime.Materials.TryGetId(name, out _), name));
+        Assert.Equal(62, runtime.Materials.Count);
     }
 
     /// <summary>

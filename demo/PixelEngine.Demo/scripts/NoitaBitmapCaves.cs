@@ -157,6 +157,7 @@ internal sealed class DecodedNoitaBitmapCaves
 
     internal static DecodedNoitaBitmapCaves Decode(
         NoitaBitmapCavesDefinition definition,
+        int materialCount,
         int markerCount,
         string label)
     {
@@ -182,6 +183,7 @@ internal sealed class DecodedNoitaBitmapCaves
         {
             decodedStructures[i] = DecodeStructure(
                 structures[i] ?? throw Invalid($"{label}.structures[{i}] 不能为空。"),
+                materialCount,
                 markerCount,
                 $"{label}.structures[{i}]");
         }
@@ -692,6 +694,7 @@ internal sealed class DecodedNoitaBitmapCaves
 
     private static DecodedNoitaBitmapCaveStructure DecodeStructure(
         NoitaBitmapCaveStructureDefinition definition,
+        int materialCount,
         int markerCount,
         string label)
     {
@@ -717,9 +720,11 @@ internal sealed class DecodedNoitaBitmapCaves
             byte value = pixels[i];
             bool terrain = value is <= (byte)NoitaWangTerrainSemantic.Pool or
                 (byte)NoitaWangTerrainSemantic.RandomBinary;
+            bool material = value >= NoitaWangTerrainCatalog.MaterialSemanticBase &&
+                value - NoitaWangTerrainCatalog.MaterialSemanticBase < materialCount;
             bool marker = value >= NoitaWangTerrainCatalog.MarkerSemanticBase &&
                 value - NoitaWangTerrainCatalog.MarkerSemanticBase < markerCount;
-            Require(terrain || marker, $"{label}.data[{i}] 含未知 semantic {value}。");
+            Require(terrain || material || marker, $"{label}.data[{i}] 含未知 semantic {value}。");
         }
 
         return new DecodedNoitaBitmapCaveStructure(

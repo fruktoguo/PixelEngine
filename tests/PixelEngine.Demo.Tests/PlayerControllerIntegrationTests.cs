@@ -3241,6 +3241,51 @@ public sealed class PlayerControllerIntegrationTests
     }
 
     /// <summary>
+    /// 验证 TemporarySnapshot 可保留显式出生点，供参考路线和远区视觉证据使用。
+    /// </summary>
+    [Fact]
+    public void PlayableWorldDirectorCanUseConfiguredSpawnForReferenceCapture()
+    {
+        using Engine engine = CreateScriptEngine(typeof(PlayableWorldDirector), out _, out _, out _);
+        PlayableWorldDirector director = FindBehaviour<PlayableWorldDirector>(engine);
+        director.PlayerSpawnX = 1_503f;
+        director.PlayerSpawnY = 6_006f;
+        director.UseConfiguredPlayerSpawn = true;
+
+        engine.RunHeadlessTicks(3);
+
+        PlayerController player = FindBehaviour<PlayerController>(engine);
+        Assert.Equal(1_503f, player.SpawnX);
+        Assert.Equal(6_006f, player.SpawnY);
+        Assert.InRange(player.CenterX, 1_506f, 1_506.1f);
+        Assert.InRange(player.CenterY, 6_012f, 6_013f);
+    }
+
+    /// <summary>
+    /// 验证显式出生点同步程序化世界初始焦点，避免首帧跨远距离移动造成驻留环缺口。
+    /// </summary>
+    [Fact]
+    public void PlayableWorldDirectorConfiguredSpawnAlsoSetsInitialWorldFocus()
+    {
+        PlayableWorldDirector director = new()
+        {
+            PlayerSpawnX = 1_503f,
+            PlayerSpawnY = 6_006f,
+            UseConfiguredPlayerSpawn = true,
+        };
+        ProceduralWorldBuildRequest request = new(
+            PlayableCavernWorldGenerator.Key,
+            Materials: null!,
+            WorldSeedOverride: null,
+            Config: null);
+
+        ProceduralWorldDescriptor descriptor = director.Describe(in request);
+
+        Assert.Equal(1_506, descriptor.InitialFocusX);
+        Assert.Equal(6_012, descriptor.InitialFocusY);
+    }
+
+    /// <summary>
     /// 验证可玩 Demo 的六个数字键固定对应小枪、激光炮、手雷、炸弹、挖掘与建造工具，且小枪使用材质耐久伤害而非爆炸破坏。
     /// </summary>
     [Fact]

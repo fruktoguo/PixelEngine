@@ -24,6 +24,7 @@ $SemanticStructure = 4
 $SemanticHazard = 5
 $SemanticPool = 6
 $SemanticRandomBinary = 9
+$SemanticMaterialBase = 10
 $SemanticMarkerBase = 32
 
 $specifications = @(
@@ -613,6 +614,7 @@ foreach ($specification in $specifications) {
     }
 
     $usedMaterialMappings = @{}
+    $materialSemantics = @{}
     function Resolve-Semantic([uint32] $Color) {
         $colorText = Format-Color $Color
         $rgb = Format-Rgb $Color
@@ -628,7 +630,16 @@ foreach ($specification in $specifications) {
         if ($materialAliases.ContainsKey($rgb)) {
             $mapping = $materialAliases[$rgb]
             $usedMaterialMappings[$rgb] = $mapping
-            return [int]$mapping.semantic
+            if (-not $materialSemantics.ContainsKey($rgb)) {
+                $nextSemantic = $SemanticMaterialBase + $materialSemantics.Count
+                if ($nextSemantic -ge $SemanticMarkerBase) {
+                    throw "Biome '$($specification.id)' exceeds the exact material semantic capacity."
+                }
+
+                $materialSemantics[$rgb] = $nextSemantic
+            }
+
+            return [int]$materialSemantics[$rgb]
         }
 
         $r = ($Color -shr 16) -band 0xff
@@ -710,7 +721,7 @@ foreach ($specification in $specifications) {
     try {
         $writer = [IO.BinaryWriter]::new($decodedStream, [Text.Encoding]::ASCII, $true)
         try {
-            $writer.Write([Text.Encoding]::ASCII.GetBytes('PWH1'))
+            $writer.Write([Text.Encoding]::ASCII.GetBytes('PWH2'))
             $writer.Write([byte]$header.shortSide)
             foreach ($count in $header.colors) {
                 $writer.Write([byte]$count)
@@ -752,14 +763,16 @@ foreach ($specification in $specifications) {
 
     $compressed = Compress-Brotli $decoded
     $mappingDefinitions = @(
-        $usedMaterialMappings.Values |
-            Sort-Object color, material |
+        $usedMaterialMappings.GetEnumerator() |
+            Sort-Object { [int]$materialSemantics[$_.Key] } |
             ForEach-Object {
+                $mapping = $_.Value
                 [ordered]@{
-                    color = $_.color
-                    material = $_.material
-                    semantic = Get-SemanticName $_.semantic
-                    origin = $_.origin
+                    color = $mapping.color
+                    material = $mapping.material
+                    semantic = Get-SemanticName $mapping.semantic
+                    encodedSemantic = [int]$materialSemantics[$_.Key]
+                    origin = $mapping.origin
                 }
             })
     $sets.Add([ordered]@{
@@ -783,7 +796,7 @@ foreach ($specification in $specifications) {
         materialMappings = $mappingDefinitions
         markers = @($markerDefinitions)
         bitmapCaves = $bitmapCavesDefinition
-        encoding = 'brotli-pewh-v1'
+        encoding = 'brotli-pewh-v2'
         decodedLength = $decoded.Length
         decodedSha256 = Get-ByteSha256 $decoded
         data = [Convert]::ToBase64String($compressed)
@@ -803,7 +816,7 @@ foreach ($specification in $specifications) {
 }
 
 $document = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     referenceBuildId = $ReferenceBuildId
     referenceVersionHash = $ReferenceVersionHash
     algorithm = 'stb-herringbone-wang-corner-v1'

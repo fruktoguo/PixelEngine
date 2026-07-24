@@ -109,6 +109,26 @@ public sealed class SimulationKernel(
     }
 
     /// <summary>
+    /// 相位 1：仅在目标 cell 的 dirty 传播邻域完整驻留时写入；流式补环未完成时返回 false。
+    /// </summary>
+    public bool TryEditCellAtInputPhase(int wx, int wy, ushort material, byte persistentFlags)
+    {
+        if (!DirtyRegionMarker.TryMarkCell(
+                _chunks,
+                wx,
+                wy,
+                DirtyPhaseTarget.Current,
+                includeBoundaryNeighbors: true,
+                Diagnostics))
+        {
+            return false;
+        }
+
+        WriteCell(wx, wy, material, persistentFlags);
+        return true;
+    }
+
+    /// <summary>
     /// 相位 1：批量写入世界坐标闭区间矩形，并按 row-run 批量更新 SoA 与 dirty rect。
     /// </summary>
     public int EditRectAtInputPhase(int minX, int minY, int maxX, int maxY, ushort material, byte persistentFlags)
@@ -191,6 +211,43 @@ public sealed class SimulationKernel(
         chunk.LifetimeBuffer[local] = 0;
         chunk.DamageBuffer[local] = 0;
         MarkDirty(wx, wy);
+    }
+
+    /// <summary>
+    /// 相位 1：仅在目标 cell 的 dirty 传播邻域完整驻留时清空；流式补环未完成时返回 false。
+    /// </summary>
+    public bool TryClearCellAtInputPhase(int wx, int wy)
+    {
+        if (!_chunks.TryGetChunk(CellAddressing.WorldToChunk(wx, wy), out Chunk chunk))
+        {
+            return false;
+        }
+
+        int local = CellAddressing.LocalIndex(wx, wy);
+        if (chunk.GetMaterialAt(local) == 0 && chunk.FlagsBuffer[local] == 0 && chunk.LifetimeBuffer[local] == 0)
+        {
+            return true;
+        }
+
+        if (!DirtyRegionMarker.TryMarkCell(
+                _chunks,
+                wx,
+                wy,
+                DirtyPhaseTarget.Current,
+                includeBoundaryNeighbors: true,
+                Diagnostics))
+        {
+            return false;
+        }
+
+        ushort sourceMaterial = chunk.GetMaterialAt(local);
+        NotifyRigidDamageIfNeeded(wx, wy, chunk.FlagsBuffer[local], sourceMaterial);
+        NotifyTopologyChange(wx, wy, sourceMaterial, 0);
+        chunk.SetMaterialAt(local, 0);
+        chunk.FlagsBuffer[local] = 0;
+        chunk.LifetimeBuffer[local] = 0;
+        chunk.DamageBuffer[local] = 0;
+        return true;
     }
 
     /// <summary>
@@ -665,6 +722,12 @@ public sealed class SimulationKernel(
 
     private void WriteCellAndMarkCurrent(int wx, int wy, ushort material, byte persistentFlags)
     {
+        WriteCell(wx, wy, material, persistentFlags);
+        MarkDirty(wx, wy);
+    }
+
+    private void WriteCell(int wx, int wy, ushort material, byte persistentFlags)
+    {
         Chunk chunk = RequireChunk(wx, wy);
         int local = CellAddressing.LocalIndex(wx, wy);
         ushort sourceMaterial = chunk.GetMaterialAt(local);
@@ -674,7 +737,6 @@ public sealed class SimulationKernel(
         chunk.FlagsBuffer[local] = CellFlags.SetParity(persistentFlags, CurrentParity);
         chunk.LifetimeBuffer[local] = DefaultLifetimeByte(material);
         chunk.DamageBuffer[local] = 0;
-        MarkDirty(wx, wy);
     }
 
     private void DestroyCell(Chunk chunk, int local, int wx, int wy, ushort sourceMaterial)

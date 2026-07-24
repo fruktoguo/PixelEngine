@@ -27,6 +27,12 @@ public sealed class PlayableWorldDirector :
     public float PlayerSpawnY { get; set; } = PlayableCavernWorldGenerator.PlayerSpawnY;
 
     /// <summary>
+    /// 是否保留 Scene / TemporarySnapshot 显式配置的出生点。
+    /// 关闭时按当前 CampaignConfig 重新计算标准地表出生点。
+    /// </summary>
+    public bool UseConfiguredPlayerSpawn { get; set; }
+
+    /// <summary>
     /// 是否在实体完成初始化后自动选择并开始 Campaign。
     /// 默认关闭；自动化和参考路线捕获可在 TemporarySnapshot 中启用，正式玩家仍经过主菜单。
     /// </summary>
@@ -44,7 +50,14 @@ public sealed class PlayableWorldDirector :
     /// <inheritdoc />
     public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
     {
-        return WorldGenerator.Describe(in request);
+        ProceduralWorldDescriptor descriptor = WorldGenerator.Describe(in request);
+        return UseConfiguredPlayerSpawn
+            ? descriptor with
+            {
+                InitialFocusX = (long)(PlayerSpawnX + (PlayableCavernWorldGenerator.PlayerCollisionWidth * 0.5f)),
+                InitialFocusY = (long)(PlayerSpawnY + (PlayableCavernWorldGenerator.PlayerCollisionHeight * 0.5f)),
+            }
+            : descriptor;
     }
 
     /// <inheritdoc />
@@ -79,11 +92,14 @@ public sealed class PlayableWorldDirector :
     /// <inheritdoc />
     protected override void OnStart()
     {
-        CampaignConfig config = CampaignConfig.Load(Context.Config);
-        PlayerSpawnX = PlayableCavernWorldGenerator.PlayerSpawnX;
-        PlayerSpawnY = config.SurfaceY +
-            PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY -
-            (PlayableCavernWorldGenerator.PlayerCollisionHeight * 0.5f);
+        if (!UseConfiguredPlayerSpawn)
+        {
+            CampaignConfig config = CampaignConfig.Load(Context.Config);
+            PlayerSpawnX = PlayableCavernWorldGenerator.PlayerSpawnX;
+            PlayerSpawnY = config.SurfaceY +
+                PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY -
+                (PlayableCavernWorldGenerator.PlayerCollisionHeight * 0.5f);
+        }
         RegisterEntityBuildSystem();
     }
 

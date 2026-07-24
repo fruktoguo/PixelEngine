@@ -58,13 +58,13 @@ public sealed class NoitaBitmapCavesTests
         Assert.Equal((2, 4), (structure.CountMin, structure.CountMax));
         Assert.Equal((1.45, 1.55), (structure.StrengthMin, structure.StrengthMax));
         Assert.Equal(64, structure.DecodedLength);
-        Assert.Equal("391a558df56f00b6b8792b4abb1e90244914c49ba2c3a82abc699bc323c7fb04", structure.DecodedSha256);
+        Assert.Equal("fb15d2dfad0c51e8798170a448f0d710f1f72dee8cbb91544804658fa9842ca4", structure.DecodedSha256);
 
         DecodedNoitaBitmapCaveStructure decoded = Assert.Single(coalmine.DecodedBitmapCaves!.Structures.ToArray());
         Assert.Equal(64, decoded.Pixels.Length);
-        Assert.All(decoded.Pixels.AsSpan(0, 8).ToArray(), value => Assert.Equal((byte)NoitaWangTerrainSemantic.Structure, value));
+        Assert.All(decoded.Pixels.AsSpan(0, 8).ToArray(), value => AssertStructureMaterial(coalmine, value, "wood_static"));
         Assert.Equal((byte)NoitaWangTerrainSemantic.Empty, decoded.Pixels[9]);
-        Assert.Equal((byte)NoitaWangTerrainSemantic.Loose, decoded.Pixels[40]);
+        AssertStructureMaterial(coalmine, decoded.Pixels[40], "coal");
         AssertStructureMarker(coalmine, decoded.Pixels[10], "ffffff00", "builtin-or-unresolved-ffffff00");
         AssertStructureMarker(coalmine, decoded.Pixels[18], "ff800000", "builtin-or-unresolved-ff800000");
         AssertStructureMarker(coalmine, decoded.Pixels[51], "ffc88d1a", "builtin-or-unresolved-ffc88d1a");
@@ -220,8 +220,8 @@ public sealed class NoitaBitmapCavesTests
     }
 
     /// <summary>
-    /// 锁定煤矿完整 BitmapCaves block 的大尺度空气连通性，防止把 Noita 的洞穴强度
-    /// 错译成个位数半径后退化为细碎 Wang 纹理。
+    /// 锁定煤矿完整 BitmapCaves block 的空气占比、原生逐像素碎边与贯通洞室，防止
+    /// 把 Noita 的洞穴强度错译成缩略图块或抹平其 Wang 边缘细节。
     /// </summary>
     [Fact]
     public void CoalMineCavernScaleMatchesNativeReferenceEnvelope()
@@ -286,8 +286,8 @@ public sealed class NoitaBitmapCavesTests
         int p75 = horizontalRuns[horizontalRuns.Count * 3 / 4];
         double emptyPercent = emptyCells * 100.0 / block.Length;
         Assert.InRange(emptyPercent, 55.0, 68.0);
-        Assert.InRange(horizontalRuns.Count, 1_200, 2_500);
-        Assert.InRange(p75, 60, 100);
+        Assert.InRange(horizontalRuns.Count, 4_500, 6_000);
+        Assert.InRange(p75, 10, 24);
         Assert.InRange(horizontalRuns[^1], 256, blockWidth);
     }
 
@@ -374,6 +374,17 @@ public sealed class NoitaBitmapCavesTests
         NoitaWangMarkerDefinition marker = set.Markers[semantic - NoitaWangTerrainCatalog.MarkerSemanticBase];
         Assert.Equal(expectedColor, marker.Color);
         Assert.Equal(expectedFunction, marker.Function);
+    }
+
+    private static void AssertStructureMaterial(
+        NoitaWangTerrainSetDefinition set,
+        byte semantic,
+        string expectedMaterial)
+    {
+        Assert.True(DecodedNoitaWangTerrainSet.IsMaterial(semantic));
+        NoitaWangMaterialMappingDefinition mapping =
+            set.MaterialMappings[semantic - NoitaWangTerrainCatalog.MaterialSemanticBase];
+        Assert.Equal(expectedMaterial, mapping.Material);
     }
 
     private static JsonObject FirstBitmapCaves(JsonObject document)
