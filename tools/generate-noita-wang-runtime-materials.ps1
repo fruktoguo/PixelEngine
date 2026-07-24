@@ -5,6 +5,7 @@ param(
 
     [string] $CatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-catalog.json'),
     [string] $WangCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-wang-terrain.json'),
+    [string] $SnowcastlePixelSceneCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-snowcastle-pixel-scenes.json'),
     [string] $MaterialsPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\materials.json'),
     [string] $TextureDirectory = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\textures'),
     [string] $TextureCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-textures.json')
@@ -74,6 +75,7 @@ function Get-Sha256([string] $Path) {
 
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
 $wangCatalog = Get-Content -LiteralPath $WangCatalogPath -Raw | ConvertFrom-Json
+$snowcastlePixelSceneCatalog = Get-Content -LiteralPath $SnowcastlePixelSceneCatalogPath -Raw | ConvertFrom-Json
 $materialsDocument = Get-Content -LiteralPath $MaterialsPath -Raw | ConvertFrom-Json
 $resolvedSourceDataRoot = (Resolve-Path -LiteralPath $SourceDataRoot).Path
 $resolvedTextureDirectory = [IO.Path]::GetFullPath($TextureDirectory)
@@ -111,7 +113,9 @@ function Resolve-Declaration([string] $Name) {
     return $entry
 }
 
-$requiredNames = @($wangCatalog.sets.materialMappings.material | Sort-Object -Unique)
+$wangRequiredNames = @($wangCatalog.sets.materialMappings.material | Sort-Object -Unique)
+$sceneRequiredNames = @($snowcastlePixelSceneCatalog.materialNames | Sort-Object -Unique)
+$requiredNames = @(($wangRequiredNames + $sceneRequiredNames) | Sort-Object -Unique)
 $reusedNames = @('lava', 'oil', 'sand', 'water')
 $materialsDocument.materials = @(
     $materialsDocument.materials |
@@ -157,7 +161,12 @@ foreach ($name in $requiredNames) {
 $textureBySource = @{}
 $textureDefinitions = [System.Collections.Generic.List[object]]::new()
 $nextTextureId = [int]$maxTextureId + 1
-foreach ($sourcePath in @($textureSources.Keys | Sort-Object)) {
+$orderedTextureSources = @($textureSources.Keys | Sort-Object {
+    $sourceMaterials = $textureSources[$_]
+    $isWangSource = @($sourceMaterials | Where-Object { $_ -in $wangRequiredNames }).Count -gt 0
+    ('{0}_{1}' -f $(if ($isWangSource) { 0 } else { 1 }), $_)
+})
+foreach ($sourcePath in $orderedTextureSources) {
     $relativePath = $sourcePath.Substring(5).Replace('/', [IO.Path]::DirectorySeparatorChar)
     $sourceFile = Join-Path $resolvedSourceDataRoot $relativePath
     $fileName = '{0:D2}_noita_{1}' -f $nextTextureId, [IO.Path]::GetFileName($sourceFile)
@@ -305,7 +314,8 @@ $textureJson = ($textureCatalog | ConvertTo-Json -Depth 10).Replace("`r`n", "`n"
     [Text.UTF8Encoding]::new($false))
 
 [pscustomobject]@{
-    RequiredWangMaterials = $requiredNames.Count
+    RequiredWangMaterials = $wangRequiredNames.Count
+    RequiredSnowcastlePixelSceneMaterials = $sceneRequiredNames.Count
     ExistingMaterialsReused = $requiredNames.Count - $generated.Count
     GeneratedMaterials = $generated.Count
     GeneratedTextures = $textureDefinitions.Count

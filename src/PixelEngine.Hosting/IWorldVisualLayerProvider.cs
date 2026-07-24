@@ -65,3 +65,25 @@ public interface IWorldVisualLayerProvider
     /// <returns>视觉层描述。</returns>
     WorldVisualLayerDescriptor GetWorldVisualLayer(int index);
 }
+
+/// <summary>
+/// 为流式世界按当前视口提供确定性动态视觉层；用于由 seed/marker 决定、无法预枚举全世界实例的场景。
+/// </summary>
+public interface IViewportWorldVisualLayerProvider
+{
+    /// <summary>
+    /// 收集与给定世界视口相交的视觉层。调用方提供固定容量目标，返回值不得超过目标长度。
+    /// </summary>
+    /// <param name="minimumWorldX">视口最小世界 X。</param>
+    /// <param name="minimumWorldY">视口最小世界 Y。</param>
+    /// <param name="maximumWorldX">视口最大世界 X。</param>
+    /// <param name="maximumWorldY">视口最大世界 Y。</param>
+    /// <param name="destination">固定容量输出。</param>
+    /// <returns>写入的视觉层数量。</returns>
+    int CollectWorldVisualLayers(
+        float minimumWorldX,
+        float minimumWorldY,
+        float maximumWorldX,
+        float maximumWorldY,
+        Span<WorldVisualLayerDescriptor> destination);
+}

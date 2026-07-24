@@ -6,7 +6,10 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// 基于全局坐标的确定性流式战役地形生成器；生成自然地表、八个主路径 biome、七个 Holy Mountain 与无限侧区。
 /// </summary>
-public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGenerator, IWorldVisualLayerProvider
+public sealed class PlayableCavernWorldGenerator :
+    IStreamingProceduralWorldGenerator,
+    IWorldVisualLayerProvider,
+    IViewportWorldVisualLayerProvider
 {
     private static readonly ScriptAssetReference EntranceBackgroundAsset = new(
         ScriptAssetKind.Texture,
@@ -25,6 +28,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         "noita-mountain-left-stub-background",
         "maps/noita/mountain/left_stub_background.png");
     private TerrainGenerationState? _state;
+    private readonly NoitaWangMarkerAnchor[] _visualMarkerBuffer = new NoitaWangMarkerAnchor[512];
+    [ThreadStatic]
+    private static NoitaWangMarkerAnchor[]? _chunkMarkerBuffer;
 
     /// <summary>
     /// 程序化场景键，同时也是入口 Behaviour 的完整类型名。
@@ -34,7 +40,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v13";
+    public const string PersistenceKey = "showcase-campaign-v14";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -112,6 +118,79 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             >= 4 when index < WorldVisualLayerCount => NoitaPixelSceneVisualCatalog.GetLayer(index - 4),
             _ => throw new ArgumentOutOfRangeException(nameof(index)),
         };
+    }
+
+    /// <inheritdoc />
+    public int CollectWorldVisualLayers(
+        float minimumWorldX,
+        float minimumWorldY,
+        float maximumWorldX,
+        float maximumWorldY,
+        Span<WorldVisualLayerDescriptor> destination)
+    {
+        TerrainGenerationState? state = Volatile.Read(ref _state);
+        if (state is null || destination.IsEmpty)
+        {
+            return 0;
+        }
+
+        long minimumX = checked((long)MathF.Floor(minimumWorldX)) - 259;
+        long minimumY = checked((long)MathF.Floor(minimumWorldY)) - 259;
+        long maximumX = checked((long)MathF.Ceiling(maximumWorldX));
+        long maximumY = checked((long)MathF.Ceiling(maximumWorldY));
+        int markerCount = CollectWangMarkerAnchors(
+            state.Biomes,
+            state.WangTerrain,
+            state.Config,
+            state.WorldSeed,
+            minimumX,
+            minimumY,
+            maximumX,
+            maximumY,
+            _visualMarkerBuffer);
+        int count = 0;
+        for (int i = 0; i < markerCount && count < destination.Length; i++)
+        {
+            ref readonly NoitaWangMarkerAnchor anchor = ref _visualMarkerBuffer[i];
+            if (!NoitaSnowcastlePixelSceneCatalog.Supports(anchor) || !IsSnowcastlePixelSceneSafe(anchor.WorldX, anchor.WorldY))
+            {
+                continue;
+            }
+
+            int sceneIndex = NoitaSnowcastlePixelSceneCatalog.SelectSceneIndex(
+                NoitaSnowcastlePixelSceneCatalog.ResolveMarkerFunction(in anchor)!,
+                anchor.WorldX,
+                anchor.WorldY,
+                state.WorldSeed);
+            if (sceneIndex < 0)
+            {
+                continue;
+            }
+
+            NoitaSnowcastlePixelSceneDefinition scene = state.SnowcastlePixelScenes.Scenes[sceneIndex].Definition;
+            if (scene.BackgroundAsset.IsValid && count < destination.Length)
+            {
+                destination[count++] = new WorldVisualLayerDescriptor(
+                    scene.BackgroundAsset,
+                    anchor.WorldX,
+                    anchor.WorldY,
+                    scene.Width,
+                    scene.Height,
+                    WorldVisualLayerKind.Background);
+            }
+            if (scene.VisualAsset.IsValid && count < destination.Length)
+            {
+                destination[count++] = new WorldVisualLayerDescriptor(
+                    scene.VisualAsset,
+                    anchor.WorldX,
+                    anchor.WorldY,
+                    scene.Width,
+                    scene.Height,
+                    WorldVisualLayerKind.Decoration);
+            }
+        }
+
+        return count;
     }
 
     /// <inheritdoc />
@@ -337,6 +416,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             }
         }
 
+        ApplySnowcastlePixelScenes(
+            state,
+            worldSeed,
+            originCellX,
+            originCellY,
+            sizeCells,
+            materialCells);
         PopulateTemperature(
             materialCells,
             sizeCells,
@@ -346,6 +432,94 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             originCellY,
             state,
             in palette);
+    }
+
+    private static void ApplySnowcastlePixelScenes(
+        TerrainGenerationState state,
+        ulong worldSeed,
+        long originCellX,
+        long originCellY,
+        int sizeCells,
+        Span<ushort> materialCells)
+    {
+        NoitaWangMarkerAnchor[] markerBuffer = _chunkMarkerBuffer ??= new NoitaWangMarkerAnchor[512];
+        int markerCount = CollectWangMarkerAnchors(
+            state.Biomes,
+            state.WangTerrain,
+            state.Config,
+            worldSeed,
+            originCellX - 259,
+            originCellY - 259,
+            originCellX + sizeCells - 1L,
+            originCellY + sizeCells - 1L,
+            markerBuffer);
+        long chunkMaximumX = originCellX + sizeCells - 1L;
+        long chunkMaximumY = originCellY + sizeCells - 1L;
+        for (int markerIndex = 0; markerIndex < markerCount; markerIndex++)
+        {
+            ref readonly NoitaWangMarkerAnchor anchor = ref markerBuffer[markerIndex];
+            if (!NoitaSnowcastlePixelSceneCatalog.Supports(anchor) || !IsSnowcastlePixelSceneSafe(anchor.WorldX, anchor.WorldY))
+            {
+                continue;
+            }
+
+            int sceneIndex = NoitaSnowcastlePixelSceneCatalog.SelectSceneIndex(
+                NoitaSnowcastlePixelSceneCatalog.ResolveMarkerFunction(in anchor)!,
+                anchor.WorldX,
+                anchor.WorldY,
+                worldSeed);
+            if (sceneIndex < 0)
+            {
+                continue;
+            }
+
+            DecodedNoitaSnowcastlePixelScene scene = state.SnowcastlePixelScenes.Scenes[sceneIndex];
+            long sceneMaximumX = anchor.WorldX + scene.Definition.Width - 1L;
+            long sceneMaximumY = anchor.WorldY + scene.Definition.Height - 1L;
+            if (sceneMaximumX < originCellX || sceneMaximumY < originCellY ||
+                anchor.WorldX > chunkMaximumX || anchor.WorldY > chunkMaximumY)
+            {
+                continue;
+            }
+
+            int minimumLocalX = (int)Math.Max(0L, originCellX - anchor.WorldX);
+            int minimumLocalY = (int)Math.Max(0L, originCellY - anchor.WorldY);
+            int maximumLocalX = (int)Math.Min(scene.Definition.Width - 1L, chunkMaximumX - anchor.WorldX);
+            int maximumLocalY = (int)Math.Min(scene.Definition.Height - 1L, chunkMaximumY - anchor.WorldY);
+            for (int sceneY = minimumLocalY; sceneY <= maximumLocalY; sceneY++)
+            {
+                long worldY = anchor.WorldY + sceneY;
+                int destinationRow = checked((int)(worldY - originCellY)) * sizeCells;
+                int sourceRow = sceneY * scene.Definition.Width;
+                for (int sceneX = minimumLocalX; sceneX <= maximumLocalX; sceneX++)
+                {
+                    byte materialIndex = scene.MaterialIndices[sourceRow + sceneX];
+                    if (materialIndex == 0)
+                    {
+                        continue;
+                    }
+
+                    long worldX = anchor.WorldX + sceneX;
+                    if (NoitaPixelSceneCatalog.TrySample(worldX, worldY, out _))
+                    {
+                        continue;
+                    }
+
+                    materialCells[destinationRow + checked((int)(worldX - originCellX))] =
+                        state.SnowcastlePixelScenes.MaterialIds[materialIndex];
+                }
+            }
+        }
+    }
+
+    private static bool IsSnowcastlePixelSceneSafe(long worldX, long worldY)
+    {
+        return !(worldX is >= 125 and <= 249 && worldY is >= 5118 and <= 5259) && worldY <= 6100;
+    }
+
+    internal static double PixelSceneRandomUnit(long worldX, long worldY, ulong worldSeed)
+    {
+        return HashUnit(worldX, worldY, worldSeed ^ 0x534E_4F57_4341_5354UL);
     }
 
     /// <summary>
@@ -1701,6 +1875,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             worldSeed);
         CompiledHolyMountain holyMountain = CompileHolyMountain(materials, biomes.HolyMountain);
         CompiledPortalNetwork portalNetwork = CompilePortalNetwork(materials, biomes.PortalNetwork);
+        CompiledNoitaSnowcastlePixelSceneCatalog snowcastlePixelScenes =
+            NoitaSnowcastlePixelSceneCatalog.Compile(materials);
         CampaignPortalAnchor[] portalAnchors = ResolvePortalAnchors(
             config,
             biomes.PortalNetwork,
@@ -1717,7 +1893,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             biomeLandmarks,
             holyMountain,
             portalNetwork,
-            portalAnchors);
+            portalAnchors,
+            snowcastlePixelScenes,
+            worldSeed);
     }
 
     private static TerrainMaterialPalette ResolvePalette(IMaterialQuery materials)
@@ -2709,7 +2887,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ResolvedBiomeLandmark[] biomeLandmarks,
         CompiledHolyMountain holyMountain,
         CompiledPortalNetwork portalNetwork,
-        CampaignPortalAnchor[] portalAnchors)
+        CampaignPortalAnchor[] portalAnchors,
+        CompiledNoitaSnowcastlePixelSceneCatalog snowcastlePixelScenes,
+        ulong worldSeed)
     {
         public CampaignConfig Config { get; } = config;
 
@@ -2734,6 +2914,10 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         public CompiledPortalNetwork PortalNetwork { get; } = portalNetwork;
 
         public CampaignPortalAnchor[] PortalAnchors { get; } = portalAnchors;
+
+        public CompiledNoitaSnowcastlePixelSceneCatalog SnowcastlePixelScenes { get; } = snowcastlePixelScenes;
+
+        public ulong WorldSeed { get; } = worldSeed;
     }
 
     private readonly ref struct TerrainRowContext(

@@ -39,6 +39,7 @@ public sealed class RenderPhaseDriver(
     private readonly ScriptOverlayApi? _scriptOverlays = scriptOverlays;
     private readonly DebugOverlayController? _debugOverlays = debugOverlays;
     private readonly IWorldVisualLayerProvider? _worldVisualLayers = worldVisualLayers;
+    private readonly WorldVisualLayerDescriptor[] _viewportWorldVisualLayers = new WorldVisualLayerDescriptor[96];
     private readonly RenderBufferBuilder _builder = new(jobs, textures);
     private readonly ParticleCompositor _particleCompositor = new(textures);
     private readonly RenderBuffer _renderBuffer = new(1, 1);
@@ -221,40 +222,66 @@ public sealed class RenderPhaseDriver(
             throw new InvalidOperationException("世界视觉层数量必须位于 0..128。");
         }
 
-        float inverseCellsPerPixel = 1f / CurrentCamera.CellsPerPixel;
         for (int i = 0; i < count; i++)
         {
-            WorldVisualLayerDescriptor layer = _worldVisualLayers.GetWorldVisualLayer(i).Validate();
-            if (!_sink.TryResolveWorldVisualSprite(layer.Asset, out OverlaySprite sprite))
-            {
-                continue;
-            }
-
-            float viewportX = (layer.WorldX - CurrentCamera.OriginWorldX) * inverseCellsPerPixel;
-            float viewportY = (layer.WorldY - CurrentCamera.OriginWorldY) * inverseCellsPerPixel;
-            float viewportWidth = layer.WidthCells * inverseCellsPerPixel;
-            float viewportHeight = layer.HeightCells * inverseCellsPerPixel;
-            if (viewportX >= CurrentCamera.ViewportWidth || viewportY >= CurrentCamera.ViewportHeight ||
-                viewportX + viewportWidth <= 0f || viewportY + viewportHeight <= 0f)
-            {
-                continue;
-            }
-
-            OverlayCompositionLayer compositionLayer = layer.Layer switch
-            {
-                WorldVisualLayerKind.Background => OverlayCompositionLayer.Background,
-                WorldVisualLayerKind.Decoration => OverlayCompositionLayer.WorldDecoration,
-                _ => throw new ArgumentOutOfRangeException(nameof(layer), layer.Layer, "未知世界视觉组合层。"),
-            };
-            _overlayCommands.Add(OverlayCommand.SpriteRectangle(
-                viewportX,
-                viewportY,
-                viewportWidth,
-                viewportHeight,
-                sprite,
-                layer.TintBgra,
-                compositionLayer));
+            AddWorldVisualLayer(_worldVisualLayers.GetWorldVisualLayer(i).Validate());
         }
+
+        if (_worldVisualLayers is not IViewportWorldVisualLayerProvider viewportProvider)
+        {
+            return;
+        }
+
+        float cellsPerPixel = CurrentCamera.CellsPerPixel;
+        int viewportCount = viewportProvider.CollectWorldVisualLayers(
+            CurrentCamera.OriginWorldX,
+            CurrentCamera.OriginWorldY,
+            CurrentCamera.OriginWorldX + (CurrentCamera.ViewportWidth * cellsPerPixel),
+            CurrentCamera.OriginWorldY + (CurrentCamera.ViewportHeight * cellsPerPixel),
+            _viewportWorldVisualLayers);
+        if ((uint)viewportCount > (uint)_viewportWorldVisualLayers.Length)
+        {
+            throw new InvalidOperationException("动态世界视觉层数量超过调用方容量。");
+        }
+
+        for (int i = 0; i < viewportCount; i++)
+        {
+            AddWorldVisualLayer(_viewportWorldVisualLayers[i].Validate());
+        }
+    }
+
+    private void AddWorldVisualLayer(in WorldVisualLayerDescriptor layer)
+    {
+        if (!_sink.TryResolveWorldVisualSprite(layer.Asset, out OverlaySprite sprite))
+        {
+            return;
+        }
+
+        float inverseCellsPerPixel = 1f / CurrentCamera.CellsPerPixel;
+        float viewportX = (layer.WorldX - CurrentCamera.OriginWorldX) * inverseCellsPerPixel;
+        float viewportY = (layer.WorldY - CurrentCamera.OriginWorldY) * inverseCellsPerPixel;
+        float viewportWidth = layer.WidthCells * inverseCellsPerPixel;
+        float viewportHeight = layer.HeightCells * inverseCellsPerPixel;
+        if (viewportX >= CurrentCamera.ViewportWidth || viewportY >= CurrentCamera.ViewportHeight ||
+            viewportX + viewportWidth <= 0f || viewportY + viewportHeight <= 0f)
+        {
+            return;
+        }
+
+        OverlayCompositionLayer compositionLayer = layer.Layer switch
+        {
+            WorldVisualLayerKind.Background => OverlayCompositionLayer.Background,
+            WorldVisualLayerKind.Decoration => OverlayCompositionLayer.WorldDecoration,
+            _ => throw new ArgumentOutOfRangeException(nameof(layer), layer.Layer, "未知世界视觉组合层。"),
+        };
+        _overlayCommands.Add(OverlayCommand.SpriteRectangle(
+            viewportX,
+            viewportY,
+            viewportWidth,
+            viewportHeight,
+            sprite,
+            layer.TintBgra,
+            compositionLayer));
     }
 
     private void AddScriptOverlays()

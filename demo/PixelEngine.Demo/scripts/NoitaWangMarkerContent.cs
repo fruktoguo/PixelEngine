@@ -411,6 +411,12 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
 {
     public static bool TryCreate(in NoitaWangMarkerAnchor anchor, out NoitaWangMarkerVisualProfile profile)
     {
+        if (NoitaSnowcastlePixelSceneCatalog.Supports(anchor))
+        {
+            profile = default;
+            return false;
+        }
+
         string function = anchor.Function;
         if (function.StartsWith("builtin-or-unresolved", StringComparison.Ordinal) ||
             !NoitaMarkerRuleCatalog.TryResolve(function, out NoitaMarkerRule rule))

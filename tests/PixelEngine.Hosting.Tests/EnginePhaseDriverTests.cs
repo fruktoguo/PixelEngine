@@ -194,13 +194,14 @@ public sealed class EnginePhaseDriverTests
 
         _ = engine.RunOneTick();
 
-        Assert.Equal(2, sink.OverlayCount);
+        Assert.Equal(3, sink.OverlayCount);
         OverlayCommand background = Assert.Single(
             sink.Overlays,
-            static command => command.CompositionLayer == OverlayCompositionLayer.Background);
-        OverlayCommand decoration = Assert.Single(
-            sink.Overlays,
-            static command => command.CompositionLayer == OverlayCompositionLayer.WorldDecoration);
+            static command => command.CompositionLayer == OverlayCompositionLayer.Background && command.ViewportX == 4f);
+        OverlayCommand[] decorations = [.. sink.Overlays.Where(
+            static command => command.CompositionLayer == OverlayCompositionLayer.WorldDecoration)];
+        Assert.Equal(2, decorations.Length);
+        OverlayCommand decoration = decorations[0];
         Assert.Equal((4f, 3f, 8f, 6f), (
             background.ViewportX,
             background.ViewportY,
@@ -210,6 +211,7 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal((uint)77, decoration.Sprite.TextureHandle);
         Assert.All(sink.Overlays, static command => Assert.Equal(OverlayPrimitiveType.Sprite, command.PrimitiveType));
         Assert.All(sink.Overlays, static command => Assert.Equal(0xFFFFFFFFu, command.ColorBgra));
+        Assert.Equal((0f, 0f, 32f, 16f), visualLayers.LastViewport);
         Assert.Equal(0u, sink.FirstPixel);
     }
 
@@ -1251,7 +1253,7 @@ public sealed class EnginePhaseDriverTests
         }
     }
 
-    private sealed class TestWorldVisualLayerProvider : IWorldVisualLayerProvider
+    private sealed class TestWorldVisualLayerProvider : IWorldVisualLayerProvider, IViewportWorldVisualLayerProvider
     {
         private static readonly ScriptAssetReference Asset = new(
             ScriptAssetKind.Texture,
@@ -1259,6 +1261,8 @@ public sealed class EnginePhaseDriverTests
             "maps/test.png");
 
         public int WorldVisualLayerCount => 2;
+
+        public (float MinimumX, float MinimumY, float MaximumX, float MaximumY) LastViewport { get; private set; }
 
         public WorldVisualLayerDescriptor GetWorldVisualLayer(int index)
         {
@@ -1268,6 +1272,24 @@ public sealed class EnginePhaseDriverTests
                 1 => new WorldVisualLayerDescriptor(Asset, 12f, 6f, 4f, 3f, WorldVisualLayerKind.Decoration),
                 _ => throw new ArgumentOutOfRangeException(nameof(index)),
             };
+        }
+
+        public int CollectWorldVisualLayers(
+            float minimumWorldX,
+            float minimumWorldY,
+            float maximumWorldX,
+            float maximumWorldY,
+            Span<WorldVisualLayerDescriptor> destination)
+        {
+            LastViewport = (minimumWorldX, minimumWorldY, maximumWorldX, maximumWorldY);
+            destination[0] = new WorldVisualLayerDescriptor(
+                Asset,
+                20f,
+                10f,
+                4f,
+                3f,
+                WorldVisualLayerKind.Decoration);
+            return 1;
         }
     }
 

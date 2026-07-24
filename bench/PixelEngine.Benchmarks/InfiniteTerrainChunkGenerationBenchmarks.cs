@@ -28,6 +28,7 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
         TerrainGenerationScenario.SurfaceEast,
         TerrainGenerationScenario.MinesDeep,
         TerrainGenerationScenario.FungalCaverns,
+        TerrainGenerationScenario.SnowcastlePixelScene,
         TerrainGenerationScenario.PortalAndHolyMountain,
         TerrainGenerationScenario.LaboratoryDeep)]
     public TerrainGenerationScenario Scenario { get; set; }
@@ -99,10 +100,46 @@ public class InfiniteTerrainChunkGenerationBenchmarks : IDisposable
             TerrainGenerationScenario.MinesDeep =>
                 (16, ChunkCoordinate(config.RegionStartCellY(0) + (config.RegionHeightCells / 2L))),
             TerrainGenerationScenario.FungalCaverns => ResolveFungalCaverns(config, catalog),
+            TerrainGenerationScenario.SnowcastlePixelScene => ResolveSnowcastlePixelScene(config, catalog, configApi),
             TerrainGenerationScenario.PortalAndHolyMountain => ResolveFirstPortal(config, catalog),
             TerrainGenerationScenario.LaboratoryDeep => ResolveLaboratory(config, catalog),
             _ => throw new ArgumentOutOfRangeException(nameof(Scenario)),
         };
+    }
+
+    private static (int X, int Y) ResolveSnowcastlePixelScene(
+        CampaignConfig config,
+        BiomeCatalog catalog,
+        EngineScriptConfigApi configApi)
+    {
+        NoitaWangTerrainCatalog wang = NoitaWangTerrainCatalog.Load(configApi);
+        NoitaWangMarkerAnchor[] anchors = new NoitaWangMarkerAnchor[512];
+        for (long minimumY = 5200; minimumY <= 6200; minimumY += 256)
+        {
+            for (long minimumX = -1024; minimumX <= 4096; minimumX += 256)
+            {
+                int count = PlayableCavernWorldGenerator.CollectWangMarkerAnchors(
+                    catalog,
+                    wang,
+                    config,
+                    config.InitialRunSeed,
+                    minimumX,
+                    minimumY,
+                    minimumX + 255,
+                    minimumY + 255,
+                    anchors);
+                for (int i = 0; i < count; i++)
+                {
+                    ref readonly NoitaWangMarkerAnchor anchor = ref anchors[i];
+                    if (NoitaSnowcastlePixelSceneCatalog.Supports(in anchor))
+                    {
+                        return (ChunkCoordinate(anchor.WorldX), ChunkCoordinate(anchor.WorldY));
+                    }
+                }
+            }
+        }
+
+        throw new InvalidOperationException("Snowcastle 参考范围内未找到 Pixel Scene marker。");
     }
 
     private static (int X, int Y) ResolveFungalCaverns(CampaignConfig config, BiomeCatalog catalog)
@@ -178,6 +215,9 @@ public enum TerrainGenerationScenario : byte
 
     /// <summary>Fungal Caverns 侧区。</summary>
     FungalCaverns,
+
+    /// <summary>Snowcastle Wang marker 随机 Pixel Scene。</summary>
+    SnowcastlePixelScene,
 
     /// <summary>首个 Portal 供能池与 Holy Mountain 交界。</summary>
     PortalAndHolyMountain,

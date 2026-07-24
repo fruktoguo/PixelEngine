@@ -193,7 +193,8 @@
       "contentPath": "textures/37_noita_steelpanel.png",
       "contentSha256": "4f16bb7bfb386162e9154e854bc59e9a2d8a22330f406dee8267d2208040dcbb",
       "materials": [
-        "steel_static"
+        "steel_static",
+        "steel_static_strong"
       ]
     },
     {
@@ -234,6 +235,7 @@
       "contentSha256": "47aad951e8440e91cf42db595794ea1a69d133250b2225f72d1d52a0771dd94a",
       "materials": [
         "templebrick_static",
+        "templebrick_static_soft",
         "templebrick_thick_static"
       ]
     },
@@ -285,7 +287,90 @@
       "contentPath": "textures/46_noita_wood.png",
       "contentSha256": "f039a1de3658a3c734068fe161a3e8c51c95dc9eb561ad8734b00028a37af8c7",
       "materials": [
+        "wood",
+        "wood_player_b2",
+        "wood_prop",
         "wood_static"
+      ]
+    },
+    {
+      "textureId": 47,
+      "sourcePath": "data/materials_gfx/glass.png",
+      "sourceSha256": "451ca025031f1e5bce475b123d79561942929fdded46df8746d71a1508c8878a",
+      "contentPath": "textures/47_noita_glass.png",
+      "contentSha256": "451ca025031f1e5bce475b123d79561942929fdded46df8746d71a1508c8878a",
+      "materials": [
+        "glass_static"
+      ]
+    },
+    {
+      "textureId": 48,
+      "sourcePath": "data/materials_gfx/meat_done.png",
+      "sourceSha256": "0b378039f3a8ccb8b4727893ceef6166ebe8f1f5170771bcf12adbb8aaf27fb2",
+      "contentPath": "textures/48_noita_meat_done.png",
+      "contentSha256": "0b378039f3a8ccb8b4727893ceef6166ebe8f1f5170771bcf12adbb8aaf27fb2",
+      "materials": [
+        "meat_done"
+      ]
+    },
+    {
+      "textureId": 49,
+      "sourcePath": "data/materials_gfx/meat.png",
+      "sourceSha256": "d0badd818982ef94fb6fffdc3a11b1169c2eb0d44fb584574a6e8a2c29ac7020",
+      "contentPath": "textures/49_noita_meat.png",
+      "contentSha256": "d0badd818982ef94fb6fffdc3a11b1169c2eb0d44fb584574a6e8a2c29ac7020",
+      "materials": [
+        "meat"
+      ]
+    },
+    {
+      "textureId": 50,
+      "sourcePath": "data/materials_gfx/neon_tube_cyan.png",
+      "sourceSha256": "9ea536b55cf5ebefe6a127afdb55ec53eb6bf20b29aac9d48af92f30a2d4337a",
+      "contentPath": "textures/50_noita_neon_tube_cyan.png",
+      "contentSha256": "9ea536b55cf5ebefe6a127afdb55ec53eb6bf20b29aac9d48af92f30a2d4337a",
+      "materials": [
+        "neon_tube_cyan"
+      ]
+    },
+    {
+      "textureId": 51,
+      "sourcePath": "data/materials_gfx/neon_tube_purple.png",
+      "sourceSha256": "85e149b831d5e82704d11f1cbc533434e6e84004663af033da2b9c24f8df3d26",
+      "contentPath": "textures/51_noita_neon_tube_purple.png",
+      "contentSha256": "85e149b831d5e82704d11f1cbc533434e6e84004663af033da2b9c24f8df3d26",
+      "materials": [
+        "neon_tube_purple"
+      ]
+    },
+    {
+      "textureId": 52,
+      "sourcePath": "data/materials_gfx/polymorph_unstable.png",
+      "sourceSha256": "a0803a123d4dfe7bdef11a977a7b5ff7778bfca2eb1a8548872c345a009e641b",
+      "contentPath": "textures/52_noita_polymorph_unstable.png",
+      "contentSha256": "a0803a123d4dfe7bdef11a977a7b5ff7778bfca2eb1a8548872c345a009e641b",
+      "materials": [
+        "magic_liquid_unstable_polymorph"
+      ]
+    },
+    {
+      "textureId": 53,
+      "sourcePath": "data/materials_gfx/soil.png",
+      "sourceSha256": "7c3b4951a59c9c97045d2394763c712ddbca8131168a63fe05a2f9094da81f12",
+      "contentPath": "textures/53_noita_soil.png",
+      "contentSha256": "7c3b4951a59c9c97045d2394763c712ddbca8131168a63fe05a2f9094da81f12",
+      "materials": [
+        "soil"
+      ]
+    },
+    {
+      "textureId": 54,
+      "sourcePath": "data/materials_gfx/steel.png",
+      "sourceSha256": "060a725ba7d4293067bfc81a69cf2dde18bed57df178b2ac7e3de10b97b0f420",
+      "contentPath": "textures/54_noita_steel.png",
+      "contentSha256": "060a725ba7d4293067bfc81a69cf2dde18bed57df178b2ac7e3de10b97b0f420",
+      "materials": [
+        "steel"
       ]
     }
   ]
