@@ -131,7 +131,24 @@
         "pos_x": "9726",
         "pos_y": "-1024",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/pyramid/boss_limbs.png",
+            "sha256": "4113849a88d3fbb4dc5a637e6d1fbc64c196f10a6e4b44038d0f477f5b297f3e",
+            "length": 3797,
+            "width": 512,
+            "height": 512
+          },
+          "colors": {
+            "path": "data/biome_impl/pyramid/reward_visual.png",
+            "sha256": "1fcef9018fd5e361470ac6e93cf15c648ceb33f2ec833560ead7459377ae45b5",
+            "length": 1371,
+            "width": 512,
+            "height": 512
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -142,7 +159,24 @@
         "pos_x": "143",
         "pos_y": "5112",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/temple/altar_snowcastle_capsule.png",
+            "sha256": "e3e750af166ea5cd01d0bfa41029f17a6e5c54528a87be7e54aaaa6bc54743b7",
+            "length": 1071,
+            "width": 96,
+            "height": 147
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/temple/altar_snowcastle_capsule_background.png",
+            "sha256": "e7813721f8a861585f6fe4b9dbb979e2f280df4d0e0ec3d56a42ec2daf8c1c4e",
+            "length": 3665,
+            "width": 96,
+            "height": 147
+          }
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -153,7 +187,30 @@
         "pos_x": "1464",
         "pos_y": "5976",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/snowcastle/forge.png",
+            "sha256": "0dc4f73e2353119606ff33db0cc2fb4f0453491278c4fe125275030eb885f1a6",
+            "length": 876,
+            "width": 128,
+            "height": 128
+          },
+          "colors": {
+            "path": "data/biome_impl/snowcastle/forge_visual.png",
+            "sha256": "eda605ee5094d45f02f46521ee7a77d704d23c34d1fbc98785e1ac6817326121",
+            "length": 7887,
+            "width": 128,
+            "height": 128
+          },
+          "background": {
+            "path": "data/biome_impl/snowcastle/forge_background.png",
+            "sha256": "ff94e8889ed4777a94bed4f8e6a68015080d8a16a04f0295c45cdca8f7b867ed",
+            "length": 3267,
+            "width": 128,
+            "height": 128
+          }
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -164,7 +221,18 @@
         "pos_x": "143",
         "pos_y": "8704",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/temple/altar_vault_capsule.png",
+            "sha256": "ecbd463eb20492884f6a11f7d5b744cad3186084bbd4c251af86751e9f9d690d",
+            "length": 958,
+            "width": 96,
+            "height": 147
+          },
+          "colors": null,
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -175,7 +243,18 @@
         "pos_x": "127",
         "pos_y": "3072",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/temple/altar_snowcave_capsule.png",
+            "sha256": "764cd6e2d16cc6a03199ad9f4c7b6fd228a52d4ecd23fc2f7e0bc5a7e8516a61",
+            "length": 1544,
+            "width": 128,
+            "height": 147
+          },
+          "colors": null,
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -186,7 +265,18 @@
         "pos_x": "9676",
         "pos_y": "9086",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/tower_start.png",
+            "sha256": "cc18c0f4f3974f0b45ce49f81cd3c79a9cb93968940fedad63c2eacd9a553182",
+            "length": 1160,
+            "width": 128,
+            "height": 128
+          },
+          "colors": null,
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -197,7 +287,18 @@
         "pos_x": "0",
         "pos_y": "24576",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/the_end/the_end_shop.png",
+            "sha256": "1e4593b8d03c166aa6871955ff7e43c715620dab2b3fad0164299c6048b5f2ba",
+            "length": 2897,
+            "width": 256,
+            "height": 256
+          },
+          "colors": null,
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -208,7 +309,18 @@
         "pos_x": "0",
         "pos_y": "-13954",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/the_end/the_end_shop.png",
+            "sha256": "1e4593b8d03c166aa6871955ff7e43c715620dab2b3fad0164299c6048b5f2ba",
+            "length": 2897,
+            "width": 256,
+            "height": 256
+          },
+          "colors": null,
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -219,7 +331,24 @@
         "pos_x": "9216",
         "pos_y": "4096",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/greed_treasure.png",
+            "sha256": "c578f732c4e6d92c39a58ba7fc66b1f4c71667f21b6df10eab66cac1d40125a1",
+            "length": 3400,
+            "width": 512,
+            "height": 512
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/greed_treasure_background.png",
+            "sha256": "532f1c7869a16e6dc573059e3ec412e56d3af471f632083c459df071b22ab444",
+            "length": 6260,
+            "width": 512,
+            "height": 512
+          }
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -230,7 +359,30 @@
         "pos_x": "-12600",
         "pos_y": "140",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/fishing_hut.png",
+            "sha256": "2bc0c4bc5374cf98a7df0c77213c02ec3c208127ef52174902149ce93375cdbc",
+            "length": 1542,
+            "width": 240,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/fishing_hut_visual.png",
+            "sha256": "9959ba8d4e835565648d8c7952a6699201c1e02904918eff911a9fb85291f34d",
+            "length": 2629,
+            "width": 240,
+            "height": 160
+          },
+          "background": {
+            "path": "data/biome_impl/fishing_hut_background.png",
+            "sha256": "d54e7a3ac35865aa2719d1c5b7b991636ab01473c2d9a5008575027065d2ea86",
+            "length": 9230,
+            "width": 240,
+            "height": 160
+          }
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -241,7 +393,24 @@
         "pos_x": "-6948",
         "pos_y": "-270",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/essence_altar.png",
+            "sha256": "cc78554d5c1327f10b8520fd2da00bd949e29f0773e05740b62c02e386a54dc1",
+            "length": 1834,
+            "width": 128,
+            "height": 240
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/essence_altar_visual.png",
+            "sha256": "786e5d9ced3c43d6eb1dd802891770b039bb41dc0636de0375dcd925c678e1cc",
+            "length": 11489,
+            "width": 128,
+            "height": 240
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -252,7 +421,24 @@
         "pos_x": "12519",
         "pos_y": "-30",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/essence_altar_desert.png",
+            "sha256": "6afca5d3ec5f1e10d0103909056b2f91699444b2ce8926d4668433e896e30533",
+            "length": 1540,
+            "width": 100,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/essence_altar_desert_visual.png",
+            "sha256": "7973d80fb60f44bf029ad981ca52ede1387ab2ff7defd952d3175ac7169a14c8",
+            "length": 3330,
+            "width": 100,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -263,7 +449,24 @@
         "pos_x": "-43300",
         "pos_y": "-270",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/essence_altar.png",
+            "sha256": "cc78554d5c1327f10b8520fd2da00bd949e29f0773e05740b62c02e386a54dc1",
+            "length": 1834,
+            "width": 128,
+            "height": 240
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/essence_altar_visual.png",
+            "sha256": "786e5d9ced3c43d6eb1dd802891770b039bb41dc0636de0375dcd925c678e1cc",
+            "length": 11489,
+            "width": 128,
+            "height": 240
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -274,7 +477,24 @@
         "pos_x": "-23833",
         "pos_y": "-30",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/essence_altar_desert.png",
+            "sha256": "6afca5d3ec5f1e10d0103909056b2f91699444b2ce8926d4668433e896e30533",
+            "length": 1540,
+            "width": 100,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/essence_altar_desert_visual.png",
+            "sha256": "7973d80fb60f44bf029ad981ca52ede1387ab2ff7defd952d3175ac7169a14c8",
+            "length": 3330,
+            "width": 100,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -285,7 +505,24 @@
         "pos_x": "29404",
         "pos_y": "-270",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/essence_altar.png",
+            "sha256": "cc78554d5c1327f10b8520fd2da00bd949e29f0773e05740b62c02e386a54dc1",
+            "length": 1834,
+            "width": 128,
+            "height": 240
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/essence_altar_visual.png",
+            "sha256": "786e5d9ced3c43d6eb1dd802891770b039bb41dc0636de0375dcd925c678e1cc",
+            "length": 11489,
+            "width": 128,
+            "height": 240
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -296,7 +533,24 @@
         "pos_x": "48871",
         "pos_y": "-30",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/essence_altar_desert.png",
+            "sha256": "6afca5d3ec5f1e10d0103909056b2f91699444b2ce8926d4668433e896e30533",
+            "length": 1540,
+            "width": 100,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/essence_altar_desert_visual.png",
+            "sha256": "7973d80fb60f44bf029ad981ca52ede1387ab2ff7defd952d3175ac7169a14c8",
+            "length": 3330,
+            "width": 100,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -307,7 +561,30 @@
         "pos_x": "-12603",
         "pos_y": "326",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/bunker.png",
+            "sha256": "da134e3c19879969609958ef1d33f1f2f9550ad073527c6a76ab8a548c8bd38f",
+            "length": 1114,
+            "width": 306,
+            "height": 127
+          },
+          "colors": {
+            "path": "data/biome_impl/bunker_visual.png",
+            "sha256": "dc01bfbc47b89d5e5f592d4b23b440ebba5cc42eed280786742f76d33c1526d9",
+            "length": 4620,
+            "width": 306,
+            "height": 127
+          },
+          "background": {
+            "path": "data/biome_impl/bunker_background.png",
+            "sha256": "f7ecf1639a6115b1d9b0fd6206a0c5fc2f971e39b4811196488b82981e83be21",
+            "length": 5874,
+            "width": 306,
+            "height": 127
+          }
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -318,7 +595,30 @@
         "pos_x": "-12953",
         "pos_y": "540",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/bunker2.png",
+            "sha256": "64c6ba8de20316ea048b1db065be411a528f81e59847208f433ab918f4e12009",
+            "length": 1104,
+            "width": 306,
+            "height": 127
+          },
+          "colors": {
+            "path": "data/biome_impl/bunker_visual.png",
+            "sha256": "dc01bfbc47b89d5e5f592d4b23b440ebba5cc42eed280786742f76d33c1526d9",
+            "length": 4620,
+            "width": 306,
+            "height": 127
+          },
+          "background": {
+            "path": "data/biome_impl/bunker_background.png",
+            "sha256": "f7ecf1639a6115b1d9b0fd6206a0c5fc2f971e39b4811196488b82981e83be21",
+            "length": 5874,
+            "width": 306,
+            "height": 127
+          }
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -329,7 +629,24 @@
         "pos_x": "-2446",
         "pos_y": "-223",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/snowy_ruins_eye_pillar.png",
+            "sha256": "7b6578971786b7d2a7e6e636ba5baaace0f6135d8b993a1645b705f4ca384322",
+            "length": 435,
+            "width": 25,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/snowy_ruins_eye_pillar_visual.png",
+            "sha256": "b013a01ece17c29690205be71c4ef2f26b828afa49fcf1b2b6db23d35401ac04",
+            "length": 4125,
+            "width": 25,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -340,7 +657,18 @@
         "pos_x": "-14059",
         "pos_y": "-2851",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/rainbow_cloud.png",
+            "sha256": "4bd946ce7c8b4cdc01bb3687984c66349bf81a4c17a0540451aae7baafe3b28e",
+            "length": 883,
+            "width": 110,
+            "height": 80
+          },
+          "colors": null,
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -351,7 +679,24 @@
         "pos_x": "-12400",
         "pos_y": "-400",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/cliff.png",
+            "sha256": "19a55dbb4bd70a2fb8aef7538b5eec77172ee3640c1d90d9b597d52e6fcf6076",
+            "length": 6651,
+            "width": 512,
+            "height": 512
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/cliff_visual.png",
+            "sha256": "9dc9d3a3595f7b6a15fcb3ae45581f1d55b929d9ad1f393c0aac77619f8db8d9",
+            "length": 5851,
+            "width": 512,
+            "height": 512
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -362,7 +707,24 @@
         "pos_x": "-3408",
         "pos_y": "1712",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/eyespot.png",
+            "sha256": "dbdaa576fb8df526708692f1d18ae72f493a00891ce070ab07770667ec48a5ce",
+            "length": 1165,
+            "width": 160,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/eyespot_visual.png",
+            "sha256": "08c192391a8dcbeceb5bf406909421022397608cb6b48ee43234e6c327ba172c",
+            "length": 1307,
+            "width": 160,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -373,7 +735,24 @@
         "pos_x": "5852",
         "pos_y": "-4944",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/eyespot.png",
+            "sha256": "dbdaa576fb8df526708692f1d18ae72f493a00891ce070ab07770667ec48a5ce",
+            "length": 1165,
+            "width": 160,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/eyespot_visual.png",
+            "sha256": "08c192391a8dcbeceb5bf406909421022397608cb6b48ee43234e6c327ba172c",
+            "length": 1307,
+            "width": 160,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -384,7 +763,24 @@
         "pos_x": "15024",
         "pos_y": "1712",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/eyespot.png",
+            "sha256": "dbdaa576fb8df526708692f1d18ae72f493a00891ce070ab07770667ec48a5ce",
+            "length": 1165,
+            "width": 160,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/eyespot_visual.png",
+            "sha256": "08c192391a8dcbeceb5bf406909421022397608cb6b48ee43234e6c327ba172c",
+            "length": 1307,
+            "width": 160,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -395,7 +791,24 @@
         "pos_x": "-1360",
         "pos_y": "9904",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/eyespot.png",
+            "sha256": "dbdaa576fb8df526708692f1d18ae72f493a00891ce070ab07770667ec48a5ce",
+            "length": 1165,
+            "width": 160,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/eyespot_visual.png",
+            "sha256": "08c192391a8dcbeceb5bf406909421022397608cb6b48ee43234e6c327ba172c",
+            "length": 1307,
+            "width": 160,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -406,7 +819,24 @@
         "pos_x": "12976",
         "pos_y": "9904",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/eyespot.png",
+            "sha256": "dbdaa576fb8df526708692f1d18ae72f493a00891ce070ab07770667ec48a5ce",
+            "length": 1165,
+            "width": 160,
+            "height": 160
+          },
+          "colors": {
+            "path": "data/biome_impl/eyespot_visual.png",
+            "sha256": "08c192391a8dcbeceb5bf406909421022397608cb6b48ee43234e6c327ba172c",
+            "length": 1307,
+            "width": 160,
+            "height": 160
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -417,7 +847,24 @@
         "pos_x": "5890",
         "pos_y": "0",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/desert_ruins_base_01.png",
+            "sha256": "2c29e1041cb744794795e0abe979fe6bff9d93af5d7f2851786387ccb0517097",
+            "length": 734,
+            "width": 67,
+            "height": 85
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/desert_ruins_base_01_visual_fungus.png",
+            "sha256": "09e741eb425c44775f796b8dd3df12ccba216b8437f0607f98ff5a4ec733e7ee",
+            "length": 1434,
+            "width": 67,
+            "height": 85
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -428,7 +875,24 @@
         "pos_x": "14650",
         "pos_y": "-34",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/music_machine_stand.png",
+            "sha256": "906f7a12c9f1c375837d110ccc0e1dd2d3a10f6fb681610314422957e371266c",
+            "length": 810,
+            "width": 96,
+            "height": 112
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/music_machine_stand_visual.png",
+            "sha256": "7ec2a75bc61dc1f09bbb410335e04fed31bf9b620515137081fd0d5aaee13f2f",
+            "length": 1918,
+            "width": 96,
+            "height": 112
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -439,7 +903,24 @@
         "pos_x": "-1953",
         "pos_y": "-1360",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "0"
+        "skip_edge_textures": "0",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/overworld/music_machine_stand.png",
+            "sha256": "906f7a12c9f1c375837d110ccc0e1dd2d3a10f6fb681610314422957e371266c",
+            "length": 810,
+            "width": 96,
+            "height": 112
+          },
+          "colors": {
+            "path": "data/biome_impl/overworld/music_machine_stand_visual.png",
+            "sha256": "7ec2a75bc61dc1f09bbb410335e04fed31bf9b620515137081fd0d5aaee13f2f",
+            "length": 1918,
+            "width": 96,
+            "height": 112
+          },
+          "background": null
+        }
       },
       {
         "DEBUG_RELOAD_ME": "0",
@@ -450,312 +931,634 @@
         "pos_x": "9000",
         "pos_y": "-1900",
         "skip_biome_checks": "1",
-        "skip_edge_textures": "1"
+        "skip_edge_textures": "1",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/huussi.png",
+            "sha256": "5393965804a4ae71e97618fd4d7c28127d120cb334e5894d23a5da8a4f405870",
+            "length": 1253,
+            "width": 180,
+            "height": 180
+          },
+          "colors": {
+            "path": "data/biome_impl/huussi_visual.png",
+            "sha256": "29af1321a600bd1fc37ced75b326106e8970c5c36f7a9fd6bcfe1bfcbcda3250",
+            "length": 2435,
+            "width": 180,
+            "height": 180
+          },
+          "background": null
+        }
       },
       {
         "pos_x": "14698",
         "pos_y": "-90",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_00.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_00.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "51050",
         "pos_y": "-90",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_00.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_00.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-21654",
         "pos_y": "-90",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_00.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_00.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1905",
         "pos_y": "-1412",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_01.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_01.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "34447",
         "pos_y": "-300",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_01.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_01.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-38257",
         "pos_y": "-300",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_01.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_01.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "24166",
         "pos_y": "-421",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_02.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_02.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-48538",
         "pos_y": "-421",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_02.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_02.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "2800",
         "pos_y": "250",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_03.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_03.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "39252",
         "pos_y": "-150",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_03.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_03.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-33652",
         "pos_y": "-150",
-        "just_load_an_entity": "data/entities/props/music_machines/music_machine_03.xml"
+        "just_load_an_entity": "data/entities/props/music_machines/music_machine_03.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1824",
         "pos_y": "-1270",
-        "just_load_an_entity": "data/entities/props/physics_fungus.xml"
+        "just_load_an_entity": "data/entities/props/physics_fungus.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1809",
         "pos_y": "-1260",
-        "just_load_an_entity": "data/entities/props/physics_fungus_big.xml"
+        "just_load_an_entity": "data/entities/props/physics_fungus_big.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1737",
         "pos_y": "-1271",
-        "just_load_an_entity": "data/entities/props/physics_fungus.xml"
+        "just_load_an_entity": "data/entities/props/physics_fungus.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1705",
         "pos_y": "-1205",
-        "just_load_an_entity": "data/entities/props/physics_fungus.xml"
+        "just_load_an_entity": "data/entities/props/physics_fungus.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1695",
         "pos_y": "-1205",
-        "just_load_an_entity": "data/entities/props/physics_fungus_small.xml"
+        "just_load_an_entity": "data/entities/props/physics_fungus_small.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "3608",
         "pos_y": "934",
-        "just_load_an_entity": "data/entities/props/physics/bridge_spawner.xml"
+        "just_load_an_entity": "data/entities/props/physics/bridge_spawner.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-9980",
         "pos_y": "-30",
-        "just_load_an_entity": "data/entities/props/physics/bridge_spawner.xml"
+        "just_load_an_entity": "data/entities/props/physics/bridge_spawner.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-6883",
         "pos_y": "-170",
-        "just_load_an_entity": "data/entities/buildings/essence_eater.xml"
+        "just_load_an_entity": "data/entities/buildings/essence_eater.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "12569",
         "pos_y": "15",
-        "just_load_an_entity": "data/entities/buildings/essence_eater.xml"
+        "just_load_an_entity": "data/entities/buildings/essence_eater.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "29469",
         "pos_y": "-170",
-        "just_load_an_entity": "data/entities/buildings/essence_eater.xml"
+        "just_load_an_entity": "data/entities/buildings/essence_eater.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "48921",
         "pos_y": "15",
-        "just_load_an_entity": "data/entities/buildings/essence_eater.xml"
+        "just_load_an_entity": "data/entities/buildings/essence_eater.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-43235",
         "pos_y": "-170",
-        "just_load_an_entity": "data/entities/buildings/essence_eater.xml"
+        "just_load_an_entity": "data/entities/buildings/essence_eater.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-23783",
         "pos_y": "15",
-        "just_load_an_entity": "data/entities/buildings/essence_eater.xml"
+        "just_load_an_entity": "data/entities/buildings/essence_eater.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-2434",
         "pos_y": "-207",
-        "just_load_an_entity": "data/entities/items/pickup/evil_eye.xml"
+        "just_load_an_entity": "data/entities/items/pickup/evil_eye.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12441",
         "pos_y": "190",
-        "just_load_an_entity": "data/entities/buildings/hut_check.xml"
+        "just_load_an_entity": "data/entities/buildings/hut_check.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-1320",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-1576",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-1832",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-2088",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-2344",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-2600",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-2856",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-3112",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-3368",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-3624",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-3880",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "9990",
         "pos_y": "-4136",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-540",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-796",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-1052",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-1308",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-1564",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-1820",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-2076",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-2332",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-2588",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-2844",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-3100",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-3356",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-3612",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-3868",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-12180",
         "pos_y": "-4124",
-        "just_load_an_entity": "data/entities/misc/platform_wide.xml"
+        "just_load_an_entity": "data/entities/misc/platform_wide.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-3328",
         "pos_y": "1792",
-        "just_load_an_entity": "data/entities/items/books/book_hint.xml"
+        "just_load_an_entity": "data/entities/items/books/book_hint.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-3328",
         "pos_y": "1792",
-        "just_load_an_entity": "data/entities/buildings/eyespot_a.xml"
+        "just_load_an_entity": "data/entities/buildings/eyespot_a.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "5932",
         "pos_y": "-4864",
-        "just_load_an_entity": "data/entities/buildings/eyespot_b.xml"
+        "just_load_an_entity": "data/entities/buildings/eyespot_b.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "15104",
         "pos_y": "1792",
-        "just_load_an_entity": "data/entities/buildings/eyespot_c.xml"
+        "just_load_an_entity": "data/entities/buildings/eyespot_c.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-1280",
         "pos_y": "9984",
-        "just_load_an_entity": "data/entities/buildings/eyespot_d.xml"
+        "just_load_an_entity": "data/entities/buildings/eyespot_d.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "13056",
         "pos_y": "9984",
-        "just_load_an_entity": "data/entities/buildings/eyespot_e.xml"
+        "just_load_an_entity": "data/entities/buildings/eyespot_e.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "14941",
         "pos_y": "16454",
-        "just_load_an_entity": "data/entities/buildings/maggotspot.xml"
+        "just_load_an_entity": "data/entities/buildings/maggotspot.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       },
       {
         "pos_x": "-14000",
         "pos_y": "10000",
-        "just_load_an_entity": "data/entities/animals/boss_fish/fish_giga.xml"
+        "just_load_an_entity": "data/entities/animals/boss_fish/fish_giga.xml",
+        "assets": {
+          "material": null,
+          "colors": null,
+          "background": null
+        }
       }
     ]
   },

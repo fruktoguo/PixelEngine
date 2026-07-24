@@ -78,6 +78,18 @@ public sealed class NoitaWorldContentCatalogTests
             global.GetProperty("bufferedScenes").EnumerateArray(),
             static scene => scene.TryGetProperty("material_filename", out JsonElement path) &&
                 path.GetString() == "data/biome_impl/snowcastle/forge.png");
+
+        JsonElement[] buffered = [.. global.GetProperty("bufferedScenes").EnumerateArray()];
+        Assert.Equal(30, buffered.Count(static scene => scene.GetProperty("assets").GetProperty("material").ValueKind == JsonValueKind.Object));
+        Assert.Equal(22, buffered.Count(static scene => scene.GetProperty("assets").GetProperty("colors").ValueKind == JsonValueKind.Object));
+        Assert.Equal(6, buffered.Count(static scene => scene.GetProperty("assets").GetProperty("background").ValueKind == JsonValueKind.Object));
+
+        JsonElement forge = buffered.Single(static scene =>
+            scene.TryGetProperty("material_filename", out JsonElement path) &&
+            path.GetString() == "data/biome_impl/snowcastle/forge.png");
+        AssertAsset(forge.GetProperty("assets").GetProperty("material"), "0dc4f73e2353119606ff33db0cc2fb4f0453491278c4fe125275030eb885f1a6");
+        AssertAsset(forge.GetProperty("assets").GetProperty("colors"), "eda605ee5094d45f02f46521ee7a77d704d23c34d1fbc98785e1ac6817326121");
+        AssertAsset(forge.GetProperty("assets").GetProperty("background"), "ff94e8889ed4777a94bed4f8e6a68015080d8a16a04f0295c45cdca8f7b867ed");
     }
 
     /// <summary>
@@ -120,9 +132,36 @@ public sealed class NoitaWorldContentCatalogTests
         Assert.Equal(NoitaMarkerRuleKind.Encounter, NoitaMarkerRuleCatalog.Resolve("spawn_large_enemies").Kind);
     }
 
+    /// <summary>
+    /// 全局 buffered pixel scene 必须全部预编译成 C# 坐标和资产边界，运行时不读取 XML。
+    /// </summary>
+    [Fact]
+    public void GlobalPixelScenesArePrecompiledIntoPureCSharpCatalog()
+    {
+        Assert.Equal(91, NoitaPixelSceneCatalog.SceneCount);
+        Assert.Equal(91, NoitaPixelSceneCatalog.Scenes.Length);
+        Assert.True(NoitaPixelSceneCatalog.TryFindAt(1464, 5976, out NoitaPixelSceneDefinition forge));
+        Assert.Equal("global-buffered-2", forge.StableId);
+        Assert.Equal(128, forge.Width);
+        Assert.Equal(128, forge.Height);
+        Assert.Equal("data/biome_impl/snowcastle/forge.png", forge.MaterialPath);
+        Assert.Equal("data/biome_impl/snowcastle/forge_visual.png", forge.ColorsPath);
+        Assert.Equal("data/biome_impl/snowcastle/forge_background.png", forge.BackgroundPath);
+        Assert.Equal("0dc4f73e2353119606ff33db0cc2fb4f0453491278c4fe125275030eb885f1a6", forge.MaterialSha256);
+        Assert.False(NoitaPixelSceneCatalog.TryFindAt(0, 0, out _));
+    }
+
     private static string ContentRoot()
     {
         return Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "demo", "PixelEngine.Demo", "content"));
+    }
+
+    private static void AssertAsset(JsonElement asset, string expectedSha256)
+    {
+        Assert.Equal(expectedSha256, asset.GetProperty("sha256").GetString());
+        Assert.Equal(128, asset.GetProperty("width").GetInt32());
+        Assert.Equal(128, asset.GetProperty("height").GetInt32());
+        Assert.True(asset.GetProperty("length").GetInt64() > 0);
     }
 }

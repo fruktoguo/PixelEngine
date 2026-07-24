@@ -8,6 +8,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
 
 $ReferenceBuildId = '17130612'
 $ReferenceVersionHash = '9dbd52ced019a643169a2db02f46c77f8766c6e5'
@@ -77,6 +78,38 @@ function Get-ReferencedDataPaths([string] $Source) {
     }
 
     return @($paths | Sort-Object)
+}
+
+function Get-AssetDescriptor([string] $DataPath) {
+    if ([string]::IsNullOrWhiteSpace($DataPath)) {
+        return $null
+    }
+    if (-not $DataPath.StartsWith('data/', [StringComparison]::Ordinal)) {
+        throw "World asset path must start with data/: $DataPath"
+    }
+
+    $file = Join-Path $resolvedDataRoot $DataPath.Substring(5)
+    if (-not (Test-Path -LiteralPath $file -PathType Leaf)) {
+        throw "World asset not found: $DataPath"
+    }
+
+    $descriptor = [ordered]@{
+        path = $DataPath
+        sha256 = Get-Sha256 $file
+        length = (Get-Item -LiteralPath $file).Length
+    }
+    if ([IO.Path]::GetExtension($file).Equals('.png', [StringComparison]::OrdinalIgnoreCase)) {
+        $image = [Drawing.Image]::FromFile($file)
+        try {
+            $descriptor.width = $image.Width
+            $descriptor.height = $image.Height
+        }
+        finally {
+            $image.Dispose()
+        }
+    }
+
+    return $descriptor
 }
 
 $materialsPath = Join-Path $resolvedDataRoot 'materials.xml'
@@ -151,7 +184,16 @@ foreach ($file in Get-ChildItem -LiteralPath $biomeRoot -File -Filter '*.xml' | 
 $pixelDocument = Read-NoitaXml $pixelScenesPath
 $splicedFiles = @($pixelDocument.SelectNodes('/PixelScenes/PixelSceneFiles/File') | ForEach-Object { $_.InnerText.Trim() })
 $backgrounds = @($pixelDocument.SelectNodes('/PixelScenes/BackgroundImages/Image') | ForEach-Object { Get-Attributes $_ })
-$bufferedScenes = @($pixelDocument.SelectNodes('/PixelScenes/mBufferedPixelScenes/PixelScene') | ForEach-Object { Get-Attributes $_ })
+$bufferedScenes = @($pixelDocument.SelectNodes('/PixelScenes/mBufferedPixelScenes/PixelScene') | ForEach-Object {
+    $attributes = Get-Attributes $_
+    $assets = [ordered]@{
+        material = Get-AssetDescriptor $(if ($attributes.Contains('material_filename')) { [string]$attributes['material_filename'] } else { '' })
+        colors = Get-AssetDescriptor $(if ($attributes.Contains('colors_filename')) { [string]$attributes['colors_filename'] } else { '' })
+        background = Get-AssetDescriptor $(if ($attributes.Contains('background_filename')) { [string]$attributes['background_filename'] } else { '' })
+    }
+    $attributes.assets = $assets
+    $attributes
+})
 
 $vegetation = [Collections.Generic.List[object]]::new()
 foreach ($file in Get-ChildItem -LiteralPath $vegetationRoot -Recurse -File | Sort-Object FullName) {

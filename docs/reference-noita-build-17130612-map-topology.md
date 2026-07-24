@@ -103,3 +103,9 @@ BitmapCaves 负责大尺度结构，Wang semantic pixel 不再人为扩成 5 个
 转换为 `NoitaMarkerRules.Generated.cs`。运行时只调用 C# `NoitaMarkerRuleCatalog`，分类为 PixelScene、
 Vegetation、Loot、Prop、Encounter、Trigger 与 Effect；玩家包不包含 Lua 源码、Lua VM，也没有
 运行时字符串 heuristic fallback。Lua 只作为隔离参考树中的只读来源。
+
+`tools/generate-noita-pixel-scenes.ps1` 进一步把 91 个全局 buffered pixel scene 的世界坐标、尺寸、
+清理/biome/边缘标志，以及 material/colors/background 三层资产路径与 SHA256 预编译为
+`NoitaPixelScenes.Generated.cs`。运行时通过纯 C# `NoitaPixelSceneCatalog` 查询，不读取参考 XML 或 Lua；
+其中 30 个 material、22 个 colors、6 个 background 资产描述已锁定。该节点只闭合来源与调度目录，
+实际语义像素掩码、背景纹理和实体生成仍必须在后续节点接入后才能形成视觉 parity。
