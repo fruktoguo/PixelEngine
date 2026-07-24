@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json;
 using Xunit;
 
@@ -177,6 +178,35 @@ public sealed class NoitaWorldContentCatalogTests
             out NoitaPixelSceneMaterial sampled));
         Assert.Equal((NoitaPixelSceneMaterial)forge.Materials[materialIndex], sampled);
         Assert.False(NoitaPixelSceneCatalog.TrySample(forge.WorldX - 1, forge.WorldY - 1, out _));
+    }
+
+    /// <summary>
+    /// colors/background 图片必须随 Demo 独立分发，并逐项绑定参考来源 hash 与世界矩形。
+    /// </summary>
+    [Fact]
+    public void GlobalPixelSceneVisualAssetsKeepCompleteProvenance()
+    {
+        string visualRoot = Path.Combine(ContentRoot(), "maps", "noita", "global-scenes");
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(Path.Combine(visualRoot, "provenance.json")));
+        JsonElement root = document.RootElement;
+        Assert.Equal("17130612", root.GetProperty("referenceBuildId").GetString());
+        Assert.Equal(28, root.GetProperty("assetCount").GetInt32());
+        JsonElement[] assets = [.. root.GetProperty("assets").EnumerateArray()];
+        Assert.Equal(6, assets.Count(static asset => asset.GetProperty("kind").GetString() == "background"));
+        Assert.Equal(22, assets.Count(static asset => asset.GetProperty("kind").GetString() == "colors"));
+
+        foreach (JsonElement asset in assets)
+        {
+            string relativePath = asset.GetProperty("contentPath").GetString()!;
+            string file = Path.Combine(ContentRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));
+            Assert.True(File.Exists(file), relativePath);
+            Assert.Equal(
+                asset.GetProperty("sourceSha256").GetString(),
+                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant());
+            Assert.Equal(asset.GetProperty("sourceSha256").GetString(), asset.GetProperty("contentSha256").GetString());
+            Assert.True(asset.GetProperty("width").GetInt32() > 0);
+            Assert.True(asset.GetProperty("height").GetInt32() > 0);
+        }
     }
 
     private static string ContentRoot()

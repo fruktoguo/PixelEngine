@@ -115,4 +115,10 @@ Vegetation、Loot、Prop、Encounter、Trigger 与 Effect；玩家包不包含 L
 回溯到稳定材质语义，13 种非材料 marker 色保留为空地并记录像素数量，等待实体生成系统消费。
 语义掩码以 Brotli + decoded SHA256 进入 `NoitaPixelSceneMasks.Generated.cs`；世界生成器在
 Wang/BitmapCaves 和程序 scene 之前按原始绝对坐标逐像素应用，比例固定为 `1 source pixel = 1 world cell`。
-玩家包不携带来源 PNG，也不读取本机参考树。colors/background 层与 marker 实体仍是后续接线项。
+玩家包不携带来源 material PNG，也不读取本机参考树。colors/background 层与 marker 实体仍是后续接线项。
+
+全局视觉层随后由 `tools/extract-noita-pixel-scene-visuals.ps1` 进入 Demo 自有内容包：6 张
+background 在权威 cell 世界后方绘制，22 张 colors 在 cell 世界上方、光照合成前绘制；每层沿用
+来源 world X/Y 与原始像素尺寸，不随窗口分辨率改变物理比例。`provenance.json` 逐项记录参考路径、
+Build、source/content SHA256 和目标矩形，复制后 hash 必须完全一致。运行时现有 4 层出生山体视觉与
+28 层全局 scene 视觉合计 32 层，仍低于 Hosting 固定 128 层上限。marker 实体仍待后续接线。

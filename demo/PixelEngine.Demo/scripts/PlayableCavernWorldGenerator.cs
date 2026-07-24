@@ -72,7 +72,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     private const double Inverse53Bit = 1.0 / 9_007_199_254_740_992.0;
 
     /// <inheritdoc />
-    public int WorldVisualLayerCount => 4;
+    public int WorldVisualLayerCount => 4 + NoitaPixelSceneVisualCatalog.LayerCount;
 
     /// <inheritdoc />
     public WorldVisualLayerDescriptor GetWorldVisualLayer(int index)
@@ -109,6 +109,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 512f,
                 512f,
                 WorldVisualLayerKind.Decoration),
+            >= 4 when index < WorldVisualLayerCount => NoitaPixelSceneVisualCatalog.GetLayer(index - 4),
             _ => throw new ArgumentOutOfRangeException(nameof(index)),
         };
     }

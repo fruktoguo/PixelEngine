@@ -1477,7 +1477,7 @@ public sealed class CampaignWorldTests
             Config: new EngineScriptConfigApi(ContentRoot()));
         _ = generator.Describe(in request);
 
-        Assert.Equal(4, generator.WorldVisualLayerCount);
+        Assert.Equal(32, generator.WorldVisualLayerCount);
         WorldVisualLayerDescriptor background = generator.GetWorldVisualLayer(0).Validate();
         WorldVisualLayerDescriptor belowBackground = generator.GetWorldVisualLayer(1).Validate();
         WorldVisualLayerDescriptor stubBackground = generator.GetWorldVisualLayer(2).Validate();
@@ -1527,6 +1527,31 @@ public sealed class CampaignWorldTests
             decoration,
             "maps/noita/mountain/left_entrance_visual.png",
             "D5775C1BC8BAB858A691C6398E4639B4922759C37B489BBE535D0B824BB7D5CC");
+
+        WorldVisualLayerDescriptor[] globalLayers = [.. Enumerable.Range(4, 28)
+            .Select(generator.GetWorldVisualLayer)
+            .Select(static layer => layer.Validate())];
+        Assert.Equal(6, globalLayers.Count(static layer => layer.Layer == WorldVisualLayerKind.Background));
+        Assert.Equal(22, globalLayers.Count(static layer => layer.Layer == WorldVisualLayerKind.Decoration));
+        WorldVisualLayerDescriptor forgeBackground = globalLayers.Single(static layer =>
+            layer.Asset.LogicalPath == "maps/noita/global-scenes/02-background.png");
+        WorldVisualLayerDescriptor forgeColors = globalLayers.Single(static layer =>
+            layer.Asset.LogicalPath == "maps/noita/global-scenes/02-colors.png");
+        Assert.Equal((1464f, 5976f, 128f, 128f), (
+            forgeBackground.WorldX,
+            forgeBackground.WorldY,
+            forgeBackground.WidthCells,
+            forgeBackground.HeightCells));
+        Assert.Equal(WorldVisualLayerKind.Background, forgeBackground.Layer);
+        Assert.Equal(WorldVisualLayerKind.Decoration, forgeColors.Layer);
+        AssertWorldVisualAsset(
+            forgeBackground,
+            "maps/noita/global-scenes/02-background.png",
+            "FF94E8889ED4777A94BED4F8E6A68015080D8A16A04F0295C45CDCA8F7B867ED");
+        AssertWorldVisualAsset(
+            forgeColors,
+            "maps/noita/global-scenes/02-colors.png",
+            "EDA605EE5094D45F02F46521EE7A77D704D23C34D1FBC98785E1AC6817326121");
     }
 
     /// <summary>
