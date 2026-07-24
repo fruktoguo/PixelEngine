@@ -2471,6 +2471,47 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         return count;
     }
 
+    /// <summary>
+    /// 收集全局 buffered Pixel Scene material PNG 中的实体 marker。数据在构建时从参考图片与
+    /// RegisterSpawnFunction 声明编译为 C#，运行时不解释或执行 Lua。
+    /// </summary>
+    internal static int CollectGlobalPixelSceneMarkerAnchors(
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY,
+        Span<NoitaWangMarkerAnchor> destination)
+    {
+        if (minimumX > maximumX || minimumY > maximumY)
+        {
+            throw new ArgumentException("Pixel Scene marker 查询矩形无效。");
+        }
+
+        int count = 0;
+        ReadOnlySpan<NoitaPixelSceneMarkerDefinition> markers = NoitaPixelSceneCatalog.Markers;
+        for (int i = 0; i < markers.Length && count < destination.Length; i++)
+        {
+            ref readonly NoitaPixelSceneMarkerDefinition marker = ref markers[i];
+            if (marker.WorldX < minimumX || marker.WorldX > maximumX ||
+                marker.WorldY < minimumY || marker.WorldY > maximumY)
+            {
+                continue;
+            }
+
+            destination[count++] = new NoitaWangMarkerAnchor(
+                "global-pixel-scene",
+                "global-pixel-scene",
+                marker.Color,
+                marker.Function,
+                marker.Origin,
+                Semantic: byte.MaxValue,
+                marker.WorldX,
+                marker.WorldY);
+        }
+
+        return count;
+    }
+
     private static bool TryResolveWangReferenceBiome(
         BiomeCatalog catalog,
         CampaignConfig config,

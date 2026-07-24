@@ -164,6 +164,16 @@ internal readonly record struct NoitaPixelSceneMaskDefinition(
 
 internal readonly record struct NoitaPixelSceneBucketKey(long X, long Y);
 
+internal readonly record struct NoitaPixelSceneMarkerDefinition(
+    int SceneOrdinal,
+    int LocalX,
+    int LocalY,
+    long WorldX,
+    long WorldY,
+    string Color,
+    string Function,
+    string Origin);
+
 internal readonly record struct DecodedNoitaPixelScene(
     int Ordinal,
     int WorldX,

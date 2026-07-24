@@ -218,6 +218,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 第八个实现节点以可重现提取器锁定 Build `17130612` 当前完整宏图使用的 15 组 STB Herringbone Wang 模板、20 个 reference biome 绑定、PNG/XML/Lua/material/license SHA256 和语义像素。产品内 `noita-wang-terrain.json` 保存 Brotli 压缩的 `PWH1` tile 数据；加载期严格验证全部 constraint key、variant、offset、语义和来源身份，`Describe` 后的 chunk 热路径按全局坐标与 run seed 无分配采样。main/side biome 现在分别使用 `coalmine`、`excavationsite`、`fungicave`、`snowcave`、`snowcastle`、`rainforest*`、`vault*`、`crypt`、`wandcave` 与 `wizardcave`，authored pixel scene 保持更高优先级，marker 色暂时为空而不再误生成为前景固体。`d2abcfd6` detached clean worktree 已通过 native build、solution 0 warning / 0 error、Demo 197 passed / 1 explicit GL skip、真实 Player framebuffer；七场景 InProcess ShortRun 为 73.42–657.33 us/chunk、0–7 B。BitmapCaves、背景、marker 实体、剩余 pixel scene 和 Noita 原始 RNG 调用序列仍未闭合，因此 `DEMO-008` 保持 `[~]`；证据见 `docs/evidence-2026-07-23-demo-008-noita-wang-terrain.md`。
 
+后续全局 Pixel Scene 接线节点已将 30 张 material PNG、6 张 background、22 张 colors 与 43 个非材质 marker 分层接入。material 进入权威 cell，background/colors 只进入世界视觉组合；marker 由构建期提取器将图片颜色与 `RegisterSpawnFunction` 映射为纯 C# 世界锚点，运行时与 Wang marker 共用固定容量扫描。该节点闭合了 forge 等固定建筑的地形、视觉与生成点坐标，但 marker 目前仍使用通用 prop/VFX profile，尚不等于真实交互行为完成。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。

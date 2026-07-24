@@ -86,7 +86,13 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         ulong worldSeed = _runDirector?.RunSeed ?? config.InitialRunSeed;
         long centerX = (long)MathF.Round(player.CenterX);
         long centerY = (long)MathF.Round(player.CenterY);
-        int count = PlayableCavernWorldGenerator.CollectWangMarkerAnchors(
+        int count = PlayableCavernWorldGenerator.CollectGlobalPixelSceneMarkerAnchors(
+            centerX - ScanHalfWidthCells,
+            centerY - ScanHalfHeightCells,
+            centerX + ScanHalfWidthCells,
+            centerY + ScanHalfHeightCells,
+            _anchors);
+        count += PlayableCavernWorldGenerator.CollectWangMarkerAnchors(
             biomes,
             wangTerrain,
             config,
@@ -95,7 +101,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             centerY - ScanHalfHeightCells,
             centerX + ScanHalfWidthCells,
             centerY + ScanHalfHeightCells,
-            _anchors);
+            _anchors.AsSpan(count));
         LastScanAnchorCount = count;
         LastScanMaterializedCount = 0;
         for (int i = 0; i < count; i++)

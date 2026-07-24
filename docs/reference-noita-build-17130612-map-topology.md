@@ -121,4 +121,11 @@ Wang/BitmapCaves 和程序 scene 之前按原始绝对坐标逐像素应用，�
 background 在权威 cell 世界后方绘制，22 张 colors 在 cell 世界上方、光照合成前绘制；每层沿用
 来源 world X/Y 与原始像素尺寸，不随窗口分辨率改变物理比例。`provenance.json` 逐项记录参考路径、
 Build、source/content SHA256 和目标矩形，复制后 hash 必须完全一致。运行时现有 4 层出生山体视觉与
-28 层全局 scene 视觉合计 32 层，仍低于 Hosting 固定 128 层上限。marker 实体仍待后续接线。
+28 层全局 scene 视觉合计 32 层，仍低于 Hosting 固定 128 层上限。
+
+`tools/extract-noita-pixel-scene-markers.ps1` 继续读取同一 30 张 material PNG 与 `materials.xml`，
+把全部 43 个非材质像素编译为 `NoitaPixelSceneMarkers.Generated.cs`。每个锚点保存 scene ordinal、
+局部/世界坐标、ARGB、解析出的唯一 `RegisterSpawnFunction` 和来源脚本；没有 Lua 注册的 12 个
+`ffffff00` 内建点显式标记为 `builtin-or-unresolved`，不会被猜测成错误玩法。运行时只查询 C# span，
+并与 Wang marker 共用固定容量邻域扫描。当前通用 prop/VFX 只闭合调度链，真实 barricade、forge check、
+shop、treasure、bunker、alchemist、music machine 等交互行为仍须逐函数实现。

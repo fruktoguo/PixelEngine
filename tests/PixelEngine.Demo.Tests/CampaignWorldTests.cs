@@ -1227,6 +1227,53 @@ public sealed class CampaignWorldTests
         Assert.True(hasLuaMaterializableMarker, "至少一个 Lua 来源 Noita marker 必须能进入实体/特效 materialization 管线。");
     }
 
+    /// <summary>验证全局 Pixel Scene 的非材质像素全部进入纯 C# marker 目录。</summary>
+    [Fact]
+    public void GlobalPixelSceneMarkersPreserveEveryUnresolvedMaterialPixel()
+    {
+        ReadOnlySpan<NoitaPixelSceneMarkerDefinition> markers = NoitaPixelSceneCatalog.Markers;
+        int expected = 0;
+        foreach (NoitaPixelSceneMaskDefinition mask in NoitaPixelSceneCatalog.Masks)
+        {
+            expected += mask.MarkerPixelCount;
+        }
+
+        Assert.Equal(43, markers.Length);
+        Assert.Equal(expected, markers.Length);
+        Assert.All(markers.ToArray(), static marker =>
+        {
+            Assert.StartsWith("ff", marker.Color, StringComparison.Ordinal);
+            Assert.Equal(8, marker.Color.Length);
+            Assert.False(string.IsNullOrWhiteSpace(marker.Function));
+            Assert.False(string.IsNullOrWhiteSpace(marker.Origin));
+        });
+    }
+
+    /// <summary>验证 forge marker 保留参考坐标、颜色、函数与来源，并可接入现有实体 profile。</summary>
+    [Fact]
+    public void ForgePixelSceneMarkerResolvesToPureCSharpSpawnAnchor()
+    {
+        NoitaWangMarkerAnchor[] anchors = new NoitaWangMarkerAnchor[8];
+        int count = PlayableCavernWorldGenerator.CollectGlobalPixelSceneMarkerAnchors(
+            1464,
+            5976,
+            1591,
+            6103,
+            anchors);
+
+        NoitaWangMarkerAnchor marker = Assert.Single(anchors[..count]);
+        Assert.Equal("global-pixel-scene", marker.ReferenceBiomeId);
+        Assert.Equal("global-pixel-scene", marker.WangSetId);
+        Assert.Equal("ff4cacab", marker.MarkerColor);
+        Assert.Equal("spawn_forge_check", marker.Function);
+        Assert.Equal("data/scripts/biomes/snowcastle.lua", marker.Origin);
+        Assert.Equal(byte.MaxValue, marker.Semantic);
+        Assert.Equal(1537, marker.WorldX);
+        Assert.Equal(6042, marker.WorldY);
+        Assert.True(NoitaWangMarkerVisualProfile.TryCreate(marker, out NoitaWangMarkerVisualProfile profile));
+        Assert.Equal(NoitaWangMarkerVisualKind.Machine, profile.Kind);
+    }
+
     /// <summary>
     /// 验证代表性的 Noita Lua marker 已经映射到真实 Demo 脚本实体，而不只是 overlay 占位。
     /// </summary>
