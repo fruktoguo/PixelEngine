@@ -1,56 +1,64 @@
-<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v6" style="left: 14px; top: 14px; width: 352px; height: 370px">
+<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v9" style="left: 0px; top: 8px; width: 1280px; height: 74px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #e8edf2; background-color: transparent; }
-      #status_panel { position: absolute; left: 16px; top: 16px; width: 312px; height: 288px; padding: 12px; background-color: rgba(4, 8, 13, 218); border-width: 1px; border-color: #40546a; }
-      #hud_title, #hud_route, #hud_region, #hud_seed_label, #hud_seed, #hud_depth_label, #hud_depth_value { position: absolute; margin: 0px; }
-      #hud_title { left: 12px; top: 10px; color: #f1c264; font-size: 13px; }
-      #hud_route { left: 12px; top: 28px; }
-      #hud_region { left: 12px; top: 44px; color: #e8edf2; }
-      #hud_seed_label { left: 12px; top: 60px; }
-      #hud_seed { left: 50px; top: 60px; }
-      #hud_depth_label { left: 12px; top: 76px; }
-      #hud_depth_value { left: 74px; top: 76px; }
-      #hud_route, #hud_region, #hud_seed_label, #hud_seed, #hud_depth_label, #hud_depth_value { color: #9facbb; font-size: 11px; }
-      #run_divider { position: absolute; left: 12px; top: 94px; width: 288px; height: 1px; background-color: #3d4f62; }
-      progress { position: relative; display: block; height: 13px; margin-top: 3px; background-color: #18232f; border-width: 1px; border-color: #34495e; }
-      progress fill { background-color: #d2a642; }
-      progress .meter_label { position: absolute; left: 6px; top: -1px; height: 13px; line-height: 13px; color: #f1f5f9; font-size: 10px; }
-      #status_panel progress { position: absolute; left: 12px; width: 288px; margin-top: 0px; }
-      #hud_health { top: 104px; }
-      #hud_levitation { top: 123px; }
-      #hud_ammo { top: 142px; }
-      #hud_cooldown { top: 161px; }
-      #hud_heat { top: 180px; }
-      #hud_reload { top: 199px; }
-      #hud_health fill { background-color: #3ca66f; }
-      #hud_levitation fill { background-color: #d3c55a; }
-      #hud_ammo fill { background-color: #d3a341; }
-      #hud_cooldown fill { background-color: #4f86bd; }
-      #hud_heat fill { background-color: #4a9b7b; }
-      #hud_hazard fill { background-color: #d05a49; }
-      #hud_reload fill { background-color: #7b6cb2; }
-      #hud_distance fill { background-color: #d7aa48; }
-      #hud_longitude fill { background-color: #4b83b8; }
-      #hud_depth fill { background-color: #8b6cb0; }
-      #hud_elevation fill { background-color: #4a9b7b; }
-      #hud_context_divider { position: absolute; left: 12px; top: 220px; width: 288px; height: 1px; background-color: #2f4153; }
-      .context_label { position: absolute; left: 12px; color: #7f92a5; font-size: 11px; }
-      #hud_mode_label, #hud_input_mode { top: 228px; }
-      #hud_equipment_label, #hud_equipment { top: 244px; }
-      #hud_material_label, #hud_material_name { top: 260px; }
-      #hud_input_mode, #hud_equipment, #hud_material_name { position: absolute; left: 50px; color: #d7dee6; font-size: 11px; }
-      #hud_material_name { color: #f1c264; }
-      #hud_material_detail { position: absolute; left: 50px; top: 276px; width: 252px; color: #91a4b7; font-size: 10px; line-height: 12px; display: block; }
-      button { width: 126px; height: 32px; color: #dfe8f1; text-align: center; background-color: rgba(18, 35, 51, 232); border-width: 1px; border-color: #45637e; }
-      button:hover { color: #ffffff; background-color: #315b7e; border-color: #75a0c5; }
-      #hud_pause { position: absolute; left: 16px; top: 326px; width: 156px; }
-      #hud_telemetry { position: absolute; left: 180px; top: 326px; width: 156px; }
-      #legacy_route_models { display: none; }
+      rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #ffffff; background-color: rgba(0, 0, 0, 0); }
+      button { color: #f6e9dc; background-color: rgba(50, 38, 39, 210); border-width: 2px; border-color: #75504b; }
+      button:hover { color: #ffffff; background-color: rgba(91, 58, 50, 232); border-color: #dfb453; }
+      .quick_slot { position: absolute; top: 6px; width: 46px; height: 46px; padding-top: 27px; font-size: 10px; text-align: center; }
+      #hud_wand_1 { left: 12px; }
+      #hud_wand_2 { left: 62px; }
+      #hud_wand_3 { left: 112px; }
+      #hud_wand_4 { left: 162px; }
+      .wand_icon { position: absolute; top: 14px; width: 30px; height: 20px; pointer-events: none; }
+      #hud_wand_icon_1 { left: 20px; }
+      #hud_wand_icon_2 { left: 70px; }
+      #hud_wand_icon_3 { left: 120px; }
+      #hud_wand_icon_4 { left: 170px; }
+      .item_slot { position: absolute; top: 6px; width: 42px; height: 42px; color: #6f5452; text-align: center; line-height: 42px; background-color: rgba(46, 34, 36, 178); border-width: 2px; border-color: #674844; }
+      #hud_item_1 { left: 218px; }
+      #hud_item_2 { left: 264px; }
+      #hud_item_3 { left: 310px; }
+      #hud_item_4 { left: 356px; }
+      #status_panel { position: absolute; left: 1030px; top: 6px; width: 238px; height: 62px; background-color: rgba(7, 5, 8, 128); border-width: 1px; border-color: rgba(111, 79, 67, 180); }
+      .status_icon { position: absolute; left: 1038px; width: 14px; height: 14px; pointer-events: none; }
+      #hud_health_icon { top: 11px; }
+      #hud_levitation_icon { top: 25px; }
+      #hud_mana_icon { top: 39px; }
+      #hud_reload_icon { top: 53px; }
+      progress { position: absolute; left: 1058px; width: 198px; height: 7px; margin: 0px; background-color: #211719; border-width: 1px; border-color: #684943; }
+      #hud_health { top: 14px; }
+      #hud_levitation { top: 28px; }
+      #hud_ammo { top: 42px; }
+      #hud_reload { top: 56px; }
+      #hud_inventory, #hud_pause, #hud_telemetry, #hud_hidden_models { display: none; }
     </style>
   </head>
   <body>
-    <div id="status_panel">
+    <button id="hud_wand_1" class="quick_slot" data-event-click="select_wand_1"><span path="hud.wand_1">● 1</span></button>
+    <button id="hud_wand_2" class="quick_slot" data-event-click="select_wand_2"><span path="hud.wand_2">2</span></button>
+    <button id="hud_wand_3" class="quick_slot" data-event-click="select_wand_3"><span path="hud.wand_3">3</span></button>
+    <button id="hud_wand_4" class="quick_slot" data-event-click="select_wand_4"><span path="hud.wand_4">4</span></button>
+    <img id="hud_wand_icon_1" class="wand_icon" src="../images/noita/wands/apprentice.png" width="30" height="20" alt="Apprentice Wand" />
+    <img id="hud_wand_icon_2" class="wand_icon" src="../images/noita/wands/trigger.png" width="30" height="20" alt="Trigger Wand" />
+    <img id="hud_wand_icon_3" class="wand_icon" src="../images/noita/wands/chaos.png" width="30" height="20" alt="Chaos Wand" />
+    <img id="hud_wand_icon_4" class="wand_icon" src="../images/noita/wands/geomancer.png" width="30" height="20" alt="Geomancer Wand" />
+    <div id="hud_item_1" class="item_slot">—</div>
+    <div id="hud_item_2" class="item_slot">—</div>
+    <div id="hud_item_3" class="item_slot">—</div>
+    <div id="hud_item_4" class="item_slot">—</div>
+    <div id="status_panel"></div>
+    <img id="hud_health_icon" class="status_icon" src="../images/noita/hud/health.png" width="18" height="18" alt="Health" />
+    <img id="hud_levitation_icon" class="status_icon" src="../images/noita/hud/jetpack.png" width="18" height="18" alt="Levitation" />
+    <img id="hud_mana_icon" class="status_icon" src="../images/noita/hud/mana.png" width="18" height="18" alt="Mana" />
+    <img id="hud_reload_icon" class="status_icon" src="../images/noita/hud/reload.png" width="18" height="18" alt="Recharge" />
+    <progress id="hud_health" path="hud.health" value="1.0" text="生命"></progress>
+    <progress id="hud_levitation" path="hud.levitation" value="1.0" text="悬浮"></progress>
+    <progress id="hud_ammo" path="hud.ammo" value="0.0" text="Mana"></progress>
+    <progress id="hud_reload" path="hud.reload" value="0.0" text="Recharge"></progress>
+    <button id="hud_inventory" data-event-click="open_inventory">法术</button>
+    <button id="hud_pause" data-event-click="pause_game">Ⅱ</button>
+    <button id="hud_telemetry" data-event-click="toggle_telemetry">FPS</button>
+    <div id="hud_hidden_models">
       <span id="hud_title" path="hud.mode_text">战役 / Campaign</span>
       <span id="hud_route" path="hud.run_state_text">探索 / Exploring</span>
       <span id="hud_region" path="hud.region_text">Mines</span>
@@ -58,22 +66,12 @@
       <span id="hud_seed" path="hud.seed_text">0000000000000000</span>
       <span id="hud_depth_label">深度 cell</span>
       <span id="hud_depth_value" path="hud.depth_cells">0</span>
-      <div id="run_divider"></div>
-      <progress id="hud_health" path="hud.health" value="1.0" text="生命"><div class="meter_label">生命</div></progress>
-      <progress id="hud_levitation" path="hud.levitation" value="1.0" text="悬浮"><div class="meter_label">悬浮</div></progress>
-      <progress id="hud_ammo" path="hud.ammo" value="0.0" text="Mana"><div class="meter_label">Mana</div></progress>
-      <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="Cast"><div class="meter_label">Cast</div></progress>
-      <progress id="hud_heat" path="hud.heat" value="0.0" text="Projectiles"><div class="meter_label">Projectiles</div></progress>
-      <progress id="hud_reload" path="hud.reload" value="0.0" text="Recharge"><div class="meter_label">Recharge</div></progress>
-      <div id="hud_context_divider"></div>
-      <span id="hud_mode_label" class="context_label">模式</span><span id="hud_input_mode" path="hud.input_mode_text">战斗 / Combat</span>
-      <span id="hud_equipment_label" class="context_label">装备</span><span id="hud_equipment" path="hud.equipment_text">未装备 / None</span>
-      <span id="hud_material_label" class="context_label">准星</span><span id="hud_material_name" path="hud.material_name">空气 / Air</span>
+      <progress id="hud_cooldown" path="hud.cooldown" value="1.0" text="Cast"></progress>
+      <progress id="hud_heat" path="hud.heat" value="0.0" text="Projectiles"></progress>
+      <span id="hud_equipment" path="hud.equipment_text">Apprentice Wand</span>
+      <span id="hud_input_mode" path="hud.input_mode_text">战斗 / Combat</span>
+      <span id="hud_material_name" path="hud.material_name">空气 / Air</span>
       <span id="hud_material_detail" path="hud.material_detail">可穿行的空区域</span>
-    </div>
-    <button id="hud_pause" data-event-click="pause_game">暂停</button>
-    <button id="hud_telemetry" data-event-click="toggle_telemetry">诊断</button>
-    <div id="legacy_route_models">
       <progress path="hud.crystals" value="0.0"></progress>
       <progress path="hud.time" value="0.0"></progress>
       <progress path="hud.hazard" value="0.0"></progress>

@@ -1,28 +1,26 @@
-<rml title="设置" data-screen="settings" data-contract="demo.webfirst.settings/v1" style="left: 100px; top: 120px; width: 488px; height: 348px">
+<rml title="设置" data-screen="settings" data-contract="demo.webfirst.settings/v2" style="left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #edf4ff; background-color: transparent; }
-      #settings_panel { position: absolute; left: 100px; top: 120px; width: 440px; height: 300px; padding: 24px; background-color: rgba(13, 20, 28, 246); border-width: 1px; border-color: #526f8b; }
-      #settings_title { position: absolute; left: 24px; top: 18px; color: #f5c451; font-size: 24px; }
-      #settings_audio_hint, #settings_vsync_hint { position: absolute; left: 24px; width: 392px; color: #b8c5d2; font-size: 13px; }
-      #settings_audio_hint { top: 62px; }
-      #settings_vsync_hint { top: 88px; }
-      #settings_vsync, #settings_audio { position: absolute; left: 24px; width: 392px; height: 34px; }
-      #settings_vsync { top: 132px; }
-      #settings_audio { top: 178px; }
-      button { position: absolute; left: 24px; top: 238px; width: 160px; height: 38px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
-      button:hover { background-color: #4076a5; }
-      p { margin: 0px; }
+      rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #fff8ee; background-color: rgba(0, 0, 0, 0); }
+      #settings_scrim { position: absolute; left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(10, 6, 11, 176); }
+      #settings_panel { position: absolute; left: 402px; top: 142px; width: 476px; height: 400px; background-color: rgba(69, 45, 44, 247); border-width: 3px; border-color: #a26958; }
+      #settings_title { position: absolute; left: 426px; top: 166px; width: 428px; margin: 0px; color: #ffffff; font-size: 22px; }
+      #settings_audio_hint { position: absolute; left: 426px; top: 215px; width: 428px; color: #d5c2b9; font-size: 12px; }
+      #settings_vsync_hint { position: absolute; left: 426px; top: 307px; width: 428px; color: #d5c2b9; font-size: 12px; }
+      #settings_audio { position: absolute; left: 426px; top: 244px; width: 404px; height: 38px; font-size: 14px; }
+      #settings_vsync { position: absolute; left: 426px; top: 336px; width: 404px; height: 38px; font-size: 14px; }
+      #settings_back { position: absolute; left: 426px; top: 456px; width: 160px; height: 42px; color: #ffffff; background-color: #765044; border-width: 2px; border-color: #bd7b60; }
+      #settings_back:hover { background-color: #995f47; border-color: #f0c867; }
     </style>
   </head>
   <body>
-    <div id="settings_panel">
-      <p id="settings_title">设置</p>
-      <p id="settings_audio_hint">音频总开关会改写运行时 AudioSystem。</p>
-      <p id="settings_vsync_hint">Present VSync 会改写当前窗口交换策略。</p>
-      <checkbox id="settings_vsync" path="settings.vsync" text="Present VSync" checked="true" data-event-change="toggle_vsync" />
-      <checkbox id="settings_audio" path="settings.audio" text="音频总开关" checked="true" data-event-change="toggle_audio" />
-      <button id="settings_back" data-event-click="back_main">返回</button>
-    </div>
+    <div id="settings_scrim"></div>
+    <div id="settings_panel"></div>
+    <p id="settings_title">设置</p>
+    <p id="settings_audio_hint">游戏音效与环境音</p>
+    <checkbox id="settings_audio" path="settings.audio" text="音频" checked="true" data-event-change="toggle_audio" />
+    <p id="settings_vsync_hint">画面同步</p>
+    <checkbox id="settings_vsync" path="settings.vsync" text="垂直同步" checked="true" data-event-change="toggle_vsync" />
+    <button id="settings_back" data-event-click="back_main">返回</button>
   </body>
 </rml>

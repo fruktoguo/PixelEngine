@@ -31,7 +31,8 @@ internal sealed class ScriptCompiler
         nullableContextOptions: NullableContextOptions.Enable);
 
     private static readonly CSharpParseOptions ParseOptions = CSharpParseOptions.Default
-        .WithLanguageVersion(LanguageVersion.CSharp14);
+        .WithLanguageVersion(LanguageVersion.CSharp14)
+        .WithPreprocessorSymbols("PIXELENGINE_RUNTIME_SCRIPT_COMPILATION");
 
     private readonly MetadataReference[] _references;
 

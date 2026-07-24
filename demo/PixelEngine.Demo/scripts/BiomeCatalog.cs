@@ -15,11 +15,13 @@ internal sealed class BiomeCatalog
     internal const int CurrentSchemaVersion = 6;
     private const string EmbeddedResourceName = "PixelEngine.Demo.biomes.json";
 
-    private static readonly JsonSerializerOptions SerializerOptions = new()
+#if PIXELENGINE_RUNTIME_SCRIPT_COMPILATION
+    private static readonly JsonSerializerOptions RuntimeSerializerOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
     };
+#endif
 
     private static readonly Lazy<BiomeCatalog> Builtin = new(LoadBuiltin, isThreadSafe: true);
 
@@ -58,7 +60,14 @@ internal sealed class BiomeCatalog
         ArgumentNullException.ThrowIfNull(campaign);
         try
         {
-            BiomeCatalog catalog = JsonSerializer.Deserialize<BiomeCatalog>(json, SerializerOptions) ??
+            BiomeCatalog catalog =
+#if PIXELENGINE_RUNTIME_SCRIPT_COMPILATION
+                JsonSerializer.Deserialize<BiomeCatalog>(json, RuntimeSerializerOptions) ??
+#else
+                JsonSerializer.Deserialize(
+                json,
+                DemoContentJsonContext.Default.BiomeCatalog) ??
+#endif
                 throw new InvalidDataException("biomes.json 根节点不能为 null。");
             return catalog.Validate(campaign);
         }

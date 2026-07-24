@@ -87,6 +87,14 @@ internal sealed class EditorShellLayout
         out string normalized,
         out string diagnostic)
     {
+        return TryPersistLayout(layout, out normalized, out diagnostic);
+    }
+
+    public bool TryPersistLayout(
+        string layout,
+        out string normalized,
+        out string diagnostic)
+    {
         if (!EditorDockLayoutValidator.TryValidate(layout, out normalized, out diagnostic))
         {
             return false;

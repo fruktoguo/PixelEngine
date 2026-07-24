@@ -8,7 +8,7 @@
     "mode.edit": "Edit", "mode.play": "Play", "mode.paused": "Paused",
     "action.newProject": "New Project", "action.openProject": "Open Project", "action.saveScene": "Save Scene", "action.build": "Build",
     "action.play": "Play", "action.pause": "Pause", "action.resume": "Resume", "action.step": "Step", "action.stop": "Stop",
-    "action.undo": "Undo", "action.redo": "Redo", "action.create": "Create", "action.delete": "Delete", "action.duplicate": "Duplicate", "action.rename": "Rename", "action.openCSharpProject": "Open C# Project", "action.layout": "Layout", "action.resetLayout": "Reset Layout",
+    "action.undo": "Undo", "action.redo": "Redo", "action.create": "Create", "action.delete": "Delete", "action.duplicate": "Duplicate", "action.rename": "Rename", "action.openCSharpProject": "Open C# Project", "action.layout": "Layout", "action.saveLayout": "Save Current Layout...", "action.deleteLayout": "Delete Layout", "action.resetLayout": "Reset Layout", "action.save": "Save", "action.cancel": "Cancel",
     "file.openRecent": "Open Recent", "file.newScene": "New Scene", "file.openScene": "Open Scene", "file.saveSceneAs": "Save Scene As...", "file.closeProject": "Close Project", "file.exit": "Exit",
     "gameObject.createEmpty": "Create Empty", "gameObject.createEmptyChild": "Create Empty Child", "gameObject.createWithComponent": "Create with Component",
     "window.preferences": "Preferences", "window.preferencesDialog": "Preferences...", "window.hierarchy": "Hierarchy", "window.project": "Project", "window.inspector": "Inspector", "window.scene": "Scene", "window.sceneView": "Scene View", "window.game": "Game View", "window.console": "Console", "window.projectPicker": "Project Picker",

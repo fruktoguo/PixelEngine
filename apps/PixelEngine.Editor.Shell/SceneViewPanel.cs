@@ -7,7 +7,7 @@ using System.Numerics;
 namespace PixelEngine.Editor.Shell;
 
 /// <summary>
-/// Scene View ImGui 面板：使用独立 authoring 相机绘制声明式/受控 procedural preview 与编辑 overlay。
+/// Scene View ImGui 面板：Edit 使用独立 authoring 相机；Play/Paused 默认跟随运行时相机并读取同一权威 world source。
 /// </summary>
 [EditorUiSurface("editor.panel.scene")]
 internal sealed class SceneViewPanel(
@@ -18,6 +18,7 @@ internal sealed class SceneViewPanel(
     Func<AuthoringWorldPreviewSnapshot>? authoringWorldSnapshot = null,
     SceneWebCanvasAuthoringPreview? webCanvasPreview = null,
     IRuntimeSceneEditorDataSource? runtimeSource = null,
+    Func<CameraState>? runtimeCameraProvider = null,
     Action? worldChanged = null) : IEditorPanel, IDisposable
 {
     private const uint CanvasColor = 0xFF_18_1A_1F;
@@ -28,6 +29,8 @@ internal sealed class SceneViewPanel(
     private const uint ObjectColor = 0xFF_EA_C2_69;
     private const uint SelectedColor = 0xFF_66_E8_FF;
     private const uint SpawnColor = 0xFF_74_D6_7A;
+    private const uint RuntimePlayerColor = 0xFF_5E_D0_F2;
+    private const uint RuntimePlayerOutlineColor = 0xFF_2A_20_18;
     private const uint GoalColor = 0xFF_72_D8_FF;
     private const uint RuntimeBodyColor = 0xFF_D5_9B_59;
     private const uint TestColor = 0xFF_AE_83_F2;
@@ -53,6 +56,7 @@ internal sealed class SceneViewPanel(
     private readonly Func<AuthoringWorldPreviewSnapshot>? _authoringWorldSnapshot = authoringWorldSnapshot;
     private readonly SceneWebCanvasAuthoringPreview? _webCanvasPreview = webCanvasPreview;
     private readonly IRuntimeSceneEditorDataSource? _runtimeSource = runtimeSource;
+    private readonly Func<CameraState>? _runtimeCameraProvider = runtimeCameraProvider;
     private readonly Action? _worldChanged = worldChanged;
     private readonly SceneAuthoringCamera _camera = new();
     private static readonly SceneHierarchySnapshot EmptyRuntimeSnapshot = new([], []);
@@ -117,6 +121,10 @@ internal sealed class SceneViewPanel(
     public SceneAuthoringPreview Preview => EnsurePreview();
 
     public SceneAuthoringCameraSnapshot CameraSnapshot => _camera.Snapshot;
+
+    internal bool FollowRuntimeCamera { get; private set; } = true;
+
+    internal SceneAuthoringBounds DisplayBounds => ResolveDisplayBounds(EnsurePreview());
 
     internal long CurrentWorldTextureRevision => _worldTexture?.Revision ?? 0;
 
@@ -208,10 +216,29 @@ internal sealed class SceneViewPanel(
         string? selectedEntityHandle = null,
         int? selectedBodyId = null)
     {
+        EditorMode previousMode = _preparedMode;
         _preparedMode = mode;
         _preparedSelectedStableId = selectedStableId;
         _preparedSelectedEntityHandle = selectedEntityHandle;
         _preparedSelectedBodyId = selectedBodyId;
+        bool runtimeMode = mode is EditorMode.Play or EditorMode.Paused;
+        bool previousRuntimeMode = previousMode is EditorMode.Play or EditorMode.Paused;
+        if (!previousRuntimeMode && runtimeMode)
+        {
+            FollowRuntimeCamera = true;
+            _cameraAutoFit = false;
+        }
+        else if (previousRuntimeMode && !runtimeMode)
+        {
+            _cameraAutoFit = true;
+            _framedSceneName = string.Empty;
+        }
+
+        if (runtimeMode && FollowRuntimeCamera)
+        {
+            _ = SyncRuntimeCamera();
+        }
+
         if (!Visible || mode != EditorMode.Edit)
         {
             _webCanvasPreview?.Request(null, false, false, 0f, 0f);
@@ -278,6 +305,19 @@ internal sealed class SceneViewPanel(
 
     internal bool FrameAll()
     {
+        if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            FollowRuntimeCamera = false;
+            _cameraAutoFit = false;
+            if (_worldTexture?.TryGetResidentBounds(out SceneAuthoringBounds residentBounds) == true)
+            {
+                _camera.FrameBounds(residentBounds);
+                return true;
+            }
+
+            return SyncRuntimeCamera();
+        }
+
         SceneAuthoringPreview preview = EnsurePreview();
         _camera.FrameBounds(preview.Bounds);
         _framedSceneName = preview.SceneName;
@@ -297,6 +337,7 @@ internal sealed class SceneViewPanel(
             {
                 _camera.FramePoint(new Vector2(entity.X, entity.Y));
                 _cameraAutoFit = false;
+                FollowRuntimeCamera = false;
                 return true;
             }
 
@@ -304,6 +345,7 @@ internal sealed class SceneViewPanel(
             {
                 _camera.FramePoint(new Vector2(body.X, body.Y));
                 _cameraAutoFit = false;
+                FollowRuntimeCamera = false;
                 return true;
             }
 
@@ -335,6 +377,11 @@ internal sealed class SceneViewPanel(
         bool viewportChanged = !ApproximatelyEqual(_canvasSize, nextCanvasSize);
         _canvasSize = nextCanvasSize;
         _camera.SetViewport(_canvasSize);
+        if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            return FollowRuntimeCamera && SyncRuntimeCamera();
+        }
+
         SceneAuthoringPreview preview = EnsurePreview();
         bool sceneChanged = !string.Equals(_framedSceneName, preview.SceneName, StringComparison.Ordinal);
         bool shouldFrame = _canvasSize is { X: >= 64f, Y: >= 64f } &&
@@ -606,6 +653,21 @@ internal sealed class SceneViewPanel(
         if (SceneToolbarButton(SceneToolbarIcon.Grid, ShowGrid, enabled: true, "Show Grid"))
         {
             ToggleGrid();
+        }
+
+        if (_preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            ImGui.SameLine(0f, 6f);
+            bool followRuntimeCamera = FollowRuntimeCamera;
+            if (ImGui.Checkbox("Follow Game##scene-follow-game", ref followRuntimeCamera))
+            {
+                SetFollowRuntimeCamera(followRuntimeCamera);
+            }
+
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Keep Scene centered on the camera used by Game View");
+            }
         }
 
         ImGui.SameLine(0f, 4f);
@@ -1018,7 +1080,12 @@ internal sealed class SceneViewPanel(
                 DrawGrid(drawList);
             }
 
-            DrawBoundary(drawList, preview.Bounds);
+            SceneAuthoringBounds displayBounds = ResolveDisplayBounds(preview);
+            SceneAuthoringBounds boundaryBounds = _preparedMode is EditorMode.Play or EditorMode.Paused &&
+                _worldTexture?.TryGetResidentBounds(out SceneAuthoringBounds residentBounds) == true
+                    ? residentBounds
+                    : displayBounds;
+            DrawBoundary(drawList, boundaryBounds);
             if (_preparedMode is EditorMode.Play or EditorMode.Paused)
             {
                 DrawRuntimeMarkers(drawList);
@@ -1224,15 +1291,17 @@ internal sealed class SceneViewPanel(
 
     private void DrawWorldPreview(ImDrawListPtr drawList, SceneAuthoringPreview preview)
     {
-        Vector2 min = WorldToScreen(new Vector2(preview.Bounds.X, preview.Bounds.Y));
-        Vector2 max = WorldToScreen(new Vector2(preview.Bounds.Right, preview.Bounds.Bottom));
+        SceneAuthoringBounds displayBounds = ResolveDisplayBounds(preview);
+        Vector2 min = WorldToScreen(new Vector2(displayBounds.X, displayBounds.Y));
+        Vector2 max = WorldToScreen(new Vector2(displayBounds.Right, displayBounds.Bottom));
         drawList.AddRectFilled(min, max, WorldColor);
-        if (!preview.HasAuthoritativeWorld || _worldTexture is null)
+        if (_worldTexture is null ||
+            (_preparedMode == EditorMode.Edit && !preview.HasAuthoritativeWorld))
         {
             return;
         }
 
-        SceneWorldTextureSnapshot snapshot = _worldTexture.GetTexture(preview.Bounds);
+        SceneWorldTextureSnapshot snapshot = _worldTexture.GetTexture(displayBounds);
         Vector2 imageMin = WorldToScreen(new Vector2(snapshot.Bounds.X, snapshot.Bounds.Y));
         Vector2 imageMax = WorldToScreen(new Vector2(snapshot.Bounds.Right, snapshot.Bounds.Bottom));
         // SceneWorldTexture 是 CPU buffer 直接上传的原始纹理（无 FBO pass），数据 row 0 = 世界顶部 = 纹理 V=0，
@@ -1623,7 +1692,15 @@ internal sealed class SceneViewPanel(
                     _ => ObjectColor,
                 };
             Vector2 screen = WorldToScreen(marker.Position);
-            DrawMarkerShape(drawList, marker, screen, color, selected);
+            if (marker.Kind == SceneAuthoringMarkerKind.PlayerSpawn)
+            {
+                DrawRuntimePlayer(drawList, entity, color, selected);
+            }
+            else
+            {
+                DrawMarkerShape(drawList, marker, screen, color, selected);
+            }
+
             DrawMarkerLabel(drawList, marker.Name, screen, color);
         }
 
@@ -1657,6 +1734,52 @@ internal sealed class SceneViewPanel(
             : displayName.Contains("Goal", StringComparison.OrdinalIgnoreCase)
                 ? SceneAuthoringMarkerKind.Goal
                 : SceneAuthoringMarkerKind.GameObject;
+    }
+
+    private void DrawRuntimePlayer(
+        ImDrawListPtr drawList,
+        in SceneHierarchyEntityItem entity,
+        uint markerColor,
+        bool selected)
+    {
+        SceneAuthoringBounds bounds = ResolveRuntimePlayerBounds(entity);
+        Vector2 topLeft = WorldToScreen(new Vector2(bounds.X, bounds.Y));
+        Vector2 bottomRight = WorldToScreen(new Vector2(bounds.Right, bounds.Bottom));
+        Vector2 minimum = Vector2.Min(topLeft, bottomRight);
+        Vector2 maximum = Vector2.Max(topLeft, bottomRight);
+        Vector2 center = (minimum + maximum) * 0.5f;
+        Vector2 halfSize = Vector2.Max((maximum - minimum) * 0.5f, new Vector2(4f, 7f));
+        minimum = center - halfSize;
+        maximum = center + halfSize;
+        drawList.AddRectFilled(minimum, maximum, RuntimePlayerColor, 1f);
+        drawList.AddRect(
+            minimum - Vector2.One,
+            maximum + Vector2.One,
+            selected ? SelectedColor : RuntimePlayerOutlineColor,
+            1f,
+            ImDrawFlags.None,
+            selected ? 2.5f : 1.5f);
+        drawList.AddCircleFilled(
+            new Vector2(
+                maximum.X - MathF.Max(2f, halfSize.X * 0.35f),
+                minimum.Y + MathF.Max(2f, halfSize.Y * 0.35f)),
+            1.5f,
+            RuntimePlayerOutlineColor);
+        drawList.AddCircle(
+            WorldToScreen(new Vector2(entity.X, entity.Y)),
+            selected ? 4f : 3f,
+            markerColor,
+            12,
+            1f);
+    }
+
+    internal static SceneAuthoringBounds ResolveRuntimePlayerBounds(in SceneHierarchyEntityItem entity)
+    {
+        return new SceneAuthoringBounds(
+            entity.X,
+            entity.Y,
+            6f * Math.Clamp(MathF.Abs(entity.ScaleX), 0.25f, 4f),
+            12f * Math.Clamp(MathF.Abs(entity.ScaleY), 0.25f, 4f));
     }
 
     private static void DrawMarkerShape(
@@ -1720,10 +1843,11 @@ internal sealed class SceneViewPanel(
         string modeLabel = runtime
             ? "Runtime World · live"
             : preview.StatusLabel;
+        SceneAuthoringBounds displayBounds = ResolveDisplayBounds(preview);
         drawList.AddText(
             _canvasMin + new Vector2(10f, 10f),
             color,
-            $"{modeLabel} · {worldKind} · {preview.Bounds.Width:0}×{preview.Bounds.Height:0} cells");
+            $"{modeLabel} · {worldKind} · {displayBounds.Width:0}×{displayBounds.Height:0} cells");
     }
 
     private static void DrawGameObjectMarker(
@@ -1791,13 +1915,69 @@ internal sealed class SceneViewPanel(
         {
             _camera.ZoomAt(io.MousePos - _canvasMin, io.MouseWheel);
             _cameraAutoFit = false;
+            FollowRuntimeCamera = false;
         }
 
         if (ImGui.IsMouseDragging(ImGuiMouseButton.Middle) || ImGui.IsMouseDragging(ImGuiMouseButton.Right))
         {
             _camera.PanPixels(io.MouseDelta);
             _cameraAutoFit = false;
+            FollowRuntimeCamera = false;
         }
+    }
+
+    internal void SetFollowRuntimeCamera(bool enabled)
+    {
+        FollowRuntimeCamera = enabled;
+        if (enabled && _preparedMode is EditorMode.Play or EditorMode.Paused)
+        {
+            _cameraAutoFit = false;
+            _ = SyncRuntimeCamera();
+        }
+    }
+
+    private bool SyncRuntimeCamera()
+    {
+        if (_runtimeCameraProvider is null)
+        {
+            return false;
+        }
+
+        CameraState runtime = _runtimeCameraProvider();
+        if (!float.IsFinite(runtime.OriginWorldX) ||
+            !float.IsFinite(runtime.OriginWorldY) ||
+            !float.IsFinite(runtime.CellsPerPixel) ||
+            runtime.CellsPerPixel is < SceneAuthoringCamera.MinCellsPerPixel or > SceneAuthoringCamera.MaxCellsPerPixel ||
+            runtime.ViewportWidth <= 0 ||
+            runtime.ViewportHeight <= 0)
+        {
+            return false;
+        }
+
+        float centerX = runtime.OriginWorldX + (runtime.ViewportWidth * runtime.CellsPerPixel * 0.5f);
+        float centerY = runtime.OriginWorldY + (runtime.ViewportHeight * runtime.CellsPerPixel * 0.5f);
+        SceneAuthoringCameraSnapshot current = _camera.Snapshot;
+        bool changed = MathF.Abs(current.CenterX - centerX) > 0.001f ||
+            MathF.Abs(current.CenterY - centerY) > 0.001f ||
+            MathF.Abs(current.CellsPerPixel - runtime.CellsPerPixel) > 0.0001f;
+        _camera.SetView(centerX, centerY, runtime.CellsPerPixel);
+        return changed;
+    }
+
+    private SceneAuthoringBounds ResolveDisplayBounds(SceneAuthoringPreview preview)
+    {
+        return _preparedMode is EditorMode.Play or EditorMode.Paused
+            ? CameraViewportBounds(_camera.Snapshot)
+            : preview.Bounds;
+    }
+
+    internal static SceneAuthoringBounds CameraViewportBounds(in SceneAuthoringCameraSnapshot camera)
+    {
+        return new SceneAuthoringBounds(
+            camera.OriginX,
+            camera.OriginY,
+            MathF.Max(1f, camera.ViewportWidth * camera.CellsPerPixel),
+            MathF.Max(1f, camera.ViewportHeight * camera.CellsPerPixel));
     }
 
     [EditorUiCommands("panel.scene.selection", "panel.scene.brush.stroke")]

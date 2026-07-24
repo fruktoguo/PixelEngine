@@ -1,13 +1,14 @@
 using Hexa.NET.ImGui;
 using PixelEngine.Gui;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace PixelEngine.Editor.Shell;
 
 /// <summary>
 /// Editor UI 缩放规则与当前 ImGui context 应用入口。
 /// </summary>
-internal static class EditorUiScale
+internal static partial class EditorUiScale
 {
     public const float Minimum = 0.75f;
     public const float Maximum = 2f;
@@ -47,6 +48,49 @@ internal static class EditorUiScale
     {
         return Normalize(targetScale) / Normalize(appliedScale);
     }
+
+    /// <summary>按有效桌面分辨率选择首次启动倍率；已有用户偏好永远优先。</summary>
+    public static float ResolveAutomaticDefault()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return Default;
+        }
+
+        try
+        {
+            int width = GetSystemMetrics(0);
+            int height = GetSystemMetrics(1);
+            uint dpi = GetDpiForSystem();
+            float systemScale = dpi >= 96 ? dpi / 96f : 1f;
+            int effectiveWidth = Math.Max(1, (int)MathF.Round(width / systemScale));
+            int effectiveHeight = Math.Max(1, (int)MathF.Round(height / systemScale));
+            return RecommendedForResolution(effectiveWidth, effectiveHeight);
+        }
+        catch (Exception exception) when (
+            exception is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException)
+        {
+            return Default;
+        }
+    }
+
+    /// <summary>把横屏或竖屏的有效桌面尺寸映射到稳定的 UI 倍率档位。</summary>
+    internal static float RecommendedForResolution(int width, int height)
+    {
+        int longEdge = Math.Max(width, height);
+        int shortEdge = Math.Min(width, height);
+        return longEdge >= 3_200 && shortEdge >= 1_800
+            ? 2f
+            : longEdge >= 2_500 && shortEdge >= 1_400
+                ? 1.5f
+                : Default;
+    }
+
+    [LibraryImport("user32.dll")]
+    private static partial int GetSystemMetrics(int index);
+
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForSystem();
 }
 
 /// <summary>

@@ -227,6 +227,7 @@ public sealed class GamePresentationTests
             PanY = -8.25f,
             MaximizeOnPlay = true,
             IsMaximized = true,
+            StatsVisible = true,
             CustomPresets = custom,
             Diagnostic = string.Empty,
         };
@@ -239,6 +240,7 @@ public sealed class GamePresentationTests
         Assert.Equal((12.5f, -8.25f), (actual.PanX, actual.PanY));
         Assert.True(actual.MaximizeOnPlay);
         Assert.True(actual.IsMaximized);
+        Assert.True(actual.StatsVisible);
         Assert.Equal("CI Capture", Assert.Single(actual.CustomPresets).Name);
 
         GameViewPanel restored = CreatePanel(workspace, projectPath);
@@ -246,6 +248,7 @@ public sealed class GamePresentationTests
         Assert.Equal("custom-ci", persisted.PresetId);
         Assert.Equal("CI Capture", Assert.Single(persisted.CustomPresets).Name);
         Assert.False(persisted.IsMaximized);
+        Assert.False(persisted.StatsVisible);
     }
 
     /// <summary>验证 workspace 持久化失败时 automation 不发布任何内存中间态。</summary>

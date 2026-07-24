@@ -2996,7 +2996,7 @@
     "gamePresentationSnapshot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "selectedPresetId", "scalePercent", "panX", "panY", "maximizeOnPlay", "maximized", "presets", "hasCommittedPresentation", "presentationWidth", "presentationHeight", "presentationRevision", "requestRevision", "diagnostic"],
+      "required": ["schemaVersion", "selectedPresetId", "scalePercent", "panX", "panY", "maximizeOnPlay", "maximized", "statsVisible", "presets", "hasCommittedPresentation", "presentationWidth", "presentationHeight", "presentationRevision", "requestRevision", "diagnostic"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "selectedPresetId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
@@ -3005,6 +3005,7 @@
         "panY": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
         "maximizeOnPlay": { "type": "boolean" },
         "maximized": { "type": "boolean" },
+        "statsVisible": { "type": "boolean" },
         "presets": { "type": "array", "minItems": 12, "maxItems": 44, "items": { "$ref": "#/$defs/gameViewPreset" } },
         "hasCommittedPresentation": { "type": "boolean" },
         "presentationWidth": { "type": "integer", "minimum": 0, "maximum": 32768 },
@@ -3019,7 +3020,7 @@
     "gamePresentationSetRequest": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "selectedPresetId", "scalePercent", "panX", "panY", "maximizeOnPlay", "maximized", "customPresets"],
+      "required": ["schemaVersion", "selectedPresetId", "scalePercent", "panX", "panY", "maximizeOnPlay", "maximized", "statsVisible", "customPresets"],
       "properties": {
         "schemaVersion": { "const": 1 },
         "selectedPresetId": { "type": "string", "pattern": "^[A-Za-z0-9._-]{1,128}$" },
@@ -3028,6 +3029,7 @@
         "panY": { "type": "number", "minimum": -1000000000, "maximum": 1000000000 },
         "maximizeOnPlay": { "type": "boolean" },
         "maximized": { "type": "boolean" },
+        "statsVisible": { "type": "boolean" },
         "customPresets": {
           "type": "array",
           "maxItems": 32,

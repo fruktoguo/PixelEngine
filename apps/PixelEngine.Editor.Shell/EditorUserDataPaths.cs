@@ -15,6 +15,7 @@ internal sealed record EditorUserDataPaths
         RecentProjectsPath = Path.Combine(rootDirectory, "recent-projects.json");
         WorkspacePath = Path.Combine(rootDirectory, "editor-workspace.json");
         LayoutPath = Path.Combine(rootDirectory, "editor-shell-imgui.ini");
+        LayoutProfilesDirectory = Path.Combine(rootDirectory, "layout-profiles");
         LocalizationDirectory = Path.Combine(rootDirectory, "Localization");
         RecoveryRoot = Path.Combine(rootDirectory, "recovery");
     }
@@ -28,6 +29,8 @@ internal sealed record EditorUserDataPaths
     public string WorkspacePath { get; }
 
     public string LayoutPath { get; }
+
+    public string LayoutProfilesDirectory { get; }
 
     public string LocalizationDirectory { get; }
 

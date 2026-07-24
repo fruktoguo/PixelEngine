@@ -212,11 +212,83 @@ public sealed class NoitaBitmapCavesTests
         }
 
         Assert.True(changed > 0, "Coal Mine 参考区必须包含 BitmapCaves 对 Wang 基底的真实覆盖。");
-        Assert.Equal("showcase-campaign-v11", PlayableCavernWorldGenerator.PersistenceKey);
+        Assert.Equal("showcase-campaign-v13", PlayableCavernWorldGenerator.PersistenceKey);
 
         ushort[] fungalEnabled = GenerateChunk(materials, campaign, biomes, enabled, -54, 30);
         ushort[] fungalDisabled = GenerateChunk(materials, campaign, biomes, disabled, -54, 30);
         Assert.True(fungalEnabled.AsSpan().SequenceEqual(fungalDisabled));
+    }
+
+    /// <summary>
+    /// 锁定煤矿完整 BitmapCaves block 的大尺度空气连通性，防止把 Noita 的洞穴强度
+    /// 错译成个位数半径后退化为细碎 Wang 纹理。
+    /// </summary>
+    [Fact]
+    public void CoalMineCavernScaleMatchesNativeReferenceEnvelope()
+    {
+        CampaignConfig campaign = CampaignConfig.Load(new EngineScriptConfigApi(ContentRoot()));
+        BiomeCatalog biomes = BiomeCatalog.Load(new EngineScriptConfigApi(ContentRoot()), campaign);
+        IMaterialQuery materials = EngineContentLoader.LoadMaterialPackage(ContentRoot()).Materials;
+        NoitaWangTerrainCatalog wang = LoadCatalog();
+        ushort empty = ResolveRequired(materials, "empty");
+        const int blockWidth = 512;
+        const int blockHeight = 256;
+        const int originChunkY = 12;
+        ushort[] block = new ushort[blockWidth * blockHeight];
+
+        for (int chunkY = 0; chunkY < blockHeight / ChunkSize; chunkY++)
+        {
+            for (int chunkX = 0; chunkX < blockWidth / ChunkSize; chunkX++)
+            {
+                ushort[] chunk = GenerateChunk(
+                    materials,
+                    campaign,
+                    biomes,
+                    wang,
+                    chunkX,
+                    originChunkY + chunkY);
+                for (int localY = 0; localY < ChunkSize; localY++)
+                {
+                    chunk.AsSpan(localY * ChunkSize, ChunkSize).CopyTo(
+                        block.AsSpan(
+                            (((chunkY * ChunkSize) + localY) * blockWidth) + (chunkX * ChunkSize),
+                            ChunkSize));
+                }
+            }
+        }
+
+        List<int> horizontalRuns = [];
+        int emptyCells = 0;
+        for (int y = 0; y < blockHeight; y++)
+        {
+            int run = 0;
+            for (int x = 0; x < blockWidth; x++)
+            {
+                if (block[(y * blockWidth) + x] == empty)
+                {
+                    emptyCells++;
+                    run++;
+                }
+                else if (run > 0)
+                {
+                    horizontalRuns.Add(run);
+                    run = 0;
+                }
+            }
+
+            if (run > 0)
+            {
+                horizontalRuns.Add(run);
+            }
+        }
+
+        horizontalRuns.Sort();
+        int p75 = horizontalRuns[horizontalRuns.Count * 3 / 4];
+        double emptyPercent = emptyCells * 100.0 / block.Length;
+        Assert.InRange(emptyPercent, 55.0, 68.0);
+        Assert.InRange(horizontalRuns.Count, 1_200, 2_500);
+        Assert.InRange(p75, 60, 100);
+        Assert.InRange(horizontalRuns[^1], 256, blockWidth);
     }
 
     private static ulong SampleSignature(
@@ -283,6 +355,13 @@ public sealed class NoitaBitmapCavesTests
             biomes,
             wang);
         return materialCells;
+    }
+
+    private static ushort ResolveRequired(IMaterialQuery materials, string name)
+    {
+        MaterialId id = materials.Resolve(name);
+        Assert.True(id.IsValid, $"缺少材质 {name}。");
+        return id.Value;
     }
 
     private static void AssertStructureMarker(

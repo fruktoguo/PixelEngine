@@ -678,6 +678,11 @@ public enum Key
     /// 数字键 9。
     /// </summary>
     Digit9,
+
+    /// <summary>
+    /// Tab 键。
+    /// </summary>
+    Tab,
 }
 
 /// <summary>

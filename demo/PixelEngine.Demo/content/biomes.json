@@ -407,7 +407,7 @@
       "displayName": "Mines",
       "baseTemperature": 12,
       "hazardFrequency": 0.012,
-      "palette": { "primary": "stone", "secondary": "dirt", "loose": "gravel", "structure": "wood", "hazard": "oil", "pool": "water" },
+      "palette": { "primary": "stone", "secondary": "packed_dirt", "loose": "packed_gravel", "structure": "wood", "hazard": "oil", "pool": "water" },
       "grammar": { "kind": "mine-shafts", "tileSizeCells": 64, "corridorHalfWidthCells": 5, "chamberRadiusCells": 13, "edgeOpenChance": 0.58, "noiseOpenThreshold": 0.46, "horizontalScale": 0.020, "verticalScale": 0.018, "verticalBias": 0.08 },
       "pixelScenes": ["mines-wood-shaft"]
     },
@@ -416,7 +416,7 @@
       "displayName": "Coal Pits",
       "baseTemperature": 58,
       "hazardFrequency": 0.014,
-      "palette": { "primary": "dirt", "secondary": "stone", "loose": "oil", "structure": "wood", "hazard": "fire", "pool": "water" },
+      "palette": { "primary": "packed_dirt", "secondary": "stone", "loose": "oil", "structure": "wood", "hazard": "fire", "pool": "water" },
       "grammar": { "kind": "open-coal", "tileSizeCells": 80, "corridorHalfWidthCells": 7, "chamberRadiusCells": 19, "edgeOpenChance": 0.74, "noiseOpenThreshold": 0.36, "horizontalScale": 0.014, "verticalScale": 0.012, "verticalBias": 0.10 },
       "pixelScenes": ["coal-pits-support"]
     },
@@ -425,7 +425,7 @@
       "displayName": "Snowy Depths",
       "baseTemperature": 0,
       "hazardFrequency": 0.010,
-      "palette": { "primary": "ice", "secondary": "stone", "loose": "gravel", "structure": "metal", "hazard": "oil", "pool": "water" },
+      "palette": { "primary": "ice", "secondary": "stone", "loose": "packed_gravel", "structure": "metal", "hazard": "oil", "pool": "water" },
       "grammar": { "kind": "open-snow", "tileSizeCells": 96, "corridorHalfWidthCells": 9, "chamberRadiusCells": 25, "edgeOpenChance": 0.82, "noiseOpenThreshold": 0.28, "horizontalScale": 0.010, "verticalScale": 0.012, "verticalBias": -0.05 },
       "pixelScenes": ["snowy-depths-outpost"]
     },
@@ -434,7 +434,7 @@
       "displayName": "Hiisi Base",
       "baseTemperature": 18,
       "hazardFrequency": 0.012,
-      "palette": { "primary": "ice", "secondary": "stone", "loose": "gravel", "structure": "metal", "hazard": "oil", "pool": "acid" },
+      "palette": { "primary": "ice", "secondary": "stone", "loose": "packed_gravel", "structure": "metal", "hazard": "oil", "pool": "acid" },
       "grammar": { "kind": "industrial-grid", "tileSizeCells": 64, "corridorHalfWidthCells": 5, "chamberRadiusCells": 12, "edgeOpenChance": 0.68, "noiseOpenThreshold": 0.52, "horizontalScale": 0.018, "verticalScale": 0.018, "verticalBias": 0.00 },
       "pixelScenes": ["hiisi-base-corridor"]
     },
@@ -443,7 +443,7 @@
       "displayName": "Underground Jungle",
       "baseTemperature": 24,
       "hazardFrequency": 0.016,
-      "palette": { "primary": "dirt", "secondary": "stone", "loose": "wood", "structure": "wood", "hazard": "acid", "pool": "water" },
+      "palette": { "primary": "packed_dirt", "secondary": "stone", "loose": "wood", "structure": "wood", "hazard": "acid", "pool": "water" },
       "grammar": { "kind": "jungle-dropshafts", "tileSizeCells": 72, "corridorHalfWidthCells": 7, "chamberRadiusCells": 18, "edgeOpenChance": 0.72, "noiseOpenThreshold": 0.38, "horizontalScale": 0.013, "verticalScale": 0.015, "verticalBias": 0.20 },
       "pixelScenes": ["jungle-root-room"]
     },
@@ -452,7 +452,7 @@
       "displayName": "The Vault",
       "baseTemperature": 42,
       "hazardFrequency": 0.020,
-      "palette": { "primary": "stone", "secondary": "metal", "loose": "gravel", "structure": "metal", "hazard": "acid", "pool": "acid" },
+      "palette": { "primary": "stone", "secondary": "metal", "loose": "packed_gravel", "structure": "metal", "hazard": "acid", "pool": "acid" },
       "grammar": { "kind": "vault-factory", "tileSizeCells": 64, "corridorHalfWidthCells": 5, "chamberRadiusCells": 14, "edgeOpenChance": 0.66, "noiseOpenThreshold": 0.44, "horizontalScale": 0.016, "verticalScale": 0.017, "verticalBias": 0.04 },
       "pixelScenes": ["vault-acid-vat"]
     },
@@ -461,7 +461,7 @@
       "displayName": "Temple of the Art",
       "baseTemperature": 16,
       "hazardFrequency": 0.010,
-      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "sand", "structure": "boundary_stone", "hazard": "smoke", "pool": "water" },
+      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "packed_sand", "structure": "boundary_stone", "hazard": "smoke", "pool": "water" },
       "grammar": { "kind": "temple-labyrinth", "tileSizeCells": 64, "corridorHalfWidthCells": 4, "chamberRadiusCells": 11, "edgeOpenChance": 0.54, "noiseOpenThreshold": 0.56, "horizontalScale": 0.020, "verticalScale": 0.020, "verticalBias": 0.02 },
       "pixelScenes": ["temple-art-chamber"]
     },
@@ -481,7 +481,7 @@
       "displayName": "Fungal Caverns",
       "baseTemperature": 26,
       "hazardFrequency": 0.024,
-      "palette": { "primary": "dirt", "secondary": "metal", "loose": "wood", "structure": "metal", "hazard": "acid", "pool": "water" },
+      "palette": { "primary": "packed_dirt", "secondary": "metal", "loose": "wood", "structure": "metal", "hazard": "acid", "pool": "water" },
       "grammar": { "kind": "fungal-tight", "tileSizeCells": 56, "corridorHalfWidthCells": 4, "chamberRadiusCells": 10, "edgeOpenChance": 0.48, "noiseOpenThreshold": 0.58, "horizontalScale": 0.024, "verticalScale": 0.022, "verticalBias": 0.00 },
       "pixelScenes": ["fungal-steel-nest"]
     },
@@ -490,7 +490,7 @@
       "displayName": "Magical Temple",
       "baseTemperature": 12,
       "hazardFrequency": 0.014,
-      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "sand", "structure": "boundary_stone", "hazard": "smoke", "pool": "acid" },
+      "palette": { "primary": "boundary_stone", "secondary": "stone", "loose": "packed_sand", "structure": "boundary_stone", "hazard": "smoke", "pool": "acid" },
       "grammar": { "kind": "dark-brick-labyrinth", "tileSizeCells": 48, "corridorHalfWidthCells": 3, "chamberRadiusCells": 9, "edgeOpenChance": 0.46, "noiseOpenThreshold": 0.62, "horizontalScale": 0.026, "verticalScale": 0.024, "verticalBias": 0.00 },
       "pixelScenes": ["magical-temple-altar"]
     },
@@ -499,7 +499,7 @@
       "displayName": "Lukki Lair",
       "baseTemperature": 20,
       "hazardFrequency": 0.028,
-      "palette": { "primary": "dirt", "secondary": "boundary_stone", "loose": "wood", "structure": "stone", "hazard": "acid", "pool": "acid" },
+      "palette": { "primary": "packed_dirt", "secondary": "boundary_stone", "loose": "wood", "structure": "stone", "hazard": "acid", "pool": "acid" },
       "grammar": { "kind": "lukki-tight", "tileSizeCells": 56, "corridorHalfWidthCells": 3, "chamberRadiusCells": 9, "edgeOpenChance": 0.44, "noiseOpenThreshold": 0.60, "horizontalScale": 0.026, "verticalScale": 0.024, "verticalBias": 0.12 },
       "pixelScenes": ["lukki-lair-pocket"]
     }
@@ -618,7 +618,7 @@
     {
       "id": "coal-fungal-threshold", "displayName": "Fungal Caverns Threshold", "stage": "active", "biome": "coal-pits", "placement": "fixed-offset", "offsetCells": -300, "localDepthCells": 224, "widthCells": 96, "heightCells": 64, "encounterId": "coal-fungal-threshold-room",
       "operations": [
-        { "kind": "fillRect", "material": "dirt", "x": 0, "y": 0, "width": 96, "height": 64 },
+        { "kind": "fillRect", "material": "packed_dirt", "x": 0, "y": 0, "width": 96, "height": 64 },
         { "kind": "carveEllipse", "material": "empty", "x": 4, "y": 4, "width": 88, "height": 56 },
         { "kind": "fillRect", "material": "metal", "x": 8, "y": 8, "width": 4, "height": 46 },
         { "kind": "fillRect", "material": "wood", "x": 18, "y": 46, "width": 60, "height": 5 },
@@ -666,7 +666,7 @@
     {
       "id": "jungle-munkki-statues", "displayName": "Munkki Statues", "stage": "active", "biome": "underground-jungle", "placement": "fixed-offset", "offsetCells": 180, "localDepthCells": 100, "widthCells": 96, "heightCells": 64, "encounterId": "jungle-munkki-statues",
       "operations": [
-        { "kind": "fillRect", "material": "dirt", "x": 0, "y": 0, "width": 96, "height": 64 },
+        { "kind": "fillRect", "material": "packed_dirt", "x": 0, "y": 0, "width": 96, "height": 64 },
         { "kind": "carveEllipse", "material": "empty", "x": 5, "y": 5, "width": 86, "height": 54 },
         { "kind": "fillRect", "material": "stone", "x": 20, "y": 30, "width": 10, "height": 24 },
         { "kind": "fillRect", "material": "stone", "x": 43, "y": 24, "width": 10, "height": 30 },

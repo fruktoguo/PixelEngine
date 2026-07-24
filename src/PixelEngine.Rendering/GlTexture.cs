@@ -85,6 +85,87 @@ public sealed unsafe class GlTexture : IDisposable
         _gl.BindTexture(TextureTarget.Texture2D, Handle);
     }
 
+    internal void EnableMipmappedMinification()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _gl.GetInteger(GLEnum.TextureBinding2D, out int previousTexture);
+        try
+        {
+            _gl.BindTexture(TextureTarget.Texture2D, Handle);
+            _gl.GenerateMipmap(TextureTarget.Texture2D);
+            _gl.TexParameter(
+                TextureTarget.Texture2D,
+                TextureParameterName.TextureMinFilter,
+                (int)GLEnum.LinearMipmapLinear);
+        }
+        finally
+        {
+            _gl.BindTexture(TextureTarget.Texture2D, (uint)previousTexture);
+        }
+    }
+
+    internal void RegenerateMipmaps()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _gl.GetInteger(GLEnum.TextureBinding2D, out int previousTexture);
+        try
+        {
+            _gl.BindTexture(TextureTarget.Texture2D, Handle);
+            _gl.GenerateMipmap(TextureTarget.Texture2D);
+        }
+        finally
+        {
+            _gl.BindTexture(TextureTarget.Texture2D, (uint)previousTexture);
+        }
+    }
+
+    /// <summary>
+    /// 上传覆盖整张纹理的 32-bit 像素。调用前后的 Texture2D、PBO 与 unpack alignment 状态保持不变。
+    /// </summary>
+    /// <param name="pixels">行优先像素；长度必须等于纹理宽乘高。</param>
+    /// <param name="pixelFormat">输入像素通道格式。</param>
+    /// <param name="pixelType">输入像素元素类型。</param>
+    public void UploadPixels(
+        ReadOnlySpan<uint> pixels,
+        PixelFormat pixelFormat = PixelFormat.Rgba,
+        PixelType pixelType = PixelType.UnsignedByte)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (pixels.Length != checked(Width * Height))
+        {
+            throw new ArgumentException("上传像素数量必须与纹理尺寸一致。", nameof(pixels));
+        }
+
+        _gl.GetInteger(GLEnum.TextureBinding2D, out int previousTexture);
+        _gl.GetInteger(GLEnum.PixelUnpackBufferBinding, out int previousUnpackBuffer);
+        _gl.GetInteger(GLEnum.UnpackAlignment, out int previousAlignment);
+        try
+        {
+            _gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, 0);
+            _gl.BindTexture(TextureTarget.Texture2D, Handle);
+            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, 1);
+            fixed (uint* data = pixels)
+            {
+                _gl.TexSubImage2D(
+                    TextureTarget.Texture2D,
+                    level: 0,
+                    xoffset: 0,
+                    yoffset: 0,
+                    (uint)Width,
+                    (uint)Height,
+                    pixelFormat,
+                    pixelType,
+                    data);
+            }
+        }
+        finally
+        {
+            _gl.PixelStore(PixelStoreParameter.UnpackAlignment, previousAlignment);
+            _gl.BindTexture(TextureTarget.Texture2D, (uint)previousTexture);
+            _gl.BindBuffer(BufferTargetARB.PixelUnpackBuffer, (uint)previousUnpackBuffer);
+        }
+    }
+
     /// <inheritdoc />
     public void Dispose()
     {

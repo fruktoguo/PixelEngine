@@ -55,6 +55,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
     private int _appliedViewportHeight;
     private int _appliedLayoutWidth;
     private int _appliedLayoutHeight;
+    private float _nativeRasterScaleX = 1f;
+    private float _nativeRasterScaleY = 1f;
     private bool _disposed;
 
     /// <summary>
@@ -134,7 +136,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
         }
 
         UiCanvasMetrics metrics = info.CanvasMetrics;
-        _renderer = RmlUiNative.CreateRenderer(metrics.LayoutWidth, metrics.LayoutHeight);
+        _renderer = RmlUiNative.CreateRenderer(metrics.PresentationWidth, metrics.PresentationHeight);
         if (_renderer == IntPtr.Zero)
         {
             throw new InvalidOperationException("RmlUi native renderer 创建失败。");
@@ -153,6 +155,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             _renderer,
             0,
             0,
+            metrics.PresentationWidth,
+            metrics.PresentationHeight,
+            metrics.LayoutWidth,
+            metrics.LayoutHeight);
+        UpdateNativeRasterScale(
             metrics.PresentationWidth,
             metrics.PresentationHeight,
             metrics.LayoutWidth,
@@ -191,6 +198,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             _renderer,
             0,
             0,
+            metrics.PresentationWidth,
+            metrics.PresentationHeight,
+            metrics.LayoutWidth,
+            metrics.LayoutHeight);
+        UpdateNativeRasterScale(
             metrics.PresentationWidth,
             metrics.PresentationHeight,
             metrics.LayoutWidth,
@@ -350,8 +362,8 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
         _ = RmlUiNative.ProcessMouseMove(
             _renderer,
-            (int)MathF.Round(x),
-            (int)MathF.Round(y),
+            (int)MathF.Round(x * _nativeRasterScaleX),
+            (int)MathF.Round(y * _nativeRasterScaleY),
             ToRmlModifiers(_lastModifiers));
         Dirty = true;
     }
@@ -600,7 +612,7 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return false;
         }
 
-        geometry = new UiImeGeometry(
+        UiImeGeometry rasterGeometry = new(
             hasCaretRect: true,
             caretX,
             caretY,
@@ -609,6 +621,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             hasCandidateAnchor: true,
             anchorX,
             anchorY);
+        geometry = rasterGeometry.Transform(
+            0f,
+            0f,
+            1f / _nativeRasterScaleX,
+            1f / _nativeRasterScaleY);
         return geometry.HasAny;
     }
 
@@ -637,7 +654,10 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
             return UiHitResult.None;
         }
 
-        int flags = RmlUiNative.HitTest(_renderer, x, y);
+        int flags = RmlUiNative.HitTest(
+            _renderer,
+            x * _nativeRasterScaleX,
+            y * _nativeRasterScaleY);
         bool hitsElement = (flags & HitTestElement) != 0;
         bool wantsMouse = hitsElement || (flags & HitTestMouseInteracting) != 0;
         bool wantsKeyboard = (flags & HitTestKeyboardFocus) != 0;
@@ -853,6 +873,11 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
                 frameHeight,
                 CanvasMetrics.LayoutWidth,
                 CanvasMetrics.LayoutHeight);
+            UpdateNativeRasterScale(
+                frameWidth,
+                frameHeight,
+                CanvasMetrics.LayoutWidth,
+                CanvasMetrics.LayoutHeight);
             _appliedViewportX = x;
             _appliedViewportY = y;
             _appliedViewportWidth = frameWidth;
@@ -864,6 +889,23 @@ public sealed unsafe class RmlUiBackend : IGameUiBackend, IGameUiImagePreloader
 
         RmlUiNative.Render(_renderer);
         Dirty = false;
+    }
+
+    private void UpdateNativeRasterScale(
+        int renderWidth,
+        int renderHeight,
+        int layoutWidth,
+        int layoutHeight)
+    {
+        _nativeRasterScaleX = ResolveNativeRasterScale(renderWidth, layoutWidth);
+        _nativeRasterScaleY = ResolveNativeRasterScale(renderHeight, layoutHeight);
+    }
+
+    internal static float ResolveNativeRasterScale(int renderExtent, int layoutExtent)
+    {
+        return renderExtent > 0 && layoutExtent > 0
+            ? renderExtent / (float)layoutExtent
+            : 1f;
     }
 
     internal static (int X, int Y, int Width, int Height) ResolveCompositeViewportRegion(

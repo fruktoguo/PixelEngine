@@ -81,6 +81,17 @@ public sealed class EditorPreferencesTests
         Assert.Equal(expected, EditorUiScale.Normalize(input));
     }
 
+    /// <summary>首次启动倍率按有效分辨率分档，并同时支持横屏与竖屏。</summary>
+    [Theory]
+    [InlineData(1920, 1080, 1f)]
+    [InlineData(2560, 1440, 1.5f)]
+    [InlineData(3840, 2160, 2f)]
+    [InlineData(2160, 3840, 2f)]
+    public void AutomaticUiScaleMatchesEffectiveDisplayResolution(int width, int height, float expected)
+    {
+        Assert.Equal(expected, EditorUiScale.RecommendedForResolution(width, height));
+    }
+
     /// <summary>
     /// 非有限倍率回退默认值，窗口尺寸在高倍率下仍受 viewport 约束。
     /// </summary>

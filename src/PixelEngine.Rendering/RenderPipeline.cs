@@ -499,9 +499,20 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         RecordSub(profiler, FrameSubPhase.GpuUpload, started);
 
         started = Stopwatch.GetTimestamp();
-        // --- 光照合成阶段：world blit → GPU 粒子 → compute/fragment 光照 ---
+        // --- 光照合成阶段：背景 → world cell → 世界装饰 → GPU 粒子 → compute/fragment 光照 ---
         _scene.Clear();
-        _worldBlit.Render(_worldTexture, _scene, camera, _quad);
+        bool hasBackground = ContainsCompositionLayer(overlays, OverlayCompositionLayer.Background);
+        if (hasBackground)
+        {
+            _overlay.Render(overlays, _scene, OverlayCompositionLayer.Background);
+        }
+
+        _worldBlit.Render(_worldTexture, _scene, camera, _quad, blendOverDestination: hasBackground);
+        if (ContainsCompositionLayer(overlays, OverlayCompositionLayer.WorldDecoration))
+        {
+            _overlay.Render(overlays, _scene, OverlayCompositionLayer.WorldDecoration);
+        }
+
         RenderGpuParticlesIfEnabled(particles, materials, camera);
         if (ShouldUseComputeLightComposite())
         {
@@ -551,7 +562,11 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         current = RenderPost(current);
         // Editor 的 Game View 直接采样 CurrentViewportTexture，因此 gameplay overlay 必须先写入
         // 离屏 runtime surface，不能只在默认 framebuffer 上绘制，否则玩家/准星会被 Editor 面板覆盖。
-        _overlay.Render(overlays, current);
+        if (ContainsCompositionLayer(overlays, OverlayCompositionLayer.Foreground))
+        {
+            _overlay.Render(overlays, current, OverlayCompositionLayer.Foreground);
+        }
+
         CurrentViewportOverlayCount = overlays.Length;
         RecordSub(profiler, FrameSubPhase.PostProcess, started);
 
@@ -685,6 +700,21 @@ public sealed class RenderPipeline : IGpuComputeQualityDegrader, IRenderPresenta
         _worldBlit.Dispose();
         _quad.Dispose();
         _disposed = true;
+    }
+
+    private static bool ContainsCompositionLayer(
+        ReadOnlySpan<OverlayCommand> overlays,
+        OverlayCompositionLayer layer)
+    {
+        for (int i = 0; i < overlays.Length; i++)
+        {
+            if (overlays[i].CompositionLayer == layer)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static int QueryMaximumTextureSize(GL gl)

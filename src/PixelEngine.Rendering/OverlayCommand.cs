@@ -13,6 +13,7 @@ namespace PixelEngine.Rendering;
 /// <param name="Sprite">纹理精灵来源；仅当 <paramref name="PrimitiveType"/> 为 <see cref="OverlayPrimitiveType.Sprite"/> 时使用。</param>
 /// <param name="LineEndX">线段终点 X；仅当 <paramref name="PrimitiveType"/> 为 <see cref="OverlayPrimitiveType.Line"/> 时使用。</param>
 /// <param name="LineEndY">线段终点 Y；仅当 <paramref name="PrimitiveType"/> 为 <see cref="OverlayPrimitiveType.Line"/> 时使用。</param>
+/// <param name="CompositionLayer">命令在世界渲染图中的组合位置。</param>
 public readonly record struct OverlayCommand(
     OverlayPrimitiveType PrimitiveType,
     float ViewportX,
@@ -23,7 +24,8 @@ public readonly record struct OverlayCommand(
     float OutlineThickness,
     OverlaySprite Sprite,
     float LineEndX,
-    float LineEndY)
+    float LineEndY,
+    OverlayCompositionLayer CompositionLayer = OverlayCompositionLayer.Foreground)
 {
     /// <summary>
     /// 创建实色矩形命令。
@@ -63,10 +65,29 @@ public readonly record struct OverlayCommand(
     /// <param name="height">目标矩形高度，单位为 viewport pixel。</param>
     /// <param name="sprite">精灵纹理来源。</param>
     /// <param name="tintBgra">精灵 tint，BGRA8 非预乘 alpha；默认白色不改色。</param>
+    /// <param name="compositionLayer">命令在世界渲染图中的组合位置。</param>
     /// <returns>纹理精灵命令。</returns>
-    public static OverlayCommand SpriteRectangle(float viewportX, float viewportY, float width, float height, OverlaySprite sprite, uint tintBgra = 0xFFFFFFFFu)
+    public static OverlayCommand SpriteRectangle(
+        float viewportX,
+        float viewportY,
+        float width,
+        float height,
+        OverlaySprite sprite,
+        uint tintBgra = 0xFFFFFFFFu,
+        OverlayCompositionLayer compositionLayer = OverlayCompositionLayer.Foreground)
     {
-        return new OverlayCommand(OverlayPrimitiveType.Sprite, viewportX, viewportY, width, height, tintBgra, 0f, sprite, 0f, 0f);
+        return new OverlayCommand(
+            OverlayPrimitiveType.Sprite,
+            viewportX,
+            viewportY,
+            width,
+            height,
+            tintBgra,
+            0f,
+            sprite,
+            0f,
+            0f,
+            compositionLayer);
     }
 
     /// <summary>
@@ -91,6 +112,11 @@ public readonly record struct OverlayCommand(
         if (!float.IsFinite(Width) || !float.IsFinite(Height) || Width <= 0f || Height <= 0f)
         {
             throw new ArgumentOutOfRangeException(nameof(Width), "Overlay 目标矩形尺寸必须为正有限数值。");
+        }
+
+        if (!Enum.IsDefined(CompositionLayer))
+        {
+            throw new ArgumentOutOfRangeException(nameof(CompositionLayer), CompositionLayer, "未知 Overlay 组合层。");
         }
 
         switch (PrimitiveType)

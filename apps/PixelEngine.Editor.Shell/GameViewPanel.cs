@@ -1,6 +1,8 @@
 using Hexa.NET.ImGui;
+using PixelEngine.Audio;
 using PixelEngine.Hosting;
 using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using System.Globalization;
 using System.Numerics;
 
@@ -15,9 +17,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private const string OverflowPopupName = "game-view-overflow";
     private const string CustomPresetPopupName = "game-view-custom-preset";
     private const float MinimumDisplayExtent = 1f;
-    private const uint CheckerDark = 0xFF_20_22_26;
-    private const uint CheckerLight = 0xFF_29_2C_31;
     private const uint DisplayBorder = 0xFF_4B_4F_58;
+    private const float PreferredStatsPanelWidth = 390f;
+    private const float StatsOverlayInset = 8f;
+    private const float StatsOverlayPadding = 8f;
     private static readonly float[] ScaleValues = [0f, 25f, 50f, 75f, 100f, 200f];
     private static readonly string[] ScaleLabels = ["Fit", "25%", "50%", "75%", "100%", "200%"];
 
@@ -28,6 +31,9 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private readonly EditorWorkspaceStore? _workspace;
     private readonly string? _projectPath;
     private readonly bool _requiresDescriptorMatch;
+    private readonly Func<PerformanceHudSample>? _performanceSampleProvider;
+    private readonly AudioSystem? _audioSystem;
+    private readonly IRuntimeControlApi? _runtimeControl;
     private EditorGameViewCustomPreset[] _customPresets = [];
     private Vector2 _pan;
     private GamePresentationOverride _pendingPresentation;
@@ -46,6 +52,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private float _lastToolbarAvailableWidth;
     private EditorMode _preparedMode = EditorMode.Edit;
     private EditorMode _lastPreparedMode = EditorMode.Edit;
+    private float _lastAudibleMasterVolume = 1f;
 
     /// <summary>保留旧测试/宿主的一参数构造路径；纹理本身视为完整 world presentation。</summary>
     public GameViewPanel(Func<RenderViewportTexture> textureProvider)
@@ -56,7 +63,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             maximumTextureSize: int.MaxValue,
             workspace: null,
             projectPath: null,
-            requiresDescriptorMatch: false)
+            requiresDescriptorMatch: false,
+            performanceSampleProvider: null,
+            audioSystem: null,
+            runtimeControl: null)
     {
     }
 
@@ -67,7 +77,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         Func<(int Width, int Height)> playerDefaultSizeProvider,
         int maximumTextureSize,
         EditorWorkspaceStore? workspace,
-        string? projectPath)
+        string? projectPath,
+        Func<PerformanceHudSample>? performanceSampleProvider = null,
+        AudioSystem? audioSystem = null,
+        IRuntimeControlApi? runtimeControl = null)
         : this(
             textureProvider,
             descriptorProvider,
@@ -75,7 +88,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             maximumTextureSize,
             workspace,
             projectPath,
-            requiresDescriptorMatch: true)
+            requiresDescriptorMatch: true,
+            performanceSampleProvider,
+            audioSystem,
+            runtimeControl)
     {
     }
 
@@ -86,7 +102,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         int maximumTextureSize,
         EditorWorkspaceStore? workspace,
         string? projectPath,
-        bool requiresDescriptorMatch)
+        bool requiresDescriptorMatch,
+        Func<PerformanceHudSample>? performanceSampleProvider,
+        AudioSystem? audioSystem,
+        IRuntimeControlApi? runtimeControl)
     {
         _textureProvider = textureProvider ?? throw new ArgumentNullException(nameof(textureProvider));
         _descriptorProvider = descriptorProvider ?? throw new ArgumentNullException(nameof(descriptorProvider));
@@ -96,6 +115,14 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         _workspace = workspace;
         _projectPath = string.IsNullOrWhiteSpace(projectPath) ? null : Path.GetFullPath(projectPath);
         _requiresDescriptorMatch = requiresDescriptorMatch;
+        _performanceSampleProvider = performanceSampleProvider;
+        _audioSystem = audioSystem;
+        _runtimeControl = runtimeControl;
+        if (audioSystem?.Settings.MasterVolume > 0f)
+        {
+            _lastAudibleMasterVolume = audioSystem.Settings.MasterVolume;
+        }
+
         LoadWorkspaceState();
     }
 
@@ -148,6 +175,8 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
 
     internal Vector2 Pan => _pan;
 
+    internal bool StatsVisible { get; private set; }
+
     internal bool MaximizeOnPlay { get; private set; }
 
     internal string LastDiagnostic { get; private set; } = string.Empty;
@@ -163,6 +192,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             PanY = _pan.Y,
             MaximizeOnPlay = MaximizeOnPlay,
             IsMaximized = IsMaximized,
+            StatsVisible = StatsVisible,
             CustomPresets = CloneCustomPresets(_customPresets),
             Diagnostic = LastDiagnostic,
         };
@@ -194,6 +224,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         ScalePercent = state.ScalePercent;
         _pan = new Vector2(state.PanX, state.PanY);
         MaximizeOnPlay = state.MaximizeOnPlay;
+        StatsVisible = state.StatsVisible;
         bool maximizedChanged = IsMaximized != state.IsMaximized;
         IsMaximized = state.IsMaximized;
         _customPresets = CloneCustomPresets(state.CustomPresets);
@@ -370,9 +401,12 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         }
 
         LastViewportSnapshot = snapshot;
-        PointerHovered = displayHovered && snapshot.ContainsPanelPoint(mousePanel);
-        KeyboardFocused = ImGui.IsWindowFocused() && !ToolbarCapturesInput;
         DrawPresentation(texture, in snapshot, panelOriginScreen);
+        bool statsOverlayHovered = DrawStatsOverlay(in snapshot, panelOriginScreen);
+        PointerHovered = displayHovered &&
+            snapshot.ContainsPanelPoint(mousePanel) &&
+            !statsOverlayHovered;
+        KeyboardFocused = ImGui.IsWindowFocused() && !ToolbarCapturesInput;
         ImGui.End();
     }
 
@@ -465,6 +499,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
     private bool DrawToolbar()
     {
         float available = ImGui.GetContentRegionAvail().X;
+        float toolbarStartX = ImGui.GetCursorPosX();
         ImGuiStylePtr style = ImGui.GetStyle();
         float horizontalFramePadding = style.FramePadding.X * 2f;
         float comboArrowWidth = ImGui.GetFrameHeight();
@@ -491,6 +526,10 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             96f,
             ImGui.CalcTextSize("Free Aspect").X + comboArrowWidth + horizontalFramePadding);
         float fullPresetMinimumWidth = MathF.Max(140f, minimumPresetWidth);
+        float audioButtonWidth = ImGui.GetFrameHeight();
+        float statsButtonWidth = ImGui.CalcTextSize("Stats").X + horizontalFramePadding;
+        float rightToolWidth = audioButtonWidth + statsButtonWidth +
+            (style.ItemSpacing.X * 2f);
         GameViewToolbarMetrics metrics = new(
             style.ItemSpacing.X,
             overflowWidth,
@@ -502,7 +541,9 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             minimumPresetWidth,
             fullPresetMinimumWidth,
             MathF.Max(260f, fullPresetMinimumWidth));
-        GameViewToolbarLayout layout = ResolveToolbarLayout(available, in metrics);
+        GameViewToolbarLayout layout = ResolveToolbarLayout(
+            MathF.Max(metrics.OverflowWidth, available - rightToolWidth),
+            in metrics);
         _lastToolbarAvailableWidth = available;
         _lastToolbarLayout = layout;
         _ = GameViewPresentationPreset.TryResolve(SelectedPresetId, _customPresets, out GameViewPresentationPreset selected);
@@ -590,7 +631,39 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             drewControl = true;
         }
 
-        DrawNextToolbarControl(drewControl);
+        float rightGroupWidth = audioButtonWidth + statsButtonWidth + layout.OverflowWidth +
+            (style.ItemSpacing.X * 2f);
+        float rightStart = MathF.Max(
+            ImGui.GetStyle().WindowPadding.X,
+            toolbarStartX + available - rightGroupWidth);
+        if (drewControl)
+        {
+            ImGui.SameLine(MathF.Max(ImGui.GetCursorPosX() + style.ItemSpacing.X, rightStart));
+        }
+        else
+        {
+            ImGui.SetCursorPosX(rightStart);
+        }
+
+        DrawAudioToolbarButton(audioButtonWidth);
+        ImGui.SameLine(0f, style.ItemSpacing.X);
+        if (StatsVisible)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.HeaderActive]);
+        }
+
+        bool toggleStats = ImGui.Button("Stats##game-view-stats-button", new Vector2(statsButtonWidth, 0f));
+        if (StatsVisible)
+        {
+            ImGui.PopStyleColor();
+        }
+
+        if (toggleStats)
+        {
+            StatsVisible = !StatsVisible;
+        }
+
+        ImGui.SameLine(0f, style.ItemSpacing.X);
         if (ImGui.Button("...##game-view-overflow-button", new Vector2(layout.OverflowWidth, 0f)))
         {
             ImGui.OpenPopup(OverflowPopupName);
@@ -600,6 +673,93 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         popupOpen |= DrawCustomPresetPopup();
         ImGui.Separator();
         return popupOpen;
+    }
+
+    [EditorUiControlPrimitive]
+    private void DrawAudioToolbarButton(float width)
+    {
+        bool available = _audioSystem is not null;
+        bool enabled = available && IsAudioEnabled(_audioSystem!.Settings);
+        if (available && _runtimeControl is not null)
+        {
+            enabled = _runtimeControl.CaptureSettings().AudioEnabled;
+        }
+
+        Vector2 min = ImGui.GetCursorScreenPos();
+        if (!available)
+        {
+            ImGui.BeginDisabled();
+        }
+
+        bool clicked = ImGui.InvisibleButton("##game-view-audio-toggle", new Vector2(width, ImGui.GetFrameHeight()));
+        bool hovered = ImGui.IsItemHovered();
+        if (!available)
+        {
+            ImGui.EndDisabled();
+        }
+
+        Vector2 size = ImGui.GetItemRectSize();
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        uint background = ImGui.GetColorU32(
+            !enabled && available
+                ? ImGuiCol.ButtonActive
+                : hovered && available
+                    ? ImGuiCol.ButtonHovered
+                    : ImGuiCol.Button);
+        drawList.AddRectFilled(min, min + size, background, ImGui.GetStyle().FrameRounding);
+        uint foreground = ImGui.GetColorU32(available ? ImGuiCol.Text : ImGuiCol.TextDisabled);
+        float unit = MathF.Min(size.X, size.Y) / 14f;
+        Vector2 center = min + (size * 0.5f);
+        drawList.AddRectFilled(
+            center + new Vector2(-unit * 4f, -unit * 1.75f),
+            center + new Vector2(-unit * 2f, unit * 1.75f),
+            foreground,
+            unit * 0.35f);
+        drawList.AddTriangleFilled(
+            center + new Vector2(-unit * 2.2f, -unit * 1.75f),
+            center + new Vector2(unit * 0.75f, -unit * 4f),
+            center + new Vector2(unit * 0.75f, unit * 4f),
+            foreground);
+        if (enabled)
+        {
+            drawList.AddLine(
+                center + new Vector2(unit * 2f, -unit * 2.25f),
+                center + new Vector2(unit * 3.4f, -unit * 0.8f),
+                foreground,
+                MathF.Max(1f, unit));
+            drawList.AddLine(
+                center + new Vector2(unit * 3.4f, unit * 0.8f),
+                center + new Vector2(unit * 2f, unit * 2.25f),
+                foreground,
+                MathF.Max(1f, unit));
+        }
+        else
+        {
+            drawList.AddLine(
+                center + new Vector2(unit * 1.8f, -unit * 2.4f),
+                center + new Vector2(unit * 4.4f, unit * 2.4f),
+                foreground,
+                MathF.Max(1f, unit));
+            drawList.AddLine(
+                center + new Vector2(unit * 4.4f, -unit * 2.4f),
+                center + new Vector2(unit * 1.8f, unit * 2.4f),
+                foreground,
+                MathF.Max(1f, unit));
+        }
+
+        if (hovered)
+        {
+            _ = ImGui.BeginTooltip();
+            ImGui.TextUnformatted(available
+                ? enabled ? "Mute Audio" : "Unmute Audio"
+                : "Audio unavailable");
+            ImGui.EndTooltip();
+        }
+
+        if (clicked && available)
+        {
+            SetAudioEnabled(!enabled);
+        }
     }
 
     private static void DrawNextToolbarControl(bool hasPreviousControl)
@@ -743,7 +903,13 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         "panel.game.custom-resolution.edit",
         "panel.game.custom-resolution.delete",
         "panel.game.scale.fit",
-        "panel.game.scale.pixel-100")]
+        "panel.game.scale.pixel-100",
+        "panel.game.stats",
+        "panel.game.audio.enabled",
+        "panel.game.audio.master",
+        "panel.game.audio.sfx",
+        "panel.game.audio.ui",
+        "panel.game.audio.ambient")]
     private bool DrawOverflowPopup(
         in GameViewToolbarLayout layout,
         in GameViewPresentationPreset selected)
@@ -851,8 +1017,103 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             SetScalePercent(100f);
         }
 
+        ImGui.Separator();
+        bool showStats = StatsVisible;
+        if (ImGui.MenuItem("Stats", string.Empty, ref showStats))
+        {
+            StatsVisible = showStats;
+        }
+
+        DrawAudioMenu();
+
         ImGui.EndPopup();
         return true;
+    }
+
+    [EditorUiControlPrimitive]
+    private void DrawAudioMenu()
+    {
+        if (!ImGui.BeginMenu(_audioSystem is null ? "Audio (Unavailable)" : "Audio"))
+        {
+            return;
+        }
+
+        if (_audioSystem is null)
+        {
+            ImGui.TextDisabled("No audio system");
+            ImGui.EndMenu();
+            return;
+        }
+
+        bool audioEnabled = IsAudioEnabled(_audioSystem.Settings);
+        if (_runtimeControl is not null)
+        {
+            audioEnabled = _runtimeControl.CaptureSettings().AudioEnabled;
+        }
+
+        if (ImGui.MenuItem("Enabled", string.Empty, ref audioEnabled))
+        {
+            SetAudioEnabled(audioEnabled);
+        }
+
+        ImGui.Separator();
+        DrawVolumeSlider("Master", GameViewAudioVolume.Master, _audioSystem.Settings.MasterVolume);
+        DrawVolumeSlider("SFX", GameViewAudioVolume.Sfx, _audioSystem.Settings.SfxVolume);
+        DrawVolumeSlider("UI", GameViewAudioVolume.Ui, _audioSystem.Settings.UiVolume);
+        DrawVolumeSlider("Ambient", GameViewAudioVolume.Ambient, _audioSystem.Settings.AmbientVolume);
+        ImGui.EndMenu();
+    }
+
+    [EditorUiControlPrimitive]
+    private void DrawVolumeSlider(string label, GameViewAudioVolume target, float currentVolume)
+    {
+        float percent = Math.Clamp(currentVolume * 100f, 0f, 100f);
+        ImGui.SetNextItemWidth(180f);
+        if (!ImGui.SliderFloat($"{label}##game-view-audio-{target}", ref percent, 0f, 100f, "%.0f%%"))
+        {
+            return;
+        }
+
+        float volume = percent / 100f;
+        if (target == GameViewAudioVolume.Master && volume > 0f)
+        {
+            _lastAudibleMasterVolume = volume;
+        }
+
+        _audioSystem!.ApplySettings(CreateAudioSettingsWithVolume(_audioSystem.Settings, target, volume));
+    }
+
+    private void SetAudioEnabled(bool enabled)
+    {
+        if (_audioSystem is null)
+        {
+            return;
+        }
+
+        if (_runtimeControl is not null)
+        {
+            RuntimeControlResult result = _runtimeControl.SetAudioEnabled(enabled);
+            if (!result.Success)
+            {
+                LastDiagnostic = result.Message;
+            }
+
+            return;
+        }
+
+        float master = _audioSystem.Settings.MasterVolume;
+        if (!enabled && master > 0f)
+        {
+            _lastAudibleMasterVolume = master;
+        }
+
+        float nextMaster = enabled
+            ? MathF.Max(0.01f, _lastAudibleMasterVolume)
+            : 0f;
+        _audioSystem.ApplySettings(CreateAudioSettingsWithVolume(
+            _audioSystem.Settings,
+            GameViewAudioVolume.Master,
+            nextMaster));
     }
 
     private void DrawPresetMenuChoices(ReadOnlySpan<GameViewPresentationPreset> presets)
@@ -1148,7 +1409,7 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
         Vector2 displayMin = panelOriginScreen + snapshot.DisplayAreaRect.Position;
         Vector2 displayMax = displayMin + snapshot.DisplayAreaRect.Size;
-        DrawCheckerboard(drawList, displayMin, displayMax);
+        DrawEditorBackground(drawList, displayMin, displayMax);
         drawList.PushClipRect(displayMin, displayMax, true);
         Vector2 imageMin = panelOriginScreen + snapshot.ImageRect.Position;
         Vector2 imageMax = imageMin + snapshot.ImageRect.Size;
@@ -1159,15 +1420,152 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             new Vector2(0f, 1f),
             new Vector2(1f, 0f),
             0xFFFFFFFF);
+        GameViewRect worldContent = snapshot.WorldContentPanelRect;
+        if (worldContent.IsValid)
+        {
+            Vector2 contentMin = panelOriginScreen + worldContent.Position;
+            drawList.AddRect(contentMin, contentMin + worldContent.Size, DisplayBorder);
+        }
+
         drawList.PopClipRect();
-        drawList.AddRect(displayMin, displayMax, DisplayBorder);
+    }
+
+    private bool DrawStatsOverlay(
+        in GameViewViewportSnapshot snapshot,
+        Vector2 panelOriginScreen)
+    {
+        if (!StatsVisible)
+        {
+            return false;
+        }
+
+        float lineHeight = ImGui.GetTextLineHeightWithSpacing();
+        float desiredHeight = (GameViewStatsLines.Count * lineHeight) + (StatsOverlayPadding * 2f);
+        bool hasSample = _performanceSampleProvider is not null;
+        PerformanceHudSample sample = hasSample ? _performanceSampleProvider!() : default;
+        GameViewStatsLines lines = hasSample
+            ? BuildStatsLines(in sample, float.MaxValue)
+            : default;
+        float measuredTextWidth = 0f;
+        if (hasSample)
+        {
+            for (int i = 0; i < GameViewStatsLines.Count; i++)
+            {
+                measuredTextWidth = MathF.Max(measuredTextWidth, ImGui.CalcTextSize(lines[i]).X);
+            }
+        }
+
+        float desiredWidth = MathF.Max(
+            PreferredStatsPanelWidth,
+            measuredTextWidth + (StatsOverlayPadding * 2f));
+        GameViewRect visibleWorldContent = snapshot.VisibleWorldContentPanelRect;
+        GameViewRect overlay = ResolveStatsOverlayRect(
+            in visibleWorldContent,
+            desiredWidth,
+            desiredHeight,
+            StatsOverlayInset);
+        if (!overlay.IsValid)
+        {
+            return false;
+        }
+
+        Vector2 min = panelOriginScreen + overlay.Position;
+        Vector2 max = min + overlay.Size;
+        ImDrawListPtr drawList = ImGui.GetWindowDrawList();
+        drawList.AddRectFilled(min, max, ImGui.GetColorU32(ImGuiCol.WindowBg, 0.94f), 2f);
+        drawList.AddRect(min, max, ImGui.GetColorU32(ImGuiCol.Border), 2f);
+        drawList.PushClipRect(min, max, true);
+        Vector2 text = min + new Vector2(StatsOverlayPadding);
+        int visibleLineCount = Math.Clamp(
+            (int)MathF.Floor((overlay.Height - (StatsOverlayPadding * 2f)) / lineHeight),
+            0,
+            GameViewStatsLines.Count);
+        if (!hasSample)
+        {
+            if (visibleLineCount > 0)
+            {
+                drawList.AddText(text, ImGui.GetColorU32(ImGuiCol.TextDisabled), "Statistics unavailable");
+            }
+        }
+        else
+        {
+            if (measuredTextWidth > overlay.Width - (StatsOverlayPadding * 2f))
+            {
+                lines = BuildStatsLines(in sample, 0f);
+            }
+
+            uint textColor = ImGui.GetColorU32(ImGuiCol.Text);
+            for (int i = 0; i < visibleLineCount; i++)
+            {
+                drawList.AddText(text + new Vector2(0f, i * lineHeight), textColor, lines[i]);
+            }
+        }
+
+        drawList.PopClipRect();
+        return ImGui.IsMouseHoveringRect(min, max, clip: true);
+    }
+
+    internal static GameViewRect ResolveStatsOverlayRect(
+        in GameViewRect visibleWorldContent,
+        float preferredWidth,
+        float preferredHeight,
+        float inset)
+    {
+        if (!visibleWorldContent.IsValid ||
+            !float.IsFinite(preferredWidth) ||
+            !float.IsFinite(preferredHeight) ||
+            !float.IsFinite(inset) ||
+            preferredWidth <= 0f ||
+            preferredHeight <= 0f)
+        {
+            return default;
+        }
+
+        float normalizedInset = MathF.Max(0f, inset);
+        float horizontalInset = MathF.Min(normalizedInset, MathF.Max(0f, (visibleWorldContent.Width - 1f) * 0.5f));
+        float verticalInset = MathF.Min(normalizedInset, MathF.Max(0f, (visibleWorldContent.Height - 1f) * 0.5f));
+        float width = MathF.Min(preferredWidth, visibleWorldContent.Width - (horizontalInset * 2f));
+        float height = MathF.Min(preferredHeight, visibleWorldContent.Height - (verticalInset * 2f));
+        return new GameViewRect(
+            visibleWorldContent.Right - horizontalInset - width,
+            visibleWorldContent.Y + verticalInset,
+            MathF.Max(0f, width),
+            MathF.Max(0f, height));
+    }
+
+    internal static GameViewStatsLines BuildStatsLines(
+        in PerformanceHudSample sample,
+        float availableWidth)
+    {
+        bool compact = !float.IsFinite(availableWidth) || availableWidth < 360f;
+        string gpu = sample.GpuTimerAvailable
+            ? string.Create(CultureInfo.InvariantCulture, $"{sample.GpuWorkMs:F2}")
+            : "N/A";
+        string cells = FormatCompactCounter(sample.ActiveCells);
+        return compact
+            ? new GameViewStatsLines(
+                string.Create(CultureInfo.InvariantCulture, $"FPS {sample.EffectiveFps:F1}  {sample.EffectiveFrameMs:F2} ms"),
+                string.Create(CultureInfo.InvariantCulture, $"CPU {sample.CpuWorkMs:F2}  GPU {gpu}"),
+                string.Create(CultureInfo.InvariantCulture, $"R {sample.RenderMs:F2}  UI {sample.UiCompositeMs:F2} ms"),
+                string.Create(CultureInfo.InvariantCulture, $"Sim {sample.SimHz:F0} Hz  CA {sample.CaMs:F2}"),
+                string.Create(CultureInfo.InvariantCulture, $"C {sample.ActiveChunks}/{sample.ResidentChunks}  Cells {cells}"),
+                string.Create(CultureInfo.InvariantCulture, $"P {FormatCompactCounter(sample.FreeParticles)}  Bodies {sample.RigidBodies}"),
+                string.Create(CultureInfo.InvariantCulture, $"Audio {sample.AudioMs:F2}  VSync {(sample.VSyncEnabled ? "On" : "Off")}"))
+            : new GameViewStatsLines(
+                string.Create(CultureInfo.InvariantCulture, $"FPS {sample.EffectiveFps:F1}  Frame {sample.EffectiveFrameMs:F2} ms"),
+                string.Create(CultureInfo.InvariantCulture, $"CPU {sample.CpuWorkMs:F2} ms  GPU {gpu} ms"),
+                string.Create(CultureInfo.InvariantCulture, $"Render {sample.RenderMs:F2} ms  UI {sample.UiCompositeMs:F2} ms"),
+                string.Create(CultureInfo.InvariantCulture, $"Sim {sample.SimHz:F0} Hz  CA {sample.CaMs:F2} ms  Physics {sample.PhysicsMs:F2} ms"),
+                string.Create(CultureInfo.InvariantCulture, $"Chunks {sample.ActiveChunks}/{sample.ResidentChunks}  Cells {cells}"),
+                string.Create(CultureInfo.InvariantCulture, $"Particles {FormatCompactCounter(sample.FreeParticles)}  Bodies {sample.RigidBodies}"),
+                string.Create(CultureInfo.InvariantCulture, $"Audio {sample.AudioMs:F2} ms  VSync {(sample.VSyncEnabled ? "On" : "Off")}"));
     }
 
     private void DrawWaitingSurface(Vector2 min, Vector2 size, bool textureValid)
     {
         ImDrawListPtr drawList = ImGui.GetWindowDrawList();
         Vector2 max = min + size;
-        DrawCheckerboard(drawList, min, max);
+        DrawEditorBackground(drawList, min, max);
         string message = textureValid
             ? LastDiagnostic
             : EditorLocalization.Get("game.waiting", "Waiting for the Game View texture");
@@ -1181,27 +1579,9 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
         drawList.AddRect(min, max, DisplayBorder);
     }
 
-    private static void DrawCheckerboard(ImDrawListPtr drawList, Vector2 min, Vector2 max)
+    private static void DrawEditorBackground(ImDrawListPtr drawList, Vector2 min, Vector2 max)
     {
-        const float Cell = 16f;
-        drawList.AddRectFilled(min, max, CheckerDark);
-        int row = 0;
-        for (float y = min.Y; y < max.Y; y += Cell, row++)
-        {
-            int column = 0;
-            for (float x = min.X; x < max.X; x += Cell, column++)
-            {
-                if (((row + column) & 1) == 0)
-                {
-                    continue;
-                }
-
-                drawList.AddRectFilled(
-                    new Vector2(x, y),
-                    new Vector2(MathF.Min(max.X, x + Cell), MathF.Min(max.Y, y + Cell)),
-                    CheckerLight);
-            }
-        }
+        drawList.AddRectFilled(min, max, ImGui.GetColorU32(ImGuiCol.WindowBg));
     }
 
     private void LoadWorkspaceState()
@@ -1393,10 +1773,119 @@ internal sealed class GameViewPanel : IEditorMaximizedPanel
             : string.Create(CultureInfo.InvariantCulture, $"{scalePercent:0.#}%");
     }
 
+    internal static AudioSettings CreateAudioSettingsWithVolume(
+        AudioSettings settings,
+        GameViewAudioVolume target,
+        float volume)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        if (!float.IsFinite(volume) || volume is < 0f or > 1f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(volume));
+        }
+
+        AudioSettings result = new()
+        {
+            MaxVoices = settings.MaxVoices,
+            MaxAmbientVoices = settings.MaxAmbientVoices,
+            PixelsPerMeter = settings.PixelsPerMeter,
+            ListenerDepth = settings.ListenerDepth,
+            MasterVolume = settings.MasterVolume,
+            SfxVolume = settings.SfxVolume,
+            UiVolume = settings.UiVolume,
+            AmbientVolume = settings.AmbientVolume,
+            ReferenceDistance = settings.ReferenceDistance,
+            MaxDistance = settings.MaxDistance,
+            RolloffFactor = settings.RolloffFactor,
+            MaxDrainedAudioEventsPerFrame = settings.MaxDrainedAudioEventsPerFrame,
+            MaxParticleImpactEventsPerFrame = settings.MaxParticleImpactEventsPerFrame,
+            MaxFireCrackleEventsPerFrame = settings.MaxFireCrackleEventsPerFrame,
+            MaxLiquidSplashEventsPerFrame = settings.MaxLiquidSplashEventsPerFrame,
+            MaxExplosionEventsPerFrame = settings.MaxExplosionEventsPerFrame,
+            MaxRigidbodyShatterEventsPerFrame = settings.MaxRigidbodyShatterEventsPerFrame,
+            MaxAmbientRegionEventsPerFrame = settings.MaxAmbientRegionEventsPerFrame,
+            CoalesceBucketSize = settings.CoalesceBucketSize,
+            DefaultCooldownTicks = settings.DefaultCooldownTicks,
+            AmbientEnterThreshold = settings.AmbientEnterThreshold,
+            AmbientExitThreshold = settings.AmbientExitThreshold,
+            AmbientFadeRate = settings.AmbientFadeRate,
+            CooldownTableCapacity = settings.CooldownTableCapacity,
+        };
+        switch (target)
+        {
+            case GameViewAudioVolume.Master:
+                result.MasterVolume = volume;
+                break;
+            case GameViewAudioVolume.Sfx:
+                result.SfxVolume = volume;
+                break;
+            case GameViewAudioVolume.Ui:
+                result.UiVolume = volume;
+                break;
+            case GameViewAudioVolume.Ambient:
+                result.AmbientVolume = volume;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(target), target, "未知 Game View 音量通道。");
+        }
+
+        return result.Validate();
+    }
+
+    private static bool IsAudioEnabled(AudioSettings settings)
+    {
+        return settings.MasterVolume > 0f &&
+            (settings.SfxVolume > 0f || settings.UiVolume > 0f || settings.AmbientVolume > 0f);
+    }
+
+    private static string FormatCompactCounter(long value)
+    {
+        return value switch
+        {
+            >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{value / 1_000_000d:0.#}M"),
+            >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{value / 1_000d:0.#}K"),
+            _ => value.ToString(CultureInfo.InvariantCulture),
+        };
+    }
+
     private static float NormalizeScale(float scale)
     {
         return float.IsFinite(scale) && scale > 0f ? scale : 1f;
     }
+}
+
+/// <summary>Game View 音频混音控制目标。</summary>
+internal enum GameViewAudioVolume
+{
+    Master,
+    Sfx,
+    Ui,
+    Ambient,
+}
+
+/// <summary>单帧 Game View Stats 的固定行集合，避免布局逻辑依赖可变集合。</summary>
+internal readonly record struct GameViewStatsLines(
+    string Summary,
+    string Work,
+    string Render,
+    string Simulation,
+    string World,
+    string Entities,
+    string Runtime)
+{
+    internal const int Count = 7;
+
+    internal string this[int index] => index switch
+    {
+        0 => Summary,
+        1 => Work,
+        2 => Render,
+        3 => Simulation,
+        4 => World,
+        5 => Entities,
+        6 => Runtime,
+        _ => throw new ArgumentOutOfRangeException(nameof(index)),
+    };
 }
 
 /// <summary>Game View workspace 与瞬时最大化状态的自动化 before/after image。</summary>
@@ -1413,6 +1902,8 @@ internal sealed record EditorGameViewAutomationState
     public required bool MaximizeOnPlay { get; init; }
 
     public required bool IsMaximized { get; init; }
+
+    public required bool StatsVisible { get; init; }
 
     public required EditorGameViewCustomPreset[] CustomPresets { get; init; }
 

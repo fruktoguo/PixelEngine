@@ -1,3 +1,4 @@
+using PixelEngine.Core;
 using PixelEngine.Core.Threading;
 using PixelEngine.Rendering;
 using PixelEngine.Simulation;
@@ -13,6 +14,12 @@ internal interface IAuthoringWorldTexture : IDisposable
     long Revision { get; }
 
     SceneWorldTextureSnapshot GetTexture(SceneAuthoringBounds requestedBounds);
+
+    bool TryGetResidentBounds(out SceneAuthoringBounds bounds)
+    {
+        bounds = default;
+        return false;
+    }
 
     void Invalidate();
 }
@@ -53,7 +60,7 @@ internal sealed class SceneWorldTexture : IAuthoringWorldTexture
             throw new InvalidOperationException("OpenGL 未返回有效的最大纹理尺寸。");
         }
 
-        _texture = new WorldTexture(gl, 1, 1);
+        _texture = new WorldTexture(gl, 1, 1, WorldTextureSampling.MipmappedMinification);
         _uploader = new PboUploader(gl, sizeof(uint));
     }
 
@@ -99,6 +106,7 @@ internal sealed class SceneWorldTexture : IAuthoringWorldTexture
                 forceRebuild: true);
             _builder.Build(in context, _buffer, _aux);
             _uploader.UploadFull(_texture, _buffer);
+            _texture.RegenerateMipmaps();
             Revision++;
             _dirty = false;
         }
@@ -106,6 +114,37 @@ internal sealed class SceneWorldTexture : IAuthoringWorldTexture
         return new SceneWorldTextureSnapshot(
             new RenderViewportTexture(_texture.Handle, _texture.Width, _texture.Height, Revision),
             _textureBounds);
+    }
+
+    public bool TryGetResidentBounds(out SceneAuthoringBounds bounds)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ReadOnlySpan<Chunk> chunks = _chunks.ResidentChunks;
+        if (chunks.IsEmpty)
+        {
+            bounds = default;
+            return false;
+        }
+
+        int minimumChunkX = chunks[0].Coord.X;
+        int maximumChunkX = minimumChunkX;
+        int minimumChunkY = chunks[0].Coord.Y;
+        int maximumChunkY = minimumChunkY;
+        for (int i = 1; i < chunks.Length; i++)
+        {
+            ChunkCoord coord = chunks[i].Coord;
+            minimumChunkX = Math.Min(minimumChunkX, coord.X);
+            maximumChunkX = Math.Max(maximumChunkX, coord.X);
+            minimumChunkY = Math.Min(minimumChunkY, coord.Y);
+            maximumChunkY = Math.Max(maximumChunkY, coord.Y);
+        }
+
+        bounds = new SceneAuthoringBounds(
+            minimumChunkX * (float)EngineConstants.ChunkSize,
+            minimumChunkY * (float)EngineConstants.ChunkSize,
+            (maximumChunkX - minimumChunkX + 1) * (float)EngineConstants.ChunkSize,
+            (maximumChunkY - minimumChunkY + 1) * (float)EngineConstants.ChunkSize);
+        return true;
     }
 
     public void Invalidate()

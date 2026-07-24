@@ -24,7 +24,8 @@ public sealed class RenderPhaseDriver(
     SimulationKernel? kernel = null,
     PhysicsSystem? physics = null,
     ScriptOverlayApi? scriptOverlays = null,
-    DebugOverlayController? debugOverlays = null) : IEnginePhaseDriver
+    DebugOverlayController? debugOverlays = null,
+    IWorldVisualLayerProvider? worldVisualLayers = null) : IEnginePhaseDriver
 {
     private readonly IChunkSource _chunks = chunks ?? throw new ArgumentNullException(nameof(chunks));
     private readonly MaterialTable _materials = materials ?? throw new ArgumentNullException(nameof(materials));
@@ -37,6 +38,7 @@ public sealed class RenderPhaseDriver(
     private readonly PhysicsSystem? _physics = physics;
     private readonly ScriptOverlayApi? _scriptOverlays = scriptOverlays;
     private readonly DebugOverlayController? _debugOverlays = debugOverlays;
+    private readonly IWorldVisualLayerProvider? _worldVisualLayers = worldVisualLayers;
     private readonly RenderBufferBuilder _builder = new(jobs, textures);
     private readonly ParticleCompositor _particleCompositor = new(textures);
     private readonly RenderBuffer _renderBuffer = new(1, 1);
@@ -45,7 +47,6 @@ public sealed class RenderPhaseDriver(
     private readonly BoundaryWakeSnapshot[] _boundaryWakeBuffer = new BoundaryWakeSnapshot[256];
     private readonly CaIterationSnapshot[] _caIterationBuffer = new CaIterationSnapshot[256];
     private readonly ConnectedComponentDebugSnapshot[] _connectedComponentBuffer = new ConnectedComponentDebugSnapshot[256];
-    private CameraState _presentCamera = CameraState.OneToOne(0, 0, 1, 1);
     private CameraState _lastBuiltCamera = CameraState.OneToOne(0, 0, 1, 1);
     private bool _frameBuilt;
     private bool _hasBuiltCamera;
@@ -62,6 +63,11 @@ public sealed class RenderPhaseDriver(
     /// RenderStyle 着色质量控制器，供 Hosting 过载策略独立降级 CPU 样式着色。
     /// </summary>
     public IRenderStyleQualityController RenderStyleQuality => _builder;
+
+    /// <summary>
+    /// 最近一次实际提交给运行时渲染管线的相机；Editor Scene View 在 Play/Paused 下以此对齐同一世界视口。
+    /// </summary>
+    public CameraState CurrentCamera { get; private set; } = CameraState.OneToOne(0, 0, 1, 1);
 
     /// <summary>
     /// 请求下一张 render-only 或 simulation frame 强制重建完整世界缓冲。
@@ -128,7 +134,7 @@ public sealed class RenderPhaseDriver(
             _hadCpuParticleStamps = false;
         }
 
-        _presentCamera = camera;
+        CurrentCamera = camera;
         _lastBuiltCamera = camera;
         _hasBuiltCamera = true;
         _frameBuilt = true;
@@ -163,7 +169,7 @@ public sealed class RenderPhaseDriver(
         _sink.Render(
             _renderBuffer,
             _aux,
-            _presentCamera,
+            CurrentCamera,
             dirtyRects,
             overlays,
             _lighting.PointLights,
@@ -176,12 +182,13 @@ public sealed class RenderPhaseDriver(
 
     private ReadOnlySpan<OverlayCommand> BuildOverlays(ReadOnlySpan<Particle> activeParticles)
     {
-        if (_scriptOverlays is null && _debugOverlays is null)
+        if (_scriptOverlays is null && _debugOverlays is null && _worldVisualLayers is null)
         {
             return [];
         }
 
         _overlayCommands.Clear();
+        AddWorldVisualLayers();
         AddScriptOverlays();
         if (_debugOverlays is not null)
         {
@@ -190,7 +197,7 @@ public sealed class RenderPhaseDriver(
             int componentCount = _physics?.CopyConnectedComponentDebugSnapshots(_connectedComponentBuffer) ?? 0;
             _ = _debugOverlays.BuildVectorOverlays(
                 _chunks,
-                _presentCamera,
+                CurrentCamera,
                 _caIterationBuffer.AsSpan(0, caIterationCount),
                 _boundaryWakeBuffer.AsSpan(0, wakeCount),
                 activeParticles,
@@ -199,6 +206,55 @@ public sealed class RenderPhaseDriver(
         }
 
         return _overlayCommands.Count == 0 ? [] : CollectionsMarshal.AsSpan(_overlayCommands);
+    }
+
+    private void AddWorldVisualLayers()
+    {
+        if (_worldVisualLayers is null)
+        {
+            return;
+        }
+
+        int count = _worldVisualLayers.WorldVisualLayerCount;
+        if (count is < 0 or > 128)
+        {
+            throw new InvalidOperationException("世界视觉层数量必须位于 0..128。");
+        }
+
+        float inverseCellsPerPixel = 1f / CurrentCamera.CellsPerPixel;
+        for (int i = 0; i < count; i++)
+        {
+            WorldVisualLayerDescriptor layer = _worldVisualLayers.GetWorldVisualLayer(i).Validate();
+            if (!_sink.TryResolveWorldVisualSprite(layer.Asset, out OverlaySprite sprite))
+            {
+                continue;
+            }
+
+            float viewportX = (layer.WorldX - CurrentCamera.OriginWorldX) * inverseCellsPerPixel;
+            float viewportY = (layer.WorldY - CurrentCamera.OriginWorldY) * inverseCellsPerPixel;
+            float viewportWidth = layer.WidthCells * inverseCellsPerPixel;
+            float viewportHeight = layer.HeightCells * inverseCellsPerPixel;
+            if (viewportX >= CurrentCamera.ViewportWidth || viewportY >= CurrentCamera.ViewportHeight ||
+                viewportX + viewportWidth <= 0f || viewportY + viewportHeight <= 0f)
+            {
+                continue;
+            }
+
+            OverlayCompositionLayer compositionLayer = layer.Layer switch
+            {
+                WorldVisualLayerKind.Background => OverlayCompositionLayer.Background,
+                WorldVisualLayerKind.Decoration => OverlayCompositionLayer.WorldDecoration,
+                _ => throw new ArgumentOutOfRangeException(nameof(layer), layer.Layer, "未知世界视觉组合层。"),
+            };
+            _overlayCommands.Add(OverlayCommand.SpriteRectangle(
+                viewportX,
+                viewportY,
+                viewportWidth,
+                viewportHeight,
+                sprite,
+                layer.TintBgra,
+                compositionLayer));
+        }
     }
 
     private void AddScriptOverlays()

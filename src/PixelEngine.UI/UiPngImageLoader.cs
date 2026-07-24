@@ -7,7 +7,7 @@ namespace PixelEngine.UI;
 /// 轻量 PNG 解码器，将 UI 图片资产解码为 <see cref="UiImageBitmap" />。
 /// 仅支持 8-bit、标准 deflate/adaptive filter、非交错 PNG。
 /// </summary>
-internal static class UiPngImageLoader
+public static class UiPngImageLoader
 {
     private static readonly byte[] PngSignature = [137, 80, 78, 71, 13, 10, 26, 10];
 
@@ -16,7 +16,7 @@ internal static class UiPngImageLoader
     /// </summary>
     /// <param name="path">PNG 文件路径。</param>
     /// <returns>解码后的 UI 位图。</returns>
-    internal static UiImageBitmap Load(string path)
+    public static UiImageBitmap Load(string path)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         byte[] bytes = File.ReadAllBytes(path);

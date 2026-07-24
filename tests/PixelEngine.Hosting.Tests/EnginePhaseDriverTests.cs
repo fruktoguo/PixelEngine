@@ -162,6 +162,58 @@ public sealed class EnginePhaseDriverTests
     }
 
     /// <summary>
+    /// 验证非权威世界图片使用运行时相机映射，并保留 Background/Decoration 组合层而不写 cell buffer。
+    /// </summary>
+    [Fact]
+    public void RenderPhaseDriverMapsWorldVisualLayersThroughRuntimeCamera()
+    {
+        MaterialTable materials = Materials(("empty", CellType.Empty));
+        TestChunkSource chunks = new(new Chunk(new ChunkCoord(0, 0)));
+        ParticleSystem particles = new(capacity: 4);
+        TemperatureField temperature = new();
+        ScriptCameraApi camera = new(viewportWidth: 32, viewportHeight: 16, centerX: 16, centerY: 8, zoom: 1);
+        ScriptCameraSynchronizer cameraSync = new(camera);
+        _ = cameraSync.Sync();
+        ScriptLightingSynchronizer lightingSync = new(new ScriptLightingApi(), cameraSync);
+        lightingSync.Sync();
+        RecordingRenderFrameSink sink = new() { ResolveWorldVisualSprites = true };
+        TestWorldVisualLayerProvider visualLayers = new();
+        RenderPhaseDriver driver = new(
+            chunks,
+            materials,
+            temperature,
+            particles,
+            cameraSync,
+            lightingSync,
+            sink,
+            worldVisualLayers: visualLayers);
+        using Engine engine = new EngineBuilder()
+            .WithWorkerCount(1)
+            .AddPhaseDriver(driver)
+            .Build();
+
+        _ = engine.RunOneTick();
+
+        Assert.Equal(2, sink.OverlayCount);
+        OverlayCommand background = Assert.Single(
+            sink.Overlays,
+            static command => command.CompositionLayer == OverlayCompositionLayer.Background);
+        OverlayCommand decoration = Assert.Single(
+            sink.Overlays,
+            static command => command.CompositionLayer == OverlayCompositionLayer.WorldDecoration);
+        Assert.Equal((4f, 3f, 8f, 6f), (
+            background.ViewportX,
+            background.ViewportY,
+            background.Width,
+            background.Height));
+        Assert.Equal((uint)77, background.Sprite.TextureHandle);
+        Assert.Equal((uint)77, decoration.Sprite.TextureHandle);
+        Assert.All(sink.Overlays, static command => Assert.Equal(OverlayPrimitiveType.Sprite, command.PrimitiveType));
+        Assert.All(sink.Overlays, static command => Assert.Equal(0xFFFFFFFFu, command.ColorBgra));
+        Assert.Equal(0u, sink.FirstPixel);
+    }
+
+    /// <summary>
     /// 验证 GPU 粒子输出端接管粒子时，相位 9 不再把同一批粒子 CPU stamp 进 render buffer。
     /// </summary>
     [Fact]
@@ -1129,6 +1181,8 @@ public sealed class EnginePhaseDriverTests
     {
         public ParticleRenderMode ParticleRenderMode { get; init; } = ParticleRenderMode.CpuStamp;
 
+        public bool ResolveWorldVisualSprites { get; init; }
+
         public int FrameCount { get; private set; }
 
         public int Width { get; private set; }
@@ -1156,6 +1210,13 @@ public sealed class EnginePhaseDriverTests
         public uint FirstPixel { get; private set; }
 
         public uint ParticlePixel { get; private set; }
+
+        public bool TryResolveWorldVisualSprite(ScriptAssetReference asset, out OverlaySprite sprite)
+        {
+            _ = asset;
+            sprite = ResolveWorldVisualSprites ? new OverlaySprite(77, 512, 512) : default;
+            return ResolveWorldVisualSprites;
+        }
 
         public void Render(
             RenderBuffer renderBuffer,
@@ -1187,6 +1248,26 @@ public sealed class EnginePhaseDriverTests
             FogOfWar = fogOfWar;
             FirstPixel = renderBuffer.Pixels[0];
             ParticlePixel = renderBuffer.Pixels[1];
+        }
+    }
+
+    private sealed class TestWorldVisualLayerProvider : IWorldVisualLayerProvider
+    {
+        private static readonly ScriptAssetReference Asset = new(
+            ScriptAssetKind.Texture,
+            "test-world-visual",
+            "maps/test.png");
+
+        public int WorldVisualLayerCount => 2;
+
+        public WorldVisualLayerDescriptor GetWorldVisualLayer(int index)
+        {
+            return index switch
+            {
+                0 => new WorldVisualLayerDescriptor(Asset, 4f, 3f, 8f, 6f, WorldVisualLayerKind.Background),
+                1 => new WorldVisualLayerDescriptor(Asset, 12f, 6f, 4f, 3f, WorldVisualLayerKind.Decoration),
+                _ => throw new ArgumentOutOfRangeException(nameof(index)),
+            };
         }
     }
 

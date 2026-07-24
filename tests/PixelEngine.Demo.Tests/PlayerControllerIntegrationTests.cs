@@ -3210,6 +3210,12 @@ public sealed class PlayerControllerIntegrationTests
         PlayerController player = FindBehaviour<PlayerController>(engine);
         Assert.Equal(PlayableCavernWorldGenerator.PlayerSpawnX, player.SpawnX);
         Assert.Equal(PlayableCavernWorldGenerator.PlayerSpawnY, player.SpawnY);
+        Assert.Equal(PlayableCavernWorldGenerator.PlayerCollisionWidth, player.Width);
+        Assert.Equal(PlayableCavernWorldGenerator.PlayerCollisionHeight, player.Height);
+        Assert.Equal(PlayableCavernWorldGenerator.PlayerSpawnCenterX, player.CenterX);
+        float expectedCenterY =
+            PlayableCavernWorldGenerator.SafeSurfaceY + PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY;
+        Assert.InRange(player.CenterY, expectedCenterY, expectedCenterY + 1f);
         Assert.Equal(0, CountBehaviours<GoalTrigger>(scene));
         Assert.Equal(0, CountBehaviours<MissionDirector>(scene));
     }

@@ -6,7 +6,11 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// 可玩程序化 Demo 的脚本入口，装配玩家、相机、射击工具与简洁 HUD。
 /// </summary>
-public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorldGenerator, IAuthoringWorldPreviewProvider
+public sealed class PlayableWorldDirector :
+    Behaviour,
+    IStreamingProceduralWorldGenerator,
+    IAuthoringWorldPreviewProvider,
+    IWorldVisualLayerProvider
 {
     private static readonly PlayableCavernWorldGenerator WorldGenerator = new();
     private bool _entitiesBuilt;
@@ -27,6 +31,15 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
     /// 默认关闭；自动化和参考路线捕获可在 TemporarySnapshot 中启用，正式玩家仍经过主菜单。
     /// </summary>
     public bool AutoStartCampaign { get; set; }
+
+    /// <inheritdoc />
+    public int WorldVisualLayerCount => WorldGenerator.WorldVisualLayerCount;
+
+    /// <inheritdoc />
+    public WorldVisualLayerDescriptor GetWorldVisualLayer(int index)
+    {
+        return WorldGenerator.GetWorldVisualLayer(index);
+    }
 
     /// <inheritdoc />
     public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
@@ -68,7 +81,9 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
     {
         CampaignConfig config = CampaignConfig.Load(Context.Config);
         PlayerSpawnX = PlayableCavernWorldGenerator.PlayerSpawnX;
-        PlayerSpawnY = config.SurfaceY - 85f;
+        PlayerSpawnY = config.SurfaceY +
+            PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY -
+            (PlayableCavernWorldGenerator.PlayerCollisionHeight * 0.5f);
         RegisterEntityBuildSystem();
     }
 
@@ -112,6 +127,8 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         PlayerController player = playerEntity.AddComponent<PlayerController>();
         player.SpawnX = PlayerSpawnX;
         player.SpawnY = PlayerSpawnY;
+        player.Width = PlayableCavernWorldGenerator.PlayerCollisionWidth;
+        player.Height = PlayableCavernWorldGenerator.PlayerCollisionHeight;
         player.MaxRunSpeed = 120f;
         player.GroundAcceleration = 1_650f;
         player.AirAcceleration = 1_050f;
@@ -129,6 +146,7 @@ public sealed class PlayableWorldDirector : Behaviour, IStreamingProceduralWorld
         CameraFollow camera = playerEntity.AddComponent<CameraFollow>();
         camera.ClampToBounds = false;
         camera.Zoom = 2f;
+        camera.MouseWheelZoomEnabled = false;
 
         PlayableProjectileTool projectile = playerEntity.AddComponent<PlayableProjectileTool>();
         projectile.ImpactRadius = 3;

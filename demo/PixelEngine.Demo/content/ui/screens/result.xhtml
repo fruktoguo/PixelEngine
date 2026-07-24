@@ -1,40 +1,49 @@
-<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v3" style="left: 326px; top: 70px; width: 400px; height: 490px">
+<rml title="结算" data-screen="result" data-contract="demo.webfirst.result/v4" style="left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #f5f8ff; background-color: transparent; }
-      #result_panel { position: absolute; left: 326px; top: 70px; width: 368px; height: 458px; padding: 16px; background-color: rgba(9, 12, 18, 242); border-width: 1px; border-color: #596d87; }
-      #result_title { color: #f5c451; font-size: 23px; line-height: 30px; }
-      #result_state { color: #f8fafc; font-size: 18px; line-height: 24px; }
-      #result_reason_text, #result_seed_label, #result_seed_text, #result_region_text, #result_depth_label, #result_depth_text, #result_time_label, #result_time_text { color: #b7c3d3; font-size: 12px; }
-      progress { position: relative; display: block; width: 286px; height: 14px; margin-top: 4px; background-color: #202b38; border-width: 1px; border-color: #52647c; }
-      progress fill { background-color: #d2a642; }
-      progress .meter_label { position: absolute; left: 6px; top: -1px; height: 14px; line-height: 14px; color: #f8fafc; font-size: 11px; }
-      #result_won fill { background-color: #42ad72; }
-      button { width: 132px; height: 30px; margin-top: 10px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
-      button:hover { background-color: #4076a5; }
-      #result_restart { margin-right: 8px; }
-      p { display: block; margin: 4px 0px; line-height: 18px; }
+      rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #fff8ef; background-color: rgba(0, 0, 0, 0); }
+      #result_scrim { position: absolute; left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(8, 4, 9, 205); }
+      #result_panel { position: absolute; left: 410px; top: 86px; width: 460px; height: 548px; background-color: rgba(62, 39, 40, 239); border-width: 3px; border-color: #9e6557; }
+      #result_emblem { position: absolute; left: 532px; top: 112px; width: 216px; height: 92px; }
+      #result_title { position: absolute; left: 434px; top: 218px; width: 412px; margin: 0px; color: #ffffff; font-size: 22px; text-align: center; }
+      #result_state { position: absolute; left: 434px; top: 254px; width: 412px; margin: 0px; color: #f1cd70; font-size: 15px; text-align: center; }
+      #result_reason_text { position: absolute; left: 434px; top: 284px; width: 412px; margin: 0px; color: #dfd0c8; font-size: 12px; text-align: center; }
+      .result_label { position: absolute; left: 454px; width: 116px; color: #bca9a1; font-size: 11px; }
+      .result_value { position: absolute; left: 580px; width: 246px; color: #ffffff; font-size: 12px; text-align: right; }
+      #result_seed_label, #result_seed_text { top: 326px; }
+      #result_region_label, #result_region_text { top: 352px; }
+      #result_depth_label, #result_depth_text { top: 378px; }
+      #result_time_label, #result_time_text { top: 404px; }
+      progress { position: absolute; left: 454px; width: 372px; height: 10px; margin: 0px; background-color: #281a1d; border-width: 1px; border-color: #82534d; }
+      #result_won { top: 442px; }
+      #result_crystals { top: 462px; }
+      #result_time { top: 482px; }
+      #result_score { top: 502px; }
+      #result_reason { top: 522px; }
+      .meter_label { color: transparent; font-size: 1px; }
+      button { position: absolute; top: 568px; width: 182px; height: 42px; color: #ffffff; background-color: #765044; border-width: 2px; border-color: #bd7b60; }
+      button:hover { background-color: #995f47; border-color: #f0c867; }
+      #result_restart { left: 448px; }
+      #result_quit { left: 650px; }
     </style>
   </head>
   <body>
-    <div id="result_panel">
-      <p id="result_title" path="result.title_text">本轮结束 / Run Ended</p>
-      <p id="result_state">运行结算</p>
-      <p id="result_reason_text" path="result.reason_text">永久死亡 / Run ended</p>
-      <p id="result_seed_label">Seed</p>
-      <p id="result_seed_text" path="result.seed_text">0000000000000000</p>
-      <p id="result_region_text" path="result.region_text">Mines</p>
-      <p id="result_depth_label">最深 cell</p>
-      <p id="result_depth_text" path="result.depth_cells">0</p>
-      <p id="result_time_label">耗时 s</p>
-      <p id="result_time_text" path="result.elapsed_seconds">0</p>
-      <progress id="result_won" path="result.won" value="0.0" text="场景状态"><div class="meter_label">场景状态</div></progress>
-      <progress id="result_crystals" path="result.crystals" value="0.0" text="探索记录"><div class="meter_label">探索记录</div></progress>
-      <progress id="result_time" path="result.time" value="0.0" text="会话时间"><div class="meter_label">会话时间</div></progress>
-      <progress id="result_score" path="result.score" value="0.0" text="世界改造"><div class="meter_label">世界改造</div></progress>
-      <progress id="result_reason" path="result.reason" value="0.0" text="重生状态"><div class="meter_label">重生状态</div></progress>
-      <button id="result_restart" data-event-click="restart_game">开始新轮</button>
-      <button id="result_quit" data-event-click="quit_game">退出</button>
-    </div>
+    <div id="result_scrim"></div>
+    <div id="result_panel"></div>
+    <img id="result_emblem" src="../images/noita/menu/game_over.png" width="216" height="92" alt="Game Over" />
+    <p id="result_title" path="result.title_text">本轮结束 / Run Ended</p>
+    <p id="result_state">运行结算</p>
+    <p id="result_reason_text" path="result.reason_text">永久死亡 / Run ended</p>
+    <span id="result_seed_label" class="result_label">Seed</span><span id="result_seed_text" class="result_value" path="result.seed_text">0000000000000000</span>
+    <span id="result_region_label" class="result_label">区域</span><span id="result_region_text" class="result_value" path="result.region_text">Mines</span>
+    <span id="result_depth_label" class="result_label">最深 cell</span><span id="result_depth_text" class="result_value" path="result.depth_cells">0</span>
+    <span id="result_time_label" class="result_label">耗时 s</span><span id="result_time_text" class="result_value" path="result.elapsed_seconds">0</span>
+    <progress id="result_won" path="result.won" value="0.0" text="场景状态"><div class="meter_label">场景状态</div></progress>
+    <progress id="result_crystals" path="result.crystals" value="0.0" text="探索记录"><div class="meter_label">探索记录</div></progress>
+    <progress id="result_time" path="result.time" value="0.0" text="会话时间"><div class="meter_label">会话时间</div></progress>
+    <progress id="result_score" path="result.score" value="0.0" text="世界改造"><div class="meter_label">世界改造</div></progress>
+    <progress id="result_reason" path="result.reason" value="0.0" text="重生状态"><div class="meter_label">重生状态</div></progress>
+    <button id="result_restart" data-event-click="restart_game">开始新轮</button>
+    <button id="result_quit" data-event-click="quit_game">退出</button>
   </body>
 </rml>

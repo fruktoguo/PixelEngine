@@ -785,7 +785,11 @@ public sealed class Engine : IDisposable
         }
 
         Context.Counters.FrameGpuTimerAvailable = pipeline.GpuFrameTimerAvailable;
-        RenderPipelineFrameSink sink = new(pipeline, presentation);
+        RenderPipelineFrameSink sink = new(
+            pipeline,
+            presentation,
+            window,
+            Context.Options.ContentRoot);
         RenderPhaseDriver driver = new(
             Context.GetService<IChunkSource>(),
             simulation.Materials,
@@ -798,7 +802,10 @@ public sealed class Engine : IDisposable
             kernel: simulation.Kernel,
             physics: Context.TryGetService(out PhysicsSystem physics) ? physics : null,
             scriptOverlays: Context.TryGetService(out ScriptOverlayApi overlays) ? overlays : null,
-            debugOverlays: ResolveDebugOverlayController());
+            debugOverlays: ResolveDebugOverlayController(),
+            worldVisualLayers: Context.TryGetService(out IWorldVisualLayerProvider worldVisualLayers)
+                ? worldVisualLayers
+                : null);
         Context.RegisterService(pipeline);
         Context.RegisterService(presentation);
         Context.RegisterService<IGpuComputeQualityDegrader>(pipeline);
@@ -813,6 +820,7 @@ public sealed class Engine : IDisposable
         }
         driver.RegisterPhases(Phases);
         _ownedRuntimeResources.Add(pipeline);
+        _ownedRuntimeResources.Add(sink);
         AttachGuiRuntime(window, pipeline);
         return driver;
     }
@@ -2794,6 +2802,7 @@ public sealed class Engine : IDisposable
         IMaterialQuery materialQuery = ResolveMaterialQuery(materials);
         IConfigApi config = ResolveConfigApi();
         ProceduralWorldBuildRequest request = new(key, materialQuery, Config: config);
+        RegisterWorldVisualLayerProvider(registration);
         if (registration.Streaming is not null)
         {
             ProceduralWorldDescriptor streamingDescriptor = registration.Streaming.Describe(in request).Validate();
@@ -2846,6 +2855,20 @@ public sealed class Engine : IDisposable
             descriptor.HeightCells);
         generator.Populate(in context);
         return true;
+    }
+
+    private void RegisterWorldVisualLayerProvider(
+        ProceduralWorldGeneratorRegistry.Registration registration)
+    {
+        IWorldVisualLayerProvider? provider = registration.Streaming as IWorldVisualLayerProvider ??
+            registration.Finite as IWorldVisualLayerProvider;
+        if (provider is null)
+        {
+            Context.RemoveService<IWorldVisualLayerProvider>();
+            return;
+        }
+
+        Context.RegisterService<IWorldVisualLayerProvider>(provider);
     }
 
     private bool TryResolveProceduralWorldGenerator(

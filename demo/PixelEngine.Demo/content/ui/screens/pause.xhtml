@@ -1,23 +1,29 @@
-<rml title="暂停" data-screen="pause" data-contract="demo.webfirst.pause/v1" style="left: 366px; top: 116px; width: 300px; height: 250px">
+<rml title="暂停" data-screen="pause" data-contract="demo.webfirst.pause/v2" style="left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #f2f6ff; background-color: transparent; }
-      #pause_panel { position: absolute; left: 366px; top: 116px; width: 268px; height: 218px; padding: 16px; background-color: rgba(10, 14, 22, 240); border-width: 1px; border-color: #53657d; }
-      #pause_title { color: #f5c451; font-size: 23px; }
-      #pause_hint { color: #b7c3d3; }
-      button { width: 220px; height: 30px; margin-top: 8px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
-      button:hover { background-color: #4076a5; }
-      p { margin: 4px 0px; }
+      rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #ffffff; background-color: rgba(0, 0, 0, 0); }
+      #pause_scrim { position: absolute; left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(9, 5, 11, 185); }
+      #pause_logo { position: absolute; left: 507px; top: 78px; width: 266px; height: 154px; }
+      #pause_panel { position: absolute; left: 470px; top: 250px; width: 340px; height: 344px; }
+      #pause_title { position: absolute; left: 470px; top: 246px; width: 340px; color: #fff5e5; font-size: 20px; text-align: center; }
+      #pause_hint { position: absolute; left: 470px; top: 278px; width: 340px; color: #c9b8af; font-size: 11px; text-align: center; }
+      button { position: absolute; left: 490px; width: 300px; height: 42px; color: #fff8ed; background-color: rgba(72, 46, 45, 245); border-width: 2px; border-color: #9f6556; }
+      button:hover { color: #ffffff; background-color: rgba(129, 75, 56, 250); border-color: #f1ca62; }
+      #pause_resume { top: 316px; }
+      #pause_settings { top: 366px; }
+      #pause_restart { top: 416px; }
+      #pause_quit { top: 466px; }
     </style>
   </head>
   <body>
-    <div id="pause_panel">
-      <p id="pause_title">暂停</p>
-      <p id="pause_hint">模拟已暂停，UI 与输入仍保持响应。</p>
-      <button id="pause_resume" data-event-click="resume_game">继续</button>
-      <button id="pause_settings" data-event-click="open_settings">设置</button>
-      <button id="pause_restart" data-event-click="restart_game">重开</button>
-      <button id="pause_quit" data-event-click="quit_game">退出</button>
-    </div>
+    <div id="pause_scrim"></div>
+    <img id="pause_logo" src="../images/noita/menu/noita_logo.png" width="266" height="154" alt="Noita" />
+    <div id="pause_panel"></div>
+    <p id="pause_title">游戏暂停</p>
+    <p id="pause_hint">世界模拟已停止</p>
+    <button id="pause_resume" data-event-click="resume_game">继续</button>
+    <button id="pause_settings" data-event-click="open_settings">设置</button>
+    <button id="pause_restart" data-event-click="restart_game">重新开始</button>
+    <button id="pause_quit" data-event-click="quit_game">退出游戏</button>
   </body>
 </rml>

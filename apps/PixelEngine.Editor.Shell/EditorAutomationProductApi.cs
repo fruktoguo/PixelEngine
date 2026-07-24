@@ -4275,6 +4275,7 @@ internal sealed partial class EditorAutomationAuthoringApi
             PanY = request.PanY,
             MaximizeOnPlay = request.MaximizeOnPlay,
             IsMaximized = request.Maximized,
+            StatsVisible = request.StatsVisible,
             CustomPresets = custom,
             Diagnostic = currentDiagnostic,
         };
@@ -4327,6 +4328,7 @@ internal sealed partial class EditorAutomationAuthoringApi
             PanY = state.PanY,
             MaximizeOnPlay = state.MaximizeOnPlay,
             Maximized = state.IsMaximized,
+            StatsVisible = state.StatsVisible,
             Presets = presets,
             HasCommittedPresentation = hasCommittedPresentation,
             PresentationWidth = hasCommittedPresentation ? presentation.PresentationWidth : 0,
@@ -4383,6 +4385,7 @@ internal sealed partial class EditorAutomationAuthoringApi
             left.PanY != right.PanY ||
             left.MaximizeOnPlay != right.MaximizeOnPlay ||
             left.IsMaximized != right.IsMaximized ||
+            left.StatsVisible != right.StatsVisible ||
             left.CustomPresets.Length != right.CustomPresets.Length)
         {
             return false;

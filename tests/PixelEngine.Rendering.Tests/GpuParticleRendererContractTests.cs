@@ -76,17 +76,29 @@ public sealed class GpuParticleRendererContractTests
     }
 
     /// <summary>
-    /// 验证Render Pipeline Orders Gpu Particles Between World And Overlay行为符合预期。
+    /// 验证 RenderPipeline 将 GPU 粒子放在 world decoration 之后、光照与 foreground 之前。
     /// </summary>
     [Fact]
-    public void RenderPipelineOrdersGpuParticlesBetweenWorldAndOverlay()
+    public void RenderPipelineOrdersGpuParticlesBetweenWorldDecorationAndForeground()
     {
         string source = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "RenderPipeline.cs"));
 
         Assert.Contains("RenderGpuParticlesIfEnabled", source, StringComparison.Ordinal);
         Assert.Contains("_computeGate.FeatureSwitches.GpuParticlesEnabled", source, StringComparison.Ordinal);
-        Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal));
-        Assert.True(source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
+        int world = source.IndexOf("_worldBlit.Render", StringComparison.Ordinal);
+        int decoration = source.IndexOf(
+            "_overlay.Render(overlays, _scene, OverlayCompositionLayer.WorldDecoration)",
+            StringComparison.Ordinal);
+        int particles = source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal);
+        int lighting = source.IndexOf("_composite.Render", StringComparison.Ordinal);
+        int foreground = source.IndexOf(
+            "_overlay.Render(overlays, current, OverlayCompositionLayer.Foreground)",
+            StringComparison.Ordinal);
+
+        Assert.True(world < decoration);
+        Assert.True(decoration < particles);
+        Assert.True(particles < lighting);
+        Assert.True(lighting < foreground);
     }
 
     /// <summary>

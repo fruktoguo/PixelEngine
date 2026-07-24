@@ -548,7 +548,7 @@ public sealed class EditorAssetBrowserDualRootTests
         AssetBrowserItem script = Find("ScriptSource/LevelDirector.cs");
 
         Assert.Contains("CA 材质", materials.Descriptor?.Purpose, StringComparison.Ordinal);
-        Assert.Contains("材质目录：22", materials.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("材质目录：25", materials.PreviewSummary, StringComparison.Ordinal);
         Assert.Equal("材质反应规则", reactions.Descriptor?.TypeLabel);
         Assert.Contains("反应规则：9", reactions.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("启动场景", startup.Descriptor?.Purpose, StringComparison.Ordinal);
@@ -563,7 +563,7 @@ public sealed class EditorAssetBrowserDualRootTests
         Assert.Contains("10 个预加载", uiManifest.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("Web-first", uiScreen.Descriptor?.Purpose, StringComparison.Ordinal);
         Assert.Contains("id=main-menu", uiScreen.PreviewSummary, StringComparison.Ordinal);
-        Assert.Contains("demo.webfirst.main-menu/v2", uiScreen.PreviewSummary, StringComparison.Ordinal);
+        Assert.Contains("demo.webfirst.main-menu/v3", uiScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Contains("id=telemetry", telemetryScreen.PreviewSummary, StringComparison.Ordinal);
         Assert.Equal("字体", font.Descriptor?.TypeLabel);
         Assert.Contains("初始世界材质图", materialMap.Descriptor?.Purpose, StringComparison.Ordinal);

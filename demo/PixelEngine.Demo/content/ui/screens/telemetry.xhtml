@@ -1,37 +1,50 @@
-<rml title="运行诊断" data-screen="telemetry" data-contract="demo.webfirst.telemetry/v1" style="left: 782px; top: 14px; width: 300px; height: 412px">
+<rml title="运行诊断" data-screen="telemetry" data-contract="demo.webfirst.telemetry/v2" style="left: 928px; top: 196px; width: 334px; height: 438px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #dfe8f2; background-color: transparent; }
-      #telemetry_panel { position: absolute; left: 782px; top: 14px; width: 268px; height: 380px; padding: 16px; background-color: rgba(8, 12, 18, 218); border-width: 1px; border-color: #45576d; }
-      #telemetry_title { color: #8cc8ff; font-size: 18px; }
-      progress { position: relative; display: block; width: 236px; height: 13px; margin-top: 2px; background-color: #202b38; border-width: 1px; border-color: #405066; }
-      progress fill { background-color: #4b83b8; }
-      progress .meter_label { position: absolute; left: 5px; top: -1px; height: 13px; line-height: 13px; color: #f0f5fa; font-size: 10px; }
-      p { margin: 3px 0px; }
-      button { width: 128px; height: 28px; margin-top: 8px; background-color: #315f8d; color: #ffffff; border-width: 1px; border-color: #527ca4; }
-      button:hover { background-color: #4076a5; }
+      rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #fff8ed; background-color: rgba(0, 0, 0, 0); }
+      #telemetry_panel { position: absolute; left: 928px; top: 196px; width: 300px; height: 404px; padding: 16px; background-color: rgba(57, 38, 39, 232); border-width: 2px; border-color: #966056; }
+      #telemetry_title { position: absolute; left: 944px; top: 210px; width: 268px; color: #f2cf78; font-size: 14px; }
+      progress { position: absolute; left: 944px; width: 268px; height: 10px; margin: 0px; background-color: #281a1d; border-width: 1px; border-color: #79504a; }
+      #hud_weapon { top: 242px; }
+      #hud_overheated { top: 262px; }
+      #hud_material_slot { top: 282px; }
+      #hud_brush_radius { top: 302px; }
+      #hud_explosions { top: 322px; }
+      #hud_shots { top: 342px; }
+      #hud_collapse_islands { top: 362px; }
+      #hud_collapse_scan { top: 382px; }
+      #hud_fps { top: 402px; }
+      #hud_frame_p99 { top: 422px; }
+      #hud_frame_low1 { top: 442px; }
+      #hud_jitter { top: 462px; }
+      #hud_particles { top: 482px; }
+      #hud_lights { top: 502px; }
+      #hud_bodies { top: 522px; }
+      #hud_fx { top: 542px; }
+      .meter_label { position: absolute; left: 4px; top: -2px; color: #ffffff; font-size: 9px; }
+      #telemetry_close { position: absolute; left: 944px; top: 570px; width: 132px; height: 30px; color: #ffffff; background-color: #765044; border-width: 1px; border-color: #bd7b60; }
+      #telemetry_close:hover { background-color: #995f47; border-color: #f0c867; }
     </style>
   </head>
   <body>
-    <div id="telemetry_panel">
-      <p id="telemetry_title">运行诊断（按需显示）</p>
-      <progress id="hud_weapon" path="hud.weapon" value="0.0" text="武器槽位"><div class="meter_label">武器槽位</div></progress>
-      <progress id="hud_overheated" path="hud.overheated" value="0.0" text="过热锁定"><div class="meter_label">过热锁定</div></progress>
-      <progress id="hud_material_slot" path="hud.material_slot" value="0.0" text="材质槽位"><div class="meter_label">材质槽位</div></progress>
-      <progress id="hud_brush_radius" path="hud.brush_radius" value="0.0" text="笔刷半径"><div class="meter_label">笔刷半径</div></progress>
-      <progress id="hud_explosions" path="hud.explosions" value="0.0" text="爆破次数"><div class="meter_label">爆破次数</div></progress>
-      <progress id="hud_shots" path="hud.shots" value="0.0" text="射击次数"><div class="meter_label">射击次数</div></progress>
-      <progress id="hud_collapse_islands" path="hud.collapse_islands" value="0.0" text="坍塌转刚体"><div class="meter_label">坍塌转刚体</div></progress>
-      <progress id="hud_collapse_scan" path="hud.collapse_scan" value="0.0" text="坍塌扫描"><div class="meter_label">坍塌扫描</div></progress>
-      <progress id="hud_fps" path="hud.fps" value="0.0" text="Render FPS"><div class="meter_label">Render FPS</div></progress>
-      <progress id="hud_frame_p99" path="hud.frame_p99" value="0.0" text="p99 帧耗时"><div class="meter_label">p99 帧耗时</div></progress>
-      <progress id="hud_frame_low1" path="hud.frame_low1" value="0.0" text="1% low"><div class="meter_label">1% low</div></progress>
-      <progress id="hud_jitter" path="hud.jitter" value="0.0" text="jitter"><div class="meter_label">jitter</div></progress>
-      <progress id="hud_particles" path="hud.particles" value="0.0" text="粒子"><div class="meter_label">粒子</div></progress>
-      <progress id="hud_lights" path="hud.lights" value="0.0" text="光源"><div class="meter_label">光源</div></progress>
-      <progress id="hud_bodies" path="hud.bodies" value="0.0" text="刚体"><div class="meter_label">刚体</div></progress>
-      <progress id="hud_fx" path="hud.fx" value="0.0" text="FX burst"><div class="meter_label">FX burst</div></progress>
-      <button id="telemetry_close" data-event-click="toggle_telemetry">关闭诊断</button>
-    </div>
+    <div id="telemetry_panel"></div>
+    <p id="telemetry_title">运行诊断</p>
+    <progress id="hud_weapon" path="hud.weapon" value="0.0" text="武器槽位"><div class="meter_label">武器槽位</div></progress>
+    <progress id="hud_overheated" path="hud.overheated" value="0.0" text="过热锁定"><div class="meter_label">过热锁定</div></progress>
+    <progress id="hud_material_slot" path="hud.material_slot" value="0.0" text="材质槽位"><div class="meter_label">材质槽位</div></progress>
+    <progress id="hud_brush_radius" path="hud.brush_radius" value="0.0" text="笔刷半径"><div class="meter_label">笔刷半径</div></progress>
+    <progress id="hud_explosions" path="hud.explosions" value="0.0" text="爆破次数"><div class="meter_label">爆破次数</div></progress>
+    <progress id="hud_shots" path="hud.shots" value="0.0" text="射击次数"><div class="meter_label">射击次数</div></progress>
+    <progress id="hud_collapse_islands" path="hud.collapse_islands" value="0.0" text="坍塌转刚体"><div class="meter_label">坍塌转刚体</div></progress>
+    <progress id="hud_collapse_scan" path="hud.collapse_scan" value="0.0" text="坍塌扫描"><div class="meter_label">坍塌扫描</div></progress>
+    <progress id="hud_fps" path="hud.fps" value="0.0" text="Render FPS"><div class="meter_label">Render FPS</div></progress>
+    <progress id="hud_frame_p99" path="hud.frame_p99" value="0.0" text="p99 帧耗时"><div class="meter_label">p99 帧耗时</div></progress>
+    <progress id="hud_frame_low1" path="hud.frame_low1" value="0.0" text="1% low"><div class="meter_label">1% low</div></progress>
+    <progress id="hud_jitter" path="hud.jitter" value="0.0" text="jitter"><div class="meter_label">jitter</div></progress>
+    <progress id="hud_particles" path="hud.particles" value="0.0" text="粒子"><div class="meter_label">粒子</div></progress>
+    <progress id="hud_lights" path="hud.lights" value="0.0" text="光源"><div class="meter_label">光源</div></progress>
+    <progress id="hud_bodies" path="hud.bodies" value="0.0" text="刚体"><div class="meter_label">刚体</div></progress>
+    <progress id="hud_fx" path="hud.fx" value="0.0" text="FX burst"><div class="meter_label">FX burst</div></progress>
+    <button id="telemetry_close" data-event-click="toggle_telemetry">关闭</button>
   </body>
 </rml>

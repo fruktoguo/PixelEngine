@@ -125,6 +125,8 @@ public sealed record AutomationGamePresentationSnapshot
     public required bool MaximizeOnPlay { get; init; }
     /// <summary>Game View 当前是否最大化。</summary>
     public required bool Maximized { get; init; }
+    /// <summary>是否显示不参与布局的 Game View 性能统计浮层。</summary>
+    public required bool StatsVisible { get; init; }
     /// <summary>所有内建及自定义 presets。</summary>
     public required AutomationGameViewPreset[] Presets { get; init; }
     /// <summary>是否已有可捕获的完整 presentation。</summary>
@@ -162,6 +164,8 @@ public sealed record AutomationGamePresentationSetRequest
     public required bool MaximizeOnPlay { get; init; }
     /// <summary>Game View 当前是否最大化。</summary>
     public required bool Maximized { get; init; }
+    /// <summary>是否显示不参与布局的 Game View 性能统计浮层。</summary>
+    public required bool StatsVisible { get; init; }
     /// <summary>完整替换的自定义 fixed-resolution presets。</summary>
     public AutomationGameViewPreset[] CustomPresets { get; init; } = [];
 }

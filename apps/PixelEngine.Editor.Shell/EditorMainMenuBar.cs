@@ -12,14 +12,15 @@ namespace PixelEngine.Editor.Shell;
 [EditorUiSurface("editor.panel.main-menu")]
 internal sealed class EditorMainMenuBar
 {
-    private const float ToolbarHeight = 38f;
+    private const float ToolbarHeight = 32f;
     private const float StatusBarHeight = 22f;
-    private const float PlayControlButtonSize = 28f;
-    private const float PlayControlGap = 4f;
+    private const float PlayControlButtonSize = 22f;
+    private const float PlayControlGap = 3f;
     private const float LayoutButtonWidth = 72f;
     private const string ToolbarWindowName = "##PixelEngineEditorToolbar";
     private const string StatusBarWindowName = "##PixelEngineEditorStatusBar";
     private const string LayoutPopupName = "##PixelEngineEditorLayoutPopup";
+    private const string LayoutSavePopupName = "Save Layout##PixelEngineEditorLayoutSavePopup";
     private const ImGuiWindowFlags ToolbarWindowFlags =
         ImGuiWindowFlags.NoTitleBar |
         ImGuiWindowFlags.NoResize |
@@ -28,6 +29,9 @@ internal sealed class EditorMainMenuBar
         ImGuiWindowFlags.NoScrollWithMouse |
         ImGuiWindowFlags.NoSavedSettings |
         ImGuiWindowFlags.NoDocking;
+    private string _layoutProfileName = "My Layout";
+    private string _layoutProfileDiagnostic = string.Empty;
+    private bool _layoutSavePopupRequested;
 
     public void Draw(EditorShellApp app)
     {
@@ -92,7 +96,7 @@ internal sealed class EditorMainMenuBar
         "toolbar.pause",
         "toolbar.step",
         "toolbar.layout.reset")]
-    private static void DrawToolbar(EditorShellApp app)
+    private void DrawToolbar(EditorShellApp app)
     {
         EditorMainToolbarState state = CaptureToolbarState(app);
         float uiScale = app.UiScale;
@@ -159,6 +163,42 @@ internal sealed class EditorMainMenuBar
 
         if (ImGui.BeginPopup(LayoutPopupName))
         {
+            string[] profiles = app.GetLayoutProfileNames();
+            for (int i = 0; i < profiles.Length; i++)
+            {
+                string profile = profiles[i];
+                if (ImGui.MenuItem(profile))
+                {
+                    _ = app.TryApplyLayoutProfile(profile, out _layoutProfileDiagnostic);
+                }
+            }
+
+            if (profiles.Length != 0)
+            {
+                ImGui.Separator();
+            }
+
+            if (ImGui.MenuItem(L.Get("action.saveLayout", "Save Current Layout..."), string.Empty, false, app.HasOpenProject))
+            {
+                _layoutProfileDiagnostic = string.Empty;
+                _layoutSavePopupRequested = true;
+            }
+
+            if (ImGui.BeginMenu(L.Get("action.deleteLayout", "Delete Layout"), profiles.Length != 0))
+            {
+                for (int i = 0; i < profiles.Length; i++)
+                {
+                    string profile = profiles[i];
+                    if (ImGui.MenuItem(profile))
+                    {
+                        _ = app.TryDeleteLayoutProfile(profile, out _layoutProfileDiagnostic);
+                    }
+                }
+
+                ImGui.EndMenu();
+            }
+
+            ImGui.Separator();
             if (ImGui.MenuItem(L.Get("action.resetLayout", "Reset Layout")))
             {
                 app.ResetLayout();
@@ -167,7 +207,51 @@ internal sealed class EditorMainMenuBar
             ImGui.EndPopup();
         }
 
+        if (_layoutSavePopupRequested)
+        {
+            ImGui.OpenPopup(LayoutSavePopupName);
+            _layoutSavePopupRequested = false;
+        }
+
+        DrawLayoutSavePopup(app);
+
         ImGui.End();
+    }
+
+    [EditorUiControlPrimitive]
+    private void DrawLayoutSavePopup(EditorShellApp app)
+    {
+        if (!ImGui.BeginPopup(LayoutSavePopupName))
+        {
+            return;
+        }
+
+        ImGui.SetNextItemWidth(EditorUiScale.Scale(240f, app.UiScale));
+        bool submitted = ImGui.InputText(
+            "Name##layout-profile-name",
+            ref _layoutProfileName,
+            65,
+            ImGuiInputTextFlags.EnterReturnsTrue);
+        if (!string.IsNullOrWhiteSpace(_layoutProfileDiagnostic))
+        {
+            ImGui.TextDisabled(_layoutProfileDiagnostic);
+        }
+
+        if (ImGui.Button(L.Get("action.save", "Save")) || submitted)
+        {
+            if (app.TrySaveLayoutProfile(_layoutProfileName, out _layoutProfileDiagnostic))
+            {
+                ImGui.CloseCurrentPopup();
+            }
+        }
+
+        ImGui.SameLine();
+        if (ImGui.Button(L.Get("action.cancel", "Cancel")))
+        {
+            ImGui.CloseCurrentPopup();
+        }
+
+        ImGui.EndPopup();
     }
 
     private static void DrawStatusBar(EditorShellApp app)

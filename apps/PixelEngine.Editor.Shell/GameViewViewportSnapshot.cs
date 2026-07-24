@@ -69,6 +69,48 @@ internal readonly record struct GameViewViewportSnapshot(
     public float FitScale => MathF.Min(DisplayScale.X, DisplayScale.Y);
 
     /// <summary>
+    /// runtime world content 在 Game View 面板内的完整矩形。该矩形保留被 Scale/crop 裁掉的边，
+    /// 用于只描绘真实游戏内容边界，而不是描绘整个 dock 面板。
+    /// </summary>
+    public GameViewRect WorldContentPanelRect
+    {
+        get
+        {
+            if (!IsValid ||
+                !ImageRect.IsValid ||
+                WorldContentRect.TargetWidth <= 0 ||
+                WorldContentRect.TargetHeight <= 0 ||
+                WorldContentRect.Width <= 0 ||
+                WorldContentRect.Height <= 0)
+            {
+                return default;
+            }
+
+            float targetWidth = WorldContentRect.TargetWidth;
+            float targetHeight = WorldContentRect.TargetHeight;
+            float top = targetHeight - WorldContentRect.Y - WorldContentRect.Height;
+            return new GameViewRect(
+                ImageRect.X + (WorldContentRect.X / targetWidth * ImageRect.Width),
+                ImageRect.Y + (top / targetHeight * ImageRect.Height),
+                WorldContentRect.Width / targetWidth * ImageRect.Width,
+                WorldContentRect.Height / targetHeight * ImageRect.Height);
+        }
+    }
+
+    /// <summary>runtime world content 与当前 Game View 可见区域的交集。</summary>
+    public GameViewRect VisibleWorldContentPanelRect
+    {
+        get
+        {
+            GameViewRect content = WorldContentPanelRect;
+            GameViewRect visiblePanel = VisiblePanelRect;
+            return content.IsValid
+                ? GameViewRect.Intersect(in content, in visiblePanel)
+                : default;
+        }
+    }
+
+    /// <summary>
     /// 创建旧式 Fit 快照；world content 等于整张 texture，revision 为 0。
     /// </summary>
     public static GameViewViewportSnapshot Create(

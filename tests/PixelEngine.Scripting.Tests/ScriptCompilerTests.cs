@@ -64,6 +64,30 @@ public sealed class ScriptCompilerTests
     }
 
     /// <summary>
+    /// 验证运行时脚本编译有稳定预处理符号，使项目源码能隔离只适用于 SDK/source-generator 的声明。
+    /// </summary>
+    [Fact]
+    public void CompilerDefinesRuntimeScriptCompilationSymbol()
+    {
+        ScriptCompiler compiler = new();
+        ScriptCompilationResult result = compiler.Compile(
+            "PixelEngine.UserScripts.RuntimeSymbol",
+            [new ScriptSourceFile("RuntimeSymbol.cs", """
+                namespace UserScripts;
+
+                #if PIXELENGINE_RUNTIME_SCRIPT_COMPILATION
+                public sealed class RuntimeSymbolMarker;
+                #endif
+                """)]);
+
+        Assert.True(result.Success, FormatDiagnostics(result));
+        ScriptLoadContext loadContext = new("script-runtime-symbol");
+        Assembly assembly = loadContext.LoadFromImages(result.PeImage, result.PdbImage);
+        Assert.NotNull(assembly.GetType("UserScripts.RuntimeSymbolMarker"));
+        loadContext.Unload();
+    }
+
+    /// <summary>
     /// 验证编译失败会返回诊断且不产出程序集字节。
     /// </summary>
     [Fact]

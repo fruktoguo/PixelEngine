@@ -8,7 +8,7 @@
     "mode.edit": "编辑", "mode.play": "运行", "mode.paused": "已暂停",
     "action.newProject": "新建工程", "action.openProject": "打开工程", "action.saveScene": "保存场景", "action.build": "构建",
     "action.play": "运行", "action.pause": "暂停", "action.resume": "继续", "action.step": "单步", "action.stop": "停止",
-    "action.undo": "撤销", "action.redo": "重做", "action.create": "创建", "action.delete": "删除", "action.duplicate": "复制", "action.rename": "重命名", "action.openCSharpProject": "打开 C# 工程", "action.layout": "布局", "action.resetLayout": "重置布局",
+    "action.undo": "撤销", "action.redo": "重做", "action.create": "创建", "action.delete": "删除", "action.duplicate": "复制", "action.rename": "重命名", "action.openCSharpProject": "打开 C# 工程", "action.layout": "布局", "action.saveLayout": "保存当前布局...", "action.deleteLayout": "删除布局", "action.resetLayout": "重置布局", "action.save": "保存", "action.cancel": "取消",
     "file.openRecent": "最近打开", "file.newScene": "新建场景", "file.openScene": "打开场景", "file.saveSceneAs": "场景另存为...", "file.closeProject": "关闭工程", "file.exit": "退出",
     "gameObject.createEmpty": "创建空对象", "gameObject.createEmptyChild": "创建空子对象", "gameObject.createWithComponent": "创建并添加组件",
     "window.preferences": "偏好设置", "window.preferencesDialog": "偏好设置...", "window.hierarchy": "层级", "window.project": "工程", "window.inspector": "检查器", "window.scene": "场景", "window.sceneView": "场景视图", "window.game": "游戏视图", "window.console": "控制台", "window.projectPicker": "工程选择器",

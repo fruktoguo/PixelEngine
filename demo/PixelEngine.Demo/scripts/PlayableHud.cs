@@ -330,15 +330,16 @@ public sealed class PlayableHud : Behaviour
         }
 
         gui.TextColored("无限沙盒 · 自由探索", 0xFF_E8_D0_6A);
-        float x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnX;
-        float y = _player?.CenterY ?? PlayableCavernWorldGenerator.PlayerSpawnY;
+        float x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnCenterX;
+        float y = _player?.CenterY ??
+            (PlayableCavernWorldGenerator.SafeSurfaceY + PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY);
         _ = _text.Clear()
             .Append("坐标 X ")
             .Append(x, "0")
             .Append("  Y ")
             .Append(y, "0")
             .Append("  距出生点 ")
-            .Append(MathF.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnX), "0");
+            .Append(MathF.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnCenterX), "0");
         gui.Text(_text.WrittenSpan);
     }
 

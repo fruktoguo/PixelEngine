@@ -78,9 +78,13 @@ public sealed class RmlUiGlBootstrapSmokeTests
         Assert.Contains("peui_native_renderer_set_viewport_region", nativeBinding, StringComparison.Ordinal);
         Assert.Contains("peui_native_renderer_set_viewport_region", nativeShim, StringComparison.Ordinal);
         Assert.Contains("renderer->renderer->SetViewport(width, height, x, y)", nativeShim, StringComparison.Ordinal);
-        Assert.Contains("renderer->context->SetDimensions(Rml::Vector2i(layout_width, layout_height))", nativeShim, StringComparison.Ordinal);
-        Assert.Contains("renderer->renderer->SetViewport(renderer->layoutWidth, renderer->layoutHeight)", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->context->SetDimensions(Rml::Vector2i(render_width, render_height))", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->context->SetDensityIndependentPixelRatio", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("renderer->renderer->SetViewport(\n        renderer->outputWidth", nativeShim, StringComparison.Ordinal);
         Assert.Contains("renderer->outputWidth", nativeShim, StringComparison.Ordinal);
+        Assert.Contains("ResolveNativeRasterScale", source, StringComparison.Ordinal);
+        Assert.Contains("x * _nativeRasterScaleX", source, StringComparison.Ordinal);
+        Assert.Contains("1f / _nativeRasterScaleX", source, StringComparison.Ordinal);
         Assert.Contains("glViewport(viewport_offset_x, viewport_offset_y, viewport_width, viewport_height)", gl3Renderer, StringComparison.Ordinal);
     }
 

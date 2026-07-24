@@ -32,7 +32,13 @@ public sealed class WorldBlitPass : IDisposable
     /// <param name="destination">输出颜色目标。</param>
     /// <param name="camera">只读相机快照；用于校验视口尺寸，本 pass 不持有相机权威。</param>
     /// <param name="quad">全屏三角形。</param>
-    public void Render(WorldTexture world, ColorRenderTarget destination, CameraState camera, FullscreenQuad quad)
+    /// <param name="blendOverDestination">是否把透明 world cell 合成到已绘制的背景上。</param>
+    public void Render(
+        WorldTexture world,
+        ColorRenderTarget destination,
+        CameraState camera,
+        FullscreenQuad quad,
+        bool blendOverDestination = false)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(destination);
@@ -46,13 +52,23 @@ public sealed class WorldBlitPass : IDisposable
         // 世界纹理 nearest 采样到 scene FBO，Y 轴在 fragment 中翻转以匹配 CPU 上传朝向。
         destination.BindFramebuffer();
         _gl.Viewport(0, 0, (uint)destination.Width, (uint)destination.Height);
-        _gl.Disable(EnableCap.Blend);
+        if (blendOverDestination)
+        {
+            _gl.Enable(EnableCap.Blend);
+            _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
+        }
+        else
+        {
+            _gl.Disable(EnableCap.Blend);
+        }
+
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.ScissorTest);
         _program.Use();
         world.Bind(0);
         _gl.Uniform1(_worldLocation, 0);
         quad.Draw();
+        _gl.Disable(EnableCap.Blend);
     }
 
     /// <inheritdoc />

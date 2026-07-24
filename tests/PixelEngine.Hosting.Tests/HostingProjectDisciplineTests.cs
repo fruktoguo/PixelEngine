@@ -538,6 +538,9 @@ public sealed class HostingProjectDisciplineTests
         Assert.Equal("WixToolset.Sdk/4.0.6", setupProject.Root?.Attribute("Sdk")?.Value);
         Assert.Equal("WixToolset.UI.wixext", setupProject.Descendants("PackageReference").Single().Attribute("Include")?.Value);
         Assert.Contains(package.Descendants(), element => element.Name.LocalName == "Package" && element.Attribute("Scope")?.Value == "perUser");
+        Assert.Contains(package.Descendants(), element =>
+            element.Name.LocalName == "MajorUpgrade" &&
+            element.Attribute("AllowSameVersionUpgrades")?.Value == "yes");
         Assert.Contains(package.Descendants(), element => element.Name.LocalName == "WixUI" && element.Attribute("InstallDirectory")?.Value == "INSTALLFOLDER");
         Assert.Contains(package.Descendants(), element => element.Name.LocalName == "RegistrySearch" && element.Attribute("Name")?.Value == "InstallFolder");
         Assert.Equal(2, package.Descendants().Count(element => element.Name.LocalName == "Shortcut"));

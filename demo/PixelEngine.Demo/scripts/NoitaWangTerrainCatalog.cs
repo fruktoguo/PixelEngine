@@ -23,6 +23,14 @@ internal sealed class NoitaWangTerrainCatalog
     private const string RequiredAlgorithm = "stb-herringbone-wang-corner-v1";
     private const int BinaryHeaderLength = 19;
 
+#if PIXELENGINE_RUNTIME_SCRIPT_COMPILATION
+    private static readonly JsonSerializerOptions RuntimeSerializerOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
+    };
+#endif
+
     private static readonly string[] RequiredReferenceBiomeIds =
     [
         "coalmine",
@@ -46,12 +54,6 @@ internal sealed class NoitaWangTerrainCatalog
         "wizardcave",
         "wizardcave-entrance",
     ];
-
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow,
-    };
 
     private static readonly Lazy<NoitaWangTerrainCatalog> Builtin = new(LoadBuiltin, isThreadSafe: true);
 
@@ -89,7 +91,13 @@ internal sealed class NoitaWangTerrainCatalog
         try
         {
             NoitaWangTerrainCatalog catalog =
-                JsonSerializer.Deserialize<NoitaWangTerrainCatalog>(json, SerializerOptions) ??
+#if PIXELENGINE_RUNTIME_SCRIPT_COMPILATION
+                JsonSerializer.Deserialize<NoitaWangTerrainCatalog>(json, RuntimeSerializerOptions) ??
+#else
+                JsonSerializer.Deserialize(
+                    json,
+                    DemoContentJsonContext.Default.NoitaWangTerrainCatalog) ??
+#endif
                 throw new InvalidDataException("noita-wang-terrain.json 根节点不能为 null。");
             return catalog.Validate();
         }
@@ -621,6 +629,9 @@ internal sealed class DecodedNoitaWangTerrainSet(
     uint[] verticalKeys,
     int[] verticalOffsets)
 {
+    // 当前独立 Wang tile 选择缺少参考实现未公开的 coarse topology，因此将一个
+    // semantic pixel 展开为五个 world cells；该比例由本机原生存档的空腔 run 分布锁定。
+    internal const int SemanticPixelScale = 5;
     private const ulong CoordinateXMultiplier = 0x9E37_79B9_7F4A_7C15UL;
     private const ulong CoordinateYMultiplier = 0xBF58_476D_1CE4_E5B9UL;
     private const ulong OrientationSalt = 0x94D0_49BB_1331_11EBUL;
@@ -645,8 +656,10 @@ internal sealed class DecodedNoitaWangTerrainSet(
 
     internal byte Sample(long worldX, long worldY, ulong worldSeed, ulong biomeSalt)
     {
-        long unitX = FloorDivide(worldX, ShortSide, out int localX);
-        long unitY = FloorDivide(worldY, ShortSide, out int localY);
+        long semanticX = FloorDivide(worldX, SemanticPixelScale, out _);
+        long semanticY = FloorDivide(worldY, SemanticPixelScale, out _);
+        long unitX = FloorDivide(semanticX, ShortSide, out int localX);
+        long unitY = FloorDivide(semanticY, ShortSide, out int localY);
         int phase = (int)(unitY & 3L);
         int relative = ((int)(unitX & 3L) - phase) & 3;
         bool horizontal = relative is 0 or 1;

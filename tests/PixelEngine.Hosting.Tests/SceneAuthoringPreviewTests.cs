@@ -1,6 +1,7 @@
 using Hexa.NET.ImGuizmo;
 using PixelEngine.Editor;
 using PixelEngine.Editor.Shell;
+using PixelEngine.Rendering;
 using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using System.Numerics;
@@ -1242,6 +1243,64 @@ public sealed class SceneAuthoringPreviewTests
         Assert.InRange(panel.CameraSnapshot.CellsPerPixel, 0.8f, 1.1f);
         Assert.Equal(320f, panel.CameraSnapshot.CenterX);
         Assert.Equal(180f, panel.CameraSnapshot.CenterY);
+    }
+
+    /// <summary>
+    /// 验证 Play 默认使用 Game View 的真实运行相机，并把 Scene world 请求边界移动到相同世界位置。
+    /// </summary>
+    [Fact]
+    public void SceneViewFollowsRuntimeCameraAndUsesItsVisibleWorldBounds()
+    {
+        CameraState runtimeCamera = new(4_000f, 8_000f, 2f, 640, 360);
+        SceneViewPanel panel = new(
+            EditorSceneModel.Empty("runtime-follow"),
+            new EditorUndoStack(),
+            runtimeCameraProvider: () => runtimeCamera);
+
+        panel.PrepareFrame(null, EditorUiMode.Play);
+        _ = panel.PrepareCanvas(new Vector2(800f, 450f));
+
+        Assert.True(panel.FollowRuntimeCamera);
+        Assert.Equal(4_640f, panel.CameraSnapshot.CenterX, precision: 3);
+        Assert.Equal(8_360f, panel.CameraSnapshot.CenterY, precision: 3);
+        Assert.Equal(2f, panel.CameraSnapshot.CellsPerPixel, precision: 3);
+        Assert.Equal(3_840f, panel.DisplayBounds.X, precision: 3);
+        Assert.Equal(7_910f, panel.DisplayBounds.Y, precision: 3);
+        Assert.Equal(1_600f, panel.DisplayBounds.Width, precision: 3);
+        Assert.Equal(900f, panel.DisplayBounds.Height, precision: 3);
+
+        panel.SetFollowRuntimeCamera(false);
+        runtimeCamera = runtimeCamera with { OriginWorldX = 20_000f, OriginWorldY = 30_000f };
+        panel.PrepareFrame(null, EditorUiMode.Play);
+        Assert.Equal(4_640f, panel.CameraSnapshot.CenterX, precision: 3);
+
+        panel.SetFollowRuntimeCamera(true);
+        Assert.Equal(20_640f, panel.CameraSnapshot.CenterX, precision: 3);
+        Assert.Equal(30_360f, panel.CameraSnapshot.CenterY, precision: 3);
+    }
+
+    /// <summary>
+    /// 验证 runtime Player marker 使用与 Demo controller 一致的左上角 AABB，而不是出生点三角形。
+    /// </summary>
+    [Fact]
+    public void RuntimePlayerMarkerUsesVisibleWorldAabb()
+    {
+        SceneHierarchyEntityItem player = new(
+            "script:5",
+            "Player",
+            ComponentCount: 5,
+            HasTransform: true,
+            X: 230f,
+            Y: 145f,
+            ScaleX: 1.5f,
+            ScaleY: 2f);
+
+        SceneAuthoringBounds bounds = SceneViewPanel.ResolveRuntimePlayerBounds(player);
+
+        Assert.Equal(230f, bounds.X);
+        Assert.Equal(145f, bounds.Y);
+        Assert.Equal(9f, bounds.Width);
+        Assert.Equal(24f, bounds.Height);
     }
 
     /// <summary>

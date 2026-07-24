@@ -259,6 +259,14 @@ public sealed class EditorAutomationRuntimeTests
                         AutomationProtocolConstants.RuntimeChangedEventType,
                         StringComparer.Ordinal));
                 Assert.Contains(capabilities.Items, descriptor =>
+                    descriptor.Id == AutomationProtocolConstants.GamePresentationSetMethod &&
+                    descriptor.UiCommandIds.Contains("panel.game.stats", StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains("panel.game.audio.enabled", StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains("panel.game.audio.master", StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains("panel.game.audio.sfx", StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains("panel.game.audio.ui", StringComparer.Ordinal) &&
+                    descriptor.UiCommandIds.Contains("panel.game.audio.ambient", StringComparer.Ordinal));
+                Assert.Contains(capabilities.Items, descriptor =>
                     descriptor.Id == AutomationProtocolConstants.RuntimeBodyListMethod &&
                     descriptor.ResponseSchema == "#/$defs/runtimeBodyListResponse" &&
                     descriptor.ExecutionPhase == AutomationExecutionPhase.EnginePhysicsSync &&

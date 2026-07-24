@@ -16,10 +16,11 @@ public sealed class ScriptInputApiTests
     {
         ScriptInputApi input = new();
 
-        input.Update([Key.D, Key.Space], [MouseButton.Left], mouseX: 12, mouseY: 34, wheelY: 2);
+        input.Update([Key.D, Key.Space, Key.Tab], [MouseButton.Left], mouseX: 12, mouseY: 34, wheelY: 2);
 
         Assert.True(input.IsDown(Key.D));
         Assert.True(input.WasPressed(Key.Space));
+        Assert.True(input.WasPressed(Key.Tab));
         Assert.False(input.WasReleased(Key.Space));
         Assert.Equal(1f, input.Axis(Axis.Horizontal));
         Assert.Equal((12f, 34f), input.MousePixel);
@@ -32,6 +33,7 @@ public sealed class ScriptInputApiTests
         Assert.False(input.IsDown(Key.D));
         Assert.True(input.WasReleased(Key.D));
         Assert.True(input.WasReleased(Key.Space));
+        Assert.True(input.WasReleased(Key.Tab));
         Assert.True(input.WasMouseReleased(MouseButton.Left));
         Assert.True(input.WasMousePressed(MouseButton.Right));
         Assert.Equal(-1f, input.Axis(Axis.Horizontal));

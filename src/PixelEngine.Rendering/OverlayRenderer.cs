@@ -79,7 +79,29 @@ public sealed unsafe class OverlayRenderer : IDisposable
         ArgumentNullException.ThrowIfNull(destination);
         ObjectDisposedException.ThrowIf(_disposed, this);
         destination.BindFramebuffer();
-        RenderCore(commands, destination.Width, destination.Height, bindDefaultFramebuffer: false);
+        RenderCore(commands, destination.Width, destination.Height, bindDefaultFramebuffer: false, compositionLayer: null);
+    }
+
+    /// <summary>
+    /// 只把指定组合层的 overlay 命令绘制到颜色目标。
+    /// </summary>
+    /// <param name="commands">只读 overlay 命令列表。</param>
+    /// <param name="destination">输出颜色目标。</param>
+    /// <param name="compositionLayer">要绘制的组合层。</param>
+    public void Render(
+        ReadOnlySpan<OverlayCommand> commands,
+        ColorRenderTarget destination,
+        OverlayCompositionLayer compositionLayer)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+        if (!Enum.IsDefined(compositionLayer))
+        {
+            throw new ArgumentOutOfRangeException(nameof(compositionLayer));
+        }
+
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        destination.BindFramebuffer();
+        RenderCore(commands, destination.Width, destination.Height, bindDefaultFramebuffer: false, compositionLayer);
     }
 
     /// <summary>
@@ -91,7 +113,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
     public void Render(ReadOnlySpan<OverlayCommand> commands, int viewportWidth, int viewportHeight)
     {
         PresentationViewport viewport = PresentationViewport.Fit(viewportWidth, viewportHeight, viewportWidth, viewportHeight);
-        RenderCore(commands, viewport, bindDefaultFramebuffer: true);
+        RenderCore(commands, viewport, bindDefaultFramebuffer: true, compositionLayer: null);
     }
 
     /// <summary>
@@ -101,16 +123,25 @@ public sealed unsafe class OverlayRenderer : IDisposable
     /// <param name="viewport">内部画布在默认 framebuffer 中的呈现区域。</param>
     public void Render(ReadOnlySpan<OverlayCommand> commands, PresentationViewport viewport)
     {
-        RenderCore(commands, viewport, bindDefaultFramebuffer: true);
+        RenderCore(commands, viewport, bindDefaultFramebuffer: true, compositionLayer: null);
     }
 
-    private void RenderCore(ReadOnlySpan<OverlayCommand> commands, int viewportWidth, int viewportHeight, bool bindDefaultFramebuffer)
+    private void RenderCore(
+        ReadOnlySpan<OverlayCommand> commands,
+        int viewportWidth,
+        int viewportHeight,
+        bool bindDefaultFramebuffer,
+        OverlayCompositionLayer? compositionLayer)
     {
         PresentationViewport viewport = PresentationViewport.Fit(viewportWidth, viewportHeight, viewportWidth, viewportHeight);
-        RenderCore(commands, viewport, bindDefaultFramebuffer);
+        RenderCore(commands, viewport, bindDefaultFramebuffer, compositionLayer);
     }
 
-    private void RenderCore(ReadOnlySpan<OverlayCommand> commands, PresentationViewport viewport, bool bindDefaultFramebuffer)
+    private void RenderCore(
+        ReadOnlySpan<OverlayCommand> commands,
+        PresentationViewport viewport,
+        bool bindDefaultFramebuffer,
+        OverlayCompositionLayer? compositionLayer)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -119,9 +150,11 @@ public sealed unsafe class OverlayRenderer : IDisposable
             throw new ArgumentOutOfRangeException(nameof(commands), "Overlay 命令数超过构造时声明的容量。");
         }
 
+        bool hasMatchingCommand = false;
         for (int i = 0; i < commands.Length; i++)
         {
             commands[i].Validate();
+            hasMatchingCommand |= compositionLayer is null || commands[i].CompositionLayer == compositionLayer.Value;
         }
 
         // --- 准备 GL 状态：绑定默认 FBO、设置呈现 viewport 与 alpha 混合 ---
@@ -133,7 +166,7 @@ public sealed unsafe class OverlayRenderer : IDisposable
         _gl.Viewport(viewport.X, viewport.Y, (uint)viewport.Width, (uint)viewport.Height);
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.ScissorTest);
-        if (commands.IsEmpty)
+        if (!hasMatchingCommand)
         {
             _gl.Disable(EnableCap.Blend);
             return;
@@ -155,6 +188,11 @@ public sealed unsafe class OverlayRenderer : IDisposable
         for (int i = 0; i < commands.Length; i++)
         {
             OverlayCommand command = commands[i];
+            if (compositionLayer is not null && command.CompositionLayer != compositionLayer.Value)
+            {
+                continue;
+            }
+
             bool commandUsesTexture = command.PrimitiveType == OverlayPrimitiveType.Sprite;
             uint commandTexture = commandUsesTexture ? command.Sprite.TextureHandle : 0;
             if (vertexCount > 0 && (batchUsesTexture != commandUsesTexture || batchTexture != commandTexture))

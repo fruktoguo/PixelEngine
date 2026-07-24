@@ -6,8 +6,24 @@ namespace PixelEngine.Demo;
 /// <summary>
 /// 基于全局坐标的确定性流式战役地形生成器；生成自然地表、八个主路径 biome、七个 Holy Mountain 与无限侧区。
 /// </summary>
-public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGenerator
+public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGenerator, IWorldVisualLayerProvider
 {
+    private static readonly ScriptAssetReference EntranceBackgroundAsset = new(
+        ScriptAssetKind.Texture,
+        "noita-mountain-left-entrance-background",
+        "maps/noita/mountain/left_entrance_background.png");
+    private static readonly ScriptAssetReference EntranceDecorationAsset = new(
+        ScriptAssetKind.Texture,
+        "noita-mountain-left-entrance-visual",
+        "maps/noita/mountain/left_entrance_visual.png");
+    private static readonly ScriptAssetReference EntranceBelowBackgroundAsset = new(
+        ScriptAssetKind.Texture,
+        "noita-mountain-left-entrance-below-background",
+        "maps/noita/mountain/left_entrance_below_background.png");
+    private static readonly ScriptAssetReference LeftStubBackgroundAsset = new(
+        ScriptAssetKind.Texture,
+        "noita-mountain-left-stub-background",
+        "maps/noita/mountain/left_stub_background.png");
     private TerrainGenerationState? _state;
 
     /// <summary>
@@ -18,7 +34,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// <summary>
     /// 当前生成算法与 region 存档兼容身份；改变不兼容算法时必须升级。
     /// </summary>
-    public const string PersistenceKey = "showcase-campaign-v11";
+    public const string PersistenceKey = "showcase-campaign-v13";
 
     /// <summary>
     /// 原点安全区的地表 Y。
@@ -26,14 +42,26 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     public const int SafeSurfaceY = 224;
 
     /// <summary>
-    /// 默认玩家出生 X。
+    /// Noita 参考出生中心 X。
     /// </summary>
-    public const float PlayerSpawnX = 227f;
+    public const float PlayerSpawnCenterX = 227f;
 
     /// <summary>
-    /// 默认玩家出生 Y；玩家会短距离落到安全地表。
+    /// Noita 参考出生中心相对地表的 Y 偏移。
     /// </summary>
-    public const float PlayerSpawnY = SafeSurfaceY - 85f;
+    public const float PlayerSpawnCenterOffsetY = -85f;
+
+    /// <summary>默认玩家碰撞 AABB 宽度。</summary>
+    public const float PlayerCollisionWidth = 6f;
+
+    /// <summary>默认玩家碰撞 AABB 高度。</summary>
+    public const float PlayerCollisionHeight = 12f;
+
+    /// <summary>传给角色控制器的默认出生左上角 X。</summary>
+    public const float PlayerSpawnX = PlayerSpawnCenterX - (PlayerCollisionWidth * 0.5f);
+
+    /// <summary>传给角色控制器的默认出生左上角 Y。</summary>
+    public const float PlayerSpawnY = SafeSurfaceY + PlayerSpawnCenterOffsetY - (PlayerCollisionHeight * 0.5f);
 
     internal const ulong Seed = 0x5049_5845_4C53_4248;
     internal const int SeaLevelY = 242;
@@ -42,6 +70,48 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     private const int MaximumConnectionSegmentsPerRow = 16;
     private const int MaximumBiomeLandmarkSegmentsPerRow = 8;
     private const double Inverse53Bit = 1.0 / 9_007_199_254_740_992.0;
+
+    /// <inheritdoc />
+    public int WorldVisualLayerCount => 4;
+
+    /// <inheritdoc />
+    public WorldVisualLayerDescriptor GetWorldVisualLayer(int index)
+    {
+        TerrainGenerationState? state = Volatile.Read(ref _state);
+        float worldY = (state?.Config.SurfaceY ?? SafeSurfaceY) - 512f;
+        return index switch
+        {
+            0 => new WorldVisualLayerDescriptor(
+                EntranceBackgroundAsset,
+                0f,
+                worldY,
+                512f,
+                512f,
+                WorldVisualLayerKind.Background),
+            1 => new WorldVisualLayerDescriptor(
+                EntranceBelowBackgroundAsset,
+                0f,
+                worldY + 512f,
+                512f,
+                512f,
+                WorldVisualLayerKind.Background),
+            2 => new WorldVisualLayerDescriptor(
+                LeftStubBackgroundAsset,
+                -512f,
+                worldY + 512f,
+                550f,
+                512f,
+                WorldVisualLayerKind.Background),
+            3 => new WorldVisualLayerDescriptor(
+                EntranceDecorationAsset,
+                0f,
+                worldY,
+                512f,
+                512f,
+                WorldVisualLayerKind.Decoration),
+            _ => throw new ArgumentOutOfRangeException(nameof(index)),
+        };
+    }
 
     /// <inheritdoc />
     public ProceduralWorldDescriptor Describe(in ProceduralWorldBuildRequest request)
@@ -64,8 +134,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
 
         return ProceduralWorldDescriptor.CreateInfinite(
             worldSeed,
-            initialFocusX: (long)PlayerSpawnX,
-            initialFocusY: config.SurfaceY - 85,
+            initialFocusX: (long)PlayerSpawnCenterX,
+            initialFocusY: (long)(config.SurfaceY + PlayerSpawnCenterOffsetY),
             persistenceKey: PersistenceKey);
     }
 
@@ -397,13 +467,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             return surfaceY < 108
                 ? row.Palette.Ice
                 : surfaceY >= SeaLevelY - 5 || moisture < -0.28
-                    ? row.Palette.Sand
-                    : row.Palette.Dirt;
+                    ? row.Palette.PackedSand
+                    : row.Palette.PackedDirt;
         }
 
         if (depth <= soilDepth + 7)
         {
-            return moisture < -0.5 ? row.Palette.Sand : row.Palette.Dirt;
+            return moisture < -0.5 ? row.Palette.PackedSand : row.Palette.PackedDirt;
         }
 
         bool protectedSpawn = Math.Abs((double)worldX) < SafeOuterRadius && depth < 160;
@@ -454,17 +524,17 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 worldX,
                 worldY,
                 state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                palette.Dirt,
+                palette.PackedDirt,
                 palette.Stone,
-                palette.Gravel,
+                palette.PackedGravel,
                 in palette),
             CompiledTopologyCellKind.SurfaceDesert => SelectReferenceCaveMaterial(
                 worldX,
                 worldY,
                 state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                palette.Sand,
+                palette.PackedSand,
                 palette.Stone,
-                palette.Gravel,
+                palette.PackedGravel,
                 in palette),
             CompiledTopologyCellKind.SurfaceWinter => SelectReferenceCaveMaterial(
                 worldX,
@@ -472,7 +542,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 palette.Ice,
                 palette.Stone,
-                palette.Gravel,
+                palette.PackedGravel,
                 in palette),
             CompiledTopologyCellKind.Mountain => SelectMountainMaterial(
                 worldX,
@@ -484,7 +554,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 worldY,
                 state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                 palette.Stone,
-                palette.Gravel,
+                palette.PackedGravel,
                 palette.Crystal,
                 in palette),
             CompiledTopologyCellKind.GenericStructure => SelectReferenceStructureMaterial(
@@ -613,7 +683,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     return rightCliff
                         ? palette.Stone
                         : localY >= groundY
-                            ? localY < groundY + 10 ? palette.Dirt : palette.Stone
+                            ? localY < groundY + 10 ? palette.PackedDirt : palette.Stone
                             : palette.Empty;
                 }
             case ReferenceMountainKind.Hall:
@@ -664,9 +734,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     worldX,
                     depthCells,
                     biome,
-                    palette.Dirt,
+                    palette.PackedDirt,
                     palette.Stone,
-                    palette.Gravel,
+                    palette.PackedGravel,
                     in palette);
             default:
                 throw new InvalidOperationException($"未知的参考山体类型：{biome.Mountain}。");
@@ -699,13 +769,13 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         return maskKind switch
         {
             0 => palette.Empty,
-            1 => palette.Dirt,
+            1 => palette.PackedDirt,
             2 => palette.BoundaryStone,
             3 => biome.MaskAccent switch
             {
                 ReferenceTerrainMaskAccent.Water => palette.Water,
                 ReferenceTerrainMaskAccent.Ice => palette.Ice,
-                ReferenceTerrainMaskAccent.Gravel => palette.Gravel,
+                ReferenceTerrainMaskAccent.Gravel => palette.PackedGravel,
                 _ => throw new InvalidOperationException($"未知的参考地形掩码强调材质：{biome.MaskAccent}。"),
             },
             _ => throw new InvalidOperationException($"未知的参考地形掩码值：{maskKind}。"),
@@ -736,7 +806,7 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             2 => laboratory.Structure,
             3 => laboratory.Hazard,
             4 => palette.Water,
-            5 => palette.Dirt,
+            5 => palette.PackedDirt,
             6 => palette.Crystal,
             7 => palette.Stone,
             _ => throw new InvalidOperationException($"未知的 Laboratory 参考地形掩码值：{maskKind}。"),
@@ -1475,6 +1545,8 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
     /// </summary>
     internal static void PopulateAuthoringWorld(in AuthoringWorldPreviewContext context)
     {
+        const int ChunkSizeCells = 64;
+        const int TemperatureSizeCells = 16;
         CampaignConfig config = CampaignConfig.Load(context.Config);
         BiomeCatalog biomes = BiomeCatalog.Load(context.Config, config);
         NoitaWangTerrainCatalog wangTerrain = NoitaWangTerrainCatalog.Load(context.Config);
@@ -1485,112 +1557,59 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             biomes,
             wangTerrain,
             worldSeed);
-        TerrainMaterialPalette palette = state.Palette;
         _ = context.Edit.ClearRect(0, 0, context.WidthCells - 1, context.HeightCells - 1);
-        Span<int> surfaces = stackalloc int[context.WidthCells];
-        Span<int> soilDepths = stackalloc int[context.WidthCells];
-        Span<double> moisture = stackalloc double[context.WidthCells];
-        double mainPathOriginNoise = MainPathOriginNoise(worldSeed);
-        Span<ConnectionRowSegment> connectionSegments =
-            stackalloc ConnectionRowSegment[MaximumConnectionSegmentsPerRow];
-        Span<BiomeLandmarkRowSegment> landmarkSegments =
-            stackalloc BiomeLandmarkRowSegment[MaximumBiomeLandmarkSegmentsPerRow];
-        long previewOriginX = -(context.WidthCells / 2L);
-        for (int x = 0; x < context.WidthCells; x++)
+        Span<ushort> materialCells = stackalloc ushort[ChunkSizeCells * ChunkSizeCells];
+        Span<Half> temperatureCells = stackalloc Half[TemperatureSizeCells * TemperatureSizeCells];
+        int chunkCountX = (context.WidthCells + ChunkSizeCells - 1) / ChunkSizeCells;
+        int chunkCountY = (context.HeightCells + ChunkSizeCells - 1) / ChunkSizeCells;
+        for (int chunkY = 0; chunkY < chunkCountY; chunkY++)
         {
-            long worldX = previewOriginX + x;
-            surfaces[x] = SurfaceYAt(worldX, worldSeed);
-            moisture[x] = MoistureAt(worldX, worldSeed);
-            soilDepths[x] = 5 + (int)Math.Round(
-                (ValueNoise1D(worldX * 0.011, worldSeed ^ 0x5A17UL) + 1.0) * 2.5);
-        }
-
-        for (int y = 0; y < context.HeightCells; y++)
-        {
-            CampaignDepthLocation location = config.ResolveLocation(y);
-            int regionIndex = Math.Clamp(location.RegionIndex, 0, CampaignConfig.RequiredRegionCount - 1);
-            CompiledBiome biome = state.MainBiomes[regionIndex];
-            int connectionSegmentCount = BuildConnectionRowSegments(
-                state,
-                y,
-                connectionSegments);
-            int landmarkSegmentCount = BuildBiomeLandmarkRowSegments(
-                state,
-                regionIndex,
-                y,
-                landmarkSegments);
-            PortalRowContext portalRow = BuildPortalRowContext(
-                state,
-                location,
-                regionIndex,
-                y);
-            long pathCenterX = location.DepthCells >= config.CampaignStartDepthCells
-                ? MainPathCenterX(y, config, worldSeed, mainPathOriginNoise)
-                : config.MainPathEntranceX;
-            TerrainRowContext rowContext = new(
-                worldSeed,
-                state,
-                location,
-                pathCenterX,
-                regionIndex,
-                biome,
-                palette,
-                portalRow,
-                landmarkSegments[..landmarkSegmentCount],
-                connectionSegments[..connectionSegmentCount]);
-            int runStart = 0;
-            ushort runMaterial = SelectMaterialIncludingPortal(
-                previewOriginX,
-                y,
-                surfaces[0],
-                soilDepths[0],
-                moisture[0],
-                in rowContext);
-            for (int x = 1; x <= context.WidthCells; x++)
+            int originY = chunkY * ChunkSizeCells;
+            int copyHeight = Math.Min(ChunkSizeCells, context.HeightCells - originY);
+            for (int chunkX = 0; chunkX < chunkCountX; chunkX++)
             {
-                ushort material = x == context.WidthCells
-                    ? ushort.MaxValue
-                    : SelectMaterialIncludingPortal(
-                        previewOriginX + x,
-                        y,
-                        surfaces[x],
-                        soilDepths[x],
-                        moisture[x],
-                        in rowContext);
-                if (material == runMaterial)
+                int originX = chunkX * ChunkSizeCells;
+                int copyWidth = Math.Min(ChunkSizeCells, context.WidthCells - originX);
+                PopulateChunkCore(
+                    state,
+                    worldSeed,
+                    originX,
+                    originY,
+                    ChunkSizeCells,
+                    TemperatureSizeCells,
+                    materialCells,
+                    temperatureCells);
+                for (int localY = 0; localY < copyHeight; localY++)
                 {
-                    continue;
-                }
+                    int rowOffset = localY * ChunkSizeCells;
+                    int runStart = 0;
+                    ushort runMaterial = materialCells[rowOffset];
+                    for (int localX = 1; localX <= copyWidth; localX++)
+                    {
+                        ushort material = localX == copyWidth
+                            ? ushort.MaxValue
+                            : materialCells[rowOffset + localX];
+                        if (material == runMaterial)
+                        {
+                            continue;
+                        }
 
-                if (runMaterial != palette.Empty)
-                {
-                    _ = context.Edit.PaintRect(runStart, y, x - 1, y, new MaterialId(runMaterial));
-                }
+                        if (runMaterial != state.Palette.Empty)
+                        {
+                            _ = context.Edit.PaintRect(
+                                originX + runStart,
+                                originY + localY,
+                                originX + localX - 1,
+                                originY + localY,
+                                new MaterialId(runMaterial));
+                        }
 
-                runStart = x;
-                runMaterial = material;
+                        runStart = localX;
+                        runMaterial = material;
+                    }
+                }
             }
         }
-    }
-
-    private static ushort SelectMaterialIncludingPortal(
-        long worldX,
-        long worldY,
-        int surfaceY,
-        int soilDepth,
-        double moisture,
-        in TerrainRowContext row)
-    {
-        return row.PortalRow.Kind != PortalRowKind.None &&
-            TrySelectPortalTerrain(worldX, in row, out ushort portalTerrainMaterial)
-                ? portalTerrainMaterial
-                : SelectMaterial(
-                    worldX,
-                    worldY,
-                    surfaceY,
-                    soilDepth,
-                    moisture,
-                    in row);
     }
 
     private static TerrainGenerationState CreateGenerationState(
@@ -1651,12 +1670,15 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             ResolveRequired(materials, "empty"),
             ResolveRequired(materials, "sand"),
             ResolveRequired(materials, "dirt"),
+            ResolveRequired(materials, "packed_sand"),
+            ResolveRequired(materials, "packed_dirt"),
             ResolveRequired(materials, "water"),
             ResolveRequired(materials, "lava"),
             ResolveRequired(materials, "stone"),
             ResolveRequired(materials, "boundary_stone"),
             ResolveRequired(materials, "ice"),
             ResolveRequired(materials, "gravel"),
+            ResolveRequired(materials, "packed_gravel"),
             ResolveRequired(materials, "crystal"));
     }
 
@@ -2363,12 +2385,21 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                     salt = lastSalt;
                 }
 
-                if (set.DecodedBitmapCaves is null ||
-                    !set.DecodedBitmapCaves.TrySample(worldX, worldY, worldSeed, salt, out byte semantic))
+                byte semantic = 0;
+                bool sampledBitmap = set.DecodedBitmapCaves is not null &&
+                    set.DecodedBitmapCaves.TrySample(worldX, worldY, worldSeed, salt, out semantic);
+                if (!sampledBitmap)
                 {
                     semantic = set.Decoded.Sample(worldX, worldY, worldSeed, salt);
                 }
                 if (!DecodedNoitaWangTerrainSet.IsMarker(semantic))
+                {
+                    continue;
+                }
+
+                if (!sampledBitmap &&
+                    (FloorRemainder(worldX, DecodedNoitaWangTerrainSet.SemanticPixelScale) != 0 ||
+                     FloorRemainder(worldY, DecodedNoitaWangTerrainSet.SemanticPixelScale) != 0))
                 {
                     continue;
                 }
@@ -2919,12 +2950,15 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort Empty,
         ushort Sand,
         ushort Dirt,
+        ushort PackedSand,
+        ushort PackedDirt,
         ushort Water,
         ushort Lava,
         ushort Stone,
         ushort BoundaryStone,
         ushort Ice,
         ushort Gravel,
+        ushort PackedGravel,
         ushort Crystal);
 }
 

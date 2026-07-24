@@ -2,6 +2,16 @@ using Silk.NET.OpenGL;
 
 namespace PixelEngine.Rendering;
 
+/// <summary>世界纹理的显示采样策略。</summary>
+public enum WorldTextureSampling
+{
+    /// <summary>放大和缩小都保持最近邻，供运行时像素视图使用。</summary>
+    PixelPerfect,
+
+    /// <summary>放大保持最近邻，缩小时使用 mipmap，供大范围 Scene 预览使用。</summary>
+    MipmappedMinification,
+}
+
 /// <summary>
 /// 单张视口大小世界纹理。按架构 §9.2 禁止 per-chunk texture 上传路径。
 /// </summary>
@@ -18,10 +28,28 @@ public sealed class WorldTexture : IDisposable
     /// <param name="width">纹理宽度。</param>
     /// <param name="height">纹理高度。</param>
     public WorldTexture(GL gl, int width, int height)
+        : this(gl, width, height, WorldTextureSampling.PixelPerfect)
+    {
+    }
+
+    /// <summary>
+    /// 创建指定采样策略的 BGRA8 世界纹理；通道保存相位 9 产出的 display-referred sRGB 材质色。
+    /// </summary>
+    /// <param name="gl">OpenGL 入口。</param>
+    /// <param name="width">纹理宽度。</param>
+    /// <param name="height">纹理高度。</param>
+    /// <param name="sampling">显示采样策略。</param>
+    public WorldTexture(GL gl, int width, int height, WorldTextureSampling sampling)
     {
         ArgumentNullException.ThrowIfNull(gl);
+        if (!Enum.IsDefined(sampling))
+        {
+            throw new ArgumentOutOfRangeException(nameof(sampling));
+        }
+
         _gl = gl;
-        _texture = CreateTexture(gl, width, height);
+        Sampling = sampling;
+        _texture = CreateTexture(gl, width, height, sampling);
     }
 
     /// <summary>
@@ -39,6 +67,9 @@ public sealed class WorldTexture : IDisposable
     /// </summary>
     public int Height => _texture.Height;
 
+    /// <summary>当前显示采样策略。</summary>
+    public WorldTextureSampling Sampling { get; }
+
     /// <summary>
     /// 调整世界纹理尺寸。尺寸未变化时不重建。
     /// </summary>
@@ -52,9 +83,23 @@ public sealed class WorldTexture : IDisposable
             return;
         }
 
-        GlTexture next = CreateTexture(_gl, width, height);
+        GlTexture next = CreateTexture(_gl, width, height, Sampling);
         _texture.Dispose();
         _texture = next;
+    }
+
+    /// <summary>
+    /// 在 level 0 完整更新后重建 mipmap。仅 <see cref="WorldTextureSampling.MipmappedMinification"/> 纹理可调用。
+    /// </summary>
+    public void RegenerateMipmaps()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (Sampling != WorldTextureSampling.MipmappedMinification)
+        {
+            throw new InvalidOperationException("仅启用 mipmap 缩小采样的世界纹理可以重建 mipmap。");
+        }
+
+        _texture.RegenerateMipmaps();
     }
 
     /// <summary>
@@ -79,14 +124,24 @@ public sealed class WorldTexture : IDisposable
         _disposed = true;
     }
 
-    private static GlTexture CreateTexture(GL gl, int width, int height)
+    private static GlTexture CreateTexture(
+        GL gl,
+        int width,
+        int height,
+        WorldTextureSampling sampling)
     {
-        return new GlTexture(
+        GlTexture texture = new(
             gl,
             width,
             height,
             InternalFormat.Rgba8,
             PixelFormat.Bgra,
             PixelType.UnsignedInt8888Rev);
+        if (sampling == WorldTextureSampling.MipmappedMinification)
+        {
+            texture.EnableMipmappedMinification();
+        }
+
+        return texture;
     }
 }

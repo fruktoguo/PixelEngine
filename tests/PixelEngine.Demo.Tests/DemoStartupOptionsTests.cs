@@ -306,15 +306,15 @@ public sealed class DemoStartupOptionsTests
 
             Assert.True(materials.TryGetId("empty", out ushort empty));
             Assert.True(materials.TryGetId("stone", out ushort stone));
-            Assert.True(materials.TryGetId("dirt", out ushort dirt));
-            Assert.True(materials.TryGetId("sand", out ushort sand));
+            Assert.True(materials.TryGetId("packed_dirt", out ushort packedDirt));
+            Assert.True(materials.TryGetId("packed_sand", out ushort packedSand));
             Assert.True(materials.TryGetId("boundary_stone", out ushort boundaryStone));
             const int ReferenceSpawnX = 227;
             const int ReferenceSpawnY = PlayableCavernWorldGenerator.SafeSurfaceY - 85;
             Assert.Equal(empty, grid.MaterialAt(ReferenceSpawnX, ReferenceSpawnY));
             Assert.Contains(
                 grid.MaterialAt(ReferenceSpawnX, PlayableCavernWorldGenerator.SafeSurfaceY - 70),
-                new[] { stone, dirt, sand, boundaryStone });
+                new[] { stone, packedDirt, packedSand, boundaryStone });
             Assert.False(PlayableCavernWorldGenerator.IsCaveAt(
                 0,
                 PlayableCavernWorldGenerator.SafeSurfaceY + 48,
@@ -656,6 +656,42 @@ public sealed class DemoStartupOptionsTests
     }
 
     /// <summary>
+    /// 验证初始地质使用静态固结材质，而被破坏后仍会回落到真正可流动的 Powder。
+    /// </summary>
+    [Fact]
+    public void DemoContentSeparatesPackedGeologyFromLoosePowders()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        DemoStartupOptions options = DemoStartupOptions.Parse([
+            "--headless",
+            "--no-hot-reload",
+            "--content",
+            contentRoot,
+        ]);
+        EngineProject project = DemoProgram.BuildProject(options);
+        using Engine engine = DemoProgram.BuildEngine(options, project);
+        _ = engine.LoadContentPackage();
+        MaterialTable materials = engine.Context.GetService<MaterialTable>();
+
+        foreach ((string packedName, string looseName) in new[]
+                 {
+                     ("packed_sand", "sand"),
+                     ("packed_dirt", "dirt"),
+                     ("packed_gravel", "gravel"),
+                 })
+        {
+            Assert.True(materials.TryGetId(packedName, out ushort packedId));
+            Assert.True(materials.TryGetId(looseName, out ushort looseId));
+            ref readonly MaterialDef packed = ref materials.Get(packedId);
+            ref readonly MaterialDef loose = ref materials.Get(looseId);
+            Assert.Equal(CellType.Solid, packed.Type);
+            Assert.Equal(CellType.Powder, loose.Type);
+            Assert.Equal(looseId, packed.DestroyedTarget);
+            Assert.True(packed.Integrity > 0);
+        }
+    }
+
+    /// <summary>
     /// 验证材质纯色回退与内容纹理的物理语义一致，避免水、冰、木材等在 Editor/无纹理路径中串色。
     /// </summary>
     [Fact]
@@ -675,7 +711,9 @@ public sealed class DemoStartupOptionsTests
         (string Name, uint BaseColorBgra)[] expected =
         [
             ("sand", 0xFF_DD_C5_7B),
+            ("packed_sand", 0xFF_DD_C5_7B),
             ("dirt", 0xFF_64_42_2A),
+            ("packed_dirt", 0xFF_64_42_2A),
             ("ash", 0xFF_60_60_5C),
             ("water", 0xFF_31_70_BE),
             ("oil", 0xFF_28_20_32),
@@ -692,6 +730,7 @@ public sealed class DemoStartupOptionsTests
             ("metal", 0xFF_96_9C_A0),
             ("glass", 0xFF_A8_D6_E4),
             ("gravel", 0xFF_63_63_69),
+            ("packed_gravel", 0xFF_63_63_69),
             ("crystal", 0xFF_69_E0_F2),
         ];
 

@@ -27,6 +27,10 @@ public sealed class OverlayRendererContractTests
         Assert.Equal(0.5f, outline.OutlineThickness);
         Assert.Equal(OverlayPrimitiveType.Sprite, sprite.PrimitiveType);
         Assert.Equal((uint)9, sprite.Sprite.TextureHandle);
+        Assert.Equal(OverlayCompositionLayer.Foreground, solid.CompositionLayer);
+        Assert.Equal(OverlayCompositionLayer.Foreground, outline.CompositionLayer);
+        Assert.Equal(OverlayCompositionLayer.Foreground, sprite.CompositionLayer);
+        Assert.Equal(OverlayCompositionLayer.Foreground, line.CompositionLayer);
         Assert.Equal(OverlayPrimitiveType.Line, line.PrimitiveType);
         Assert.Equal(9f, line.LineEndX);
         Assert.Equal(10f, line.LineEndY);
@@ -45,6 +49,39 @@ public sealed class OverlayRendererContractTests
         AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.Line(0f, 0f, 0f, 0f, 1f, 0).Validate());
         AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.Line(0f, 0f, 1f, 1f, 0f, 0).Validate());
         AssertThrows<ArgumentOutOfRangeException>(() => new OverlaySprite(1, 16, 16, 0.75f, 0f, 0.25f, 1f).Validate());
+        AssertThrows<ArgumentOutOfRangeException>(() => OverlayCommand.SpriteRectangle(
+            0f,
+            0f,
+            1f,
+            1f,
+            new OverlaySprite(1, 16, 16),
+            compositionLayer: (OverlayCompositionLayer)byte.MaxValue).Validate());
+    }
+
+    /// <summary>验证世界图片能明确选择背景或光照前装饰层。</summary>
+    [Fact]
+    public void SpriteCommandsPreserveWorldCompositionLayer()
+    {
+        OverlaySprite sprite = new(7, 512, 512);
+        OverlayCommand background = OverlayCommand.SpriteRectangle(
+            0f,
+            0f,
+            512f,
+            512f,
+            sprite,
+            compositionLayer: OverlayCompositionLayer.Background);
+        OverlayCommand decoration = OverlayCommand.SpriteRectangle(
+            0f,
+            0f,
+            512f,
+            512f,
+            sprite,
+            compositionLayer: OverlayCompositionLayer.WorldDecoration);
+
+        background.Validate();
+        decoration.Validate();
+        Assert.Equal(OverlayCompositionLayer.Background, background.CompositionLayer);
+        Assert.Equal(OverlayCompositionLayer.WorldDecoration, decoration.CompositionLayer);
     }
 
     /// <summary>

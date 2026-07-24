@@ -429,6 +429,44 @@ Collapsed=0
         }
     }
 
+    /// <summary>命名布局必须经过验证后原子保存，并可列出、读取和删除。</summary>
+    [Fact]
+    public void NamedLayoutProfilesRoundTripValidatedIni()
+    {
+        string directory = CreateTempDirectory();
+        try
+        {
+            EditorLayoutProfileStore profiles = new(Path.Combine(directory, "profiles"));
+            const string input = "[Window][Scene]\r\nPos=0,0\r\n[Docking][Data]\r\nDockSpace ID=0x1\r\n";
+
+            Assert.True(profiles.TrySave("Gameplay", input, out string name, out string saveDiagnostic), saveDiagnostic);
+            Assert.Equal("Gameplay", name);
+            Assert.True(profiles.TryList(out string[] names, out string listDiagnostic), listDiagnostic);
+            Assert.Equal(["Gameplay"], names);
+            Assert.True(profiles.TryLoad("Gameplay", out string loaded, out string loadDiagnostic), loadDiagnostic);
+            Assert.DoesNotContain('\r', loaded);
+            Assert.True(profiles.TryDelete("Gameplay", out string deleteDiagnostic), deleteDiagnostic);
+            Assert.True(profiles.TryList(out names, out listDiagnostic), listDiagnostic);
+            Assert.Empty(names);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    /// <summary>布局名称不得借助路径或 Windows 设备名逃逸 profile 目录。</summary>
+    [Theory]
+    [InlineData("../outside")]
+    [InlineData("folder/layout")]
+    [InlineData("CON")]
+    [InlineData(".")]
+    public void NamedLayoutProfilesRejectUnsafeNames(string name)
+    {
+        Assert.False(EditorLayoutProfileStore.TryNormalizeName(name, out _, out string diagnostic));
+        Assert.NotEmpty(diagnostic);
+    }
+
     private static string CreateTempDirectory()
     {
         string path = Path.Combine(Path.GetTempPath(), "PixelEngine.EditorShellLayoutTests", Guid.NewGuid().ToString("N"));

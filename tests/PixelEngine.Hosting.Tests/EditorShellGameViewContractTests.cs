@@ -274,6 +274,67 @@ public sealed class EditorShellGameViewContractTests
     }
 
     /// <summary>
+    /// 验证 Game View 的产品描边使用实际 16:9 图像，而不是使用包含上下空白的整个面板。
+    /// </summary>
+    [Fact]
+    public void GameViewWorldContentPanelRectMatchesCenteredFitImage()
+    {
+        PresentationViewport worldContent = PresentationViewport.Fit(640, 360, 640, 360);
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 640,
+            textureHeight: 360,
+            presentationRevision: 7,
+            in worldContent,
+            imageMinPanel: new Vector2(10f, 20f),
+            availablePanelSize: new Vector2(800f, 800f),
+            framebufferScale: Vector2.One,
+            scalePercent: 0f,
+            requestedPan: Vector2.Zero);
+
+        Assert.Equal(new GameViewRect(10f, 195f, 800f, 450f), snapshot.ImageRect);
+        Assert.Equal(snapshot.ImageRect, snapshot.WorldContentPanelRect);
+        Assert.Equal(snapshot.ImageRect, snapshot.VisibleWorldContentPanelRect);
+    }
+
+    /// <summary>
+    /// 验证 presentation 自身存在 letterbox 时，产品描边映射到 world content 而不是整张 texture。
+    /// </summary>
+    [Fact]
+    public void GameViewWorldContentPanelRectMapsInternalLetterboxFromBottomLeftViewport()
+    {
+        PresentationViewport worldContent = PresentationViewport.Fit(640, 360, 400, 400);
+        GameViewViewportSnapshot snapshot = GameViewViewportSnapshot.Create(
+            textureWidth: 400,
+            textureHeight: 400,
+            presentationRevision: 11,
+            in worldContent,
+            imageMinPanel: Vector2.Zero,
+            availablePanelSize: new Vector2(400f, 400f),
+            framebufferScale: Vector2.One,
+            scalePercent: 100f,
+            requestedPan: Vector2.Zero);
+
+        Assert.Equal(new GameViewRect(0f, 88f, 400f, 225f), snapshot.WorldContentPanelRect);
+        Assert.Equal(snapshot.WorldContentPanelRect, snapshot.VisibleWorldContentPanelRect);
+    }
+
+    /// <summary>验证 Stats 浮层锚定实际可见游戏内容右上角且不改变该内容矩形。</summary>
+    [Fact]
+    public void GameViewStatsOverlayAnchorsInsideVisibleWorldContent()
+    {
+        GameViewRect content = new(20f, 30f, 800f, 450f);
+
+        GameViewRect overlay = GameViewPanel.ResolveStatsOverlayRect(
+            in content,
+            preferredWidth: 390f,
+            preferredHeight: 160f,
+            inset: 8f);
+
+        Assert.Equal(new GameViewRect(422f, 38f, 390f, 160f), overlay);
+        Assert.Equal(new GameViewRect(20f, 30f, 800f, 450f), content);
+    }
+
+    /// <summary>
     /// 验证 Game View 面板空白区会在 Editor 层阻断输入，避免 panel 外点击进入 UI 或 gameplay。
     /// </summary>
     [Fact]

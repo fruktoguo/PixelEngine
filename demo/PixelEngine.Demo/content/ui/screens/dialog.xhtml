@@ -1,23 +1,23 @@
-<rml title="对话" data-screen="dialog" data-contract="demo.webfirst.dialog/v1" style="left: 210px; top: 398px; width: 620px; height: 172px">
+<rml title="对话" data-screen="dialog" data-contract="demo.webfirst.dialog/v2" style="left: 150px; top: 454px; width: 980px; height: 210px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
-      body { margin: 0px; font-family: "Noto Sans SC"; color: #f4f0e7; background-color: transparent; }
-      #dialog_panel { position: absolute; left: 210px; top: 398px; width: 588px; height: 140px; padding: 16px; background-color: rgba(31, 25, 16, 238); border-width: 1px; border-color: #8b7444; }
-      #dialog_title { color: #f5c451; font-size: 20px; }
-      #dialog_line { color: #fff7dd; }
-      #dialog_hint { color: #c7bda4; }
-      button { width: 132px; height: 28px; margin-top: 8px; background-color: #7a6234; color: #ffffff; border-width: 1px; border-color: #a48750; }
-      button:hover { background-color: #987b43; }
-      p { margin: 4px 0px; }
+      rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #fff8ed; background-color: rgba(0, 0, 0, 0); }
+      #dialog_panel { position: absolute; left: 150px; top: 454px; width: 920px; height: 148px; padding: 28px; background-color: rgba(62, 40, 38, 245); border-width: 3px; border-color: #a76a56; }
+      #dialog_title { position: absolute; left: 182px; top: 476px; width: 856px; margin: 0px; color: #f4cf72; font-size: 16px; }
+      #dialog_line { position: absolute; left: 182px; top: 510px; width: 856px; margin: 0px; color: #ffffff; font-size: 14px; }
+      #dialog_hint { position: absolute; left: 182px; top: 538px; width: 856px; margin: 0px; color: #d3c0b6; font-size: 12px; }
+      button { position: absolute; top: 570px; width: 126px; height: 34px; color: #ffffff; background-color: #765044; border-width: 2px; border-color: #bd7b60; }
+      button:hover { background-color: #995f47; border-color: #f0c867; }
+      #dialog_next { left: 182px; }
+      #dialog_close { left: 316px; }
     </style>
   </head>
   <body>
-    <div id="dialog_panel">
-      <p id="dialog_title">勘探记录</p>
-      <p id="dialog_line">山脊、湖盆和洞穴由同一个世界 seed 延展。</p>
-      <p id="dialog_hint">走过的地形会保留挖掘、爆破与建造结果。</p>
-      <button id="dialog_next" data-event-click="dialog_next">继续</button>
-      <button id="dialog_close" data-event-click="close_dialog">关闭</button>
-    </div>
+    <div id="dialog_panel"></div>
+    <p id="dialog_title">勘探记录</p>
+    <p id="dialog_line">山脊、湖盆和洞穴由同一个世界 seed 延展。</p>
+    <p id="dialog_hint">走过的地形会保留挖掘、爆破与建造结果。</p>
+    <button id="dialog_next" data-event-click="dialog_next">继续</button>
+    <button id="dialog_close" data-event-click="close_dialog">关闭</button>
   </body>
 </rml>

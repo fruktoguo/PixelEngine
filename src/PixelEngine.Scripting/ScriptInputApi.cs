@@ -5,7 +5,7 @@ namespace PixelEngine.Scripting;
 /// </summary>
 public sealed class ScriptInputApi : IInputApi
 {
-    private const int KeyCount = (int)Key.Digit9 + 1;
+    private const int KeyCount = (int)Key.Tab + 1;
     private const int MouseButtonCount = (int)MouseButton.Middle + 1;
 
     private readonly bool[] _downKeys = new bool[KeyCount];

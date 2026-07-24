@@ -185,11 +185,28 @@ public sealed class RenderPipelineContractTests
         Assert.Contains("ReadOnlySpan<LightSource> pointLights", source, StringComparison.Ordinal);
         Assert.Contains("UploadVisibility(fogOfWar, pointLights)", source, StringComparison.Ordinal);
         Assert.Contains("ApplyPointLights(mask, pointLights)", source, StringComparison.Ordinal);
-        Assert.True(source.IndexOf("_worldBlit.Render", StringComparison.Ordinal) < source.IndexOf("_composite.Render", StringComparison.Ordinal));
-        Assert.True(source.IndexOf("_composite.Render", StringComparison.Ordinal) < source.IndexOf("_overlay.Render", StringComparison.Ordinal));
-        Assert.True(source.IndexOf("_overlay.Render(overlays, current)", StringComparison.Ordinal) < source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal));
-        Assert.True(source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal) < source.IndexOf("_present.Render", StringComparison.Ordinal));
-        Assert.True(source.IndexOf("UiPresentSurface.RuntimeViewport", StringComparison.Ordinal) < source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal));
+        int background = source.IndexOf(
+            "_overlay.Render(overlays, _scene, OverlayCompositionLayer.Background)",
+            StringComparison.Ordinal);
+        int world = source.IndexOf("_worldBlit.Render", StringComparison.Ordinal);
+        int decoration = source.IndexOf(
+            "_overlay.Render(overlays, _scene, OverlayCompositionLayer.WorldDecoration)",
+            StringComparison.Ordinal);
+        int particles = source.IndexOf("RenderGpuParticlesIfEnabled", StringComparison.Ordinal);
+        int lighting = source.IndexOf("_composite.Render", StringComparison.Ordinal);
+        int foreground = source.IndexOf(
+            "_overlay.Render(overlays, current, OverlayCompositionLayer.Foreground)",
+            StringComparison.Ordinal);
+        int viewportTexture = source.IndexOf("CurrentViewportTexture = new RenderViewportTexture", StringComparison.Ordinal);
+
+        Assert.True(background < world);
+        Assert.True(world < decoration);
+        Assert.True(decoration < particles);
+        Assert.True(particles < lighting);
+        Assert.True(lighting < foreground);
+        Assert.True(foreground < viewportTexture);
+        Assert.True(viewportTexture < source.IndexOf("_present.Render", StringComparison.Ordinal));
+        Assert.True(source.IndexOf("UiPresentSurface.RuntimeViewport", StringComparison.Ordinal) < viewportTexture);
         Assert.Contains("UiPresentSurface.WindowFramebuffer);", source, StringComparison.Ordinal);
         Assert.True(source.IndexOf("_present.Render", StringComparison.Ordinal) < source.IndexOf("BeforePresentUi?.Invoke", StringComparison.Ordinal));
     }

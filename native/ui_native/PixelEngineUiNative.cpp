@@ -1435,6 +1435,7 @@ PE_UI_NATIVE_API void peui_native_renderer_set_viewport(PeUiRenderer* renderer, 
     if (renderer->context != nullptr)
     {
         renderer->context->SetDimensions(Rml::Vector2i(width, height));
+        renderer->context->SetDensityIndependentPixelRatio(1.0f);
     }
 }
 
@@ -1455,10 +1456,12 @@ PE_UI_NATIVE_API void peui_native_renderer_set_viewport_region(PeUiRenderer* ren
     if (renderer->context != nullptr)
     {
         renderer->context->SetDimensions(Rml::Vector2i(width, height));
+        renderer->context->SetDensityIndependentPixelRatio(1.0f);
     }
 }
 
-// 分离 CSS layout viewport 与 presentation raster 区域。layout 先渲染到内部 surface，EndFrame 再拉伸到输出区域。
+// CSS 使用 dp 表示 Canvas logical unit；Context 直接在 presentation raster 尺寸排版和栅格化，
+// 避免先生成低分辨率 layout FBO 再整体放大造成字体与边框模糊。
 PE_UI_NATIVE_API void peui_native_renderer_set_canvas_metrics(
     PeUiRenderer* renderer,
     int32_t x,
@@ -1480,10 +1483,12 @@ PE_UI_NATIVE_API void peui_native_renderer_set_canvas_metrics(
     renderer->outputY = y;
     renderer->outputWidth = render_width;
     renderer->outputHeight = render_height;
-    renderer->renderer->SetViewport(layout_width, layout_height);
+    renderer->renderer->SetViewport(render_width, render_height, x, y);
     if (renderer->context != nullptr)
     {
-        renderer->context->SetDimensions(Rml::Vector2i(layout_width, layout_height));
+        renderer->context->SetDimensions(Rml::Vector2i(render_width, render_height));
+        renderer->context->SetDensityIndependentPixelRatio(
+            static_cast<float>(render_width) / static_cast<float>(layout_width));
     }
 }
 
@@ -1589,16 +1594,15 @@ PE_UI_NATIVE_API void peui_native_render(PeUiRenderer* renderer)
     }
 
     PeUiGlStateGuard state;
-    // CanvasScaler：RmlUi 以 logical viewport layout；完成内部 surface 后再把同一帧拉伸到 presentation raster 区域。
-    renderer->renderer->SetViewport(renderer->layoutWidth, renderer->layoutHeight);
-    renderer->renderer->SetTransform(nullptr);
-    renderer->renderer->BeginFrame();
-    renderer->context->Render();
+    // CanvasScaler：Context 已按 presentation 像素排版，dp ratio 负责 logical unit 缩放。
     renderer->renderer->SetViewport(
         renderer->outputWidth,
         renderer->outputHeight,
         renderer->outputX,
         renderer->outputY);
+    renderer->renderer->SetTransform(nullptr);
+    renderer->renderer->BeginFrame();
+    renderer->context->Render();
     renderer->renderer->EndFrame();
 }
 

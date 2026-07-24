@@ -8,6 +8,7 @@ using PixelEngine.Physics;
 using PixelEngine.Rendering;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
+using PixelEngine.Scripting;
 using PixelEngine.UI;
 using Silk.NET.OpenGL;
 
@@ -1867,6 +1868,10 @@ internal sealed class EditorShellHostExtension :
             window,
             pipeline,
             manifestAssetResolver);
+        Func<CameraState>? runtimeCameraProvider =
+            engine.Context.TryGetService(out RenderPhaseDriver runtimeRenderDriver)
+                ? () => runtimeRenderDriver.CurrentCamera
+                : null;
         _sceneViewPanel = new SceneViewPanel(
             _sceneModel ?? throw new InvalidOperationException("Scene View 需要先配置 authoring scene model。"),
             _undoStack ?? throw new InvalidOperationException("Scene View 需要先配置 authoring undo stack。"),
@@ -1875,11 +1880,22 @@ internal sealed class EditorShellHostExtension :
             () => _authoringWorld?.Snapshot ?? default,
             _sceneWebCanvasPreview,
             _runtimeHierarchy,
+            runtimeCameraProvider,
             InvalidateAuthoringWorld);
         _undoStack.BeforeOperation = FlushPendingAuthoringEdits;
         _editor.AddPanel(EditorPanelIds.Scene, _sceneViewPanel);
         _playerSettingsPanel = new PlayerSettingsPanel(_project, () => _app.UiScale);
         GamePresentationCoordinator presentation = engine.Context.GetService<GamePresentationCoordinator>();
+        IRenderPresentationControl? gamePresentationControl =
+            engine.Context.TryGetService(out IRenderPresentationControl registeredPresentationControl)
+                ? registeredPresentationControl
+                : null;
+        AudioSystem? gameAudioSystem = engine.Context.TryGetService(out AudioSystem registeredAudioSystem)
+            ? registeredAudioSystem
+            : null;
+        IRuntimeControlApi? gameRuntimeControl = engine.Context.TryGetService(out IRuntimeControlApi registeredRuntimeControl)
+            ? registeredRuntimeControl
+            : null;
         _gameViewPanel = new GameViewPanel(
             () => pipeline.CurrentViewportTexture,
             () => presentation.Current,
@@ -1888,7 +1904,14 @@ internal sealed class EditorShellHostExtension :
                 _playerSettingsPanel.AppliedSettings.WindowHeight),
             pipeline.MaximumTextureSize,
             _app.Workspace,
-            _project.ProjectRoot);
+            _project.ProjectRoot,
+            () => PerformanceHudPanel.BuildSample(EditorPerformanceSnapshot.Create(
+                engine.Context.Counters,
+                engine.Context.Profiler,
+                BuildRuntimeDiagnostics(engine),
+                gamePresentationControl)),
+            gameAudioSystem,
+            gameRuntimeControl);
         _editor.AddPanel(EditorPanelIds.Game, _gameViewPanel);
         _assetBrowserPanel = new AssetBrowserPanel(
             assetBrowserDataSource,

@@ -101,19 +101,19 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.MainMenuScreen,
-            "demo.webfirst.main-menu/v2",
+            "demo.webfirst.main-menu/v3",
             GameUiDemoController.MenuModelPathNames.ToArray(),
             ["open_dialog", "open_inventory", "open_settings", "select_campaign", "select_sandbox", "start_game"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.SettingsScreen,
-            "demo.webfirst.settings/v1",
+            "demo.webfirst.settings/v2",
             ["settings.audio", "settings.vsync"],
             ["back_main", "toggle_audio", "toggle_vsync"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.InventoryScreen,
-            "demo.webfirst.inventory/v2",
+            "demo.webfirst.inventory/v3",
             GameUiDemoController.InventoryModelPathNames.ToArray(),
             [
                 "back_main",
@@ -141,19 +141,27 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.DialogScreen,
-            "demo.webfirst.dialog/v1",
+            "demo.webfirst.dialog/v2",
             [],
             ["close_dialog", "dialog_next"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.HudScreen,
-            "demo.webfirst.hud/v6",
+            "demo.webfirst.hud/v9",
             GameUiDemoController.HudModelPathNames.ToArray(),
-            ["pause_game", "toggle_telemetry"]);
+            [
+                "open_inventory",
+                "pause_game",
+                "select_wand_1",
+                "select_wand_2",
+                "select_wand_3",
+                "select_wand_4",
+                "toggle_telemetry",
+            ]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.TelemetryScreen,
-            "demo.webfirst.telemetry/v1",
+            "demo.webfirst.telemetry/v2",
             GameUiDemoController.TelemetryModelPathNames.ToArray(),
             ["toggle_telemetry"]);
         AssertScreenContract(
@@ -171,13 +179,13 @@ public sealed class DemoUiContentTests
         AssertScreenContract(
             manifest,
             GameUiDemoController.PauseScreen,
-            "demo.webfirst.pause/v1",
+            "demo.webfirst.pause/v2",
             [],
             ["open_settings", "restart_game", "resume_game", "quit_game"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.ResultScreen,
-            "demo.webfirst.result/v3",
+            "demo.webfirst.result/v4",
             GameUiDemoController.ResultModelPathNames.ToArray(),
             ["restart_game", "quit_game"]);
     }
@@ -256,7 +264,7 @@ public sealed class DemoUiContentTests
         Assert.Contains("每一轮由独立世界 Seed 生成", defaultLoopText);
         Assert.Contains("NOITA", defaultLoopText);
         Assert.Contains("Mines", defaultLoopText);
-        Assert.Contains("A/D 移动 · 按住 W/Space 有限悬浮 · 鼠标施放 · Esc 暂停", defaultLoopText);
+        Assert.Contains("PIXELENGINE FALLING-SAND DEMO", defaultLoopText);
         Assert.Contains("战役 / Campaign", defaultLoopText);
         Assert.Contains("探索 / Exploring", defaultLoopText);
         Assert.Contains("Seed", defaultLoopText);
@@ -275,7 +283,7 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证正常产品态使用单一紧凑 HUD，运行信息不会因第二个越界面板折回原点而重叠。
+    /// 验证正常产品态采用 Noita 式角落 HUD，并为每个进度条声明稳定绝对坐标。
     /// </summary>
     [Fact]
     public void DemoMenuAndHudUseCompactProductLayoutWithoutOverlappingObjectivePanel()
@@ -293,19 +301,36 @@ public sealed class DemoUiContentTests
 
         XElement statusPanel = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "status_panel");
         Assert.DoesNotContain(hud.Descendants(), element => (string?)element.Attribute("id") == "objective_panel");
-        foreach (string id in new[] { "hud_title", "hud_route", "hud_region", "hud_health", "hud_levitation", "hud_context_divider", "hud_material_detail" })
+        foreach (string id in new[] { "hud_title", "hud_route", "hud_region", "hud_health", "hud_levitation", "hud_material_detail" })
         {
-            _ = Assert.Single(statusPanel.Descendants(), element => (string?)element.Attribute("id") == id);
+            _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == id);
         }
 
         string hudStyle = hud.Descendants("style").Select(static element => element.Value).Single();
-        Assert.Contains("#hud_material_detail", hudStyle, StringComparison.Ordinal);
-        Assert.DoesNotContain("#hud_material_detail { display: none;", hudStyle, StringComparison.Ordinal);
+        Assert.Contains("#hud_hidden_models { display: none;", hudStyle, StringComparison.Ordinal);
+        foreach (string id in new[] { "hud_health", "hud_levitation", "hud_ammo", "hud_reload" })
+        {
+            Assert.Contains($"#{id} {{", hudStyle, StringComparison.Ordinal);
+        }
 
-        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "run_divider");
-        _ = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context_divider");
+        Assert.DoesNotContain(hud.Descendants(), element => (string?)element.Attribute("id") == "run_meta");
+        XElement hudRoot = hud.Root ?? throw new InvalidDataException("hud.xhtml 缺少根元素。");
+        Assert.Equal(74f, ReadInlinePixelStyle(hudRoot, "height"));
+        Assert.Contains("background-color: rgba(0, 0, 0, 0)", (string?)hudRoot.Attribute("style"), StringComparison.Ordinal);
+        Assert.DoesNotContain(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_context_divider");
+        Assert.DoesNotContain(hud.Descendants(), element => (string?)element.Attribute("id") == "run_divider");
+        for (int i = 1; i <= 4; i++)
+        {
+            XElement wand = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == $"hud_wand_{i}");
+            Assert.Equal($"select_wand_{i}", (string?)wand.Attribute("data-event-click"));
+            XElement icon = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == $"hud_wand_icon_{i}");
+            Assert.EndsWith(".png", (string?)icon.Attribute("src"), StringComparison.Ordinal);
+        }
+
         XElement telemetry = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_telemetry");
         Assert.Equal("toggle_telemetry", (string?)telemetry.Attribute("data-event-click"));
+        XElement inventory = Assert.Single(hud.Descendants(), element => (string?)element.Attribute("id") == "hud_inventory");
+        Assert.Equal("open_inventory", (string?)inventory.Attribute("data-event-click"));
 
         string normalLoopText = string.Concat(UiVisibleText(mainPath)) + string.Concat(UiVisibleText(hudPath));
         Assert.DoesNotContain("Constant Pixel Size", normalLoopText, StringComparison.Ordinal);
@@ -328,12 +353,12 @@ public sealed class DemoUiContentTests
         for (int i = 0; i < catalog.Wands.Length; i++)
         {
             string expectedPrefix = $"{i + 1} {catalog.Wands[i].DisplayName}";
-            Assert.Contains(inventoryText, text => text.StartsWith(expectedPrefix, StringComparison.Ordinal));
+            Assert.Contains(inventoryText, text => text.Contains(expectedPrefix, StringComparison.Ordinal));
         }
 
         Assert.Contains(inventoryText, text => text.Contains("Mana Coil", StringComparison.Ordinal));
         Assert.Contains(inventoryText, text => text.Contains("Damage Rune", StringComparison.Ordinal));
-        Assert.Contains(inventoryText, text => text.Contains("点击槽位更换法术", StringComparison.Ordinal));
+        Assert.Contains(inventoryText, text => text.Contains("调整法术顺序", StringComparison.Ordinal));
         Assert.Contains("山脊、湖盆和洞穴由同一个世界 seed 延展。", dialogText);
         Assert.Contains("走过的地形会保留挖掘、爆破与建造结果。", dialogText);
         Assert.DoesNotContain(dialogText, text => text.Contains("出口", StringComparison.Ordinal));
@@ -345,7 +370,7 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证设置屏幕说明真实运行态 AudioSystem / Present VSync 开关，不退回无语义占位面板。
+    /// 验证设置屏幕使用面向玩家的音频与垂直同步文案，并保留真实运行态绑定。
     /// </summary>
     [Fact]
     public void DemoSettingsTextDescribesRuntimeAudioAndVSyncControls()
@@ -354,43 +379,35 @@ public sealed class DemoUiContentTests
         UiManifestScreen settings = manifest.GetRequiredScreen(GameUiDemoController.SettingsScreen);
         string[] settingsText = UiVisibleText(settings.FullPath);
 
-        Assert.Contains("音频总开关会改写运行时 AudioSystem。", settingsText);
-        Assert.Contains("Present VSync 会改写当前窗口交换策略。", settingsText);
-        Assert.Contains("Present VSync", settingsText);
-        Assert.Contains("音频总开关", settingsText);
+        Assert.Contains("游戏音效与环境音", settingsText);
+        Assert.Contains("画面同步", settingsText);
+        Assert.Contains("垂直同步", settingsText);
+        Assert.Contains("音频", settingsText);
         XDocument document = XDocument.Load(settings.FullPath);
         string[] modelPaths = ExtractAttributeValues(document, "path", "data-model");
         Assert.Contains("settings.vsync", modelPaths);
         Assert.Contains("settings.audio", modelPaths);
-        Assert.DoesNotContain("音效", settingsText);
+        Assert.DoesNotContain(settingsText, text => text.Contains("AudioSystem", StringComparison.Ordinal));
+        Assert.DoesNotContain(settingsText, text => text.Contains("Present VSync", StringComparison.Ordinal));
         Assert.DoesNotContain("占位", settingsText);
 
         XElement settingsRoot = document.Root ?? throw new InvalidDataException("settings.xhtml 缺少根元素。");
         XDocument mainDocument = XDocument.Load(
             manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath);
         XElement mainRoot = mainDocument.Root ?? throw new InvalidDataException("main-menu.xhtml 缺少根元素。");
-        float settingsRight = ReadInlinePixelStyle(settingsRoot, "left") +
-            ReadInlinePixelStyle(settingsRoot, "width");
-        float mainLeft = ReadInlinePixelStyle(mainRoot, "left");
-        Assert.Equal(32f, mainLeft - settingsRight);
+        Assert.Equal(1280f, ReadInlinePixelStyle(settingsRoot, "width"));
+        Assert.Equal(720f, ReadInlinePixelStyle(settingsRoot, "height"));
+        Assert.Equal(1280f, ReadInlinePixelStyle(mainRoot, "width"));
+        Assert.Equal(720f, ReadInlinePixelStyle(mainRoot, "height"));
 
         string styleSheet = string.Concat(document.Descendants("style").Select(static style => style.Value));
         string mainStyleSheet = string.Concat(mainDocument.Descendants("style").Select(static style => style.Value));
         Assert.Contains("#settings_title { position: absolute", styleSheet, StringComparison.Ordinal);
-        Assert.Contains("#settings_audio_hint { top: 62px; }", styleSheet, StringComparison.Ordinal);
-        Assert.Contains("#settings_vsync { top: 132px; }", styleSheet, StringComparison.Ordinal);
-        Assert.Contains("#settings_audio { top: 178px; }", styleSheet, StringComparison.Ordinal);
-        Assert.Contains(
-            "#menu_kicker, #main_title, #main_hint { position: absolute",
-            mainStyleSheet,
-            StringComparison.Ordinal);
-        Assert.Contains("#menu_kicker { top: 20px;", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_title { top: 42px;", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_hint { top: 84px;", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#briefing_title { position: absolute; left: 36px; top: 224px;", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_route { top: 248px; }", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_goal { top: 268px; }", mainStyleSheet, StringComparison.Ordinal);
-        Assert.Contains("#main_hazard { top: 288px; }", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#settings_audio { position: absolute", styleSheet, StringComparison.Ordinal);
+        Assert.Contains("#settings_vsync { position: absolute", styleSheet, StringComparison.Ordinal);
+        Assert.Contains("#main_logo { position: absolute", mainStyleSheet, StringComparison.Ordinal);
+        Assert.Contains("#start_game { position: absolute", mainStyleSheet, StringComparison.Ordinal);
+        _ = Assert.Single(mainDocument.Descendants(), element => (string?)element.Attribute("id") == "main_logo");
     }
 
     /// <summary>
@@ -423,7 +440,7 @@ public sealed class DemoUiContentTests
         _ = pause;
         _ = result;
         _ = gui.Context.ClickedButtons.Add("设置");
-        _ = gui.Context.ToggledCheckboxes.Add("Present VSync");
+        _ = gui.Context.ToggledCheckboxes.Add("垂直同步");
 
         host.Composite(default);
         RuntimeUiEvent[] events = new RuntimeUiEvent[8];
@@ -438,7 +455,7 @@ public sealed class DemoUiContentTests
         Assert.Contains("运行诊断", gui.Context.Texts);
         Assert.Contains("暂停", gui.Context.Texts);
         Assert.Contains("运行结算", gui.Context.Texts);
-        Assert.Contains("开始", gui.Context.Buttons);
+        Assert.Contains("新游戏", gui.Context.Buttons);
         Assert.Contains("继续", gui.Context.Buttons);
         Assert.Contains("开始新轮", gui.Context.Buttons);
         Assert.Contains("返回", gui.Context.Buttons);
@@ -451,17 +468,17 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证真实 Demo 屏幕使用的 CSS margin shorthand 会进入 ManagedFallback 垂直布局子集。
+    /// 验证真实 Demo 对话屏使用显式坐标，并可由 ManagedFallback 渲染与交互。
     /// </summary>
     [Fact]
-    public void DemoManagedFallbackConsumesProductScreenMarginShorthand()
+    public void DemoManagedFallbackConsumesProductScreenAbsoluteLayout()
     {
         // Arrange：准备输入与初始状态
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         UiManifestScreen dialog = manifest.GetRequiredScreen(GameUiDemoController.DialogScreen);
         string xhtml = File.ReadAllText(dialog.FullPath);
         // Assert：验证预期结果
-        Assert.Contains("p { margin: 4px 0px; }", xhtml, StringComparison.Ordinal);
+        Assert.Contains("#dialog_line { position: absolute", xhtml, StringComparison.Ordinal);
 
         FakeGuiHost gui = new();
         using ManagedFallbackBackend backend = new(gui);
@@ -473,7 +490,6 @@ public sealed class DemoUiContentTests
 
         Assert.Contains("勘探记录", gui.Context.Texts);
         Assert.Contains("继续", gui.Context.Buttons);
-        Assert.Contains(4f, gui.Context.VerticalSpacings);
     }
 
     /// <summary>
@@ -651,6 +667,9 @@ public sealed class DemoUiContentTests
         Assert.Contains("Ordered", GetUiText(ui, "inventory.stats"), StringComparison.Ordinal);
         Assert.Contains("Mana Coil", GetUiText(ui, "inventory.slot_1"), StringComparison.Ordinal);
         Assert.Contains("可编辑", GetUiText(ui, "inventory.edit_state"), StringComparison.Ordinal);
+        Assert.Equal("按序", GetUiText(ui, "inventory.shuffle_text"));
+        Assert.Equal("每次 1", GetUiText(ui, "inventory.draw_text"));
+        Assert.Equal("容量 8", GetUiText(ui, "inventory.capacity_text"));
 
         ui.Raise(GameUiDemoController.Action("select_wand_2"));
 
@@ -663,6 +682,44 @@ public sealed class DemoUiContentTests
         Assert.Equal("timed-trigger", wand.SpellSlotId(1, 0));
         Assert.Contains("Timed Trigger", GetUiText(ui, "inventory.slot_1"), StringComparison.Ordinal);
         Assert.False(wand.Faulted, wand.LastException?.ToString());
+    }
+
+    /// <summary>
+    /// 验证进入玩法后可用 Tab 打开法杖编辑，并在关闭库存后保留 HUD 与运行态。
+    /// </summary>
+    [Fact]
+    public void DemoGameplayTabOpensEditableWandInventoryAndReturnsToHud()
+    {
+        string contentRoot = Path.Combine(FindRepositoryRoot(), "demo", "PixelEngine.Demo", "content");
+        using Engine engine = CreateHudEngine(contentRoot, out ScriptScene scene, out FakeGameUiService ui, out ScriptInputApi input);
+        Entity entity = scene.CreateEntity();
+        _ = entity.AddComponent<Transform>();
+        PlayerController player = entity.AddComponent<PlayerController>();
+        player.SpawnX = 20f;
+        player.SpawnY = 42f;
+        WandController wand = entity.AddComponent<WandController>();
+        GameUiDemoController controller = entity.AddComponent<GameUiDemoController>();
+
+        engine.RunHeadlessTicks(2, realDeltaSeconds: 1.0 / 60.0);
+        ui.Raise(GameUiDemoController.Action("start_game"));
+        input.Update([Key.Tab], [], mouseX: 0f, mouseY: 0f, wheelY: 0f);
+        engine.RunHeadlessTicks(1, realDeltaSeconds: 1.0 / 60.0);
+
+        ScriptUiScreenHandle inventory = controller.ModalScreen;
+        Assert.NotEqual(default, controller.HudScreenHandle);
+        Assert.NotEqual(default, inventory);
+        Assert.Equal(GameUiDemoController.InventoryScreen, ui.PushedScreens[^1]);
+        ui.Raise(GameUiDemoController.Action("select_wand_2"));
+        ui.Raise(GameUiDemoController.Action("cycle_spell_1"));
+        Assert.Equal(1, wand.SelectedIndex);
+        Assert.Equal("timed-trigger", wand.SpellSlotId(1, 0));
+
+        ui.Raise(GameUiDemoController.Action("back_main"));
+
+        Assert.Equal(default, controller.ModalScreen);
+        Assert.Contains(inventory, ui.HiddenScreens);
+        Assert.NotEqual(default, controller.HudScreenHandle);
+        Assert.Equal(default, controller.MainScreen);
     }
 
     /// <summary>
@@ -734,18 +791,20 @@ public sealed class DemoUiContentTests
     }
 
     /// <summary>
-    /// 验证结算页为两套 UI 后端显式声明纵向文本流，避免标题、原因与 seed 叠压。
+    /// 验证结算页为标题、原因、seed 与动作声明独立绝对坐标，避免文本叠压。
     /// </summary>
     [Fact]
-    public void DemoResultUsesExplicitBlockTextFlowAndSeparatedActions()
+    public void DemoResultUsesExplicitSeparatedLayoutAndActions()
     {
         UiManifest manifest = UiManifestLoader.LoadFromDirectory(DemoUiRoot());
         string resultPath = manifest.GetRequiredScreen(GameUiDemoController.ResultScreen).FullPath;
         XDocument result = XDocument.Load(resultPath);
         string style = Assert.Single(result.Descendants("style")).Value;
 
-        Assert.Contains("p { display: block;", style, StringComparison.Ordinal);
-        Assert.Contains("#result_restart { margin-right: 8px; }", style, StringComparison.Ordinal);
+        Assert.Contains("#result_title { position: absolute", style, StringComparison.Ordinal);
+        Assert.Contains("#result_reason_text { position: absolute", style, StringComparison.Ordinal);
+        Assert.Contains("#result_restart { left: 448px; }", style, StringComparison.Ordinal);
+        Assert.Contains("#result_quit { left: 650px; }", style, StringComparison.Ordinal);
     }
 
     /// <summary>

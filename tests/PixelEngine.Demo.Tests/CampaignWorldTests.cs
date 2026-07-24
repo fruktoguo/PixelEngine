@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization.Metadata;
 using PixelEngine.Hosting;
@@ -616,6 +617,52 @@ public sealed class CampaignWorldTests
         Assert.Equal(["campaign.json", "biomes.json", "noita-wang-terrain.json"], config.ReadPaths);
         Assert.Equal(1, edit.ClearRectCount);
         Assert.True(edit.PaintedCellCount > 0);
+    }
+
+    /// <summary>
+    /// 验证 Editor authoring 预览与运行时程序化 chunk 使用相同世界坐标和生成入口，
+    /// 避免 Play 时把平移后的预览地形当作真实碰撞世界。
+    /// </summary>
+    [Fact]
+    public void CampaignAuthoringPreviewMatchesRuntimeChunkCells()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        CountingAuthoringWorldEditApi edit = new(width: 720, height: 480);
+        AuthoringWorldPreviewContext context = new(
+            materials,
+            new EngineScriptConfigApi(ContentRoot()),
+            edit,
+            WidthCells: 720,
+            HeightCells: 480);
+
+        PlayableCavernWorldGenerator.PopulateAuthoringWorld(in context);
+
+        (int X, int Y)[] sampledChunks = [(0, 0), (3, 2), (7, 3), (11, 7)];
+        foreach ((int chunkX, int chunkY) in sampledChunks)
+        {
+            ChunkSample runtime = GenerateChunk(
+                materials,
+                campaign,
+                biomes,
+                campaign.InitialRunSeed,
+                chunkX,
+                chunkY);
+            int copyWidth = Math.Min(ChunkSize, 720 - (chunkX * ChunkSize));
+            int copyHeight = Math.Min(ChunkSize, 480 - (chunkY * ChunkSize));
+            for (int localY = 0; localY < copyHeight; localY++)
+            {
+                for (int localX = 0; localX < copyWidth; localX++)
+                {
+                    Assert.Equal(
+                        runtime.Materials[(localY * ChunkSize) + localX],
+                        edit.MaterialAt(
+                            (chunkX * ChunkSize) + localX,
+                            (chunkY * ChunkSize) + localY));
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -1249,10 +1296,40 @@ public sealed class CampaignWorldTests
         ushort holyMountainPlatform = ResolveRequired(materials, biomes.HolyMountain.PlatformMaterial);
 
         long campaignBottom = config.SurfaceY + config.CampaignEndDepthCells;
-        Assert.Equal(227f, PlayableCavernWorldGenerator.PlayerSpawnX);
-        Assert.Equal(PlayableCavernWorldGenerator.PlayerSpawnY, config.SurfaceY - 85f);
-        Assert.Equal(empty, probe.MaterialAt(227, config.SurfaceY - 85));
-        Assert.NotEqual(empty, probe.MaterialAt(227, config.SurfaceY - 70));
+        Assert.Equal(227f, PlayableCavernWorldGenerator.PlayerSpawnCenterX);
+        Assert.Equal(
+            PlayableCavernWorldGenerator.PlayerSpawnY +
+                (PlayableCavernWorldGenerator.PlayerCollisionHeight * 0.5f),
+            config.SurfaceY + PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY);
+        Assert.Equal(
+            PlayableCavernWorldGenerator.PlayerSpawnCenterX,
+            PlayableCavernWorldGenerator.PlayerSpawnX +
+                (PlayableCavernWorldGenerator.PlayerCollisionWidth * 0.5f));
+
+        int spawnMinimumX = (int)MathF.Floor(PlayableCavernWorldGenerator.PlayerSpawnX);
+        int spawnMinimumY = (int)MathF.Floor(PlayableCavernWorldGenerator.PlayerSpawnY);
+        int spawnMaximumX = (int)MathF.Ceiling(
+            PlayableCavernWorldGenerator.PlayerSpawnX + PlayableCavernWorldGenerator.PlayerCollisionWidth) - 1;
+        int spawnMaximumY = (int)MathF.Ceiling(
+            PlayableCavernWorldGenerator.PlayerSpawnY + PlayableCavernWorldGenerator.PlayerCollisionHeight) - 1;
+        for (int y = spawnMinimumY; y <= spawnMaximumY; y++)
+        {
+            for (int x = spawnMinimumX; x <= spawnMaximumX; x++)
+            {
+                Assert.True(
+                    probe.MaterialAt(x, y) == empty,
+                    $"玩家出生 AABB 必须完整位于参考洞口空气中，失败坐标=({x},{y})。");
+            }
+        }
+
+        long groundY = (long)(PlayableCavernWorldGenerator.PlayerSpawnY +
+            PlayableCavernWorldGenerator.PlayerCollisionHeight + 3f);
+        Assert.NotEqual(empty, probe.MaterialAt((long)PlayableCavernWorldGenerator.PlayerSpawnCenterX, groundY));
+        ReferenceBiomeDefinition leftEntrance = ReferenceBiomeAtMacro(biomes.WorldTopology, 0, -1);
+        ReferenceTerrainMaskDefinition entranceMask = Assert.IsType<ReferenceTerrainMaskDefinition>(
+            leftEntrance.ReferenceTerrainMask);
+        Assert.Equal("data/biome_impl/mountain/left_entrance.png", entranceMask.SourcePath);
+        Assert.DoesNotContain("background", entranceMask.SourcePath, StringComparison.OrdinalIgnoreCase);
 
         for (int regionIndex = 0; regionIndex < CampaignConfig.RequiredRegionCount - 1; regionIndex++)
         {
@@ -1339,6 +1416,71 @@ public sealed class CampaignWorldTests
         CampaignDepthLocation unboundedFinalRegion = config.ResolveLocation(campaignBottom + 100_000);
         Assert.Equal(CampaignDepthKind.Region, unboundedFinalRegion.Kind);
         Assert.Equal(CampaignConfig.RequiredRegionCount - 1, unboundedFinalRegion.RegionIndex);
+    }
+
+    /// <summary>
+    /// 验证入口背景与山体装饰只作为同坐标系的非权威视觉层加载，透明区域不会被误写成可碰撞材质。
+    /// </summary>
+    [Fact]
+    public void MountainEntranceVisualLayersRemainSeparateFromAuthoritativeTerrain()
+    {
+        PlayableCavernWorldGenerator generator = new();
+        ProceduralWorldBuildRequest request = new(
+            PlayableCavernWorldGenerator.Key,
+            LoadMaterials(),
+            Config: new EngineScriptConfigApi(ContentRoot()));
+        _ = generator.Describe(in request);
+
+        Assert.Equal(4, generator.WorldVisualLayerCount);
+        WorldVisualLayerDescriptor background = generator.GetWorldVisualLayer(0).Validate();
+        WorldVisualLayerDescriptor belowBackground = generator.GetWorldVisualLayer(1).Validate();
+        WorldVisualLayerDescriptor stubBackground = generator.GetWorldVisualLayer(2).Validate();
+        WorldVisualLayerDescriptor decoration = generator.GetWorldVisualLayer(3).Validate();
+        Assert.Equal(WorldVisualLayerKind.Background, background.Layer);
+        Assert.Equal(WorldVisualLayerKind.Background, belowBackground.Layer);
+        Assert.Equal(WorldVisualLayerKind.Background, stubBackground.Layer);
+        Assert.Equal(WorldVisualLayerKind.Decoration, decoration.Layer);
+        Assert.Equal((0f, -288f, 512f, 512f), (
+            background.WorldX,
+            background.WorldY,
+            background.WidthCells,
+            background.HeightCells));
+        Assert.Equal((
+            background.WorldX,
+            background.WorldY,
+            background.WidthCells,
+            background.HeightCells), (
+            decoration.WorldX,
+            decoration.WorldY,
+            decoration.WidthCells,
+            decoration.HeightCells));
+        Assert.Equal((0f, 224f, 512f, 512f), (
+            belowBackground.WorldX,
+            belowBackground.WorldY,
+            belowBackground.WidthCells,
+            belowBackground.HeightCells));
+        Assert.Equal((-512f, 224f, 550f, 512f), (
+            stubBackground.WorldX,
+            stubBackground.WorldY,
+            stubBackground.WidthCells,
+            stubBackground.HeightCells));
+
+        AssertWorldVisualAsset(
+            background,
+            "maps/noita/mountain/left_entrance_background.png",
+            "6FEA95D1BB4DF16A0DD77B144799AD084A85E73E788AE3C8DFCC74F3CD3C9A43");
+        AssertWorldVisualAsset(
+            belowBackground,
+            "maps/noita/mountain/left_entrance_below_background.png",
+            "32233030568BDF9F55BC6C452916EC8989B2B9DD2A554ACACAAC3774EA6BD83D");
+        AssertWorldVisualAsset(
+            stubBackground,
+            "maps/noita/mountain/left_stub_background.png",
+            "A59602CA8C0EFF4C293DF7EA2DA290A9CAE003B414D937AA09E416A5EA4E4BFF");
+        AssertWorldVisualAsset(
+            decoration,
+            "maps/noita/mountain/left_entrance_visual.png",
+            "D5775C1BC8BAB858A691C6398E4639B4922759C37B489BBE535D0B824BB7D5CC");
     }
 
     /// <summary>
@@ -1472,7 +1614,7 @@ public sealed class CampaignWorldTests
         ushort structure = ResolveRequired(materials, laboratory.Palette.Structure);
         ushort hazard = ResolveRequired(materials, laboratory.Palette.Hazard);
         ushort water = ResolveRequired(materials, "water");
-        ushort dirt = ResolveRequired(materials, "dirt");
+        ushort dirt = ResolveRequired(materials, "packed_dirt");
         ushort crystal = ResolveRequired(materials, "crystal");
         ushort stone = ResolveRequired(materials, "stone");
         long originX = laboratoryTopology.OriginX;
@@ -1660,6 +1802,27 @@ public sealed class CampaignWorldTests
         return id.Value;
     }
 
+    private static void AssertWorldVisualAsset(
+        WorldVisualLayerDescriptor layer,
+        string expectedLogicalPath,
+        string expectedSha256)
+    {
+        ScriptAssetReference asset = layer.Asset;
+        Assert.Equal(ScriptAssetKind.Texture, asset.AssetType);
+        Assert.Equal(expectedLogicalPath, asset.LogicalPath);
+        string path = Path.Combine(ContentRoot(), expectedLogicalPath.Replace('/', Path.DirectorySeparatorChar));
+        Assert.True(File.Exists(path), $"缺少世界视觉资源：{expectedLogicalPath}。");
+        Assert.Equal(
+            expectedSha256,
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))));
+
+        MaterialMapImage image = MaterialMapPngLoader.Load(path);
+        Assert.Equal(layer.WidthCells, image.Width);
+        Assert.Equal(layer.HeightCells, image.Height);
+        Assert.Contains(image.Rgba, static pixel => (pixel >> 24) == 0);
+        Assert.Contains(image.Rgba, static pixel => (pixel >> 24) == byte.MaxValue);
+    }
+
     private static CampaignConfig LoadConfig()
     {
         return CampaignConfig.Load(new EngineScriptConfigApi(ContentRoot()));
@@ -1807,6 +1970,8 @@ public sealed class CampaignWorldTests
 
     private sealed class CountingAuthoringWorldEditApi(int width, int height) : IAuthoringWorldEditApi
     {
+        private readonly ushort[] _materials = new ushort[checked(width * height)];
+
         public int ClearRectCount { get; private set; }
 
         public long PaintedCellCount { get; private set; }
@@ -1814,6 +1979,7 @@ public sealed class CampaignWorldTests
         public void PaintCell(int worldX, int worldY, MaterialId material)
         {
             ValidateCoordinate(worldX, worldY);
+            _materials[(worldY * width) + worldX] = material.Value;
             PaintedCellCount++;
         }
 
@@ -1821,6 +1987,11 @@ public sealed class CampaignWorldTests
         {
             ValidateRect(minX, minY, maxX, maxY);
             int area = checked((maxX - minX + 1) * (maxY - minY + 1));
+            for (int y = minY; y <= maxY; y++)
+            {
+                _materials.AsSpan((y * width) + minX, maxX - minX + 1).Fill(material.Value);
+            }
+
             PaintedCellCount += area;
             return area;
         }
@@ -1828,13 +1999,25 @@ public sealed class CampaignWorldTests
         public void ClearCell(int worldX, int worldY)
         {
             ValidateCoordinate(worldX, worldY);
+            _materials[(worldY * width) + worldX] = 0;
         }
 
         public int ClearRect(int minX, int minY, int maxX, int maxY)
         {
             ValidateRect(minX, minY, maxX, maxY);
+            for (int y = minY; y <= maxY; y++)
+            {
+                _materials.AsSpan((y * width) + minX, maxX - minX + 1).Clear();
+            }
+
             ClearRectCount++;
             return checked((maxX - minX + 1) * (maxY - minY + 1));
+        }
+
+        public ushort MaterialAt(int x, int y)
+        {
+            ValidateCoordinate(x, y);
+            return _materials[(y * width) + x];
         }
 
         private void ValidateRect(int minX, int minY, int maxX, int maxY)

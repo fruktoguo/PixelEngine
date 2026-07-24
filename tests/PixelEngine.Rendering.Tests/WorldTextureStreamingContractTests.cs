@@ -134,6 +134,23 @@ public sealed class WorldTextureStreamingContractTests
         Assert.Contains("仅在", modeSource, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// 验证 Scene 远景独占 mipmap 缩小采样，运行时世界纹理默认路径仍保持最近邻像素采样。
+    /// </summary>
+    [Fact]
+    public void ScenePreviewUsesMipmappedMinificationWithoutChangingRuntimeDefault()
+    {
+        string worldSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "WorldTexture.cs"));
+        string textureSource = File.ReadAllText(ProjectPath("src", "PixelEngine.Rendering", "GlTexture.cs"));
+        string sceneSource = File.ReadAllText(ProjectPath("apps", "PixelEngine.Editor.Shell", "SceneWorldTexture.cs"));
+
+        Assert.Contains(": this(gl, width, height, WorldTextureSampling.PixelPerfect)", worldSource, StringComparison.Ordinal);
+        Assert.Contains("WorldTextureSampling.MipmappedMinification", sceneSource, StringComparison.Ordinal);
+        Assert.Contains("_texture.RegenerateMipmaps();", sceneSource, StringComparison.Ordinal);
+        Assert.Contains("GLEnum.LinearMipmapLinear", textureSource, StringComparison.Ordinal);
+        Assert.Contains("TextureParameterName.TextureMagFilter, (int)GLEnum.Nearest", textureSource, StringComparison.Ordinal);
+    }
+
     private static string ProjectPath(params string[] parts)
     {
         string path = AppContext.BaseDirectory;

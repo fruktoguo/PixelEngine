@@ -11,6 +11,53 @@ namespace PixelEngine.UI.Tests;
 public sealed class RmlUiDocumentPreprocessorTests
 {
     /// <summary>
+    /// 验证 Web-first px 只在 CSS declaration 中转换为 RmlUi dp，文本、注释和引号内容保持原样。
+    /// </summary>
+    [Fact]
+    public void PrepareNormalizesCssPixelsToDensityUnits()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"pixelengine-rmlui-dp-{Guid.NewGuid():N}");
+        _ = Directory.CreateDirectory(root);
+        string documentPath = Path.Combine(root, "screen.rml");
+        File.WriteAllText(
+            documentPath,
+            """
+            <rml style="left: 12px; top: -0.5px; width: calc(100% - 24px)">
+              <head>
+                <style>
+                  /* 18px remains documentation */
+                  body { margin: 0px; font-size: 16px; content: "icon-32px.png"; }
+                </style>
+              </head>
+              <body>正文 20px</body>
+            </rml>
+            """);
+
+        try
+        {
+            using RmlUiImageAssetCache cache = new();
+            string processed = RmlUiDocumentPreprocessor.Prepare(documentPath, cache);
+            XDocument document = XDocument.Parse(processed);
+            XElement rootElement = document.Root ?? throw new InvalidDataException("预处理文档缺少根节点。");
+            string rootStyle = rootElement.Attribute("style")?.Value ?? string.Empty;
+            string stylesheet = Assert.Single(document.Descendants("style")).Value;
+
+            Assert.Contains("left: 12dp", rootStyle, StringComparison.Ordinal);
+            Assert.Contains("top: -0.5dp", rootStyle, StringComparison.Ordinal);
+            Assert.Contains("24dp", rootStyle, StringComparison.Ordinal);
+            Assert.Contains("margin: 0dp", stylesheet, StringComparison.Ordinal);
+            Assert.Contains("font-size: 16dp", stylesheet, StringComparison.Ordinal);
+            Assert.Contains("18px remains documentation", stylesheet, StringComparison.Ordinal);
+            Assert.Contains("icon-32px.png", stylesheet, StringComparison.Ordinal);
+            Assert.Equal("正文 20px", Assert.Single(document.Descendants("body")).Value);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
     /// 验证Prepare Rewrites Data Image Png To Rml Ui Readable Tga。
     /// </summary>
     [Fact]

@@ -1365,6 +1365,7 @@ public sealed class AutomationSchemaTests
             PanY = -8.25f,
             MaximizeOnPlay = true,
             Maximized = false,
+            StatsVisible = true,
             CustomPresets =
             [
                 new AutomationGameViewPreset
@@ -1394,6 +1395,7 @@ public sealed class AutomationSchemaTests
         Assert.Equal(request.PanY, roundTrip.PanY);
         Assert.Equal(request.MaximizeOnPlay, roundTrip.MaximizeOnPlay);
         Assert.Equal(request.Maximized, roundTrip.Maximized);
+        Assert.Equal(request.StatsVisible, roundTrip.StatsVisible);
         Assert.Equal(
             request.CustomPresets.Select(static preset =>
                 (preset.PresetId, preset.Name, preset.Kind, preset.BuiltIn, preset.ValueA, preset.ValueB)),

@@ -70,6 +70,7 @@ internal sealed class EditorShellApp
             windowState.Width,
             windowState.Height,
             migrateToCurrentLayout: true);
+        LayoutProfiles = new EditorLayoutProfileStore(userDataPaths.LayoutProfilesDirectory);
         PreferencesWindow = new EditorPreferencesWindow(Preferences, ResetLayout, SetLanguage);
         _transitions = new EditorTransitionCoordinator(
             IsCurrentSceneDirtyAfterFlushing,
@@ -251,6 +252,8 @@ internal sealed class EditorShellApp
 
     private EditorShellLayout Layout { get; }
 
+    private EditorLayoutProfileStore LayoutProfiles { get; }
+
     public static int Execute(string[] args)
     {
         Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
@@ -260,12 +263,21 @@ internal sealed class EditorShellApp
             options = EditorShellOptions.Parse(args);
             EditorUserDataPaths userDataPaths = EditorUserDataPaths.Resolve(options);
             string? preferencesOverride = Environment.GetEnvironmentVariable("PIXELENGINE_EDITOR_PREFERENCES_PATH");
+            EditorPreferencesStore preferences = EditorPreferencesStore.Load(string.IsNullOrWhiteSpace(preferencesOverride)
+                ? userDataPaths.PreferencesPath
+                : preferencesOverride);
+            if (!userDataPaths.IsEphemeral && !preferences.LoadedFromDisk &&
+                string.IsNullOrWhiteSpace(preferences.LastDiagnostic))
+            {
+                _ = preferences.TryUpdate(
+                    preferences.Current with { UiScale = EditorUiScale.ResolveAutomaticDefault() },
+                    out _);
+            }
+
             EditorShellApp app = new(
                 options,
                 userDataPaths,
-                EditorPreferencesStore.Load(string.IsNullOrWhiteSpace(preferencesOverride)
-                    ? userDataPaths.PreferencesPath
-                    : preferencesOverride),
+                preferences,
                 RecentProjectsStore.Load(userDataPaths.RecentProjectsPath),
                 EditorWorkspaceStore.Load(userDataPaths.WorkspacePath));
             try
@@ -2417,6 +2429,69 @@ internal sealed class EditorShellApp
         }
 
         CurrentSession?.ResetLayout();
+    }
+
+    internal string[] GetLayoutProfileNames()
+    {
+        return LayoutProfiles.TryList(out string[] names, out _)
+            ? names
+            : [];
+    }
+
+    internal bool TrySaveLayoutProfile(string name, out string diagnostic)
+    {
+        if (CurrentSession is null)
+        {
+            diagnostic = "打开工程后才能保存当前布局。";
+            return false;
+        }
+
+        string layout = CurrentSession.CaptureAutomationDockLayout();
+        if (!LayoutProfiles.TrySave(name, layout, out _, out diagnostic))
+        {
+            ReportLayoutProfileFailure(diagnostic);
+            return false;
+        }
+
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryApplyLayoutProfile(string name, out string diagnostic)
+    {
+        if (CurrentSession is null)
+        {
+            diagnostic = "打开工程后才能切换布局。";
+            return false;
+        }
+
+        if (!LayoutProfiles.TryLoad(name, out string layout, out diagnostic) ||
+            !Layout.TryPersistLayout(layout, out string normalized, out diagnostic))
+        {
+            ReportLayoutProfileFailure(diagnostic);
+            return false;
+        }
+
+        CurrentSession.ApplyAutomationDockLayout(normalized);
+        diagnostic = string.Empty;
+        return true;
+    }
+
+    internal bool TryDeleteLayoutProfile(string name, out string diagnostic)
+    {
+        if (LayoutProfiles.TryDelete(name, out diagnostic))
+        {
+            return true;
+        }
+
+        ReportLayoutProfileFailure(diagnostic);
+        return false;
+    }
+
+    private void ReportLayoutProfileFailure(string diagnostic)
+    {
+        LastProjectError = diagnostic;
+        ConsoleStore.AddProjectError("layout-profile", diagnostic);
     }
 
     internal bool TryResetAutomationLayout(out string diagnostic)

@@ -3,7 +3,7 @@ namespace PixelEngine.UI;
 /// <summary>
 /// 解码后的 UI 图片位图，以 BGRA 打包的 <c>uint</c> 数组存储像素。
 /// </summary>
-internal readonly struct UiImageBitmap
+public readonly struct UiImageBitmap
 {
     /// <summary>
     /// 创建已验证尺寸的 UI 位图。
@@ -28,15 +28,20 @@ internal readonly struct UiImageBitmap
     /// <summary>
     /// 图片宽度（像素）。
     /// </summary>
-    internal int Width { get; }
+    public int Width { get; }
 
     /// <summary>
     /// 图片高度（像素）。
     /// </summary>
-    internal int Height { get; }
+    public int Height { get; }
 
     /// <summary>
     /// BGRA 打包像素数据，行优先排列。
     /// </summary>
     internal uint[] Rgba { get; }
+
+    /// <summary>
+    /// BGRA 打包像素的只读行优先视图。
+    /// </summary>
+    public ReadOnlySpan<uint> Pixels => Rgba;
 }

@@ -30,6 +30,10 @@ public sealed class GameUiDemoController : Behaviour
         "hud.equipment_text",
         "hud.material_name",
         "hud.material_detail",
+        "hud.wand_1",
+        "hud.wand_2",
+        "hud.wand_3",
+        "hud.wand_4",
         "hud.health",
         "hud.levitation",
         "hud.ammo",
@@ -62,6 +66,14 @@ public sealed class GameUiDemoController : Behaviour
         "inventory.selected_name",
         "inventory.stats",
         "inventory.edit_state",
+        "inventory.shuffle_text",
+        "inventory.draw_text",
+        "inventory.capacity_text",
+        "inventory.cast_delay_text",
+        "inventory.recharge_text",
+        "inventory.mana_max_text",
+        "inventory.mana_charge_text",
+        "inventory.spread_text",
         "inventory.slot_1",
         "inventory.slot_2",
         "inventory.slot_3",
@@ -224,6 +236,21 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiPathId InventorySelectedNamePath = Path("inventory.selected_name");
     private static readonly UiPathId InventoryStatsPath = Path("inventory.stats");
     private static readonly UiPathId InventoryEditStatePath = Path("inventory.edit_state");
+    private static readonly UiPathId InventoryShuffleTextPath = Path("inventory.shuffle_text");
+    private static readonly UiPathId InventoryDrawTextPath = Path("inventory.draw_text");
+    private static readonly UiPathId InventoryCapacityTextPath = Path("inventory.capacity_text");
+    private static readonly UiPathId InventoryCastDelayTextPath = Path("inventory.cast_delay_text");
+    private static readonly UiPathId InventoryRechargeTextPath = Path("inventory.recharge_text");
+    private static readonly UiPathId InventoryManaMaxTextPath = Path("inventory.mana_max_text");
+    private static readonly UiPathId InventoryManaChargeTextPath = Path("inventory.mana_charge_text");
+    private static readonly UiPathId InventorySpreadTextPath = Path("inventory.spread_text");
+    private static readonly UiPathId[] HudWandPaths =
+    [
+        Path("hud.wand_1"),
+        Path("hud.wand_2"),
+        Path("hud.wand_3"),
+        Path("hud.wand_4"),
+    ];
     private static readonly UiPathId[] InventoryWandPaths =
     [
         Path("inventory.wand_1"),
@@ -284,6 +311,7 @@ public sealed class GameUiDemoController : Behaviour
     private ulong _publishedHudSeed = ulong.MaxValue;
     private int _publishedInputMode = -1;
     private int _publishedCursorMaterial = int.MinValue;
+    private int _publishedWandSelection = -1;
     private string _publishedEquipmentText = string.Empty;
 
     /// <summary>
@@ -352,6 +380,7 @@ public sealed class GameUiDemoController : Behaviour
     {
         _ = dt;
         SynchronizeRunPresentation();
+        HandleInventoryShortcut();
         HandleEscapeShortcut();
         // 每帧聚合玩法数据源并推送到 HUD 绑定路径
         PublishHudState();
@@ -611,9 +640,7 @@ public sealed class GameUiDemoController : Behaviour
 
         if (uiEvent.Action == OpenInventoryAction)
         {
-            ResolveHudSources();
-            OpenModal(InventoryScreen);
-            PublishInventoryState();
+            OpenInventory();
             return;
         }
 
@@ -705,6 +732,7 @@ public sealed class GameUiDemoController : Behaviour
 
         // HUD 刷新流水线：解析引用 → 健康/武器/工具/沙盒探索/诊断
         ResolveHudSources();
+        PublishHudWands();
         PublishHealth();
         PublishWeapon();
         PublishTools();
@@ -960,6 +988,7 @@ public sealed class GameUiDemoController : Behaviour
             SetScreenText(ModalScreen, InventorySelectedNamePath, "Wand unavailable");
             SetScreenText(ModalScreen, InventoryStatsPath, string.Empty);
             SetScreenText(ModalScreen, InventoryEditStatePath, "当前场景没有 WandController");
+            PublishUnavailableWandStats();
             for (int i = 0; i < InventoryWandPaths.Length; i++)
             {
                 SetScreenText(ModalScreen, InventoryWandPaths[i], $"{i + 1} --");
@@ -992,13 +1021,21 @@ public sealed class GameUiDemoController : Behaviour
             _wand.CanEditWand
                 ? "可编辑：点击槽位循环法术"
                 : "仅可在 Holy Mountain 或 Infinite Sandbox 编辑");
+        SetScreenText(ModalScreen, InventoryShuffleTextPath, wand.Shuffle ? "乱序" : "按序");
+        SetScreenText(ModalScreen, InventoryDrawTextPath, $"每次 {wand.SpellsPerCast}");
+        SetScreenText(ModalScreen, InventoryCapacityTextPath, $"容量 {wand.Capacity}");
+        SetScreenText(ModalScreen, InventoryCastDelayTextPath, $"{wand.CastDelaySeconds:0.00}s");
+        SetScreenText(ModalScreen, InventoryRechargeTextPath, $"{wand.RechargeSeconds:0.00}s");
+        SetScreenText(ModalScreen, InventoryManaMaxTextPath, $"{wand.ManaMax:0}");
+        SetScreenText(ModalScreen, InventoryManaChargeTextPath, $"{wand.ManaChargePerSecond:0}/s");
+        SetScreenText(ModalScreen, InventorySpreadTextPath, $"{wand.SpreadDegrees:0.#}°");
         for (int i = 0; i < InventorySlotPaths.Length; i++)
         {
             string label;
             if (i < wand.DeckSpellIndices.Length)
             {
                 WandSpellDefinition spell = catalog.Spells[wand.DeckSpellIndices[i]];
-                label = $"{i + 1:00}  {spell.DisplayName}  [{spell.Category}]";
+                label = $"{i + 1:00}  {spell.DisplayName}";
             }
             else
             {
@@ -1006,6 +1043,39 @@ public sealed class GameUiDemoController : Behaviour
             }
 
             SetScreenText(ModalScreen, InventorySlotPaths[i], label);
+        }
+    }
+
+    private void PublishUnavailableWandStats()
+    {
+        SetScreenText(ModalScreen, InventoryShuffleTextPath, "--");
+        SetScreenText(ModalScreen, InventoryDrawTextPath, "--");
+        SetScreenText(ModalScreen, InventoryCapacityTextPath, "--");
+        SetScreenText(ModalScreen, InventoryCastDelayTextPath, "--");
+        SetScreenText(ModalScreen, InventoryRechargeTextPath, "--");
+        SetScreenText(ModalScreen, InventoryManaMaxTextPath, "--");
+        SetScreenText(ModalScreen, InventoryManaChargeTextPath, "--");
+        SetScreenText(ModalScreen, InventorySpreadTextPath, "--");
+    }
+
+    private void PublishHudWands()
+    {
+        if (_ui is null || HudScreenHandle.Value == 0)
+        {
+            return;
+        }
+
+        int selected = _wand?.SelectedIndex ?? -1;
+        if (_publishedWandSelection == selected)
+        {
+            return;
+        }
+
+        _publishedWandSelection = selected;
+        for (int i = 0; i < HudWandPaths.Length; i++)
+        {
+            string label = i == selected ? $"● {i + 1}" : $"{i + 1}";
+            SetScreenText(HudScreenHandle, HudWandPaths[i], label);
         }
     }
 
@@ -1218,11 +1288,12 @@ public sealed class GameUiDemoController : Behaviour
 
     private void PublishSandboxExploration()
     {
-        double x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnX;
-        double y = _player?.CenterY ?? PlayableCavernWorldGenerator.PlayerSpawnY;
-        double distance = Math.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnX);
+        double x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnCenterX;
+        double y = _player?.CenterY ??
+            (PlayableCavernWorldGenerator.SafeSurfaceY + PlayableCavernWorldGenerator.PlayerSpawnCenterOffsetY);
+        double distance = Math.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnCenterX);
         SetHudValue(HudDistancePath, Ratio(distance, 4_096.0));
-        SetHudValue(HudLongitudePath, Math.Clamp(0.5 + ((x - PlayableCavernWorldGenerator.PlayerSpawnX) / 8_192.0), 0.0, 1.0));
+        SetHudValue(HudLongitudePath, Math.Clamp(0.5 + ((x - PlayableCavernWorldGenerator.PlayerSpawnCenterX) / 8_192.0), 0.0, 1.0));
         SetHudValue(HudDepthPath, Ratio(Math.Max(0.0, y - PlayableCavernWorldGenerator.SafeSurfaceY), 2_048.0));
         SetHudValue(HudElevationPath, Ratio(Math.Max(0.0, PlayableCavernWorldGenerator.SafeSurfaceY - y), 512.0));
         SetHudValue(HudCrystalsPath, 0.0);
@@ -1241,10 +1312,10 @@ public sealed class GameUiDemoController : Behaviour
             return;
         }
 
-        double x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnX;
-        double distance = Math.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnX);
+        double x = _player?.CenterX ?? PlayableCavernWorldGenerator.PlayerSpawnCenterX;
+        double distance = Math.Abs(x - PlayableCavernWorldGenerator.PlayerSpawnCenterX);
         SetHudValue(HudDistancePath, Ratio(distance, 4_096.0));
-        SetHudValue(HudLongitudePath, Math.Clamp(0.5 + ((x - PlayableCavernWorldGenerator.PlayerSpawnX) / 8_192.0), 0.0, 1.0));
+        SetHudValue(HudLongitudePath, Math.Clamp(0.5 + ((x - PlayableCavernWorldGenerator.PlayerSpawnCenterX) / 8_192.0), 0.0, 1.0));
         SetHudValue(HudDepthPath, Ratio(run.CurrentDepthCells, 5_120.0));
         SetHudValue(HudElevationPath, 0.0);
         SetHudValue(HudCrystalsPath, Ratio(CountVisitedRegions(run.VisitedRegionMask), CampaignConfig.RequiredRegionCount));
@@ -1645,6 +1716,28 @@ public sealed class GameUiDemoController : Behaviour
         OpenPauseMenu();
     }
 
+    private void HandleInventoryShortcut()
+    {
+        if (_ui is null ||
+            MainScreen.Value != 0 ||
+            HudScreenHandle.Value == 0 ||
+            ModalScreen.Value != 0 ||
+            _resultVisible ||
+            !Context.Input.WasPressed(Key.Tab))
+        {
+            return;
+        }
+
+        OpenInventory();
+    }
+
+    private void OpenInventory()
+    {
+        ResolveHudSources();
+        OpenModal(InventoryScreen);
+        PublishInventoryState();
+    }
+
     private void OpenPauseMenu()
     {
         if (MainScreen.Value != 0)
@@ -1825,6 +1918,7 @@ public sealed class GameUiDemoController : Behaviour
         _publishedHudSeed = ulong.MaxValue;
         _publishedInputMode = -1;
         _publishedCursorMaterial = int.MinValue;
+        _publishedWandSelection = -1;
         _publishedEquipmentText = string.Empty;
     }
 

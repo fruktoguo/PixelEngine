@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 
@@ -7,10 +8,12 @@ namespace PixelEngine.Hosting;
 /// <summary>
 /// 将 Hosting 渲染相位输出提交到真实 RenderPipeline。
 /// </summary>
-public sealed class RenderPipelineFrameSink : IRenderFrameSink
+public sealed class RenderPipelineFrameSink : IRenderFrameSink, IDisposable
 {
     private readonly RenderPipeline _pipeline;
     private readonly GamePresentationCoordinator? _presentation;
+    private readonly WorldVisualTextureCache? _worldVisualTextures;
+    private bool _disposed;
 
 #pragma warning disable IDE0290 // 普通构造器保留独立 XML 文档，供公开 API 文档纪律测试识别。
     /// <summary>
@@ -18,7 +21,7 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
     /// </summary>
     /// <param name="pipeline">真实 Rendering 管线。</param>
     public RenderPipelineFrameSink(RenderPipeline pipeline)
-        : this(pipeline, presentation: null)
+        : this(pipeline, presentation: null, worldVisualTextures: null)
     {
     }
 
@@ -28,9 +31,39 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
     /// <param name="pipeline">真实 Rendering 管线。</param>
     /// <param name="presentation">Hosting 三层分辨率协调器。</param>
     public RenderPipelineFrameSink(RenderPipeline pipeline, GamePresentationCoordinator? presentation)
+        : this(pipeline, presentation, worldVisualTextures: null)
+    {
+    }
+
+    /// <summary>
+    /// 创建带 presentation 协调器与 ContentRoot 世界视觉纹理缓存的真实帧提交器。
+    /// </summary>
+    /// <param name="pipeline">真实 Rendering 管线。</param>
+    /// <param name="presentation">Hosting 三层分辨率协调器。</param>
+    /// <param name="window">持有共享 GL context 的渲染窗口。</param>
+    /// <param name="contentRoot">世界视觉资产所在 ContentRoot。</param>
+    public RenderPipelineFrameSink(
+        RenderPipeline pipeline,
+        GamePresentationCoordinator? presentation,
+        RenderWindow window,
+        string contentRoot)
+        : this(
+            pipeline,
+            presentation,
+            new WorldVisualTextureCache(
+                (window ?? throw new ArgumentNullException(nameof(window))).Gl,
+                contentRoot))
+    {
+    }
+
+    private RenderPipelineFrameSink(
+        RenderPipeline pipeline,
+        GamePresentationCoordinator? presentation,
+        WorldVisualTextureCache? worldVisualTextures)
     {
         _pipeline = pipeline ?? throw new ArgumentNullException(nameof(pipeline));
         _presentation = presentation;
+        _worldVisualTextures = worldVisualTextures;
     }
 #pragma warning restore IDE0290
 
@@ -40,6 +73,24 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
     public ParticleRenderMode ParticleRenderMode => _pipeline.CanRenderParticlesOnGpu
         ? ParticleRenderMode.GpuPointSprite
         : ParticleRenderMode.CpuStamp;
+
+    /// <summary>
+    /// 尝试把 ContentRoot 内的稳定 Texture 引用解析为当前 GL context 的 overlay sprite。
+    /// </summary>
+    /// <param name="asset">稳定 Texture 资产引用。</param>
+    /// <param name="sprite">解析成功的纹理精灵。</param>
+    /// <returns>当前帧提交器可绘制该资产时返回 true。</returns>
+    public bool TryResolveWorldVisualSprite(ScriptAssetReference asset, out OverlaySprite sprite)
+    {
+        if (_worldVisualTextures is null)
+        {
+            sprite = default;
+            return false;
+        }
+
+        sprite = _worldVisualTextures.Resolve(asset);
+        return true;
+    }
 
     /// <summary>
     /// 把 Hosting 构建出的 CPU render buffer、辅助 buffer、相机、dirty rect、overlay、粒子与 fog-of-war 数据提交给真实 Rendering 管线。
@@ -66,6 +117,7 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
         FogOfWarBuffer? fogOfWar,
         Core.Diagnostics.FrameProfiler? profiler)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_presentation is not null)
         {
             GamePresentationDescriptor descriptor = _presentation.CommitFrameBoundary();
@@ -74,5 +126,19 @@ public sealed class RenderPipelineFrameSink : IRenderFrameSink
         }
 
         _pipeline.RenderFrame(renderBuffer, aux, camera, dirtyRects, overlays, pointLights, particles, materials, fogOfWar, profiler);
+    }
+
+    /// <summary>
+    /// 释放 ContentRoot 世界视觉纹理缓存；底层 RenderPipeline 仍由创建方持有。
+    /// </summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _worldVisualTextures?.Dispose();
+        _disposed = true;
     }
 }

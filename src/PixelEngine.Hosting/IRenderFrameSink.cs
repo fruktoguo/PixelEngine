@@ -1,4 +1,5 @@
 using PixelEngine.Rendering;
+using PixelEngine.Scripting;
 using PixelEngine.Simulation;
 using PixelEngine.Simulation.Particles;
 
@@ -13,6 +14,20 @@ public interface IRenderFrameSink
     /// 当前帧输出端实际接管的自由粒子渲染模式。默认由相位 9 CPU stamp 粒子。
     /// </summary>
     ParticleRenderMode ParticleRenderMode => ParticleRenderMode.CpuStamp;
+
+    /// <summary>
+    /// 尝试把 ContentRoot 内的稳定 Texture 引用解析为当前 GL context 的 overlay sprite。
+    /// 不支持纹理的测试/headless sink 默认返回 false。
+    /// </summary>
+    /// <param name="asset">稳定 Texture 资产引用。</param>
+    /// <param name="sprite">解析成功的纹理精灵。</param>
+    /// <returns>当前 sink 可绘制该资产时返回 true。</returns>
+    bool TryResolveWorldVisualSprite(ScriptAssetReference asset, out OverlaySprite sprite)
+    {
+        _ = asset;
+        sprite = default;
+        return false;
+    }
 
     /// <summary>
     /// 提交一帧渲染。
