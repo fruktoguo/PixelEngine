@@ -1034,6 +1034,52 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
+    /// 全局 authored Pixel Scene 必须覆盖同坐标的 Wang/BitmapCaves 结果，并保持 1:1 world cell 比例。
+    /// </summary>
+    [Fact]
+    public void GlobalPixelSceneMaterialMaskOverridesProceduralTerrainAtWorldCoordinates()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        DecodedNoitaPixelScene forge = NoitaPixelSceneCatalog.DecodedScenes.ToArray().Single(static scene => scene.Ordinal == 2);
+        int materialIndex = Array.FindIndex(forge.Materials, static value => value != (byte)NoitaPixelSceneMaterial.Empty);
+        Assert.True(materialIndex >= 0);
+
+        int localSceneX = materialIndex % forge.Width;
+        int localSceneY = materialIndex / forge.Width;
+        long worldX = forge.WorldX + localSceneX;
+        long worldY = forge.WorldY + localSceneY;
+        int chunkX = checked((int)(worldX / ChunkSize));
+        int chunkY = checked((int)(worldY / ChunkSize));
+        ChunkSample chunk = GenerateChunk(materials, campaign, biomes, campaign.InitialRunSeed, chunkX, chunkY);
+        int localChunkX = checked((int)(worldX - ((long)chunkX * ChunkSize)));
+        int localChunkY = checked((int)(worldY - ((long)chunkY * ChunkSize)));
+
+        string expectedMaterial = (NoitaPixelSceneMaterial)forge.Materials[materialIndex] switch
+        {
+            NoitaPixelSceneMaterial.Empty => throw new InvalidOperationException("测试必须选择非空 Pixel Scene material。"),
+            NoitaPixelSceneMaterial.Dirt => "dirt",
+            NoitaPixelSceneMaterial.PackedDirt => "packed_dirt",
+            NoitaPixelSceneMaterial.Water => "water",
+            NoitaPixelSceneMaterial.Stone => "stone",
+            NoitaPixelSceneMaterial.Metal => "metal",
+            NoitaPixelSceneMaterial.Wood => "wood",
+            NoitaPixelSceneMaterial.PackedSand => "packed_sand",
+            NoitaPixelSceneMaterial.BoundaryStone => "boundary_stone",
+            NoitaPixelSceneMaterial.Crystal => "crystal",
+            NoitaPixelSceneMaterial.Smoke => "smoke",
+            NoitaPixelSceneMaterial.Ice => "ice",
+            NoitaPixelSceneMaterial.Sand => "sand",
+            NoitaPixelSceneMaterial.Glass => "glass",
+            _ => throw new InvalidOperationException("Pixel Scene material enum 超出生成器支持范围。"),
+        };
+        Assert.Equal(
+            ResolveRequired(materials, expectedMaterial),
+            chunk.Materials[(localChunkY * ChunkSize) + localChunkX]);
+    }
+
+    /// <summary>
     /// 验证主区与侧区的实际 chunk 开/实轮廓来自各自绑定的 Noita BitmapCaves + Wang 模板，
     /// 防止目录仍在但运行时悄然退回通用噪声洞穴或只采样一半参考语法。
     /// </summary>

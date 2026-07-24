@@ -935,7 +935,9 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         CompiledBiome biome,
         in TerrainRowContext row)
     {
-        return TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial)
+        return TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial)
+            ? globalSceneMaterial
+            : TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial)
             ? sceneMaterial
             : IsBiomeOpenAt(worldX, worldY, biome, row.WorldSeed)
                 ? row.Palette.Empty
@@ -950,6 +952,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         in CompiledReferenceBiome referenceBiome,
         in TerrainRowContext row)
     {
+        if (TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial))
+        {
+            return globalSceneMaterial;
+        }
+
         if (TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial))
         {
             return sceneMaterial;
@@ -989,6 +996,40 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
                 (byte)NoitaWangTerrainSemantic.Pool => biome.Pool,
                 _ => throw new InvalidOperationException($"未知 Noita Wang terrain semantic：{semantic}。"),
             };
+    }
+
+    private static bool TrySelectGlobalPixelSceneMaterial(
+        long worldX,
+        long worldY,
+        in TerrainRowContext row,
+        out ushort material)
+    {
+        if (!NoitaPixelSceneCatalog.TrySample(worldX, worldY, out NoitaPixelSceneMaterial sceneMaterial))
+        {
+            material = default;
+            return false;
+        }
+
+        TerrainMaterialPalette palette = row.Palette;
+        material = sceneMaterial switch
+        {
+            NoitaPixelSceneMaterial.Empty => palette.Empty,
+            NoitaPixelSceneMaterial.Dirt => palette.Dirt,
+            NoitaPixelSceneMaterial.PackedDirt => palette.PackedDirt,
+            NoitaPixelSceneMaterial.Water => palette.Water,
+            NoitaPixelSceneMaterial.Stone => palette.Stone,
+            NoitaPixelSceneMaterial.Metal => palette.Metal,
+            NoitaPixelSceneMaterial.Wood => palette.Wood,
+            NoitaPixelSceneMaterial.PackedSand => palette.PackedSand,
+            NoitaPixelSceneMaterial.BoundaryStone => palette.BoundaryStone,
+            NoitaPixelSceneMaterial.Crystal => palette.Crystal,
+            NoitaPixelSceneMaterial.Smoke => palette.Smoke,
+            NoitaPixelSceneMaterial.Ice => palette.Ice,
+            NoitaPixelSceneMaterial.Sand => palette.Sand,
+            NoitaPixelSceneMaterial.Glass => palette.Glass,
+            _ => throw new InvalidOperationException($"未知 Noita Pixel Scene material：{sceneMaterial}。"),
+        };
+        return true;
     }
 
     private static ushort SelectBiomeSolidMaterial(
@@ -1679,7 +1720,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
             ResolveRequired(materials, "ice"),
             ResolveRequired(materials, "gravel"),
             ResolveRequired(materials, "packed_gravel"),
-            ResolveRequired(materials, "crystal"));
+            ResolveRequired(materials, "crystal"),
+            ResolveRequired(materials, "metal"),
+            ResolveRequired(materials, "wood"),
+            ResolveRequired(materials, "smoke"),
+            ResolveRequired(materials, "glass"));
     }
 
     private static CompiledWorldTopology CompileWorldTopology(
@@ -2959,7 +3004,11 @@ public sealed class PlayableCavernWorldGenerator : IStreamingProceduralWorldGene
         ushort Ice,
         ushort Gravel,
         ushort PackedGravel,
-        ushort Crystal);
+        ushort Crystal,
+        ushort Metal,
+        ushort Wood,
+        ushort Smoke,
+        ushort Glass);
 }
 
 internal readonly record struct BiomeEncounterAnchor(

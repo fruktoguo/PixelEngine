@@ -151,6 +151,34 @@ public sealed class NoitaWorldContentCatalogTests
         Assert.False(NoitaPixelSceneCatalog.TryFindAt(0, 0, out _));
     }
 
+    /// <summary>
+    /// material PNG 必须在构建前转换成带 hash 的语义掩码，运行时按原始世界坐标逐像素采样。
+    /// </summary>
+    [Fact]
+    public void GlobalPixelSceneMaterialMasksDecodeAndSampleAtWorldScale()
+    {
+        Assert.Equal(30, NoitaPixelSceneCatalog.Masks.Length);
+        Assert.Equal(30, NoitaPixelSceneCatalog.DecodedScenes.Length);
+        Assert.True(NoitaPixelSceneCatalog.Masks.ToArray().Sum(static mask => mask.MarkerPixelCount) > 0);
+
+        DecodedNoitaPixelScene forge = NoitaPixelSceneCatalog.DecodedScenes.ToArray().Single(static scene => scene.Ordinal == 2);
+        Assert.Equal(128, forge.Width);
+        Assert.Equal(128, forge.Height);
+        Assert.Equal(128 * 128, forge.Materials.Length);
+        Assert.All(forge.Materials, static value => Assert.InRange(value, (byte)0, (byte)NoitaPixelSceneMaterial.Glass));
+
+        int materialIndex = Array.FindIndex(forge.Materials, static value => value != (byte)NoitaPixelSceneMaterial.Empty);
+        Assert.True(materialIndex >= 0);
+        int localX = materialIndex % forge.Width;
+        int localY = materialIndex / forge.Width;
+        Assert.True(NoitaPixelSceneCatalog.TrySample(
+            forge.WorldX + localX,
+            forge.WorldY + localY,
+            out NoitaPixelSceneMaterial sampled));
+        Assert.Equal((NoitaPixelSceneMaterial)forge.Materials[materialIndex], sampled);
+        Assert.False(NoitaPixelSceneCatalog.TrySample(forge.WorldX - 1, forge.WorldY - 1, out _));
+    }
+
     private static string ContentRoot()
     {
         return Path.GetFullPath(

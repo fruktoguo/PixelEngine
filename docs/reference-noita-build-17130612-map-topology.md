@@ -109,3 +109,10 @@ Vegetation、Loot、Prop、Encounter、Trigger 与 Effect；玩家包不包含 L
 `NoitaPixelScenes.Generated.cs`。运行时通过纯 C# `NoitaPixelSceneCatalog` 查询，不读取参考 XML 或 Lua；
 其中 30 个 material、22 个 colors、6 个 background 资产描述已锁定。该节点只闭合来源与调度目录，
 实际语义像素掩码、背景纹理和实体生成仍必须在后续节点接入后才能形成视觉 parity。
+
+全局 material Pixel Scene 已进一步经 `tools/generate-noita-pixel-scene-masks.ps1` 构建时解析：
+30 张 material PNG 的实际材料色通过 Build `17130612` `materials.xml` 的 `wang_color`/graphics color
+回溯到稳定材质语义，13 种非材料 marker 色保留为空地并记录像素数量，等待实体生成系统消费。
+语义掩码以 Brotli + decoded SHA256 进入 `NoitaPixelSceneMasks.Generated.cs`；世界生成器在
+Wang/BitmapCaves 和程序 scene 之前按原始绝对坐标逐像素应用，比例固定为 `1 source pixel = 1 world cell`。
+玩家包不携带来源 PNG，也不读取本机参考树。colors/background 层与 marker 实体仍是后续接线项。
