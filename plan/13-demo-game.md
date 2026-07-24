@@ -220,6 +220,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 后续全局 Pixel Scene 接线节点已将 30 张 material PNG、6 张 background、22 张 colors 与 43 个非材质 marker 分层接入。material 进入权威 cell，background/colors 只进入世界视觉组合；marker 由构建期提取器将图片颜色与 `RegisterSpawnFunction` 映射为纯 C# 世界锚点，运行时与 Wang marker 共用固定容量扫描。该节点闭合了 forge 等固定建筑的地形、视觉与生成点坐标，但 marker 目前仍使用通用 prop/VFX profile，尚不等于真实交互行为完成。
 
+第九个实现节点将 `noita-wang-terrain.json` 升级为 `PWH2`，在每组模板内为实际来源颜色分配连续精确材质槽，不再把 41 种 Wang 材质压缩为 primary/secondary/loose/structure/hazard/pool 六类代表项。`tools/generate-noita-wang-runtime-materials.ps1` 从规范化参考目录可重现生成缺失材质，Demo 目录现含 62 种材质并覆盖全部 Wang 依赖。深层 Snowcastle 实机捕获同时修复了配置出生点未同步无限世界初始焦点、温度相变和脚本 cell 命令在异步补环窗口越界传播 dirty 的问题；命令会保留至邻域驻留后只执行一次。真实 Editor Console 0/0/0 与双重 SHA256 framebuffer 已取得，但最终画面仍缺 Noita 材质纹理、颜色噪声、biome 雾化与后处理，因此 `DEMO-008` 保持 `[~]`；证据见 `docs/evidence-2026-07-25-demo-008-exact-wang-materials.md`。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。
