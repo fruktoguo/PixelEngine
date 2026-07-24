@@ -1,7 +1,7 @@
 # DEMO-008 Noita VegetationComponent 检查点
 
-日期：2026-07-25  
-任务：`DEMO-008`（保持 `[~]`）  
+日期：2026-07-25
+任务：`DEMO-008`（保持 `[~]`）
 参考：Noita Build `17130612`
 
 ## 实现范围
