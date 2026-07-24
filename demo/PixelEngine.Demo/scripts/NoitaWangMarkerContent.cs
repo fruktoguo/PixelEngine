@@ -425,8 +425,18 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
             return false;
         }
 
+        // 来源中的 Vegetation marker 实际混合 Verlet chain、刚体、敌人、产怪建筑与静态植物。
+        // 在对应 C# 运行时逐类实现前不得继续用同一个绿色 overlay/SparkEmitter 冒充。
+        if (rule.Kind == NoitaMarkerRuleKind.Vegetation)
+        {
+            profile = default;
+            return false;
+        }
+
         profile = rule.Kind switch
         {
+            NoitaMarkerRuleKind.Vegetation => throw new InvalidOperationException(
+                "Vegetation marker 必须在 profile switch 前抑制。"),
             NoitaMarkerRuleKind.Loot => new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.Treasure,
                 0xFF_28_D8_FF,
@@ -438,17 +448,6 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 32f,
                 NoitaWangMarkerGameplayKind.SparkEmitter,
                 "crystal"),
-            NoitaMarkerRuleKind.Vegetation => new NoitaWangMarkerVisualProfile(
-                NoitaWangMarkerVisualKind.Plant,
-                0xFF_5A_E8_86,
-                0xCC_26_70_34,
-                9f,
-                34f,
-                0.48f,
-                8,
-                22f,
-                NoitaWangMarkerGameplayKind.SparkEmitter,
-                "smoke"),
             NoitaMarkerRuleKind.Prop => CreatePropProfile(function),
             NoitaMarkerRuleKind.PixelScene => new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.SceneLoad,

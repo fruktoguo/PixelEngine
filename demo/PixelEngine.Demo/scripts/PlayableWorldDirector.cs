@@ -10,7 +10,8 @@ public sealed class PlayableWorldDirector :
     Behaviour,
     IStreamingProceduralWorldGenerator,
     IAuthoringWorldPreviewProvider,
-    IWorldVisualLayerProvider
+    IWorldVisualLayerProvider,
+    IViewportWorldVisualLayerProvider
 {
     private const byte AmbientViewportRevealAlpha = 112;
     private static readonly PlayableCavernWorldGenerator WorldGenerator = new();
@@ -46,6 +47,22 @@ public sealed class PlayableWorldDirector :
     public WorldVisualLayerDescriptor GetWorldVisualLayer(int index)
     {
         return WorldGenerator.GetWorldVisualLayer(index);
+    }
+
+    /// <inheritdoc />
+    public int CollectWorldVisualLayers(
+        float minimumWorldX,
+        float minimumWorldY,
+        float maximumWorldX,
+        float maximumWorldY,
+        Span<WorldVisualLayerDescriptor> destination)
+    {
+        return WorldGenerator.CollectWorldVisualLayers(
+            minimumWorldX,
+            minimumWorldY,
+            maximumWorldX,
+            maximumWorldY,
+            destination);
     }
 
     /// <inheritdoc />

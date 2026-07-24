@@ -141,6 +141,13 @@ public sealed class PlayableCavernWorldGenerator :
         long minimumY = checked((long)MathF.Floor(minimumWorldY)) - 259;
         long maximumX = checked((long)MathF.Ceiling(maximumWorldX));
         long maximumY = checked((long)MathF.Ceiling(maximumWorldY));
+        int count = CollectBiomeBackgroundLayers(
+            state,
+            minimumX,
+            minimumY,
+            maximumX,
+            maximumY,
+            destination);
         int markerCount = CollectWangMarkerAnchors(
             state.Biomes,
             state.WangTerrain,
@@ -151,7 +158,6 @@ public sealed class PlayableCavernWorldGenerator :
             maximumX,
             maximumY,
             _visualMarkerBuffer);
-        int count = 0;
         for (int i = 0; i < markerCount && count < destination.Length; i++)
         {
             ref readonly NoitaWangMarkerAnchor anchor = ref _visualMarkerBuffer[i];
@@ -203,6 +209,146 @@ public sealed class PlayableCavernWorldGenerator :
             _visualVegetationBuffer);
 
         return count;
+    }
+
+    private static int CollectBiomeBackgroundLayers(
+        TerrainGenerationState state,
+        long minimumX,
+        long minimumY,
+        long maximumX,
+        long maximumY,
+        Span<WorldVisualLayerDescriptor> destination)
+    {
+        const int macroCellSize = 512;
+        int count = 0;
+        long minimumMacroX = FloorDivide(minimumX, macroCellSize);
+        long maximumMacroX = FloorDivide(maximumX, macroCellSize);
+        long minimumMacroY = FloorDivide(minimumY - state.Config.SurfaceY, macroCellSize);
+        long maximumMacroY = FloorDivide(maximumY - state.Config.SurfaceY, macroCellSize);
+        for (long macroY = minimumMacroY; macroY <= maximumMacroY && count < destination.Length; macroY++)
+        {
+            for (long macroX = minimumMacroX; macroX <= maximumMacroX && count < destination.Length; macroX++)
+            {
+                long cellX = macroX * macroCellSize;
+                long cellY = state.Config.SurfaceY + (macroY * macroCellSize);
+                if (!TryGetBiomeBackground(state, cellX, cellY, out NoitaBiomeBackgroundDefinition background) ||
+                    background.ImageAssetIndex < 0)
+                {
+                    continue;
+                }
+
+                ref readonly NoitaBiomeBackgroundAssetDefinition image =
+                    ref NoitaBiomeBackgroundCatalog.Asset(background.ImageAssetIndex);
+                int tilesX = Math.Max(1, (macroCellSize + image.Width - 1) / image.Width);
+                int tilesY = Math.Max(1, (macroCellSize + image.Height - 1) / image.Height);
+                for (int tileY = 0; tileY < tilesY && count < destination.Length; tileY++)
+                {
+                    for (int tileX = 0; tileX < tilesX && count < destination.Length; tileX++)
+                    {
+                        destination[count++] = new WorldVisualLayerDescriptor(
+                            image.Asset,
+                            cellX + (tileX * image.Width),
+                            cellY + (tileY * image.Height),
+                            image.Width,
+                            image.Height,
+                            WorldVisualLayerKind.Background);
+                    }
+                }
+
+                count = CollectBiomeBackgroundEdges(
+                    state,
+                    in background,
+                    cellX,
+                    cellY,
+                    destination,
+                    count);
+            }
+        }
+
+        return count;
+    }
+
+    private static int CollectBiomeBackgroundEdges(
+        TerrainGenerationState state,
+        in NoitaBiomeBackgroundDefinition background,
+        long cellX,
+        long cellY,
+        Span<WorldVisualLayerDescriptor> destination,
+        int count)
+    {
+        count = TryAddBiomeBackgroundEdge(
+            state, in background, background.LeftAssetIndex, cellX - 64L, cellY - 64L,
+            cellX - 1L, cellY + 256L, destination, count);
+        count = TryAddBiomeBackgroundEdge(
+            state, in background, background.RightAssetIndex, cellX + 512L, cellY - 64L,
+            cellX + 512L, cellY + 256L, destination, count);
+        count = TryAddBiomeBackgroundEdge(
+            state, in background, background.TopAssetIndex, cellX - 64L, cellY - 64L,
+            cellX + 256L, cellY - 1L, destination, count);
+        return TryAddBiomeBackgroundEdge(
+            state, in background, background.BottomAssetIndex, cellX - 64L, cellY + 512L,
+            cellX + 256L, cellY + 512L, destination, count);
+    }
+
+    private static int TryAddBiomeBackgroundEdge(
+        TerrainGenerationState state,
+        in NoitaBiomeBackgroundDefinition background,
+        int assetIndex,
+        long worldX,
+        long worldY,
+        long neighborSampleX,
+        long neighborSampleY,
+        Span<WorldVisualLayerDescriptor> destination,
+        int count)
+    {
+        if (assetIndex < 0 || count >= destination.Length)
+        {
+            return count;
+        }
+
+        bool neighborResolved = TryGetBiomeBackground(
+            state,
+            neighborSampleX,
+            neighborSampleY,
+            out NoitaBiomeBackgroundDefinition neighbor);
+        if (neighborResolved &&
+            neighbor.ImageAssetIndex == background.ImageAssetIndex &&
+            neighbor.EdgePriority == background.EdgePriority)
+        {
+            return count;
+        }
+        if (neighborResolved && neighbor.EdgePriority > background.EdgePriority)
+        {
+            return count;
+        }
+
+        ref readonly NoitaBiomeBackgroundAssetDefinition asset = ref NoitaBiomeBackgroundCatalog.Asset(assetIndex);
+        destination[count++] = new WorldVisualLayerDescriptor(
+            asset.Asset,
+            worldX,
+            worldY,
+            asset.Width,
+            asset.Height,
+            WorldVisualLayerKind.Background);
+        return count;
+    }
+
+    private static bool TryGetBiomeBackground(
+        TerrainGenerationState state,
+        long worldX,
+        long worldY,
+        out NoitaBiomeBackgroundDefinition background)
+    {
+        CompiledTopologyCell topology = state.WorldTopology.Resolve(worldX, worldY - state.Config.SurfaceY);
+        if (topology.ReferenceBiomeIndex < 0)
+        {
+            background = default;
+            return false;
+        }
+
+        ref readonly CompiledReferenceBiome referenceBiome =
+            ref state.WorldTopology.ReferenceBiome(topology.ReferenceBiomeIndex);
+        return NoitaBiomeBackgroundCatalog.TryGet(referenceBiome.Id, out background);
     }
 
     /// <inheritdoc />

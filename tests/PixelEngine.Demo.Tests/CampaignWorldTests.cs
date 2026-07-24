@@ -1281,7 +1281,6 @@ public sealed class CampaignWorldTests
     [InlineData("load_oiltank", "Hazard", "MaterialEmitter", "oil")]
     [InlineData("load_acidtank_left", "Hazard", "MaterialEmitter", "acid")]
     [InlineData("load_gunpowderpool_01", "Hazard", "MaterialEmitter", "fire")]
-    [InlineData("spawn_vines", "Plant", "SparkEmitter", "smoke")]
     [InlineData("spawn_lamp2", "Machine", "SparkEmitter", "fire")]
     [InlineData("spawn_chest", "Treasure", "SparkEmitter", "crystal")]
     [InlineData("load_pixel_scene4", "SceneLoad", "None", "")]
@@ -1312,6 +1311,23 @@ public sealed class CampaignWorldTests
         {
             Assert.True(LoadMaterials().Resolve(expectedGameplayMaterial).IsValid);
         }
+    }
+
+    /// <summary>动态植被 marker 在对应 Verlet/刚体/敌人 C# 实现前不得退化成通用绿色占位。</summary>
+    [Fact]
+    public void DynamicVegetationMarkersDoNotMaterializeAsGenericPlaceholders()
+    {
+        NoitaWangMarkerAnchor anchor = new(
+            "coalmine",
+            "coalmine",
+            "ff80ff5a",
+            "spawn_vines",
+            "lua",
+            NoitaWangTerrainCatalog.MarkerSemanticBase,
+            128,
+            256);
+
+        Assert.False(NoitaWangMarkerVisualProfile.TryCreate(anchor, out _));
     }
 
     /// <summary>
