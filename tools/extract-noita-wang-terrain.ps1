@@ -482,13 +482,14 @@ if (-not (Test-Path -LiteralPath $licensePath -PathType Leaf)) {
 }
 
 [xml]$materialsXml = [IO.File]::ReadAllText($materialsPath)
-$materialAliases = @{}
+$wangMaterialAliases = @{}
+$graphicsMaterialAliases = @{}
 $materialConflicts = [System.Collections.Generic.List[string]]::new()
 foreach ($material in $materialsXml.SelectNodes('//*[@name and @wang_color]')) {
     $materialName = [string]$material.name
-    Add-MaterialAlias $materialAliases $materialConflicts ([string]$material.wang_color) $materialName 'wang-color' 2
+    Add-MaterialAlias $wangMaterialAliases $materialConflicts ([string]$material.wang_color) $materialName 'wang-color' 2
     foreach ($graphics in $material.SelectNodes('.//Graphics[@color]')) {
-        Add-MaterialAlias $materialAliases $materialConflicts ([string]$graphics.color) $materialName 'graphics-color' 1
+        Add-MaterialAlias $graphicsMaterialAliases $materialConflicts ([string]$graphics.color) $materialName 'graphics-color' 1
     }
 }
 
@@ -565,7 +566,10 @@ foreach ($specification in $specifications) {
     foreach ($colorText in $semanticSourceColors) {
         $color = Convert-HexColor $colorText
         $rgb = Format-Rgb $color
-        if ($rgb -eq '000000' -or $randomInputs.ContainsKey($rgb) -or $materialAliases.ContainsKey($rgb)) {
+        if ($rgb -eq '000000' -or
+            $randomInputs.ContainsKey($rgb) -or
+            $wangMaterialAliases.ContainsKey($rgb) -or
+            $graphicsMaterialAliases.ContainsKey($rgb)) {
             continue
         }
 
@@ -615,7 +619,7 @@ foreach ($specification in $specifications) {
 
     $usedMaterialMappings = @{}
     $materialSemantics = @{}
-    function Resolve-Semantic([uint32] $Color) {
+    function Resolve-Semantic([uint32] $Color, [bool] $AllowGrayscaleGraphicsAlias = $false) {
         $colorText = Format-Color $Color
         $rgb = Format-Rgb $Color
         if ($rgb -eq '000000') {
@@ -627,8 +631,8 @@ foreach ($specification in $specifications) {
         if ($markerSemantics.ContainsKey($colorText)) {
             return [int]$markerSemantics[$colorText]
         }
-        if ($materialAliases.ContainsKey($rgb)) {
-            $mapping = $materialAliases[$rgb]
+        if ($wangMaterialAliases.ContainsKey($rgb)) {
+            $mapping = $wangMaterialAliases[$rgb]
             $usedMaterialMappings[$rgb] = $mapping
             if (-not $materialSemantics.ContainsKey($rgb)) {
                 $nextSemantic = $SemanticMaterialBase + $materialSemantics.Count
@@ -645,6 +649,25 @@ foreach ($specification in $specifications) {
         $r = ($Color -shr 16) -band 0xff
         $g = ($Color -shr 8) -band 0xff
         $b = $Color -band 0xff
+        if (-not $AllowGrayscaleGraphicsAlias -and $r -eq $g -and $g -eq $b) {
+            return $SemanticPrimary
+        }
+
+        if ($graphicsMaterialAliases.ContainsKey($rgb)) {
+            $mapping = $graphicsMaterialAliases[$rgb]
+            $usedMaterialMappings[$rgb] = $mapping
+            if (-not $materialSemantics.ContainsKey($rgb)) {
+                $nextSemantic = $SemanticMaterialBase + $materialSemantics.Count
+                if ($nextSemantic -ge $SemanticMarkerBase) {
+                    throw "Biome '$($specification.id)' exceeds the exact material semantic capacity."
+                }
+
+                $materialSemantics[$rgb] = $nextSemantic
+            }
+
+            return [int]$materialSemantics[$rgb]
+        }
+
         if ($r -eq $g -and $g -eq $b) {
             return $SemanticPrimary
         }
@@ -661,7 +684,7 @@ foreach ($specification in $specifications) {
             for ($y = 0; $y -lt $structureImage.height; $y++) {
                 for ($x = 0; $x -lt $structureImage.width; $x++) {
                     $semanticPixels[($y * $structureImage.width) + $x] =
-                        [byte](Resolve-Semantic (Get-PixelArgb $structureImage $x $y))
+                        [byte](Resolve-Semantic (Get-PixelArgb $structureImage $x $y) $true)
                 }
             }
 
