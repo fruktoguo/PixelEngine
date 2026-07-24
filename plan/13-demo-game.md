@@ -222,6 +222,8 @@ Campaign 在 `DEMO-006` 全局坐标生成器上叠加由 `RunSeed + ChunkCoord`
 
 第九个实现节点将 `noita-wang-terrain.json` 升级为 `PWH2`，在每组模板内为实际来源颜色分配连续精确材质槽，不再把 41 种 Wang 材质压缩为 primary/secondary/loose/structure/hazard/pool 六类代表项。`tools/generate-noita-wang-runtime-materials.ps1` 从规范化参考目录可重现生成缺失材质，Demo 目录现含 62 种材质并覆盖全部 Wang 依赖。深层 Snowcastle 实机捕获同时修复了配置出生点未同步无限世界初始焦点、温度相变和脚本 cell 命令在异步补环窗口越界传播 dirty 的问题；命令会保留至邻域驻留后只执行一次。真实 Editor Console 0/0/0 与双重 SHA256 framebuffer 已取得，但最终画面仍缺 Noita 材质纹理、颜色噪声、biome 雾化与后处理，因此 `DEMO-008` 保持 `[~]`；证据见 `docs/evidence-2026-07-25-demo-008-exact-wang-materials.md`。
 
+第十个实现节点为通用 Rendering/Hosting 接入内容目录材质纹理 provider，在装载期纯托管解码 PNG、按世界坐标无分配平铺采样；Demo 从 Build `17130612` 的规范化来源生成 28 张实际 Wang 材质纹理，为 41 个精确材质绑定稳定 `TextureId=19..46`，并以逐文件来源/内容 SHA256 清单保证可重现。深层视口从全亮收敛为 `112` 环境可见度，玩家局部点光继续提亮；真实 Editor 画面确认钢板、混凝土、冰等已脱离纯色块。该画面同时证明剩余主要差异不是倍率问题：`snowcastle.png` 是 Wang tile atlas，当前仍缺 Noita 对 pixel scene、背景/visual layer、marker、vegetation 与实体的完整组合规则，因此 `DEMO-008` 继续保持 `[~]`；证据见 `docs/evidence-2026-07-25-demo-008-wang-material-textures.md`。
+
 ### 3.18 Wand / Spell 构筑
 
 Wand 和 Spell 是 Demo gameplay 数据，不进入 Engine Core。加载期把稳定字符串键、引用和规则编译成紧凑 catalog；运行时按 Noita draw 语义在固定容量 cast state / command buffer 中求值，具备 Shuffle、Spells/Cast、Cast Delay、Recharge Time、Mana Max、Mana Charge Speed、Capacity、Spread、Always Cast、modifier、multicast 和 trigger/timer/death-trigger payload。求值器对 draw、递归、payload、投射物与世界效果设硬预算，稳态零托管分配；命令只通过公开投射物、WorldEffects、Particle、Audio 和 UI API 在安全相位执行。
