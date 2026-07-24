@@ -361,15 +361,16 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
     public static bool TryCreate(in NoitaWangMarkerAnchor anchor, out NoitaWangMarkerVisualProfile profile)
     {
         string function = anchor.Function;
-        if (function.StartsWith("builtin-or-unresolved", StringComparison.Ordinal))
+        if (function.StartsWith("builtin-or-unresolved", StringComparison.Ordinal) ||
+            !NoitaMarkerRuleCatalog.TryResolve(function, out NoitaMarkerRule rule))
         {
             profile = default;
             return false;
         }
 
-        if (Contains(function, "chest") || Contains(function, "treasure") || Contains(function, "meditation"))
+        profile = rule.Kind switch
         {
-            profile = new NoitaWangMarkerVisualProfile(
+            NoitaMarkerRuleKind.Loot => new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.Treasure,
                 0xFF_28_D8_FF,
                 0xCC_50_7A_FF,
@@ -379,14 +380,8 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 12,
                 32f,
                 NoitaWangMarkerGameplayKind.SparkEmitter,
-                "crystal");
-            return true;
-        }
-
-        if (Contains(function, "vine") || Contains(function, "fungus") || Contains(function, "tree") ||
-            Contains(function, "nest") || Contains(function, "root"))
-        {
-            profile = new NoitaWangMarkerVisualProfile(
+                "crystal"),
+            NoitaMarkerRuleKind.Vegetation => new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.Plant,
                 0xFF_5A_E8_86,
                 0xCC_26_70_34,
@@ -396,14 +391,63 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 8,
                 22f,
                 NoitaWangMarkerGameplayKind.SparkEmitter,
-                "smoke");
-            return true;
-        }
+                "smoke"),
+            NoitaMarkerRuleKind.Prop => CreatePropProfile(function),
+            NoitaMarkerRuleKind.PixelScene => new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.SceneLoad,
+                0xFF_F0_7C_FF,
+                0xCC_80_44_D0,
+                7f,
+                38f,
+                0.55f,
+                9,
+                26f,
+                NoitaWangMarkerGameplayKind.None,
+                string.Empty),
+            NoitaMarkerRuleKind.Encounter => new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Spawn,
+                0xFF_70_A8_FF,
+                0xCC_38_58_A0,
+                8f,
+                38f,
+                0.54f,
+                10,
+                28f,
+                NoitaWangMarkerGameplayKind.SparkEmitter,
+                "fire"),
+            NoitaMarkerRuleKind.Trigger => new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Machine,
+                0xFF_E8_D8_58,
+                0xCC_88_70_20,
+                8f,
+                40f,
+                0.58f,
+                9,
+                25f,
+                NoitaWangMarkerGameplayKind.SparkEmitter,
+                "crystal"),
+            NoitaMarkerRuleKind.Effect => new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Spawn,
+                0xFF_F0_E8_B0,
+                0xCC_A0_90_50,
+                7f,
+                34f,
+                0.48f,
+                7,
+                22f,
+                NoitaWangMarkerGameplayKind.SparkEmitter,
+                "fire"),
+            _ => throw new InvalidOperationException($"未知 Noita marker rule kind：{rule.Kind}。"),
+        };
+        return true;
+    }
 
-        if (Contains(function, "acid") || Contains(function, "gunpowder") || Contains(function, "oil") ||
-            Contains(function, "tank") || Contains(function, "laser") || Contains(function, "trap"))
-        {
-            profile = new NoitaWangMarkerVisualProfile(
+    private static NoitaWangMarkerVisualProfile CreatePropProfile(string function)
+    {
+        bool hazard = Contains(function, "acid") || Contains(function, "gunpowder") || Contains(function, "oil") ||
+            Contains(function, "tank") || Contains(function, "laser") || Contains(function, "trap");
+        return hazard
+            ? new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.Hazard,
                 0xFF_42_FF_B8,
                 0xCC_30_66_D8,
@@ -413,14 +457,8 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 14,
                 38f,
                 NoitaWangMarkerGameplayKind.MaterialEmitter,
-                HazardMaterialName(function));
-            return true;
-        }
-
-        if (Contains(function, "turret") || Contains(function, "machine") || Contains(function, "apparatus") ||
-            Contains(function, "forcefield") || Contains(function, "lamp") || Contains(function, "pipe"))
-        {
-            profile = new NoitaWangMarkerVisualProfile(
+                HazardMaterialName(function))
+            : new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.Machine,
                 0xFF_FF_B0_58,
                 0xCC_C0_50_20,
@@ -431,39 +469,6 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 28f,
                 NoitaWangMarkerGameplayKind.SparkEmitter,
                 "fire");
-            return true;
-        }
-
-        if (function.StartsWith("load_", StringComparison.Ordinal) || Contains(function, "pixel_scene") ||
-            Contains(function, "structure") || Contains(function, "background") || Contains(function, "beam") ||
-            Contains(function, "panel") || Contains(function, "pillar") || Contains(function, "pod"))
-        {
-            profile = new NoitaWangMarkerVisualProfile(
-                NoitaWangMarkerVisualKind.SceneLoad,
-                0xFF_F0_7C_FF,
-                0xCC_80_44_D0,
-                7f,
-                38f,
-                0.55f,
-                9,
-                26f,
-                NoitaWangMarkerGameplayKind.None,
-                string.Empty);
-            return true;
-        }
-
-        profile = new NoitaWangMarkerVisualProfile(
-            NoitaWangMarkerVisualKind.Spawn,
-            0xFF_F0_E8_B0,
-            0xCC_A0_90_50,
-            7f,
-            34f,
-            0.48f,
-            7,
-            22f,
-            NoitaWangMarkerGameplayKind.SparkEmitter,
-            "fire");
-        return true;
     }
 
     private static string HazardMaterialName(string function)

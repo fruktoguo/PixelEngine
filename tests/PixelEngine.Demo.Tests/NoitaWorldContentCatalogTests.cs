@@ -80,6 +80,46 @@ public sealed class NoitaWorldContentCatalogTests
                 path.GetString() == "data/biome_impl/snowcastle/forge.png");
     }
 
+    /// <summary>
+    /// 所有参考 Lua 注册必须在构建前转换为纯 C# rule；运行时不得依赖 Lua fallback。
+    /// </summary>
+    [Fact]
+    public void EverySourceMarkerRegistrationHasPureCSharpRule()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(ContentRoot(), "noita-world-content.json")));
+        Dictionary<string, int> registrations = new(StringComparer.Ordinal);
+        foreach (JsonElement biome in document.RootElement.GetProperty("biomes").EnumerateArray())
+        {
+            if (biome.GetProperty("lua").ValueKind == JsonValueKind.Null)
+            {
+                continue;
+            }
+
+            foreach (JsonElement spawn in biome.GetProperty("lua").GetProperty("spawnFunctions").EnumerateArray())
+            {
+                string function = spawn.GetProperty("function").GetString()!;
+                registrations[function] = registrations.GetValueOrDefault(function) + 1;
+            }
+        }
+
+        Assert.Equal(NoitaMarkerRuleCatalog.UniqueRuleCount, registrations.Count);
+        Assert.Equal(NoitaMarkerRuleCatalog.SourceRegistrationCount, registrations.Values.Sum());
+        foreach ((string function, int count) in registrations)
+        {
+            Assert.True(NoitaMarkerRuleCatalog.TryResolve(function, out NoitaMarkerRule rule), function);
+            Assert.Equal(function, rule.Function);
+            Assert.Equal(count, rule.SourceRegistrationCount);
+            Assert.InRange(rule.SourceBiomeCount, 1, 146);
+        }
+
+        Assert.Equal(NoitaMarkerRuleKind.Vegetation, NoitaMarkerRuleCatalog.Resolve("spawn_vines").Kind);
+        Assert.Equal(NoitaMarkerRuleKind.Loot, NoitaMarkerRuleCatalog.Resolve("spawn_chest").Kind);
+        Assert.Equal(NoitaMarkerRuleKind.Prop, NoitaMarkerRuleCatalog.Resolve("load_oiltank").Kind);
+        Assert.Equal(NoitaMarkerRuleKind.PixelScene, NoitaMarkerRuleCatalog.Resolve("load_pixel_scene4").Kind);
+        Assert.Equal(NoitaMarkerRuleKind.Encounter, NoitaMarkerRuleCatalog.Resolve("spawn_large_enemies").Kind);
+    }
+
     private static string ContentRoot()
     {
         return Path.GetFullPath(

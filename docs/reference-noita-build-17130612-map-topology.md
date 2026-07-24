@@ -98,3 +98,8 @@ spawn function、12 个全局 spliced pixel scene、91 个 buffered pixel scene�
 Wang 模板同时恢复为 `1 source pixel = 1 world cell`。512-cell biome macro map 和
 BitmapCaves 负责大尺度结构，Wang semantic pixel 不再人为扩成 5 个 world cell，避免把材料边界、
 洞穴细节和 spawn marker 粗化为类似略缩图的方块。
+
+`tools/generate-noita-marker-rules.ps1` 将目录中的 785 条 Lua 注册记录、243 个唯一函数名在构建前
+转换为 `NoitaMarkerRules.Generated.cs`。运行时只调用 C# `NoitaMarkerRuleCatalog`，分类为 PixelScene、
+Vegetation、Loot、Prop、Encounter、Trigger 与 Effect；玩家包不包含 Lua 源码、Lua VM，也没有
+运行时字符串 heuristic fallback。Lua 只作为隔离参考树中的只读来源。
