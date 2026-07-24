@@ -83,3 +83,18 @@ The Laboratory 不能建模为第八个全宽随机 biome。主世界通过 `dat
 - Laboratory 保持准确的 `1536,12288,2600,1600` 边界，并把 `boss_arena.png` 的 416 万来源像素映射为 4-bit/8 类 Demo 材质掩码；随机 Laboratory encounter 与原手写矩形替代均被禁用，材质温度服从二维拓扑覆盖。
 
 此检查点闭合完整宏观色图、关键固定山体、Holy Mountain 大尺度组合和 Laboratory 地形轮廓。每个普通 biome 的 Wang/BitmapCaves、背景层、spawn marker、其余固定场景、实体生态和全区域截图 parity 仍是 `DEMO-008` 的未完成项。
+
+## 7. 完整世界内容目录
+
+2026-07-25 新增 `tools/extract-noita-world-content.ps1`，从同一隔离参考树生成
+`demo/PixelEngine.Demo/content/noita-world-content.json`。目录只保存结构化属性、资源路径、坐标、
+概率入口和 SHA256，不复制 Noita 原始图片、Lua、XML 或音频内容，也不让运行时依赖本机安装。
+
+Build `17130612` 的目录基线为：146 个 biome XML、640 层材料、317 层植被、785 个 Lua
+spawn function、12 个全局 spliced pixel scene、91 个 buffered pixel scene、17 张定位背景、
+2232 个 `biome_impl` 文件和 229 个 vegetation 文件。该目录是后续地形、背景、花草和交互物
+复原的唯一来源清单；现有少量手写 scene/marker 不能再被描述为完整覆盖。
+
+Wang 模板同时恢复为 `1 source pixel = 1 world cell`。512-cell biome macro map 和
+BitmapCaves 负责大尺度结构，Wang semantic pixel 不再人为扩成 5 个 world cell，避免把材料边界、
+洞穴细节和 spawn marker 粗化为类似略缩图的方块。

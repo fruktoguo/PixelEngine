@@ -629,9 +629,10 @@ internal sealed class DecodedNoitaWangTerrainSet(
     uint[] verticalKeys,
     int[] verticalOffsets)
 {
-    // 当前独立 Wang tile 选择缺少参考实现未公开的 coarse topology，因此将一个
-    // semantic pixel 展开为五个 world cells；该比例由本机原生存档的空腔 run 分布锁定。
-    internal const int SemanticPixelScale = 5;
+    // Noita 的 Wang/material PNG 是逐物理像素模板：一个 source pixel 对应一个 world cell。
+    // 宏观尺度由 512-cell biome map 与 BitmapCaves 提供，不能在这里再次放大模板，否则
+    // 会把洞穴、材料边界和 spawn marker 粗化成“略缩图像素块”。
+    internal const int SemanticPixelScale = 1;
     private const ulong CoordinateXMultiplier = 0x9E37_79B9_7F4A_7C15UL;
     private const ulong CoordinateYMultiplier = 0xBF58_476D_1CE4_E5B9UL;
     private const ulong OrientationSalt = 0x94D0_49BB_1331_11EBUL;
