@@ -17,8 +17,9 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
 
     private readonly NoitaWangMarkerAnchor[] _anchors = new NoitaWangMarkerAnchor[MaxAnchorsPerScan];
     private readonly MarkerKey[] _materialized = new MarkerKey[MaxMaterializedMarkers];
-    private readonly MaterialEmitter?[] _materialEmitters = new MaterialEmitter?[MaxMaterializedMarkers];
-    private readonly SparkEmitter?[] _sparkEmitters = new SparkEmitter?[MaxMaterializedMarkers];
+    private readonly Entity?[] _propEntities = new Entity?[MaxMaterializedMarkers];
+    private readonly Entity?[] _gameplayEntities = new Entity?[MaxMaterializedMarkers];
+    private readonly Behaviour?[] _gameplayComponents = new Behaviour?[MaxMaterializedMarkers];
     private CampaignConfig? _config;
     private BiomeCatalog? _biomes;
     private NoitaWangTerrainCatalog? _wangTerrain;
@@ -26,8 +27,6 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
     private CampaignRunDirector? _runDirector;
     private float _scanTimer;
     private float _gameplayElapsed;
-    private int _materialEmitterCount;
-    private int _sparkEmitterCount;
 
     /// <summary>已经创建为场景 prop 的 marker 数量。</summary>
     public int MaterializedCount { get; private set; }
@@ -104,6 +103,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             _anchors.AsSpan(count));
         LastScanAnchorCount = count;
         LastScanMaterializedCount = 0;
+        EvictMarkersOutsideCurrentScan(_anchors.AsSpan(0, count));
         for (int i = 0; i < count; i++)
         {
             ref readonly NoitaWangMarkerAnchor anchor = ref _anchors[i];
@@ -118,12 +118,14 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 continue;
             }
 
-            _materialized[MaterializedCount++] = key;
-            LastScanMaterializedCount++;
+            int slot = MaterializedCount++;
+            _materialized[slot] = key;
             Entity entity = context.Scene.CreateEntity();
+            _propEntities[slot] = entity;
             NoitaWangMarkerProp prop = entity.AddComponent<NoitaWangMarkerProp>();
             prop.Bind(anchor, profile);
-            CreateGameplayMarkerEntity(context, anchor, profile);
+            CreateGameplayMarkerEntity(context, anchor, profile, slot);
+            LastScanMaterializedCount++;
             TransientParticleBurst.Emit(
                 context,
                 anchor.WorldX,
@@ -177,7 +179,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
     private void CreateGameplayMarkerEntity(
         IScriptContext context,
         in NoitaWangMarkerAnchor anchor,
-        in NoitaWangMarkerVisualProfile profile)
+        in NoitaWangMarkerVisualProfile profile,
+        int slot)
     {
         if (profile.GameplayKind == NoitaWangMarkerGameplayKind.MaterialEmitter)
         {
@@ -198,7 +201,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             emitter.LightRadius = profile.LightRadiusCells;
             emitter.LightColorBgra = profile.CoreColorBgra;
             emitter.LightIntensity = Math.Clamp(profile.LightIntensity, 0.15f, 0.75f);
-            _materialEmitters[_materialEmitterCount++] = emitter;
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = emitter;
             return;
         }
 
@@ -214,21 +218,62 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             spark.IntervalSeconds = 0.22f;
             spark.Lifetime = 66;
             spark.Spread = 0.95f;
-            _sparkEmitters[_sparkEmitterCount++] = spark;
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = spark;
         }
     }
 
     private void SetGameplayEmittersEnabled(bool enabled)
     {
-        for (int i = 0; i < _materialEmitterCount; i++)
+        for (int i = 0; i < MaterializedCount; i++)
         {
-            _materialEmitters[i]!.Enabled = enabled;
+            if (_gameplayComponents[i] is { } component)
+            {
+                component.Enabled = enabled;
+            }
+        }
+    }
+
+    private void EvictMarkersOutsideCurrentScan(ReadOnlySpan<NoitaWangMarkerAnchor> anchors)
+    {
+        int slot = 0;
+        while (slot < MaterializedCount)
+        {
+            if (ContainsAnchor(anchors, _materialized[slot]))
+            {
+                slot++;
+                continue;
+            }
+
+            _propEntities[slot]!.Destroy();
+            _gameplayEntities[slot]?.Destroy();
+            int last = --MaterializedCount;
+            if (slot != last)
+            {
+                _materialized[slot] = _materialized[last];
+                _propEntities[slot] = _propEntities[last];
+                _gameplayEntities[slot] = _gameplayEntities[last];
+                _gameplayComponents[slot] = _gameplayComponents[last];
+            }
+
+            _materialized[last] = default;
+            _propEntities[last] = null;
+            _gameplayEntities[last] = null;
+            _gameplayComponents[last] = null;
+        }
+    }
+
+    private static bool ContainsAnchor(ReadOnlySpan<NoitaWangMarkerAnchor> anchors, MarkerKey key)
+    {
+        for (int i = 0; i < anchors.Length; i++)
+        {
+            if (MarkerKey.From(anchors[i]).Equals(key))
+            {
+                return true;
+            }
         }
 
-        for (int i = 0; i < _sparkEmitterCount; i++)
-        {
-            _sparkEmitters[i]!.Enabled = enabled;
-        }
+        return false;
     }
 
     private bool ContainsMaterialized(MarkerKey key)

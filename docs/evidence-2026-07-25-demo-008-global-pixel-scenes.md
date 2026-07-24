@@ -41,3 +41,7 @@ cell 掩码，6 张 background 与 22 张 colors 作为非权威世界视觉层�
 画面证明 forge background/colors、material scene 与 `spawn_forge_check` marker 使用同一世界坐标并进入
 真实 Player。marker 当前呈现为通用青色 Machine/VFX，外围地形的材质观感、洞穴密度也仍与参考目标有
 明显差距，因此本证据只证明完整接线，不宣称地图视觉或交互 parity 完成，`DEMO-008` 继续保持进行中。
+
+实机从出生区移动到 forge 时还发现旧 marker 系统会永久累计历史锚点，两个区域后 128 槽即耗尽。
+后续修复把槽位改为玩家活动窗口驻留：离开扫描窗口时同时销毁 prop 与 gameplay emitter，紧凑固定数组并
+复用槽位。该修复需要新的长路线实机回归，不能由上述 framebuffer 单独证明。
