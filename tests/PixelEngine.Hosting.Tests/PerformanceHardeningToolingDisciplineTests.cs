@@ -112,6 +112,10 @@ public sealed class PerformanceHardeningToolingDisciplineTests
         Assert.Contains("foreach ($projectPath in $testProjects)", runner, StringComparison.Ordinal);
         Assert.Contains("Sort-Object FullName", runner, StringComparison.Ordinal);
         Assert.Contains("\"--filter\", $Filter", runner, StringComparison.Ordinal);
+        Assert.Contains("ValidateSet(\"Auto\", \"Fast\", \"UI\", \"Physics\", \"Performance\", \"Full\")", runner, StringComparison.Ordinal);
+        Assert.Contains("Get-ChangedPaths", runner, StringComparison.Ordinal);
+        Assert.Contains("$Profile -eq \"Full\"", runner, StringComparison.Ordinal);
+        Assert.Contains("run-benchmark.ps1", runner, StringComparison.Ordinal);
     }
 
     /// <summary>

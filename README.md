@@ -29,7 +29,13 @@ Editor 会记住最近一次成功打开的工程；普通无参数启动会自�
 本机完整测试和 coverage 使用仓库入口，都会先串行化 testhost，避免并发写同一 `obj`：
 
 ```powershell
-pwsh -NoProfile -File tools/run-tests.ps1
+pwsh -NoProfile -File tools/run-tests.ps1                    # Auto：按当前 Git 改动选择测试
+pwsh -NoProfile -File tools/run-tests.ps1 -ListOnly          # 只预览 Auto 将运行哪些项目
+pwsh -NoProfile -File tools/run-tests.ps1 -Profile Fast      # 快速核心测试
+pwsh -NoProfile -File tools/run-tests.ps1 -Profile UI        # UI/渲染/Hosting 测试
+pwsh -NoProfile -File tools/run-tests.ps1 -Profile Physics   # Physics/Simulation/World 测试
+pwsh -NoProfile -File tools/run-tests.ps1 -Profile Performance # BenchmarkDotNet
+pwsh -NoProfile -File tools/run-tests.ps1 -Profile Full      # 仅正式验收使用
 pwsh -NoProfile -File tools/run-coverage.ps1
 ```
 
