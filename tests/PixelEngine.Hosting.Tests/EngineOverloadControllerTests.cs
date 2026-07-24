@@ -472,6 +472,9 @@ public sealed class EngineOverloadControllerTests
         Assert.True(initial.CanToggleVSync);
         Assert.True(initial.AudioEnabled);
         Assert.True(initial.CanToggleAudio);
+        Assert.False(initial.CanResizeWindow);
+        Assert.Equal(0, initial.WindowWidth);
+        Assert.Equal(0, initial.WindowHeight);
 
         RuntimeControlResult noVSync = api.SetVSyncEnabled(false);
         RuntimeControlResult muted = api.SetAudioEnabled(false);
@@ -495,6 +498,13 @@ public sealed class EngineOverloadControllerTests
         Assert.Equal(0.6f, audio.Settings.UiVolume);
         Assert.Equal(0.5f, audio.Settings.AmbientVolume);
         Assert.True(api.CaptureSettings().AudioEnabled);
+
+        RuntimeControlResult invalidSize = api.SetWindowSize(320, 180);
+        RuntimeControlResult missingWindow = api.SetWindowSize(2560, 1440);
+        Assert.False(invalidSize.Success);
+        Assert.Contains("640x360", invalidSize.Message, StringComparison.Ordinal);
+        Assert.False(missingWindow.Success);
+        Assert.Contains("窗口", missingWindow.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

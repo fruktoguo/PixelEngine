@@ -152,6 +152,9 @@ public sealed class GameUiDemoController : Behaviour
     private static readonly UiActionId QuitGameAction = Action("quit_game");
     private static readonly UiActionId ToggleAudioAction = Action("toggle_audio");
     private static readonly UiActionId ToggleVSyncAction = Action("toggle_vsync");
+    private static readonly UiActionId Resolution720pAction = Action("resolution_720p");
+    private static readonly UiActionId Resolution1080pAction = Action("resolution_1080p");
+    private static readonly UiActionId Resolution1440pAction = Action("resolution_1440p");
     private static readonly UiActionId[] SelectWandActions =
     [
         Action("select_wand_1"),
@@ -180,6 +183,7 @@ public sealed class GameUiDemoController : Behaviour
     ];
     private static readonly UiPathId SettingsAudioPath = Path("settings.audio");
     private static readonly UiPathId SettingsVSyncPath = Path("settings.vsync");
+    private static readonly UiPathId SettingsResolutionPath = Path("settings.resolution");
     private static readonly UiPathId MenuCampaignSelectedPath = Path("menu.campaign_selected");
     private static readonly UiPathId MenuSandboxSelectedPath = Path("menu.sandbox_selected");
     private static readonly UiPathId MenuModeTextPath = Path("menu.mode_text");
@@ -299,6 +303,8 @@ public sealed class GameUiDemoController : Behaviour
     private bool _resultVisible;
     private bool _settingsAudioEnabled = true;
     private bool _settingsVSyncEnabled = true;
+    private int _settingsWindowWidth;
+    private int _settingsWindowHeight;
     private string _modalScreenId = string.Empty;
     private MissionState _lastMissionState = MissionState.Playing;
     private bool _lastGoalReached;
@@ -629,6 +635,24 @@ public sealed class GameUiDemoController : Behaviour
         if (uiEvent.Action == ToggleVSyncAction)
         {
             ToggleVSync();
+            return;
+        }
+
+        if (uiEvent.Action == Resolution720pAction)
+        {
+            SetResolution(1280, 720);
+            return;
+        }
+
+        if (uiEvent.Action == Resolution1080pAction)
+        {
+            SetResolution(1920, 1080);
+            return;
+        }
+
+        if (uiEvent.Action == Resolution1440pAction)
+        {
+            SetResolution(2560, 1440);
             return;
         }
 
@@ -1833,6 +1857,22 @@ public sealed class GameUiDemoController : Behaviour
         PublishSettingsState();
     }
 
+    private void SetResolution(int width, int height)
+    {
+        RuntimeControlResult? result = _runtime?.SetWindowSize(width, height);
+        if (result is null || result.Value.Success)
+        {
+            _settingsWindowWidth = width;
+            _settingsWindowHeight = height;
+        }
+        else
+        {
+            RefreshSettingsStateFromRuntime();
+        }
+
+        PublishSettingsState();
+    }
+
     private void ClearRuntimeModalState()
     {
         CloseModal();
@@ -1867,6 +1907,8 @@ public sealed class GameUiDemoController : Behaviour
         RuntimeSettingsSnapshot settings = _runtime.CaptureSettings();
         _settingsAudioEnabled = settings.AudioEnabled;
         _settingsVSyncEnabled = settings.VSyncEnabled;
+        _settingsWindowWidth = settings.WindowWidth;
+        _settingsWindowHeight = settings.WindowHeight;
     }
 
     private void PublishSettingsState()
@@ -1878,6 +1920,10 @@ public sealed class GameUiDemoController : Behaviour
 
         SetScreenValue(ModalScreen, SettingsAudioPath, new UiValue(_settingsAudioEnabled ? 1.0 : 0.0));
         SetScreenValue(ModalScreen, SettingsVSyncPath, new UiValue(_settingsVSyncEnabled ? 1.0 : 0.0));
+        string resolution = _settingsWindowWidth > 0 && _settingsWindowHeight > 0
+            ? $"{_settingsWindowWidth} x {_settingsWindowHeight}"
+            : "由宿主控制";
+        SetScreenText(ModalScreen, SettingsResolutionPath, resolution);
     }
 
     private void CloseModalOrReturnToPause()

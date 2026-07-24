@@ -108,8 +108,8 @@ public sealed class DemoUiContentTests
             manifest,
             GameUiDemoController.SettingsScreen,
             "demo.webfirst.settings/v2",
-            ["settings.audio", "settings.vsync"],
-            ["back_main", "toggle_audio", "toggle_vsync"]);
+            ["settings.audio", "settings.resolution", "settings.vsync"],
+            ["back_main", "resolution_1080p", "resolution_1440p", "resolution_720p", "toggle_audio", "toggle_vsync"]);
         AssertScreenContract(
             manifest,
             GameUiDemoController.InventoryScreen,
@@ -387,6 +387,8 @@ public sealed class DemoUiContentTests
         string[] modelPaths = ExtractAttributeValues(document, "path", "data-model");
         Assert.Contains("settings.vsync", modelPaths);
         Assert.Contains("settings.audio", modelPaths);
+        Assert.Contains("settings.resolution", modelPaths);
+        Assert.Contains("只调整窗口和 UI 清晰度，不改变世界格、角色、碰撞或相机逻辑视野。", settingsText);
         Assert.DoesNotContain(settingsText, text => text.Contains("AudioSystem", StringComparison.Ordinal));
         Assert.DoesNotContain(settingsText, text => text.Contains("Present VSync", StringComparison.Ordinal));
         Assert.DoesNotContain("占位", settingsText);
@@ -395,10 +397,10 @@ public sealed class DemoUiContentTests
         XDocument mainDocument = XDocument.Load(
             manifest.GetRequiredScreen(GameUiDemoController.MainMenuScreen).FullPath);
         XElement mainRoot = mainDocument.Root ?? throw new InvalidDataException("main-menu.xhtml 缺少根元素。");
-        Assert.Equal(1280f, ReadInlinePixelStyle(settingsRoot, "width"));
-        Assert.Equal(720f, ReadInlinePixelStyle(settingsRoot, "height"));
-        Assert.Equal(1280f, ReadInlinePixelStyle(mainRoot, "width"));
-        Assert.Equal(720f, ReadInlinePixelStyle(mainRoot, "height"));
+        Assert.Equal(2560f, ReadInlinePixelStyle(settingsRoot, "width"));
+        Assert.Equal(1440f, ReadInlinePixelStyle(settingsRoot, "height"));
+        Assert.Equal(2560f, ReadInlinePixelStyle(mainRoot, "width"));
+        Assert.Equal(1440f, ReadInlinePixelStyle(mainRoot, "height"));
 
         string styleSheet = string.Concat(document.Descendants("style").Select(static style => style.Value));
         string mainStyleSheet = string.Concat(mainDocument.Descendants("style").Select(static style => style.Value));
@@ -1027,6 +1029,7 @@ public sealed class DemoUiContentTests
         // Assert：验证预期结果
         Assert.Equal(1.0, GetUiValue(ui, "settings.audio"), precision: 3);
         Assert.Equal(1.0, GetUiValue(ui, "settings.vsync"), precision: 3);
+        Assert.Equal("1280 x 720", GetUiText(ui, "settings.resolution"));
 
         ui.Raise(GameUiDemoController.Action("toggle_audio"));
         ui.Raise(GameUiDemoController.Action("toggle_vsync"));
@@ -1047,6 +1050,10 @@ public sealed class DemoUiContentTests
         Assert.Equal(2, runtime.VSyncToggleCount);
         Assert.Equal(1.0, GetUiValue(ui, "settings.audio"), precision: 3);
         Assert.Equal(1.0, GetUiValue(ui, "settings.vsync"), precision: 3);
+
+        ui.Raise(GameUiDemoController.Action("resolution_1440p"));
+        Assert.Equal((2560, 1440), (runtime.WindowWidth, runtime.WindowHeight));
+        Assert.Equal("2560 x 1440", GetUiText(ui, "settings.resolution"));
     }
 
     /// <summary>
@@ -2656,6 +2663,10 @@ public sealed class DemoUiContentTests
 
         public int VSyncToggleCount { get; private set; }
 
+        public int WindowWidth { get; private set; } = 1280;
+
+        public int WindowHeight { get; private set; } = 720;
+
         public bool IsPlaying { get; private set; } = true;
 
         public bool AudioEnabled { get; private set; } = true;
@@ -2669,7 +2680,14 @@ public sealed class DemoUiContentTests
 
         public RuntimeSettingsSnapshot CaptureSettings()
         {
-            return new RuntimeSettingsSnapshot(VSyncEnabled, CanToggleVSync: true, AudioEnabled, CanToggleAudio: true);
+            return new RuntimeSettingsSnapshot(
+                VSyncEnabled,
+                CanToggleVSync: true,
+                AudioEnabled,
+                CanToggleAudio: true,
+                WindowWidth,
+                WindowHeight,
+                CanResizeWindow: true);
         }
 
         public void PauseSimulation()
@@ -2714,6 +2732,13 @@ public sealed class DemoUiContentTests
             AudioToggleCount++;
             AudioEnabled = enabled;
             return new RuntimeControlResult(true, "audio");
+        }
+
+        public RuntimeControlResult SetWindowSize(int width, int height)
+        {
+            WindowWidth = width;
+            WindowHeight = height;
+            return new RuntimeControlResult(true, "resolution");
         }
     }
 

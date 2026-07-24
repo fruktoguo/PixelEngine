@@ -44,8 +44,8 @@
       "canvasScaler": {
         "scaleMode": 1,
         "scaleFactor": 1,
-        "referenceWidth": 1280,
-        "referenceHeight": 720,
+        "referenceWidth": 2560,
+        "referenceHeight": 1440,
         "screenMatchMode": 0,
         "matchWidthOrHeight": 0.5,
         "physicalUnit": 3,
@@ -74,8 +74,8 @@
       "canvasScaler": {
         "scaleMode": 0,
         "scaleFactor": 1,
-        "referenceWidth": 1280,
-        "referenceHeight": 720,
+        "referenceWidth": 2560,
+        "referenceHeight": 1440,
         "screenMatchMode": 0,
         "matchWidthOrHeight": 0,
         "physicalUnit": 3,
@@ -104,8 +104,8 @@
       "canvasScaler": {
         "scaleMode": 2,
         "scaleFactor": 1,
-        "referenceWidth": 1280,
-        "referenceHeight": 720,
+        "referenceWidth": 2560,
+        "referenceHeight": 1440,
         "screenMatchMode": 0,
         "matchWidthOrHeight": 0,
         "physicalUnit": 3,

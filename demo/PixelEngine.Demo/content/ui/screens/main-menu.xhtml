@@ -1,33 +1,33 @@
-<rml title="PixelEngine 主菜单" data-screen="main-menu" data-contract="demo.webfirst.main-menu/v3" style="left: 0px; top: 0px; width: 1280px; height: 720px">
+<rml title="PixelEngine 主菜单" data-screen="main-menu" data-contract="demo.webfirst.main-menu/v3" style="left: 0px; top: 0px; width: 2560px; height: 1440px">
   <head>
     <style>
       body { margin: 0px; font-family: "Noto Sans SC"; color: #ffffff; background-color: #171018; }
-      #menu_sky { position: absolute; left: 0px; top: 0px; width: 1280px; height: 720px; }
-      #menu_mountains { position: absolute; left: 0px; top: 208px; width: 1280px; height: 512px; }
-      #menu_scrim { position: absolute; left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(12, 7, 13, 126); }
-      #main_panel { position: absolute; left: 436px; top: 42px; width: 408px; height: 636px; }
-      #main_logo { position: absolute; left: 507px; top: 42px; width: 266px; height: 154px; }
-      #menu_kicker { position: absolute; left: 440px; top: 202px; width: 400px; margin: 0px; color: #d7c3b6; font-size: 11px; text-align: center; }
+      #menu_sky { position: absolute; left: 0px; top: 0px; width: 2560px; height: 1440px; }
+      #menu_mountains { position: absolute; left: 0px; top: 416px; width: 2560px; height: 1024px; }
+      #menu_scrim { position: absolute; left: 0px; top: 0px; width: 2560px; height: 1440px; background-color: rgba(12, 7, 13, 126); }
+      #main_panel { position: absolute; left: 872px; top: 84px; width: 816px; height: 1272px; }
+      #main_logo { position: absolute; left: 1014px; top: 84px; width: 532px; height: 308px; }
+      #menu_kicker { position: absolute; left: 880px; top: 404px; width: 800px; margin: 0px; color: #d7c3b6; font-size: 22px; text-align: center; }
       #main_title { display: none; }
-      #main_hint { position: absolute; left: 440px; top: 228px; width: 400px; margin: 0px; color: #fff4dc; font-size: 14px; text-align: center; }
-      button { color: #fff8eb; background-color: rgba(61, 39, 40, 236); border-width: 2px; border-color: #986052; }
+      #main_hint { position: absolute; left: 880px; top: 456px; width: 800px; margin: 0px; color: #fff4dc; font-size: 28px; text-align: center; }
+      button { color: #fff8eb; background-color: rgba(61, 39, 40, 236); border-width: 4px; border-color: #986052; }
       button:hover { color: #ffffff; background-color: rgba(123, 69, 53, 246); border-color: #f2ca63; }
-      #mode_campaign { position: absolute; left: 486px; top: 262px; width: 150px; height: 38px; }
-      #mode_sandbox { position: absolute; left: 644px; top: 262px; width: 150px; height: 38px; }
+      #mode_campaign { position: absolute; left: 972px; top: 524px; width: 300px; height: 76px; }
+      #mode_sandbox { position: absolute; left: 1288px; top: 524px; width: 300px; height: 76px; }
       #campaign_selected { display: none; }
       #sandbox_selected { display: none; }
-      #selected_mode { position: absolute; left: 440px; top: 310px; width: 400px; margin: 0px; color: #f4cf68; font-size: 13px; text-align: center; }
-      #start_game { position: absolute; left: 490px; top: 344px; width: 300px; height: 52px; color: #211414; font-size: 18px; background-color: #d69a4b; border-color: #ffe186; }
+      #selected_mode { position: absolute; left: 880px; top: 620px; width: 800px; margin: 0px; color: #f4cf68; font-size: 26px; text-align: center; }
+      #start_game { position: absolute; left: 980px; top: 688px; width: 600px; height: 104px; color: #211414; font-size: 36px; background-color: #d69a4b; border-color: #ffe186; }
       #start_game:hover { color: #160f0f; background-color: #efb85f; border-color: #fff0b1; }
-      #open_settings { position: absolute; left: 490px; top: 408px; width: 300px; height: 40px; }
-      #open_inventory { position: absolute; left: 490px; top: 456px; width: 300px; height: 40px; }
-      #open_dialog { position: absolute; left: 490px; top: 504px; width: 300px; height: 40px; }
-      #briefing { position: absolute; left: 390px; top: 574px; width: 500px; height: 78px; background-color: rgba(25, 15, 19, 150); border-width: 1px; border-color: #6f4843; }
-      #briefing_title { position: absolute; left: 410px; top: 584px; width: 460px; color: #f5d58a; font-size: 12px; text-align: center; }
-      #main_route { position: absolute; left: 410px; top: 606px; width: 460px; color: #f5eee9; font-size: 11px; text-align: center; }
-      #main_goal { position: absolute; left: 410px; top: 624px; width: 460px; color: #d2c4bc; font-size: 10px; text-align: center; }
-      #main_hazard { position: absolute; left: 410px; top: 640px; width: 460px; color: #d2c4bc; font-size: 10px; text-align: center; }
-      #menu_footer { position: absolute; left: 390px; top: 680px; width: 500px; color: #9d8982; font-size: 9px; text-align: center; }
+      #open_settings { position: absolute; left: 980px; top: 816px; width: 600px; height: 80px; }
+      #open_inventory { position: absolute; left: 980px; top: 912px; width: 600px; height: 80px; }
+      #open_dialog { position: absolute; left: 980px; top: 1008px; width: 600px; height: 80px; }
+      #briefing { position: absolute; left: 780px; top: 1148px; width: 1000px; height: 156px; background-color: rgba(25, 15, 19, 150); border-width: 2px; border-color: #6f4843; }
+      #briefing_title { position: absolute; left: 820px; top: 1168px; width: 920px; color: #f5d58a; font-size: 24px; text-align: center; }
+      #main_route { position: absolute; left: 820px; top: 1212px; width: 920px; color: #f5eee9; font-size: 22px; text-align: center; }
+      #main_goal { position: absolute; left: 820px; top: 1248px; width: 920px; color: #d2c4bc; font-size: 20px; text-align: center; }
+      #main_hazard { position: absolute; left: 820px; top: 1280px; width: 920px; color: #d2c4bc; font-size: 20px; text-align: center; }
+      #menu_footer { position: absolute; left: 780px; top: 1360px; width: 1000px; color: #9d8982; font-size: 18px; text-align: center; }
     </style>
   </head>
   <body>

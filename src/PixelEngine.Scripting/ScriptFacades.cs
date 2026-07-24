@@ -992,6 +992,19 @@ public interface IRuntimeControlApi
     /// <param name="enabled">是否开启音频。</param>
     /// <returns>控制操作结果。</returns>
     RuntimeControlResult SetAudioEnabled(bool enabled);
+
+    /// <summary>
+    /// 调整宿主窗口的 presentation 尺寸；不得改变内部 world/camera surface 或 Simulation cell 尺度。
+    /// </summary>
+    /// <param name="width">目标窗口客户区宽度。</param>
+    /// <param name="height">目标窗口客户区高度。</param>
+    /// <returns>控制操作结果。</returns>
+    RuntimeControlResult SetWindowSize(int width, int height)
+    {
+        _ = width;
+        _ = height;
+        return new RuntimeControlResult(false, "当前宿主不支持运行时调整窗口尺寸。");
+    }
 }
 
 /// <summary>
@@ -1045,11 +1058,17 @@ public readonly record struct RuntimeControlResult(bool Success, string Message)
 /// <param name="CanToggleVSync">当前宿主是否支持运行时切换 VSync。</param>
 /// <param name="AudioEnabled">当前音频是否开启。</param>
 /// <param name="CanToggleAudio">当前宿主是否支持运行时切换音频。</param>
+/// <param name="WindowWidth">当前窗口 framebuffer 宽度；宿主无窗口时为 0。</param>
+/// <param name="WindowHeight">当前窗口 framebuffer 高度；宿主无窗口时为 0。</param>
+/// <param name="CanResizeWindow">当前宿主是否支持运行时调整窗口尺寸。</param>
 public readonly record struct RuntimeSettingsSnapshot(
     bool VSyncEnabled,
     bool CanToggleVSync,
     bool AudioEnabled,
-    bool CanToggleAudio);
+    bool CanToggleAudio,
+    int WindowWidth = 0,
+    int WindowHeight = 0,
+    bool CanResizeWindow = false);
 
 /// <summary>
 /// 提供脚本可用的事件订阅 API。

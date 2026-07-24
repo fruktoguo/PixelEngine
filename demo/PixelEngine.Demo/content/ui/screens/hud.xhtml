@@ -1,35 +1,35 @@
-<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v9" style="left: 0px; top: 8px; width: 1280px; height: 74px; background-color: rgba(0, 0, 0, 0)">
+<rml title="HUD" data-screen="hud" data-contract="demo.webfirst.hud/v9" style="left: 0px; top: 16px; width: 2560px; height: 148px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
       rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #ffffff; background-color: rgba(0, 0, 0, 0); }
-      button { color: #f6e9dc; background-color: rgba(50, 38, 39, 210); border-width: 2px; border-color: #75504b; }
+      button { color: #f6e9dc; background-color: rgba(50, 38, 39, 210); border-width: 4px; border-color: #75504b; }
       button:hover { color: #ffffff; background-color: rgba(91, 58, 50, 232); border-color: #dfb453; }
-      .quick_slot { position: absolute; top: 6px; width: 46px; height: 46px; padding-top: 27px; font-size: 10px; text-align: center; }
-      #hud_wand_1 { left: 12px; }
-      #hud_wand_2 { left: 62px; }
-      #hud_wand_3 { left: 112px; }
-      #hud_wand_4 { left: 162px; }
-      .wand_icon { position: absolute; top: 14px; width: 30px; height: 20px; pointer-events: none; }
-      #hud_wand_icon_1 { left: 20px; }
-      #hud_wand_icon_2 { left: 70px; }
-      #hud_wand_icon_3 { left: 120px; }
-      #hud_wand_icon_4 { left: 170px; }
-      .item_slot { position: absolute; top: 6px; width: 42px; height: 42px; color: #6f5452; text-align: center; line-height: 42px; background-color: rgba(46, 34, 36, 178); border-width: 2px; border-color: #674844; }
-      #hud_item_1 { left: 218px; }
-      #hud_item_2 { left: 264px; }
-      #hud_item_3 { left: 310px; }
-      #hud_item_4 { left: 356px; }
-      #status_panel { position: absolute; left: 1030px; top: 6px; width: 238px; height: 62px; background-color: rgba(7, 5, 8, 128); border-width: 1px; border-color: rgba(111, 79, 67, 180); }
-      .status_icon { position: absolute; left: 1038px; width: 14px; height: 14px; pointer-events: none; }
-      #hud_health_icon { top: 11px; }
-      #hud_levitation_icon { top: 25px; }
-      #hud_mana_icon { top: 39px; }
-      #hud_reload_icon { top: 53px; }
-      progress { position: absolute; left: 1058px; width: 198px; height: 7px; margin: 0px; background-color: #211719; border-width: 1px; border-color: #684943; }
-      #hud_health { top: 14px; }
-      #hud_levitation { top: 28px; }
-      #hud_ammo { top: 42px; }
-      #hud_reload { top: 56px; }
+      .quick_slot { position: absolute; top: 12px; width: 92px; height: 92px; padding-top: 54px; font-size: 20px; text-align: center; }
+      #hud_wand_1 { left: 24px; }
+      #hud_wand_2 { left: 124px; }
+      #hud_wand_3 { left: 224px; }
+      #hud_wand_4 { left: 324px; }
+      .wand_icon { position: absolute; top: 28px; width: 60px; height: 40px; pointer-events: none; }
+      #hud_wand_icon_1 { left: 40px; }
+      #hud_wand_icon_2 { left: 140px; }
+      #hud_wand_icon_3 { left: 240px; }
+      #hud_wand_icon_4 { left: 340px; }
+      .item_slot { position: absolute; top: 12px; width: 84px; height: 84px; color: #6f5452; text-align: center; line-height: 84px; background-color: rgba(46, 34, 36, 178); border-width: 4px; border-color: #674844; }
+      #hud_item_1 { left: 436px; }
+      #hud_item_2 { left: 528px; }
+      #hud_item_3 { left: 620px; }
+      #hud_item_4 { left: 712px; }
+      #status_panel { position: absolute; left: 2060px; top: 12px; width: 476px; height: 124px; background-color: rgba(7, 5, 8, 128); border-width: 2px; border-color: rgba(111, 79, 67, 180); }
+      .status_icon { position: absolute; left: 2076px; width: 28px; height: 28px; pointer-events: none; }
+      #hud_health_icon { top: 22px; }
+      #hud_levitation_icon { top: 50px; }
+      #hud_mana_icon { top: 78px; }
+      #hud_reload_icon { top: 106px; }
+      progress { position: absolute; left: 2116px; width: 396px; height: 14px; margin: 0px; background-color: #211719; border-width: 2px; border-color: #684943; }
+      #hud_health { top: 28px; }
+      #hud_levitation { top: 56px; }
+      #hud_ammo { top: 84px; }
+      #hud_reload { top: 112px; }
       #hud_inventory, #hud_pause, #hud_telemetry, #hud_hidden_models { display: none; }
     </style>
   </head>

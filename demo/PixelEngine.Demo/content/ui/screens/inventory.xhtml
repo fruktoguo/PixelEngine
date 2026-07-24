@@ -1,71 +1,71 @@
-<rml title="法杖与法术" data-screen="inventory" data-contract="demo.webfirst.inventory/v3" style="left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(0, 0, 0, 0)">
+<rml title="法杖与法术" data-screen="inventory" data-contract="demo.webfirst.inventory/v3" style="left: 0px; top: 0px; width: 2560px; height: 1440px; background-color: rgba(0, 0, 0, 0)">
   <head>
     <style>
       rml, body { margin: 0px; font-family: "Noto Sans SC"; color: #fff8ee; background-color: rgba(0, 0, 0, 0); }
-      #inventory_scrim { position: absolute; left: 0px; top: 0px; width: 1280px; height: 720px; background-color: rgba(20, 12, 18, 168); }
-      #inventory_title { position: absolute; left: 24px; top: 16px; margin: 0px; color: #ffffff; font-size: 19px; }
-      #inventory_subtitle { position: absolute; left: 24px; top: 43px; margin: 0px; color: #dac9c0; font-size: 12px; }
-      #wand_spell_panel { position: absolute; left: 24px; top: 78px; width: 352px; height: 442px; background-color: rgba(73, 48, 47, 239); border-width: 3px; border-color: #9f6658; }
-      #item_stats_panel { position: absolute; left: 390px; top: 78px; width: 352px; height: 442px; background-color: rgba(73, 48, 47, 239); border-width: 3px; border-color: #9f6658; }
-      #wand_panel_label { position: absolute; left: 36px; top: 88px; color: #ffe6b2; font-size: 12px; }
-      #item_panel_label { position: absolute; left: 402px; top: 88px; color: #ffe6b2; font-size: 12px; }
-      button { color: #fff8ed; background-color: rgba(83, 55, 52, 242); border-width: 2px; border-color: #a86458; }
+      #inventory_scrim { position: absolute; left: 0px; top: 0px; width: 2560px; height: 1440px; background-color: rgba(20, 12, 18, 168); }
+      #inventory_title { position: absolute; left: 48px; top: 32px; margin: 0px; color: #ffffff; font-size: 38px; }
+      #inventory_subtitle { position: absolute; left: 48px; top: 86px; margin: 0px; color: #dac9c0; font-size: 24px; }
+      #wand_spell_panel { position: absolute; left: 48px; top: 156px; width: 704px; height: 884px; background-color: rgba(73, 48, 47, 239); border-width: 6px; border-color: #9f6658; }
+      #item_stats_panel { position: absolute; left: 780px; top: 156px; width: 704px; height: 884px; background-color: rgba(73, 48, 47, 239); border-width: 6px; border-color: #9f6658; }
+      #wand_panel_label { position: absolute; left: 72px; top: 176px; color: #ffe6b2; font-size: 24px; }
+      #item_panel_label { position: absolute; left: 804px; top: 176px; color: #ffe6b2; font-size: 24px; }
+      button { color: #fff8ed; background-color: rgba(83, 55, 52, 242); border-width: 4px; border-color: #a86458; }
       button:hover { color: #ffffff; background-color: rgba(132, 79, 61, 248); border-color: #f4cf64; }
-      .wand_button { position: absolute; top: 112px; width: 76px; height: 72px; padding-top: 37px; font-size: 10px; line-height: 13px; text-align: center; }
-      #inventory_wand_1 { left: 36px; }
-      #inventory_wand_2 { left: 120px; }
-      #inventory_wand_3 { left: 204px; }
-      #inventory_wand_4 { left: 288px; }
-      .inventory_wand_icon { position: absolute; top: 125px; width: 42px; height: 27px; pointer-events: none; }
-      #inventory_wand_icon_1 { left: 53px; }
-      #inventory_wand_icon_2 { left: 137px; }
-      #inventory_wand_icon_3 { left: 221px; }
-      #inventory_wand_icon_4 { left: 305px; }
-      .spell_slot { position: absolute; width: 76px; height: 70px; padding: 7px; color: #fff3eb; font-size: 11px; line-height: 14px; text-align: left; background-color: rgba(81, 53, 50, 244); border-style: dashed; border-width: 2px; border-color: #b76459; }
-      #inventory_slot_1 { left: 36px; top: 194px; }
-      #inventory_slot_2 { left: 120px; top: 194px; }
-      #inventory_slot_3 { left: 204px; top: 194px; }
-      #inventory_slot_4 { left: 288px; top: 194px; }
-      #inventory_slot_5 { left: 36px; top: 272px; }
-      #inventory_slot_6 { left: 120px; top: 272px; }
-      #inventory_slot_7 { left: 204px; top: 272px; }
-      #inventory_slot_8 { left: 288px; top: 272px; }
-      #inventory_slot_9 { left: 36px; top: 350px; }
-      #inventory_slot_10 { left: 120px; top: 350px; }
-      #inventory_slot_11 { left: 204px; top: 350px; }
-      #inventory_slot_12 { left: 288px; top: 350px; }
-      #inventory_slot_13 { left: 36px; top: 428px; }
-      #inventory_slot_14 { left: 120px; top: 428px; }
-      #inventory_slot_15 { left: 204px; top: 428px; }
-      #inventory_slot_16 { left: 288px; top: 428px; }
-      .item_slot { position: absolute; top: 112px; width: 76px; height: 72px; color: #b89188; font-size: 18px; line-height: 72px; text-align: center; background-color: rgba(81, 53, 50, 230); border-style: dashed; border-width: 2px; border-color: #a65d54; }
-      #inventory_item_1 { left: 402px; }
-      #inventory_item_2 { left: 486px; }
-      #inventory_item_3 { left: 570px; }
-      #inventory_item_4 { left: 654px; }
-      #inventory_selected { position: absolute; left: 402px; top: 202px; width: 326px; margin: 0px; color: #ffffff; font-size: 18px; }
-      #inventory_edit_state { position: absolute; left: 402px; top: 231px; width: 326px; margin: 0px; color: #f0c663; font-size: 11px; }
+      .wand_button { position: absolute; top: 224px; width: 152px; height: 144px; padding-top: 74px; font-size: 20px; line-height: 26px; text-align: center; }
+      #inventory_wand_1 { left: 72px; }
+      #inventory_wand_2 { left: 240px; }
+      #inventory_wand_3 { left: 408px; }
+      #inventory_wand_4 { left: 576px; }
+      .inventory_wand_icon { position: absolute; top: 250px; width: 84px; height: 54px; pointer-events: none; }
+      #inventory_wand_icon_1 { left: 106px; }
+      #inventory_wand_icon_2 { left: 274px; }
+      #inventory_wand_icon_3 { left: 442px; }
+      #inventory_wand_icon_4 { left: 610px; }
+      .spell_slot { position: absolute; width: 152px; height: 140px; padding: 14px; color: #fff3eb; font-size: 22px; line-height: 28px; text-align: left; background-color: rgba(81, 53, 50, 244); border-style: dashed; border-width: 4px; border-color: #b76459; }
+      #inventory_slot_1 { left: 72px; top: 388px; }
+      #inventory_slot_2 { left: 240px; top: 388px; }
+      #inventory_slot_3 { left: 408px; top: 388px; }
+      #inventory_slot_4 { left: 576px; top: 388px; }
+      #inventory_slot_5 { left: 72px; top: 544px; }
+      #inventory_slot_6 { left: 240px; top: 544px; }
+      #inventory_slot_7 { left: 408px; top: 544px; }
+      #inventory_slot_8 { left: 576px; top: 544px; }
+      #inventory_slot_9 { left: 72px; top: 700px; }
+      #inventory_slot_10 { left: 240px; top: 700px; }
+      #inventory_slot_11 { left: 408px; top: 700px; }
+      #inventory_slot_12 { left: 576px; top: 700px; }
+      #inventory_slot_13 { left: 72px; top: 856px; }
+      #inventory_slot_14 { left: 240px; top: 856px; }
+      #inventory_slot_15 { left: 408px; top: 856px; }
+      #inventory_slot_16 { left: 576px; top: 856px; }
+      .item_slot { position: absolute; top: 224px; width: 152px; height: 144px; color: #b89188; font-size: 36px; line-height: 144px; text-align: center; background-color: rgba(81, 53, 50, 230); border-style: dashed; border-width: 4px; border-color: #a65d54; }
+      #inventory_item_1 { left: 804px; }
+      #inventory_item_2 { left: 972px; }
+      #inventory_item_3 { left: 1140px; }
+      #inventory_item_4 { left: 1308px; }
+      #inventory_selected { position: absolute; left: 804px; top: 404px; width: 652px; margin: 0px; color: #ffffff; font-size: 36px; }
+      #inventory_edit_state { position: absolute; left: 804px; top: 462px; width: 652px; margin: 0px; color: #f0c663; font-size: 22px; }
       #inventory_stats { display: none; }
-      .stat_icon { position: absolute; left: 406px; width: 20px; height: 20px; pointer-events: none; }
-      .stat_label { position: absolute; left: 435px; width: 130px; color: #cdbbb3; font-size: 11px; }
-      .stat_value { position: absolute; left: 570px; width: 154px; color: #ffffff; font-size: 12px; text-align: right; }
-      #stat_icon_shuffle { top: 266px; }
-      #stat_icon_draw { top: 298px; }
-      #stat_icon_capacity { top: 330px; }
-      #stat_icon_cast { top: 362px; }
-      #stat_icon_recharge { top: 394px; }
-      #stat_icon_mana_max { top: 426px; }
-      #stat_icon_mana_charge { top: 458px; }
-      #stat_icon_spread { top: 490px; }
-      #stat_label_shuffle, #stat_value_shuffle { top: 268px; }
-      #stat_label_draw, #stat_value_draw { top: 300px; }
-      #stat_label_capacity, #stat_value_capacity { top: 332px; }
-      #stat_label_cast, #stat_value_cast { top: 364px; }
-      #stat_label_recharge, #stat_value_recharge { top: 396px; }
-      #stat_label_mana_max, #stat_value_mana_max { top: 428px; }
-      #stat_label_mana_charge, #stat_value_mana_charge { top: 460px; }
-      #stat_label_spread, #stat_value_spread { top: 492px; }
-      #inventory_back { position: absolute; left: 24px; top: 542px; width: 118px; height: 38px; color: #ffffff; background-color: rgba(89, 57, 51, 245); border-color: #c27a5f; }
+      .stat_icon { position: absolute; left: 812px; width: 40px; height: 40px; pointer-events: none; }
+      .stat_label { position: absolute; left: 870px; width: 260px; color: #cdbbb3; font-size: 22px; }
+      .stat_value { position: absolute; left: 1140px; width: 308px; color: #ffffff; font-size: 24px; text-align: right; }
+      #stat_icon_shuffle { top: 532px; }
+      #stat_icon_draw { top: 596px; }
+      #stat_icon_capacity { top: 660px; }
+      #stat_icon_cast { top: 724px; }
+      #stat_icon_recharge { top: 788px; }
+      #stat_icon_mana_max { top: 852px; }
+      #stat_icon_mana_charge { top: 916px; }
+      #stat_icon_spread { top: 980px; }
+      #stat_label_shuffle, #stat_value_shuffle { top: 536px; }
+      #stat_label_draw, #stat_value_draw { top: 600px; }
+      #stat_label_capacity, #stat_value_capacity { top: 664px; }
+      #stat_label_cast, #stat_value_cast { top: 728px; }
+      #stat_label_recharge, #stat_value_recharge { top: 792px; }
+      #stat_label_mana_max, #stat_value_mana_max { top: 856px; }
+      #stat_label_mana_charge, #stat_value_mana_charge { top: 920px; }
+      #stat_label_spread, #stat_value_spread { top: 984px; }
+      #inventory_back { position: absolute; left: 48px; top: 1084px; width: 236px; height: 76px; color: #ffffff; background-color: rgba(89, 57, 51, 245); border-color: #c27a5f; }
       #inventory_back:hover { background-color: rgba(140, 83, 60, 250); border-color: #f1cb65; }
     </style>
   </head>

@@ -95,7 +95,15 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
             : _engine.Context.Options.VSync;
         bool canToggleAudio = _engine.Context.TryGetService(out AudioSystem audio);
         bool audioEnabled = canToggleAudio && IsAudioEnabled(audio.Settings);
-        return new RuntimeSettingsSnapshot(vSyncEnabled, canToggleVSync, audioEnabled, canToggleAudio);
+        bool canResizeWindow = _engine.Context.TryGetService(out RenderWindow window);
+        return new RuntimeSettingsSnapshot(
+            vSyncEnabled,
+            canToggleVSync,
+            audioEnabled,
+            canToggleAudio,
+            canResizeWindow ? window.Width : 0,
+            canResizeWindow ? window.Height : 0,
+            canResizeWindow);
     }
 
     /// <summary>
@@ -162,6 +170,25 @@ public sealed class EngineScriptRuntimeControlApi(Engine engine) : IRuntimeContr
         muted.MasterVolume = 0f;
         audio.ApplySettings(muted);
         return new RuntimeControlResult(true, "音频已关闭。");
+    }
+
+    /// <summary>
+    /// 调整真实窗口 presentation 尺寸；固定内部 world/camera surface 由 Hosting 保持不变。
+    /// </summary>
+    public RuntimeControlResult SetWindowSize(int width, int height)
+    {
+        if (width is < 640 or > 7680 || height is < 360 or > 4320)
+        {
+            return new RuntimeControlResult(false, "窗口尺寸必须位于 640x360 到 7680x4320。");
+        }
+
+        if (!_engine.Context.TryGetService(out RenderWindow window))
+        {
+            return new RuntimeControlResult(false, "当前宿主未接入可调整尺寸的窗口。");
+        }
+
+        window.Resize(width, height);
+        return new RuntimeControlResult(true, $"窗口分辨率已切换为 {width}x{height}；世界物理尺度保持不变。");
     }
 
     private static bool IsAudioEnabled(AudioSettings settings)
