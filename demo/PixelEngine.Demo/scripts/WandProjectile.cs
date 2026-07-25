@@ -12,6 +12,7 @@ public sealed class WandProjectile : Behaviour
     private readonly NoitaMarkerEnemy[] _enemyTargets = new NoitaMarkerEnemy[MaximumEnemyTargets];
     private readonly NoitaMarkerGhostCrystal[] _ghostCrystalTargets = new NoitaMarkerGhostCrystal[32];
     private readonly NoitaMarkerForcefieldGenerator[] _forcefieldTargets = new NoitaMarkerForcefieldGenerator[32];
+    private readonly NoitaMarkerMeatCyst[] _meatCystTargets = new NoitaMarkerMeatCyst[32];
     private SpellProjectilePlan _plan;
     private WandProjectile? _firstPayload;
     private WandProjectile? _nextPayload;
@@ -384,6 +385,15 @@ public sealed class WandProjectile : Behaviour
         for (int i = 0; i < crystalCount; i++)
         {
             if (_ghostCrystalTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
+            {
+                return true;
+            }
+        }
+
+        int cystCount = Context.Scene.CollectComponents(_meatCystTargets);
+        for (int i = 0; i < cystCount; i++)
+        {
+            if (_meatCystTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
             {
                 return true;
             }
