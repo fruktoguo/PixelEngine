@@ -600,6 +600,11 @@ public enum Key
     B,
 
     /// <summary>
+    /// E 键。
+    /// </summary>
+    E,
+
+    /// <summary>
     /// 左方向键。
     /// </summary>
     Left,

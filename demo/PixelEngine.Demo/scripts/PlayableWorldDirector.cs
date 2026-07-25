@@ -174,6 +174,7 @@ public sealed class PlayableWorldDirector :
         PlayerHealth health = playerEntity.AddComponent<PlayerHealth>();
         health.LavaDamagePerSecond = 40f;
         health.AcidDamagePerSecond = 35f;
+        _ = playerEntity.AddComponent<PlayerInventory>();
 
         _ = playerEntity.AddComponent<CampaignPortalNetwork>();
 

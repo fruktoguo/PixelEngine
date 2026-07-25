@@ -30,6 +30,7 @@ public sealed class PlayableHud : Behaviour
     private PlayableProjectileTool? _projectile;
     private WeaponController? _weapons;
     private CampaignRunDirector? _runDirector;
+    private PlayerInventory? _inventory;
     private MissionDirector? _mission;
     private GoalTrigger? _goal;
     private int _frameGraphIndex;
@@ -85,6 +86,7 @@ public sealed class PlayableHud : Behaviour
         }
 
         DrawHealth(gui);
+        DrawInventory(gui);
         DrawExploration(gui);
         DrawWeapon(gui);
         _ = _text.Clear()
@@ -196,6 +198,7 @@ public sealed class PlayableHud : Behaviour
         _projectile = Entity.TryGetComponent(out PlayableProjectileTool projectile) ? projectile : null;
         _weapons = Entity.TryGetComponent(out WeaponController weapons) ? weapons : null;
         _runDirector = Entity.TryGetComponent(out CampaignRunDirector runDirector) ? runDirector : null;
+        _inventory = Entity.TryGetComponent(out PlayerInventory inventory) ? inventory : null;
         _goal = Entity.TryGetComponent(out GoalTrigger localGoal) ? localGoal : _goal;
         if (_mission is null && Entity.TryGetComponent(out MissionDirector mission))
         {
@@ -250,6 +253,23 @@ public sealed class PlayableHud : Behaviour
         gui.Text(_text.WrittenSpan);
         _ = _text.Clear().Append(_player.LevitationFraction, "P0");
         gui.ProgressBar(_player.LevitationFraction, _text.WrittenSpan);
+    }
+
+    private void DrawInventory(IGuiContext gui)
+    {
+        if (_inventory is null)
+        {
+            return;
+        }
+
+        _ = _text.Clear()
+            .Append("金币 ")
+            .Append(_inventory.Gold)
+            .Append("   法术 ")
+            .Append(_inventory.SpellCount)
+            .Append('/')
+            .Append(PlayerInventory.SpellCapacity);
+        gui.Text(_text.WrittenSpan);
     }
 
     private void DrawWeapon(IGuiContext gui)

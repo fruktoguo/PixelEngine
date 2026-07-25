@@ -153,6 +153,21 @@ public sealed class PlayerHealth : Behaviour
         ApplyDamage(amount);
     }
 
+    /// <summary>恢复生命但不超过最大生命值。</summary>
+    /// <param name="amount">请求恢复量。</param>
+    /// <returns>实际恢复量。</returns>
+    public float Heal(float amount)
+    {
+        if (!float.IsFinite(amount) || amount <= 0f || Health <= 0f)
+        {
+            return 0f;
+        }
+
+        float previous = Health;
+        Health = MathF.Min(MaxHealth, Health + amount);
+        return Health - previous;
+    }
+
     /// <summary>
     /// 授予一段有界的全伤害无敌时间；较长的现有效果不会被较短请求覆盖。
     /// </summary>
