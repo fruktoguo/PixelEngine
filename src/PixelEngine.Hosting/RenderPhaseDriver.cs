@@ -190,6 +190,7 @@ public sealed class RenderPhaseDriver(
 
         _overlayCommands.Clear();
         AddWorldVisualLayers();
+        AddScriptWorldSprites();
         AddScriptOverlays();
         if (_debugOverlays is not null)
         {
@@ -321,5 +322,31 @@ public sealed class RenderPhaseDriver(
         }
 
         _scriptOverlays.Clear();
+    }
+
+    private void AddScriptWorldSprites()
+    {
+        if (_scriptOverlays is null)
+        {
+            return;
+        }
+
+        for (int i = 0; i < _scriptOverlays.WorldSpriteCommandCount; i++)
+        {
+            ScriptWorldSpriteCommand command = _scriptOverlays.GetWorldSpriteCommand(i).Validate();
+            AddWorldVisualLayer(new WorldVisualLayerDescriptor(
+                command.Asset,
+                command.WorldX,
+                command.WorldY,
+                command.WidthCells,
+                command.HeightCells,
+                command.Layer switch
+                {
+                    ScriptWorldSpriteLayer.Background => WorldVisualLayerKind.Background,
+                    ScriptWorldSpriteLayer.Decoration => WorldVisualLayerKind.Decoration,
+                    _ => throw new ArgumentOutOfRangeException(nameof(command), command.Layer, "未知世界精灵组合层。"),
+                },
+                command.TintBgra));
+        }
     }
 }

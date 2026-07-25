@@ -75,6 +75,11 @@ public interface IScriptContext
     IOverlayApi Overlay => throw new NotSupportedException("当前脚本上下文未注入 Overlay 后端。");
 
     /// <summary>
+    /// 世界空间纹理精灵绘制能力；命令只存在于当前脚本帧，不写入权威世界或存档。
+    /// </summary>
+    IWorldSpriteApi WorldSprites => throw new NotSupportedException("当前脚本上下文未注入 WorldSprites 后端。");
+
+    /// <summary>
     /// 引擎只读诊断能力。
     /// </summary>
     IDiagnosticsApi Diagnostics { get; }
@@ -800,6 +805,31 @@ public interface IOverlayApi
     /// <param name="thickness">线段厚度，单位屏幕像素。</param>
     /// <param name="colorBgra">BGRA8 非预乘颜色。</param>
     void Line(float startX, float startY, float endX, float endY, float thickness, uint colorBgra);
+}
+
+/// <summary>
+/// 脚本可用的世界空间纹理精灵 API。目标矩形使用 world cell 坐标，Hosting 在渲染相位解析内容资产。
+/// </summary>
+public interface IWorldSpriteApi
+{
+    /// <summary>
+    /// 提交一张仅当前帧可见的世界精灵。
+    /// </summary>
+    /// <param name="asset">ContentRoot 内的稳定 Texture 资产引用。</param>
+    /// <param name="worldX">目标左上角世界 X，单位 cell。</param>
+    /// <param name="worldY">目标左上角世界 Y，单位 cell。</param>
+    /// <param name="widthCells">目标宽度，单位 cell。</param>
+    /// <param name="heightCells">目标高度，单位 cell。</param>
+    /// <param name="layer">世界组合层。</param>
+    /// <param name="tintBgra">BGRA8 非预乘 tint；白色不改色。</param>
+    void Sprite(
+        ScriptAssetReference asset,
+        float worldX,
+        float worldY,
+        float widthCells,
+        float heightCells,
+        ScriptWorldSpriteLayer layer = ScriptWorldSpriteLayer.Decoration,
+        uint tintBgra = 0xFFFFFFFFu);
 }
 
 /// <summary>

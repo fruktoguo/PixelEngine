@@ -179,6 +179,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
     public IOverlayApi Overlay => OverlayBackend ?? throw Unsupported(nameof(Overlay));
 
     /// <inheritdoc />
+    public IWorldSpriteApi WorldSprites => OverlayBackend as IWorldSpriteApi ?? throw Unsupported(nameof(WorldSprites));
+
+    /// <inheritdoc />
     public IDiagnosticsApi Diagnostics => DiagnosticsBackend ?? throw Unsupported(nameof(Diagnostics));
 
     /// <inheritdoc />

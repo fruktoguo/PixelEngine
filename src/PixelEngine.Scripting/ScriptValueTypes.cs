@@ -421,6 +421,51 @@ public readonly record struct CameraSnapshot(
 /// <param name="Intensity">光照强度。</param>
 public readonly record struct ScriptPointLight(float X, float Y, float Radius, uint ColorBgra, float Intensity);
 
+/// <summary>脚本世界精灵相对于权威 cell 世界的组合层。</summary>
+public enum ScriptWorldSpriteLayer : byte
+{
+    /// <summary>在权威 cell 世界后方绘制。</summary>
+    Background,
+
+    /// <summary>在权威 cell 世界上方、光照合成前绘制。</summary>
+    Decoration,
+}
+
+/// <summary>
+/// 一条当前帧世界空间精灵命令。
+/// </summary>
+/// <param name="Asset">ContentRoot 内的稳定 Texture 资产引用。</param>
+/// <param name="WorldX">目标左上角世界 X，单位 cell。</param>
+/// <param name="WorldY">目标左上角世界 Y，单位 cell。</param>
+/// <param name="WidthCells">目标宽度，单位 cell。</param>
+/// <param name="HeightCells">目标高度，单位 cell。</param>
+/// <param name="Layer">世界组合层。</param>
+/// <param name="TintBgra">BGRA8 非预乘 tint。</param>
+public readonly record struct ScriptWorldSpriteCommand(
+    ScriptAssetReference Asset,
+    float WorldX,
+    float WorldY,
+    float WidthCells,
+    float HeightCells,
+    ScriptWorldSpriteLayer Layer,
+    uint TintBgra)
+{
+    /// <summary>校验资产、矩形和组合层。</summary>
+    /// <returns>当前命令。</returns>
+    public ScriptWorldSpriteCommand Validate()
+    {
+        return !Asset.IsValid || Asset.AssetType != ScriptAssetKind.Texture
+            ? throw new ArgumentException("世界精灵必须引用有效 Texture 资产。", nameof(Asset))
+            : !float.IsFinite(WorldX) || !float.IsFinite(WorldY)
+            ? throw new ArgumentOutOfRangeException(nameof(WorldX), "世界精灵坐标必须为有限数。")
+            : !float.IsFinite(WidthCells) || !float.IsFinite(HeightCells) || WidthCells <= 0f || HeightCells <= 0f
+            ? throw new ArgumentOutOfRangeException(nameof(WidthCells), "世界精灵尺寸必须为正有限数。")
+            : Enum.IsDefined(Layer)
+                ? this
+                : throw new ArgumentOutOfRangeException(nameof(Layer), Layer, "未知世界精灵组合层。");
+    }
+}
+
 /// <summary>
 /// 脚本 overlay 绘制原语类型。
 /// </summary>

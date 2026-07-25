@@ -178,6 +178,15 @@ public sealed class EnginePhaseDriverTests
         lightingSync.Sync();
         RecordingRenderFrameSink sink = new() { ResolveWorldVisualSprites = true };
         TestWorldVisualLayerProvider visualLayers = new();
+        ScriptOverlayApi scriptOverlays = new();
+        scriptOverlays.Sprite(
+            new ScriptAssetReference(ScriptAssetKind.Texture, "script-world-sprite", "maps/script.png"),
+            2f,
+            1f,
+            3f,
+            4f,
+            ScriptWorldSpriteLayer.Decoration,
+            0xFF_80_C0_FFu);
         RenderPhaseDriver driver = new(
             chunks,
             materials,
@@ -186,6 +195,7 @@ public sealed class EnginePhaseDriverTests
             cameraSync,
             lightingSync,
             sink,
+            scriptOverlays: scriptOverlays,
             worldVisualLayers: visualLayers);
         using Engine engine = new EngineBuilder()
             .WithWorkerCount(1)
@@ -194,13 +204,13 @@ public sealed class EnginePhaseDriverTests
 
         _ = engine.RunOneTick();
 
-        Assert.Equal(3, sink.OverlayCount);
+        Assert.Equal(4, sink.OverlayCount);
         OverlayCommand background = Assert.Single(
             sink.Overlays,
             static command => command.CompositionLayer == OverlayCompositionLayer.Background && command.ViewportX == 4f);
         OverlayCommand[] decorations = [.. sink.Overlays.Where(
             static command => command.CompositionLayer == OverlayCompositionLayer.WorldDecoration)];
-        Assert.Equal(2, decorations.Length);
+        Assert.Equal(3, decorations.Length);
         OverlayCommand decoration = decorations[0];
         Assert.Equal((4f, 3f, 8f, 6f), (
             background.ViewportX,
@@ -210,7 +220,14 @@ public sealed class EnginePhaseDriverTests
         Assert.Equal((uint)77, background.Sprite.TextureHandle);
         Assert.Equal((uint)77, decoration.Sprite.TextureHandle);
         Assert.All(sink.Overlays, static command => Assert.Equal(OverlayPrimitiveType.Sprite, command.PrimitiveType));
-        Assert.All(sink.Overlays, static command => Assert.Equal(0xFFFFFFFFu, command.ColorBgra));
+        OverlayCommand scripted = Assert.Single(
+            decorations,
+            static command => command.ViewportX == 2f && command.ViewportY == 1f);
+        Assert.Equal((3f, 4f), (scripted.Width, scripted.Height));
+        Assert.Equal(0xFF_80_C0_FFu, scripted.ColorBgra);
+        Assert.All(
+            sink.Overlays.Where(static command => command.ViewportX != 2f),
+            static command => Assert.Equal(0xFFFFFFFFu, command.ColorBgra));
         Assert.Equal((0f, 0f, 32f, 16f), visualLayers.LastViewport);
         Assert.Equal(0u, sink.FirstPixel);
     }

@@ -90,19 +90,29 @@ public sealed class ScriptEventBusTests
         runtime.Initialize(context);
 
         overlay.SolidRectangle(1, 2, 3, 4, 0xFF_10_20_30);
+        overlay.Sprite(
+            new ScriptAssetReference(ScriptAssetKind.Texture, "test-sprite", "sprites/test.png"),
+            8,
+            9,
+            10,
+            11);
         // Assert：验证预期结果
         Assert.Equal(1, overlay.CommandCount);
+        Assert.Equal(1, overlay.WorldSpriteCommandCount);
 
         runtime.BeginFrame();
         Assert.Equal(0, overlay.CommandCount);
+        Assert.Equal(0, overlay.WorldSpriteCommandCount);
 
         runtime.Update(0.016f);
         Assert.Equal(1, overlay.CommandCount);
+        Assert.Equal(1, overlay.WorldSpriteCommandCount);
         Assert.Equal(1, context.TransientClearCount);
 
         runtime.EndFrame();
         runtime.BeginFrame();
         Assert.Equal(0, overlay.CommandCount);
+        Assert.Equal(0, overlay.WorldSpriteCommandCount);
         Assert.Equal(2, context.TransientClearCount);
     }
 
@@ -205,6 +215,12 @@ public sealed class ScriptEventBusTests
         protected override void OnUpdate(float dt)
         {
             Context.Overlay.SolidRectangle(4, 5, 6, 7, 0xFF_40_50_60);
+            Context.WorldSprites.Sprite(
+                new ScriptAssetReference(ScriptAssetKind.Texture, "frame-sprite", "sprites/frame.png"),
+                12,
+                13,
+                14,
+                15);
         }
     }
 
@@ -231,6 +247,8 @@ public sealed class ScriptEventBusTests
         public ILightingApi Lighting => throw new NotSupportedException();
 
         public IOverlayApi Overlay => overlay ?? throw new NotSupportedException();
+
+        public IWorldSpriteApi WorldSprites => overlay ?? throw new NotSupportedException();
 
         public IDiagnosticsApi Diagnostics => throw new NotSupportedException();
 
