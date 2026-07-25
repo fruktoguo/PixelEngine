@@ -125,7 +125,9 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             int slot = MaterializedCount++;
             _materialized[slot] = key;
             Entity entity = context.Scene.CreateEntity();
-            if (profile.GameplayKind is NoitaWangMarkerGameplayKind.Enemy or NoitaWangMarkerGameplayKind.Loot)
+            if (profile.GameplayKind is NoitaWangMarkerGameplayKind.Enemy or
+                NoitaWangMarkerGameplayKind.Loot or
+                NoitaWangMarkerGameplayKind.Hazard)
             {
                 entity.Destroy();
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
@@ -212,6 +214,16 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             loot.Bind(anchor, worldSeed);
             _gameplayEntities[slot] = entity;
             _gameplayComponents[slot] = loot;
+            return;
+        }
+
+        if (profile.GameplayKind == NoitaWangMarkerGameplayKind.Hazard)
+        {
+            Entity entity = context.Scene.CreateEntity();
+            NoitaMarkerHazard hazard = entity.AddComponent<NoitaMarkerHazard>();
+            hazard.Bind(anchor);
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = hazard;
             return;
         }
 
@@ -464,6 +476,7 @@ internal enum NoitaWangMarkerGameplayKind : byte
     MaterialEmitter,
     Enemy,
     Loot,
+    Hazard,
 }
 
 internal readonly record struct NoitaWangMarkerVisualProfile(
@@ -499,6 +512,22 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 12,
                 32f,
                 NoitaWangMarkerGameplayKind.Loot,
+                string.Empty);
+            return true;
+        }
+
+        if (NoitaMarkerHazard.Supports(function))
+        {
+            profile = new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Hazard,
+                0xFF_50_D8_FF,
+                0xCC_50_60_FF,
+                8f,
+                44f,
+                0.74f,
+                12,
+                34f,
+                NoitaWangMarkerGameplayKind.Hazard,
                 string.Empty);
             return true;
         }
