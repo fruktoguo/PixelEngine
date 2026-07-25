@@ -130,7 +130,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 NoitaWangMarkerGameplayKind.Hazard or
                 NoitaWangMarkerGameplayKind.Portal or
                 NoitaWangMarkerGameplayKind.DrippingLiquid or
-                NoitaWangMarkerGameplayKind.GhostCrystal)
+                NoitaWangMarkerGameplayKind.GhostCrystal or
+                NoitaWangMarkerGameplayKind.ForcefieldGenerator)
             {
                 entity.Destroy();
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
@@ -143,7 +144,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
             }
             LastScanMaterializedCount++;
-            if (_gameplayComponents[slot] is not NoitaMarkerGhostCrystal { IsPopulated: false })
+            if (_gameplayComponents[slot] is not NoitaMarkerGhostCrystal { IsPopulated: false } and
+                not NoitaMarkerForcefieldGenerator { IsPopulated: false })
             {
                 TransientParticleBurst.Emit(
                     context,
@@ -263,6 +265,16 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             return;
         }
 
+        if (profile.GameplayKind == NoitaWangMarkerGameplayKind.ForcefieldGenerator)
+        {
+            Entity entity = context.Scene.CreateEntity();
+            NoitaMarkerForcefieldGenerator generator = entity.AddComponent<NoitaMarkerForcefieldGenerator>();
+            generator.Bind(anchor, worldSeed);
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = generator;
+            return;
+        }
+
         if (profile.GameplayKind == NoitaWangMarkerGameplayKind.MaterialEmitter)
         {
             Entity entity = context.Scene.CreateEntity();
@@ -315,6 +327,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                     NoitaMarkerEnemy enemy => !enemy.IsDead,
                     NoitaMarkerLoot loot => !loot.IsConsumed,
                     NoitaMarkerGhostCrystal crystal => !crystal.IsDead,
+                    NoitaMarkerForcefieldGenerator generator => !generator.IsDead,
                     _ => true,
                 };
             }
@@ -328,7 +341,9 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             bool resolved = _gameplayComponents[i] is NoitaMarkerEnemy { IsDead: true } or
                 NoitaMarkerLoot { IsConsumed: true } or
                 NoitaMarkerGhostCrystal { IsPopulated: false } or
-                NoitaMarkerGhostCrystal { IsDead: true };
+                NoitaMarkerGhostCrystal { IsDead: true } or
+                NoitaMarkerForcefieldGenerator { IsPopulated: false } or
+                NoitaMarkerForcefieldGenerator { IsDead: true };
             if (resolved && !ContainsResolved(_materialized[i]))
             {
                 if (_resolvedCount < _resolved.Length)
@@ -520,6 +535,7 @@ internal enum NoitaWangMarkerGameplayKind : byte
     Portal,
     DrippingLiquid,
     GhostCrystal,
+    ForcefieldGenerator,
 }
 
 internal readonly record struct NoitaWangMarkerVisualProfile(
@@ -619,6 +635,22 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 14,
                 42f,
                 NoitaWangMarkerGameplayKind.GhostCrystal,
+                string.Empty);
+            return true;
+        }
+
+        if (NoitaMarkerForcefieldGenerator.Supports(function))
+        {
+            profile = new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Machine,
+                0xFF_E6_BE_96,
+                0xCC_E6_78_96,
+                16f,
+                60f,
+                0.7f,
+                14,
+                42f,
+                NoitaWangMarkerGameplayKind.ForcefieldGenerator,
                 string.Empty);
             return true;
         }

@@ -26,7 +26,7 @@ public sealed class NoitaMarkerGhostCrystalTests
 
         Assert.Equal(first.IsPopulated, second.IsPopulated);
         Assert.Equal(first.GhostCount, second.GhostCount);
-        Assert.True(first.GhostCount is 0 or >= 2 and <= 4);
+        Assert.True(first.GhostCount is 0 or (>= 2 and <= 4));
         Assert.Equal(20f, first.MaxHealth);
     }
 

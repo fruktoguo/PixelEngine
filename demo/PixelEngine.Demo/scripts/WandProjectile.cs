@@ -11,6 +11,7 @@ public sealed class WandProjectile : Behaviour
     private const int MaximumEnemyTargets = 128;
     private readonly NoitaMarkerEnemy[] _enemyTargets = new NoitaMarkerEnemy[MaximumEnemyTargets];
     private readonly NoitaMarkerGhostCrystal[] _ghostCrystalTargets = new NoitaMarkerGhostCrystal[32];
+    private readonly NoitaMarkerForcefieldGenerator[] _forcefieldTargets = new NoitaMarkerForcefieldGenerator[32];
     private SpellProjectilePlan _plan;
     private WandProjectile? _firstPayload;
     private WandProjectile? _nextPayload;
@@ -360,8 +361,17 @@ public sealed class WandProjectile : Behaviour
 
     private bool TryHitEnemy(float x0, float y0, float x1, float y1, out float hitX, out float hitY)
     {
-        int count = Context.Scene.CollectComponents(_enemyTargets);
         float damage = MathF.Max(1f, _plan.Damage);
+        int forcefieldCount = Context.Scene.CollectComponents(_forcefieldTargets);
+        for (int i = 0; i < forcefieldCount; i++)
+        {
+            if (_forcefieldTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
+            {
+                return true;
+            }
+        }
+
+        int count = Context.Scene.CollectComponents(_enemyTargets);
         for (int i = 0; i < count; i++)
         {
             if (_enemyTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
