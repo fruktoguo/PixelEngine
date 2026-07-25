@@ -15,6 +15,85 @@ namespace PixelEngine.Physics.Tests;
 public sealed class PhysicsSystemFacadeTests
 {
     /// <summary>
+    /// 验证双刚体 revolute joint 使用世界像素锚点创建，并可显式销毁和复用句柄槽。
+    /// </summary>
+    [Fact]
+    public void RevoluteJointConnectsTwoManagedBodiesAndDestroysCleanly()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        CellGrid grid = new(new TestChunkSource(chunk), MaterialPropsTable.Empty);
+        using JobSystem jobs = new(workerCount: 1);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = default;
+        using PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
+
+        FillSolidRegion(grid, 8, 8, 8, 8, 2);
+        FillSolidRegion(grid, 16, 8, 8, 8, 2);
+        int bodyA = system.CreateBodyFromRegion(8, 8, 8, 8);
+        int bodyB = system.CreateBodyFromRegion(16, 8, 8, 8);
+        RevoluteJointSettings settings = new(EnableMotor: true, MaxMotorTorque: 9f);
+
+        int joint = system.CreateRevoluteJoint(bodyA, bodyB, 16f, 12f, in settings);
+        system.SyncStep(1f / 60f);
+
+        Assert.Equal(1, system.ActiveJointCount);
+        Assert.True(system.DestroyJoint(joint));
+        Assert.False(system.DestroyJoint(joint));
+        Assert.Equal(0, system.ActiveJointCount);
+        Assert.Equal(2, system.LiveBodyCount);
+    }
+
+    /// <summary>
+    /// 验证世界锚点创建专用 static body，并在 joint 销毁时同步回收。
+    /// </summary>
+    [Fact]
+    public void WorldAnchoredRevoluteJointOwnsAndReleasesStaticAnchorBody()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        CellGrid grid = new(new TestChunkSource(chunk), MaterialPropsTable.Empty);
+        using JobSystem jobs = new(workerCount: 1);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = default;
+        using PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
+
+        FillSolidRegion(grid, 8, 8, 8, 8, 2);
+        int body = system.CreateBodyFromRegion(8, 8, 8, 8);
+        int bodiesBeforeJoint = system.LiveBodyCount;
+        RevoluteJointSettings settings = new(BreakForce: 100_000f);
+
+        int joint = system.CreateRevoluteJointToWorld(body, 12f, 8f, in settings);
+
+        Assert.Equal(bodiesBeforeJoint + 1, system.LiveBodyCount);
+        Assert.Equal(1, system.ActiveJointCount);
+        Assert.True(system.DestroyJoint(joint));
+        Assert.Equal(bodiesBeforeJoint, system.LiveBodyCount);
+        Assert.Equal(0, system.ActiveJointCount);
+    }
+
+    /// <summary>
+    /// 验证销毁参与连接的刚体会先清理 joint 及其世界锚点，避免 native 悬空句柄。
+    /// </summary>
+    [Fact]
+    public void DestroyBodyCleansConnectedJointAndOwnedWorldAnchor()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        CellGrid grid = new(new TestChunkSource(chunk), MaterialPropsTable.Empty);
+        using JobSystem jobs = new(workerCount: 1);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = default;
+        using PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
+
+        FillSolidRegion(grid, 8, 8, 8, 8, 2);
+        int body = system.CreateBodyFromRegion(8, 8, 8, 8);
+        RevoluteJointSettings settings = default;
+        _ = system.CreateRevoluteJointToWorld(body, 12f, 8f, in settings);
+
+        Assert.True(system.DestroyBody(body));
+        Assert.Equal(0, system.ActiveJointCount);
+        Assert.Equal(0, system.LiveBodyCount);
+    }
+
+    /// <summary>
     /// 验证 Initialize 创建并接管 Box2D world，同时注入 task bridge；Shutdown 后 facade 拒绝继续使用。
     /// </summary>
     [Fact]
@@ -241,6 +320,9 @@ public sealed class PhysicsSystemFacadeTests
             _ = RigidBodyRasterizer.StampInverseSampling(body, body.PreviousTransform, grid, registry);
             QueueVerticalCutDamage(grid, damageQueue, x: 32, minY: 8, maxY: 24);
             PhysicsSystem system = new(worldId, physicsWorld, grid, registry, damageQueue, destruction, eventBus: events);
+            RevoluteJointSettings jointSettings = default;
+            _ = system.CreateRevoluteJointToWorld(body.BodyKey, 8, 8, in jointSettings);
+            Assert.Equal(1, system.ActiveJointCount);
 
             // Act：执行被测操作
             system.SyncStep(1f / 60f);
@@ -249,6 +331,7 @@ public sealed class PhysicsSystemFacadeTests
             Assert.Equal(1, system.LastDestructionResult.DamagedBodies);
             Assert.Equal(1, system.LastDestructionResult.DestroyedBodies);
             Assert.Equal(2, system.LastDestructionResult.CreatedBodies);
+            Assert.Equal(0, system.ActiveJointCount);
             AudioEvent[] drained = new AudioEvent[2];
             int eventCount = events.Channel<AudioEvent>().DrainTo(drained);
             Assert.Equal(1, eventCount);

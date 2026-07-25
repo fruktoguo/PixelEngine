@@ -216,6 +216,10 @@ public static unsafe partial class Box2D
     [LibraryImport(Box2DLibrary.Name)]
     public static partial B2Transform b2Body_GetTransform(B2BodyId bodyId);
 
+    /// <summary>把世界点转换为 body-local 点。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial B2Vec2 b2Body_GetLocalPoint(B2BodyId bodyId, B2Vec2 worldPoint);
+
     /// <summary>
     /// 设置 body 变换。
     /// </summary>
@@ -321,4 +325,20 @@ public static unsafe partial class Box2D
     /// <param name="bodyId">body 句柄。</param>
     [LibraryImport(Box2DLibrary.Name)]
     public static partial void b2Body_Disable(B2BodyId bodyId);
+
+    /// <summary>取得 Box2D 默认 revolute joint 定义。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial B2RevoluteJointDef b2DefaultRevoluteJointDef();
+
+    /// <summary>创建 revolute joint。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial B2JointId b2CreateRevoluteJoint(B2WorldId worldId, in B2RevoluteJointDef def);
+
+    /// <summary>销毁 joint。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial void b2DestroyJoint(B2JointId jointId);
+
+    /// <summary>读取 joint 当前约束力。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial B2Vec2 b2Joint_GetConstraintForce(B2JointId jointId);
 }

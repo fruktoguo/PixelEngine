@@ -302,9 +302,12 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.BurstParticles:
                 case ScriptCommandKind.EmitParticles:
                 case ScriptCommandKind.CreateBodyFromRegion:
+                case ScriptCommandKind.CreateRevoluteJoint:
+                case ScriptCommandKind.CreateRevoluteJointToWorld:
                 case ScriptCommandKind.ApplyImpulse:
                 case ScriptCommandKind.ApplyRadialImpulse:
                 case ScriptCommandKind.DestroyBody:
+                case ScriptCommandKind.DestroyJoint:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本 cell 命令目标收到不匹配命令：{command.Kind}。");
                 default:
@@ -348,9 +351,12 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.DamageBeam:
                 case ScriptCommandKind.AddHeat:
                 case ScriptCommandKind.CreateBodyFromRegion:
+                case ScriptCommandKind.CreateRevoluteJoint:
+                case ScriptCommandKind.CreateRevoluteJointToWorld:
                 case ScriptCommandKind.ApplyImpulse:
                 case ScriptCommandKind.ApplyRadialImpulse:
                 case ScriptCommandKind.DestroyBody:
+                case ScriptCommandKind.DestroyJoint:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本粒子命令目标收到不匹配命令：{command.Kind}。");
                 default:
@@ -383,6 +389,14 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.CreateBodyFromRegion:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).CreateNow(command.Body, command.X, command.Y, command.Width, command.Height);
                     break;
+                case ScriptCommandKind.CreateRevoluteJoint:
+                    JointScriptCommand joint = command.Joint;
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).CreateJointNow(in joint, attachToWorld: false);
+                    break;
+                case ScriptCommandKind.CreateRevoluteJointToWorld:
+                    JointScriptCommand worldJoint = command.Joint;
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).CreateJointNow(in worldJoint, attachToWorld: true);
+                    break;
                 case ScriptCommandKind.ApplyImpulse:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).ApplyImpulseNow(command.Body, command.A, command.B);
                     break;
@@ -391,6 +405,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     break;
                 case ScriptCommandKind.DestroyBody:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).DestroyNow(command.Body);
+                    break;
+                case ScriptCommandKind.DestroyJoint:
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).DestroyJointNow(command.Joint.Joint);
                     break;
                 case ScriptCommandKind.MoveCharacter:
                     _ = _character.MoveNow(command.Character, command.A, command.B);
@@ -1017,6 +1034,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         private const int PendingBodyKey = -1;
         private const int DestroyedBodyKey = -2;
         private readonly List<int> _bodyKeys = [];
+        private readonly List<int> _jointKeys = [];
 
         public BodyHandle CreateFromRegion(int x, int y, int width, int height)
         {
@@ -1026,6 +1044,38 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             BodyHandle handle = new(_bodyKeys.Count);
             _bodyKeys.Add(PendingBodyKey);
             commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.CreateBodyFromRegion(handle, x, y, width, height));
+            return handle;
+        }
+
+        public JointHandle CreateRevoluteJoint(
+            BodyHandle bodyA,
+            BodyHandle bodyB,
+            float anchorX,
+            float anchorY,
+            in RevoluteJointDesc desc)
+        {
+            _ = GetMappedSlot(bodyA);
+            _ = GetMappedSlot(bodyB);
+            ValidateJointDesc(anchorX, anchorY, in desc);
+            JointHandle handle = ReserveJointHandle();
+            commands.Enqueue(
+                ScriptCommandTarget.Physics,
+                ScriptCommand.CreateRevoluteJoint(handle, bodyA, bodyB, anchorX, anchorY, in desc));
+            return handle;
+        }
+
+        public JointHandle CreateRevoluteJointToWorld(
+            BodyHandle body,
+            float anchorX,
+            float anchorY,
+            in RevoluteJointDesc desc)
+        {
+            _ = GetMappedSlot(body);
+            ValidateJointDesc(anchorX, anchorY, in desc);
+            JointHandle handle = ReserveJointHandle();
+            commands.Enqueue(
+                ScriptCommandTarget.Physics,
+                ScriptCommand.CreateRevoluteJointToWorld(handle, body, anchorX, anchorY, in desc));
             return handle;
         }
 
@@ -1059,6 +1109,12 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.DestroyBody(handle));
         }
 
+        public void DestroyJoint(JointHandle handle)
+        {
+            _ = GetJointSlot(handle);
+            commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.DestroyJoint(handle));
+        }
+
         public void CreateNow(BodyHandle handle, int x, int y, int width, int height)
         {
             ref int slot = ref GetMappedSlot(handle);
@@ -1090,6 +1146,63 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             _ = physics.ApplyRadialImpulse(x, y, radius, force);
         }
 
+        public void CreateJointNow(in JointScriptCommand command, bool attachToWorld)
+        {
+            ref int slot = ref GetJointSlot(command.Joint);
+            if (slot != PendingBodyKey || !TryGetBodyKey(command.BodyA, out int bodyKeyA) || bodyKeyA < 0)
+            {
+                slot = DestroyedBodyKey;
+                return;
+            }
+
+            RevoluteJointSettings settings = new(
+                command.Desc.EnableMotor,
+                command.Desc.MaxMotorTorque,
+                command.Desc.MotorSpeedRadians,
+                command.Desc.CollideConnected,
+                command.Desc.BreakForce);
+            try
+            {
+                if (attachToWorld)
+                {
+                    slot = physics.CreateRevoluteJointToWorld(
+                        bodyKeyA,
+                        command.AnchorX,
+                        command.AnchorY,
+                        in settings);
+                    return;
+                }
+
+                if (!TryGetBodyKey(command.BodyB, out int bodyKeyB) || bodyKeyB < 0)
+                {
+                    slot = DestroyedBodyKey;
+                    return;
+                }
+
+                slot = physics.CreateRevoluteJoint(
+                    bodyKeyA,
+                    bodyKeyB,
+                    command.AnchorX,
+                    command.AnchorY,
+                    in settings);
+            }
+            catch (InvalidOperationException)
+            {
+                slot = DestroyedBodyKey;
+            }
+        }
+
+        public void DestroyJointNow(JointHandle handle)
+        {
+            ref int slot = ref GetJointSlot(handle);
+            if (slot >= 0)
+            {
+                _ = physics.DestroyJoint(slot);
+            }
+
+            slot = DestroyedBodyKey;
+        }
+
         public void DestroyNow(BodyHandle handle)
         {
             ref int slot = ref GetMappedSlot(handle);
@@ -1104,6 +1217,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public void Reset()
         {
             _bodyKeys.Clear();
+            _jointKeys.Clear();
         }
 
         private bool TryGetBodyKey(BodyHandle handle, out int bodyKey)
@@ -1126,6 +1240,34 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             }
 
             return ref CollectionsMarshal.AsSpan(_bodyKeys)[handle.Value];
+        }
+
+        private JointHandle ReserveJointHandle()
+        {
+            JointHandle handle = new(_jointKeys.Count);
+            _jointKeys.Add(PendingBodyKey);
+            return handle;
+        }
+
+        private ref int GetJointSlot(JointHandle handle)
+        {
+            if ((uint)handle.Value >= (uint)_jointKeys.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(handle), handle, "未知 joint 句柄。");
+            }
+
+            return ref CollectionsMarshal.AsSpan(_jointKeys)[handle.Value];
+        }
+
+        private static void ValidateJointDesc(float anchorX, float anchorY, in RevoluteJointDesc desc)
+        {
+            ValidateFinite(anchorX, nameof(anchorX));
+            ValidateFinite(anchorY, nameof(anchorY));
+            ValidateFinite(desc.MaxMotorTorque, nameof(desc.MaxMotorTorque));
+            ValidateFinite(desc.MotorSpeedRadians, nameof(desc.MotorSpeedRadians));
+            ValidateFinite(desc.BreakForce, nameof(desc.BreakForce));
+            ArgumentOutOfRangeException.ThrowIfNegative(desc.MaxMotorTorque);
+            ArgumentOutOfRangeException.ThrowIfNegative(desc.BreakForce);
         }
 
         private static void ValidateFinite(float value, string name)

@@ -707,6 +707,34 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本可在同一安全相位先创建多段刚体，再建立 body-body 与 body-world revolute joints。
+    /// </summary>
+    [Fact]
+    public void BodyFacadeFlushesRevoluteJointGraphThroughPhysics()
+    {
+        using Fixture fixture = Fixture.Create(withPhysics: true);
+        FillRect(fixture.Chunk, minX: 8, minY: 8, maxX: 16, maxY: 16, material: 2);
+        FillRect(fixture.Chunk, minX: 16, minY: 8, maxX: 24, maxY: 16, material: 2);
+
+        BodyHandle bodyA = fixture.Context.Bodies.CreateFromRegion(8, 8, 8, 8);
+        BodyHandle bodyB = fixture.Context.Bodies.CreateFromRegion(16, 8, 8, 8);
+        RevoluteJointDesc desc = new(EnableMotor: true, MaxMotorTorque: 9f, BreakForce: 10_000f);
+        JointHandle bodyJoint = fixture.Context.Bodies.CreateRevoluteJoint(bodyA, bodyB, 16, 12, in desc);
+        JointHandle worldJoint = fixture.Context.Bodies.CreateRevoluteJointToWorld(bodyA, 12, 8, in desc);
+
+        Assert.Equal(4, fixture.Context.FlushPhysicsCommands());
+        Assert.Equal(2, fixture.Physics!.ActiveJointCount);
+        Assert.Equal(3, fixture.Physics.LiveBodyCount);
+
+        fixture.Context.Bodies.DestroyJoint(bodyJoint);
+        fixture.Context.Bodies.DestroyJoint(worldJoint);
+
+        Assert.Equal(2, fixture.Context.FlushPhysicsCommands());
+        Assert.Equal(0, fixture.Physics.ActiveJointCount);
+        Assert.Equal(2, fixture.Physics.LiveBodyCount);
+    }
+
+    /// <summary>
     /// 验证脚本时间 facade 从真实 FrameClock 读取固定步长、帧号与本帧 sim 决策。
     /// </summary>
     [Fact]

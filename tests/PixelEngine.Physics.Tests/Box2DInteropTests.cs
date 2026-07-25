@@ -20,6 +20,7 @@ public sealed unsafe class Box2DInteropTests
     {
         Assert.Equal(4, Unsafe.SizeOf<B2WorldId>());
         Assert.Equal(8, Unsafe.SizeOf<B2BodyId>());
+        Assert.Equal(8, Unsafe.SizeOf<B2JointId>());
         Assert.Equal(8, Unsafe.SizeOf<B2ShapeId>());
         Assert.Equal(8, Unsafe.SizeOf<B2ChainId>());
         Assert.Equal(8, Unsafe.SizeOf<B2Vec2>());
@@ -35,6 +36,7 @@ public sealed unsafe class Box2DInteropTests
         Assert.Equal(72, Unsafe.SizeOf<B2ChainDef>());
         Assert.Equal(40, Unsafe.SizeOf<B2ContactEvents>());
         Assert.Equal(16, Unsafe.SizeOf<B2BodyEvents>());
+        Assert.Equal(104, Unsafe.SizeOf<B2RevoluteJointDef>());
     }
 
     /// <summary>

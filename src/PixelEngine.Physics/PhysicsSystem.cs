@@ -35,9 +35,27 @@ public sealed class PhysicsSystem : IDisposable
     private readonly bool _ownsWorld;
     private readonly List<RigidDamageEvent> _pendingDamage = new(256);
     private readonly Dictionary<CharacterController, CharacterProxy> _characterProxies = [];
+    private readonly List<ManagedJoint?> _joints = [];
+    private readonly Stack<int> _freeJointKeys = new();
     private RigidDamageEvent[] _damageScratch = GC.AllocateArray<RigidDamageEvent>(256, pinned: true);
     private ExceptionDispatchInfo? _physicsTickFailure;
+    private int _activeAnchorBodyCount;
     private bool _shutdown;
+
+    /// <summary>当前由 PhysicsSystem 管理的活跃 joint 数。</summary>
+    public int ActiveJointCount
+    {
+        get
+        {
+            int count = 0;
+            for (int i = 0; i < _joints.Count; i++)
+            {
+                count += _joints[i] is null ? 0 : 1;
+            }
+
+            return count;
+        }
+    }
 
     /// <summary>
     /// 创建物理系统 facade。该构造函数不接管 Box2D world 生命周期，适合测试或外部 world 管理。
@@ -196,7 +214,7 @@ public sealed class PhysicsSystem : IDisposable
     /// </summary>
     public int LiveBodyCount => _shutdown && _ownsWorld
         ? 0
-        : PhysicsWorld.ActiveBodyCount + (_staticTerrainColliders?.LiveBodyCount ?? 0);
+        : PhysicsWorld.ActiveBodyCount + _activeAnchorBodyCount + (_staticTerrainColliders?.LiveBodyCount ?? 0);
 
     /// <summary>
     /// Box2D 内部 step 子步数。相位 8 默认使用该值；它不是额外 CA tick，见架构 §4.1。
@@ -362,6 +380,7 @@ public sealed class PhysicsSystem : IDisposable
         }
 
         RecordSub(FrameSubPhase.PhysicsStep, stepStarted);
+        BreakOverloadedJoints();
         ResolveCharacterProxyBodyContacts();
 
         // 8d：inverse-sample 写回网格，并清理角色 AABB 内漏判的 RigidOwned
@@ -535,6 +554,7 @@ public sealed class PhysicsSystem : IDisposable
 
     private void ClearDynamicBodiesForSnapshotRestore()
     {
+        ClearJoints();
         int slotCount = PhysicsWorld.BodySlotCount;
         for (int bodyKey = 0; bodyKey < slotCount; bodyKey++)
         {
@@ -743,10 +763,185 @@ public sealed class PhysicsSystem : IDisposable
             return false;
         }
 
+        DestroyJointsConnectedTo(bodyKey);
         _ = RigidBodyRasterizer.EraseAtCurrentTransform(body, Grid, Registry);
         Box2D.b2DestroyBody(body.BodyId);
         PhysicsWorld.RemoveBody(bodyKey);
         return true;
+    }
+
+    /// <summary>
+    /// 在两个托管刚体之间创建 revolute joint。锚点使用世界像素坐标。
+    /// </summary>
+    public int CreateRevoluteJoint(
+        int bodyKeyA,
+        int bodyKeyB,
+        float anchorPixelsX,
+        float anchorPixelsY,
+        in RevoluteJointSettings settings)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (bodyKeyA == bodyKeyB)
+        {
+            throw new ArgumentException("revolute joint 必须连接两个不同刚体。", nameof(bodyKeyB));
+        }
+
+        PixelRigidBody bodyA = PhysicsWorld.GetBody(bodyKeyA);
+        PixelRigidBody bodyB = PhysicsWorld.GetBody(bodyKeyB);
+        ValidateJointInputs(anchorPixelsX, anchorPixelsY, in settings);
+        B2JointId jointId = CreateNativeRevolute(bodyA.BodyId, bodyB.BodyId, anchorPixelsX, anchorPixelsY, in settings);
+        return AddJoint(new ManagedJoint(jointId, bodyKeyA, bodyKeyB, default, settings.BreakForce));
+    }
+
+    /// <summary>
+    /// 把刚体通过 revolute joint 固定到世界锚点。内部静态 body 与 joint 共生命周期。
+    /// </summary>
+    public int CreateRevoluteJointToWorld(
+        int bodyKey,
+        float anchorPixelsX,
+        float anchorPixelsY,
+        in RevoluteJointSettings settings)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        PixelRigidBody body = PhysicsWorld.GetBody(bodyKey);
+        ValidateJointInputs(anchorPixelsX, anchorPixelsY, in settings);
+
+        B2BodyDef anchorDef = Box2D.b2DefaultBodyDef();
+        anchorDef.Type = B2BodyType.StaticBody;
+        anchorDef.Position = new B2Vec2
+        {
+            X = PhysicsScale.PixelToPhysics(anchorPixelsX),
+            Y = PhysicsScale.PixelToPhysics(anchorPixelsY),
+        };
+        B2BodyId anchorBodyId = Box2D.b2CreateBody(WorldId, in anchorDef);
+        _activeAnchorBodyCount++;
+        try
+        {
+            B2JointId jointId = CreateNativeRevolute(anchorBodyId, body.BodyId, anchorPixelsX, anchorPixelsY, in settings);
+            return AddJoint(new ManagedJoint(jointId, bodyKey, -1, anchorBodyId, settings.BreakForce));
+        }
+        catch
+        {
+            Box2D.b2DestroyBody(anchorBodyId);
+            _activeAnchorBodyCount--;
+            throw;
+        }
+    }
+
+    /// <summary>销毁托管 joint；重复销毁返回 false。</summary>
+    public bool DestroyJoint(int jointKey)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        return DestroyJointCore(jointKey);
+    }
+
+    private B2JointId CreateNativeRevolute(
+        B2BodyId bodyA,
+        B2BodyId bodyB,
+        float anchorPixelsX,
+        float anchorPixelsY,
+        in RevoluteJointSettings settings)
+    {
+        B2Vec2 worldAnchor = new()
+        {
+            X = PhysicsScale.PixelToPhysics(anchorPixelsX),
+            Y = PhysicsScale.PixelToPhysics(anchorPixelsY),
+        };
+        B2RevoluteJointDef jointDef = Box2D.b2DefaultRevoluteJointDef();
+        jointDef.BodyIdA = bodyA;
+        jointDef.BodyIdB = bodyB;
+        jointDef.LocalAnchorA = Box2D.b2Body_GetLocalPoint(bodyA, worldAnchor);
+        jointDef.LocalAnchorB = Box2D.b2Body_GetLocalPoint(bodyB, worldAnchor);
+        jointDef.EnableMotor = settings.EnableMotor ? (byte)1 : (byte)0;
+        jointDef.MaxMotorTorque = settings.MaxMotorTorque;
+        jointDef.MotorSpeed = settings.MotorSpeedRadians;
+        jointDef.CollideConnected = settings.CollideConnected ? (byte)1 : (byte)0;
+        return Box2D.b2CreateRevoluteJoint(WorldId, in jointDef);
+    }
+
+    private int AddJoint(ManagedJoint joint)
+    {
+        int key = _freeJointKeys.Count > 0 ? _freeJointKeys.Pop() : _joints.Count;
+        if (key == _joints.Count)
+        {
+            _joints.Add(joint);
+        }
+        else
+        {
+            _joints[key] = joint;
+        }
+
+        return key;
+    }
+
+    private bool DestroyJointCore(int jointKey)
+    {
+        if ((uint)jointKey >= (uint)_joints.Count || _joints[jointKey] is not ManagedJoint joint)
+        {
+            return false;
+        }
+
+        Box2D.b2DestroyJoint(joint.JointId);
+        if (joint.AnchorBodyId.Index1 != 0)
+        {
+            Box2D.b2DestroyBody(joint.AnchorBodyId);
+            _activeAnchorBodyCount--;
+        }
+
+        _joints[jointKey] = null;
+        _freeJointKeys.Push(jointKey);
+        return true;
+    }
+
+    private void DestroyJointsConnectedTo(int bodyKey)
+    {
+        for (int i = 0; i < _joints.Count; i++)
+        {
+            if (_joints[i] is ManagedJoint joint && (joint.BodyKeyA == bodyKey || joint.BodyKeyB == bodyKey))
+            {
+                _ = DestroyJointCore(i);
+            }
+        }
+    }
+
+    private void BreakOverloadedJoints()
+    {
+        for (int i = 0; i < _joints.Count; i++)
+        {
+            if (_joints[i] is not ManagedJoint joint || joint.BreakForce <= 0f)
+            {
+                continue;
+            }
+
+            B2Vec2 force = Box2D.b2Joint_GetConstraintForce(joint.JointId);
+            float forceMagnitude = MathF.Sqrt((force.X * force.X) + (force.Y * force.Y));
+            if (forceMagnitude > joint.BreakForce)
+            {
+                _ = DestroyJointCore(i);
+            }
+        }
+    }
+
+    private void ClearJoints()
+    {
+        for (int i = 0; i < _joints.Count; i++)
+        {
+            _ = DestroyJointCore(i);
+        }
+
+        _joints.Clear();
+        _freeJointKeys.Clear();
+    }
+
+    private static void ValidateJointInputs(float anchorX, float anchorY, in RevoluteJointSettings settings)
+    {
+        if (!float.IsFinite(anchorX) || !float.IsFinite(anchorY) ||
+            !float.IsFinite(settings.MaxMotorTorque) || settings.MaxMotorTorque < 0f ||
+            !float.IsFinite(settings.MotorSpeedRadians) ||
+            !float.IsFinite(settings.BreakForce) || settings.BreakForce < 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(settings), "joint 参数必须是有限值，且 torque / break force 不能为负。");
+        }
     }
 
     /// <summary>
@@ -783,6 +978,7 @@ public sealed class PhysicsSystem : IDisposable
             return;
         }
 
+        ClearJoints();
         _shutdown = true;
         _staticTerrainColliders?.Dispose();
         if (!_ownsWorld)
@@ -812,6 +1008,16 @@ public sealed class PhysicsSystem : IDisposable
         if (_destruction is null)
         {
             return default;
+        }
+
+        // 破坏重建会销毁旧 native body；先解除其 joints，避免托管 joint 表保留失效句柄。
+        for (int i = 0; i < _pendingDamage.Count; i++)
+        {
+            RigidDamageEvent damage = _pendingDamage[i];
+            if (Registry.TryGet(damage.WorldX, damage.WorldY, out RigidStamp stamp))
+            {
+                DestroyJointsConnectedTo(stamp.BodyKey);
+            }
         }
 
         RigidDestructionResult result = _destruction.RebuildDirty(WorldId, PhysicsWorld, Grid, Registry, _pendingDamage, _jobs);
@@ -1424,4 +1630,11 @@ public sealed class PhysicsSystem : IDisposable
 
         public bool HasShape { get; set; }
     }
+
+    private sealed record ManagedJoint(
+        B2JointId JointId,
+        int BodyKeyA,
+        int BodyKeyB,
+        B2BodyId AnchorBodyId,
+        float BreakForce);
 }

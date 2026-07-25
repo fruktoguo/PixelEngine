@@ -400,6 +400,21 @@ public interface IRigidBodyApi
     /// <returns>新刚体的运行时句柄；若后端采用延迟分配，可返回待解析句柄。</returns>
     BodyHandle CreateFromRegion(int x, int y, int width, int height);
 
+    /// <summary>延迟在两个刚体之间创建 revolute joint；锚点为世界像素坐标。</summary>
+    JointHandle CreateRevoluteJoint(
+        BodyHandle bodyA,
+        BodyHandle bodyB,
+        float anchorX,
+        float anchorY,
+        in RevoluteJointDesc desc);
+
+    /// <summary>延迟把刚体通过 revolute joint 连接到世界锚点。</summary>
+    JointHandle CreateRevoluteJointToWorld(
+        BodyHandle body,
+        float anchorX,
+        float anchorY,
+        in RevoluteJointDesc desc);
+
     /// <summary>
     /// 尝试读取刚体上一帧末的变换；脚本可在相位 1 调用。
     /// </summary>
@@ -421,6 +436,9 @@ public interface IRigidBodyApi
     /// </summary>
     /// <param name="handle">刚体句柄。</param>
     void Destroy(BodyHandle handle);
+
+    /// <summary>延迟销毁 joint。</summary>
+    void DestroyJoint(JointHandle handle);
 }
 
 /// <summary>

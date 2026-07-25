@@ -44,6 +44,22 @@ public readonly struct B2BodyId
 }
 
 /// <summary>
+/// Box2D joint opaque handle。
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public readonly struct B2JointId
+{
+    /// <summary>1-based joint index。</summary>
+    public readonly int Index1;
+
+    /// <summary>0-based world index。</summary>
+    public readonly ushort World0;
+
+    /// <summary>句柄 generation。</summary>
+    public readonly ushort Generation;
+}
+
+/// <summary>
 /// Box2D shape opaque handle。
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -671,4 +687,50 @@ public unsafe struct B2BodyEvents
 
     /// <summary>move event 数量。</summary>
     public int MoveCount;
+}
+
+/// <summary>
+/// Box2D revolute joint 定义；字段顺序严格匹配 C ABI。
+/// </summary>
+[StructLayout(LayoutKind.Sequential)]
+public unsafe struct B2RevoluteJointDef
+{
+    /// <summary>连接 body A。</summary>
+    public B2BodyId BodyIdA;
+    /// <summary>连接 body B。</summary>
+    public B2BodyId BodyIdB;
+    /// <summary>body A 局部锚点。</summary>
+    public B2Vec2 LocalAnchorA;
+    /// <summary>body B 局部锚点。</summary>
+    public B2Vec2 LocalAnchorB;
+    /// <summary>参考角。</summary>
+    public float ReferenceAngle;
+    /// <summary>spring 目标角。</summary>
+    public float TargetAngle;
+    /// <summary>是否启用 spring。</summary>
+    public byte EnableSpring;
+    /// <summary>spring 频率。</summary>
+    public float Hertz;
+    /// <summary>spring 阻尼比。</summary>
+    public float DampingRatio;
+    /// <summary>是否启用角度限制。</summary>
+    public byte EnableLimit;
+    /// <summary>角度下限。</summary>
+    public float LowerAngle;
+    /// <summary>角度上限。</summary>
+    public float UpperAngle;
+    /// <summary>是否启用 motor。</summary>
+    public byte EnableMotor;
+    /// <summary>最大 motor torque。</summary>
+    public float MaxMotorTorque;
+    /// <summary>motor 目标角速度。</summary>
+    public float MotorSpeed;
+    /// <summary>debug draw 尺寸。</summary>
+    public float DrawSize;
+    /// <summary>相连 body 是否碰撞。</summary>
+    public byte CollideConnected;
+    /// <summary>用户数据。</summary>
+    public void* UserData;
+    /// <summary>Box2D 内部校验值。</summary>
+    public int InternalValue;
 }

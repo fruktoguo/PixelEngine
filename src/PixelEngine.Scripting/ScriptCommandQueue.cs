@@ -31,9 +31,12 @@ internal enum ScriptCommandKind
     BurstParticles,
     EmitParticles,
     CreateBodyFromRegion,
+    CreateRevoluteJoint,
+    CreateRevoluteJointToWorld,
     ApplyImpulse,
     ApplyRadialImpulse,
     DestroyBody,
+    DestroyJoint,
     MoveCharacter,
 }
 
@@ -53,41 +56,42 @@ internal readonly record struct ScriptCommand(
     CharacterHandle Character,
     float A,
     float B,
+    JointScriptCommand Joint,
     DamageKind DamageKind)
 {
     public static ScriptCommand SetCell(int x, int y, MaterialId material)
     {
-        return new ScriptCommand(ScriptCommandKind.SetCell, x, y, 0, 0, material, default, default, default, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.SetCell, x, y, 0, 0, material, default, default, default, default, 0, 0, default, default);
     }
 
     public static ScriptCommand Paint(int x, int y, int radius, MaterialId material)
     {
-        return new ScriptCommand(ScriptCommandKind.Paint, x, y, radius, 0, material, default, default, default, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.Paint, x, y, radius, 0, material, default, default, default, default, 0, 0, default, default);
     }
 
     public static ScriptCommand Explode(int x, int y, int radius, float force, float jitter)
     {
-        return new ScriptCommand(ScriptCommandKind.Explode, x, y, radius, 0, default, default, default, default, default, force, jitter, DamageKind.Impact);
+        return new ScriptCommand(ScriptCommandKind.Explode, x, y, radius, 0, default, default, default, default, default, force, jitter, default, DamageKind.Impact);
     }
 
     public static ScriptCommand DamageCircle(int x, int y, int radius, ushort damage, bool falloff, DamageKind kind)
     {
-        return new ScriptCommand(ScriptCommandKind.DamageCircle, x, y, radius, damage, default, default, default, default, default, falloff ? 1f : 0f, 0, kind);
+        return new ScriptCommand(ScriptCommandKind.DamageCircle, x, y, radius, damage, default, default, default, default, default, falloff ? 1f : 0f, 0, default, kind);
     }
 
     public static ScriptCommand DamageBeam(int x, int y, float dirX, float dirY, int length, ushort damagePerCell, DamageKind kind)
     {
-        return new ScriptCommand(ScriptCommandKind.DamageBeam, x, y, length, damagePerCell, default, default, default, default, default, dirX, dirY, kind);
+        return new ScriptCommand(ScriptCommandKind.DamageBeam, x, y, length, damagePerCell, default, default, default, default, default, dirX, dirY, default, kind);
     }
 
     public static ScriptCommand AddHeat(int x, int y, int radius, float deltaCelsius)
     {
-        return new ScriptCommand(ScriptCommandKind.AddHeat, x, y, radius, 0, default, default, default, default, default, deltaCelsius, 0, DamageKind.Heat);
+        return new ScriptCommand(ScriptCommandKind.AddHeat, x, y, radius, 0, default, default, default, default, default, deltaCelsius, 0, default, DamageKind.Heat);
     }
 
     public static ScriptCommand SpawnParticle(in ParticleSpawnDesc particle)
     {
-        return new ScriptCommand(ScriptCommandKind.SpawnParticle, 0, 0, 0, 0, default, particle, default, default, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.SpawnParticle, 0, 0, 0, 0, default, particle, default, default, default, 0, 0, default, default);
     }
 
     public static ScriptCommand BurstParticles(float x, float y, MaterialId material, int count, float speed)
@@ -105,39 +109,77 @@ internal readonly record struct ScriptCommand(
             default,
             speed,
             0,
+            default,
             default);
     }
 
     public static ScriptCommand EmitParticles(in ParticleEmit emit)
     {
-        return new ScriptCommand(ScriptCommandKind.EmitParticles, 0, 0, 0, 0, default, default, emit, default, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.EmitParticles, 0, 0, 0, 0, default, default, emit, default, default, 0, 0, default, default);
     }
 
     public static ScriptCommand CreateBodyFromRegion(BodyHandle body, int x, int y, int width, int height)
     {
-        return new ScriptCommand(ScriptCommandKind.CreateBodyFromRegion, x, y, width, height, default, default, default, body, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.CreateBodyFromRegion, x, y, width, height, default, default, default, body, default, 0, 0, default, default);
+    }
+
+    public static ScriptCommand CreateRevoluteJoint(
+        JointHandle joint,
+        BodyHandle bodyA,
+        BodyHandle bodyB,
+        float anchorX,
+        float anchorY,
+        in RevoluteJointDesc desc)
+    {
+        JointScriptCommand payload = new(joint, bodyA, bodyB, anchorX, anchorY, desc);
+        return new ScriptCommand(ScriptCommandKind.CreateRevoluteJoint, 0, 0, 0, 0, default, default, default, default, default, 0, 0, payload, default);
+    }
+
+    public static ScriptCommand CreateRevoluteJointToWorld(
+        JointHandle joint,
+        BodyHandle body,
+        float anchorX,
+        float anchorY,
+        in RevoluteJointDesc desc)
+    {
+        JointScriptCommand payload = new(joint, body, default, anchorX, anchorY, desc);
+        return new ScriptCommand(ScriptCommandKind.CreateRevoluteJointToWorld, 0, 0, 0, 0, default, default, default, default, default, 0, 0, payload, default);
     }
 
     public static ScriptCommand ApplyImpulse(BodyHandle body, float impulseX, float impulseY)
     {
-        return new ScriptCommand(ScriptCommandKind.ApplyImpulse, 0, 0, 0, 0, default, default, default, body, default, impulseX, impulseY, default);
+        return new ScriptCommand(ScriptCommandKind.ApplyImpulse, 0, 0, 0, 0, default, default, default, body, default, impulseX, impulseY, default, default);
     }
 
     public static ScriptCommand ApplyRadialImpulse(int x, int y, int radius, float force)
     {
-        return new ScriptCommand(ScriptCommandKind.ApplyRadialImpulse, x, y, radius, 0, default, default, default, default, default, force, 0, default);
+        return new ScriptCommand(ScriptCommandKind.ApplyRadialImpulse, x, y, radius, 0, default, default, default, default, default, force, 0, default, default);
     }
 
     public static ScriptCommand DestroyBody(BodyHandle body)
     {
-        return new ScriptCommand(ScriptCommandKind.DestroyBody, 0, 0, 0, 0, default, default, default, body, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.DestroyBody, 0, 0, 0, 0, default, default, default, body, default, 0, 0, default, default);
+    }
+
+    public static ScriptCommand DestroyJoint(JointHandle joint)
+    {
+        JointScriptCommand payload = new(joint, default, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.DestroyJoint, 0, 0, 0, 0, default, default, default, default, default, 0, 0, payload, default);
     }
 
     public static ScriptCommand MoveCharacter(CharacterHandle character, float dx, float dy)
     {
-        return new ScriptCommand(ScriptCommandKind.MoveCharacter, 0, 0, 0, 0, default, default, default, default, character, dx, dy, default);
+        return new ScriptCommand(ScriptCommandKind.MoveCharacter, 0, 0, 0, 0, default, default, default, default, character, dx, dy, default, default);
     }
 }
+
+internal readonly record struct JointScriptCommand(
+    JointHandle Joint,
+    BodyHandle BodyA,
+    BodyHandle BodyB,
+    float AnchorX,
+    float AnchorY,
+    RevoluteJointDesc Desc);
 
 /// <summary>
 /// 线程本地分桶的脚本命令队列；相位 1 入队，相位 2 按目标一次性排空。
