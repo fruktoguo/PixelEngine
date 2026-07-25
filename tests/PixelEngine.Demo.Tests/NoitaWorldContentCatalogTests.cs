@@ -94,6 +94,35 @@ public sealed class NoitaWorldContentCatalogTests
     }
 
     /// <summary>
+    /// 全部 640 个 MaterialComponent 引用的稳定材质必须进入独立可构建的 Demo 内容包。
+    /// </summary>
+    [Fact]
+    public void EveryBiomeMaterialLayerHasRuntimeMaterialDefinition()
+    {
+        using JsonDocument world = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(ContentRoot(), "noita-world-content.json")));
+        using JsonDocument runtime = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(ContentRoot(), "materials.json")));
+        HashSet<string> runtimeNames = runtime.RootElement.GetProperty("materials")
+            .EnumerateArray()
+            .Select(static material => material.GetProperty("name").GetString()!)
+            .ToHashSet(StringComparer.Ordinal);
+        string[] requiredNames =
+        [
+            .. world.RootElement.GetProperty("biomes")
+                .EnumerateArray()
+                .SelectMany(static biome => biome.GetProperty("materialLayers").EnumerateArray())
+                .Select(static layer => layer.GetProperty("material_name").GetString()!)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        Assert.Equal(46, requiredNames.Length);
+        Assert.All(requiredNames, name => Assert.Contains(name, runtimeNames));
+        Assert.Equal(118, runtimeNames.Count);
+    }
+
+    /// <summary>
     /// 所有参考 Lua 注册必须在构建前转换为纯 C# rule；运行时不得依赖 Lua fallback。
     /// </summary>
     [Fact]

@@ -5,6 +5,7 @@ param(
 
     [string] $CatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-material-catalog.json'),
     [string] $WangCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-wang-terrain.json'),
+    [string] $WorldCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-world-content.json'),
     [string] $SnowcastlePixelSceneCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-snowcastle-pixel-scenes.json'),
     [string] $VegetationCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-vegetation.json'),
     [string] $MaterialsPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\materials.json'),
@@ -76,6 +77,7 @@ function Get-Sha256([string] $Path) {
 
 $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
 $wangCatalog = Get-Content -LiteralPath $WangCatalogPath -Raw | ConvertFrom-Json
+$worldCatalog = Get-Content -LiteralPath $WorldCatalogPath -Raw | ConvertFrom-Json
 $snowcastlePixelSceneCatalog = Get-Content -LiteralPath $SnowcastlePixelSceneCatalogPath -Raw | ConvertFrom-Json
 $vegetationCatalog = Get-Content -LiteralPath $VegetationCatalogPath -Raw | ConvertFrom-Json
 $materialsDocument = Get-Content -LiteralPath $MaterialsPath -Raw | ConvertFrom-Json
@@ -116,7 +118,9 @@ function Resolve-Declaration([string] $Name) {
 }
 
 $wangRequiredNames = @(
-    ($wangCatalog.sets.materialMappings.material + $wangCatalog.sets.materialLayers.materialName) |
+    ($wangCatalog.sets.materialMappings.material +
+        $wangCatalog.sets.materialLayers.materialName +
+        $worldCatalog.biomes.materialLayers.material_name) |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
         Sort-Object -Unique)
 $sceneRequiredNames = @($snowcastlePixelSceneCatalog.materialNames | Sort-Object -Unique)
@@ -320,7 +324,7 @@ $textureJson = ($textureCatalog | ConvertTo-Json -Depth 10).Replace("`r`n", "`n"
     [Text.UTF8Encoding]::new($false))
 
 [pscustomobject]@{
-    RequiredWangMaterials = $wangRequiredNames.Count
+    RequiredNoitaTerrainMaterials = $wangRequiredNames.Count
     RequiredSnowcastlePixelSceneMaterials = $sceneRequiredNames.Count
     ExistingMaterialsReused = $requiredNames.Count - $generated.Count
     GeneratedMaterials = $generated.Count
