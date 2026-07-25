@@ -341,4 +341,20 @@ public static unsafe partial class Box2D
     /// <summary>读取 joint 当前约束力。</summary>
     [LibraryImport(Box2DLibrary.Name)]
     public static partial B2Vec2 b2Joint_GetConstraintForce(B2JointId jointId);
+
+    /// <summary>读取 joint 当前线性分离误差。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial float b2Joint_GetLinearSeparation(B2JointId jointId);
+
+    /// <summary>启用或禁用 revolute joint motor。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial void b2RevoluteJoint_EnableMotor(B2JointId jointId, byte enableMotor);
+
+    /// <summary>设置 revolute joint motor 目标角速度。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial void b2RevoluteJoint_SetMotorSpeed(B2JointId jointId, float motorSpeed);
+
+    /// <summary>设置 revolute joint 最大 motor torque。</summary>
+    [LibraryImport(Box2DLibrary.Name)]
+    public static partial void b2RevoluteJoint_SetMaxMotorTorque(B2JointId jointId, float torque);
 }

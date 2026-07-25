@@ -718,13 +718,20 @@ public sealed class ScriptSimulationContextTests
 
         BodyHandle bodyA = fixture.Context.Bodies.CreateFromRegion(8, 8, 8, 8);
         BodyHandle bodyB = fixture.Context.Bodies.CreateFromRegion(16, 8, 8, 8);
-        RevoluteJointDesc desc = new(EnableMotor: true, MaxMotorTorque: 9f, BreakForce: 10_000f);
+        RevoluteJointDesc desc = new(
+            EnableMotor: true,
+            MaxMotorTorque: 9f,
+            BreakForce: 10_000f,
+            BreakDistancePixels: 5f);
         JointHandle bodyJoint = fixture.Context.Bodies.CreateRevoluteJoint(bodyA, bodyB, 16, 12, in desc);
         JointHandle worldJoint = fixture.Context.Bodies.CreateRevoluteJointToWorld(bodyA, 12, 8, in desc);
 
         Assert.Equal(4, fixture.Context.FlushPhysicsCommands());
         Assert.Equal(2, fixture.Physics!.ActiveJointCount);
         Assert.Equal(3, fixture.Physics.LiveBodyCount);
+
+        fixture.Context.Bodies.SetRevoluteJointMotor(bodyJoint, enabled: true, speedRadians: 0.4f, maxTorque: 10f);
+        Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
 
         fixture.Context.Bodies.DestroyJoint(bodyJoint);
         fixture.Context.Bodies.DestroyJoint(worldJoint);

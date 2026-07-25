@@ -59,13 +59,18 @@ public sealed class PhysicsSystemFacadeTests
         FillSolidRegion(grid, 16, 8, 8, 8, 2);
         int bodyA = system.CreateBodyFromRegion(8, 8, 8, 8);
         int bodyB = system.CreateBodyFromRegion(16, 8, 8, 8);
-        RevoluteJointSettings settings = new(EnableMotor: true, MaxMotorTorque: 9f);
+        RevoluteJointSettings settings = new(
+            EnableMotor: true,
+            MaxMotorTorque: 9f,
+            BreakDistancePixels: 5f);
 
         int joint = system.CreateRevoluteJoint(bodyA, bodyB, 16f, 12f, in settings);
         system.SyncStep(1f / 60f);
 
         Assert.Equal(1, system.ActiveJointCount);
+        Assert.True(system.SetRevoluteJointMotor(joint, enabled: true, speedRadians: 0.35f, maxTorque: 10f));
         Assert.True(system.DestroyJoint(joint));
+        Assert.False(system.SetRevoluteJointMotor(joint, enabled: true, speedRadians: 0.2f, maxTorque: 10f));
         Assert.False(system.DestroyJoint(joint));
         Assert.Equal(0, system.ActiveJointCount);
         Assert.Equal(2, system.LiveBodyCount);

@@ -38,6 +38,7 @@ internal enum ScriptCommandKind
     ApplyRadialImpulse,
     DestroyBody,
     DestroyJoint,
+    SetRevoluteJointMotor,
     MoveCharacter,
 }
 
@@ -171,6 +172,12 @@ internal readonly record struct ScriptCommand(
     {
         JointScriptCommand payload = new(joint, default, default, 0, 0, default);
         return new ScriptCommand(ScriptCommandKind.DestroyJoint, 0, 0, 0, 0, default, default, default, default, default, 0, 0, payload, default);
+    }
+
+    public static ScriptCommand SetRevoluteJointMotor(JointHandle joint, bool enabled, float speedRadians, float maxTorque)
+    {
+        JointScriptCommand payload = new(joint, default, default, 0, 0, default);
+        return new ScriptCommand(ScriptCommandKind.SetRevoluteJointMotor, enabled ? 1 : 0, 0, 0, 0, default, default, default, default, default, speedRadians, maxTorque, payload, default);
     }
 
     public static ScriptCommand MoveCharacter(CharacterHandle character, float dx, float dy)

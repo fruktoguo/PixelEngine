@@ -450,6 +450,9 @@ public interface IRigidBodyApi
 
     /// <summary>延迟销毁 joint。</summary>
     void DestroyJoint(JointHandle handle);
+
+    /// <summary>延迟更新 revolute joint motor 参数。</summary>
+    void SetRevoluteJointMotor(JointHandle handle, bool enabled, float speedRadians, float maxTorque);
 }
 
 /// <summary>

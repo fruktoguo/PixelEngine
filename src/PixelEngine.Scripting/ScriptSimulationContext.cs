@@ -309,6 +309,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.ApplyRadialImpulse:
                 case ScriptCommandKind.DestroyBody:
                 case ScriptCommandKind.DestroyJoint:
+                case ScriptCommandKind.SetRevoluteJointMotor:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本 cell 命令目标收到不匹配命令：{command.Kind}。");
                 default:
@@ -359,6 +360,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.ApplyRadialImpulse:
                 case ScriptCommandKind.DestroyBody:
                 case ScriptCommandKind.DestroyJoint:
+                case ScriptCommandKind.SetRevoluteJointMotor:
                 case ScriptCommandKind.MoveCharacter:
                     throw new InvalidOperationException($"脚本粒子命令目标收到不匹配命令：{command.Kind}。");
                 default:
@@ -413,6 +415,13 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                     break;
                 case ScriptCommandKind.DestroyJoint:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).DestroyJointNow(command.Joint.Joint);
+                    break;
+                case ScriptCommandKind.SetRevoluteJointMotor:
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).SetJointMotorNow(
+                        command.Joint.Joint,
+                        command.X != 0,
+                        command.A,
+                        command.B);
                     break;
                 case ScriptCommandKind.MoveCharacter:
                     _ = _character.MoveNow(command.Character, command.A, command.B);
@@ -1149,6 +1158,17 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.DestroyJoint(handle));
         }
 
+        public void SetRevoluteJointMotor(JointHandle handle, bool enabled, float speedRadians, float maxTorque)
+        {
+            ValidateFinite(speedRadians, nameof(speedRadians));
+            ValidateFinite(maxTorque, nameof(maxTorque));
+            ArgumentOutOfRangeException.ThrowIfNegative(maxTorque);
+            _ = GetJointSlot(handle);
+            commands.Enqueue(
+                ScriptCommandTarget.Physics,
+                ScriptCommand.SetRevoluteJointMotor(handle, enabled, speedRadians, maxTorque));
+        }
+
         public void CreateNow(BodyHandle handle, int x, int y, int width, int height)
         {
             ref int slot = ref GetMappedSlot(handle);
@@ -1219,7 +1239,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 command.Desc.MaxMotorTorque,
                 command.Desc.MotorSpeedRadians,
                 command.Desc.CollideConnected,
-                command.Desc.BreakForce);
+                command.Desc.BreakForce,
+                command.Desc.BreakDistancePixels);
             try
             {
                 if (attachToWorld)
@@ -1260,6 +1281,15 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             }
 
             slot = DestroyedBodyKey;
+        }
+
+        public void SetJointMotorNow(JointHandle handle, bool enabled, float speedRadians, float maxTorque)
+        {
+            ref int slot = ref GetJointSlot(handle);
+            if (slot >= 0 && !physics.SetRevoluteJointMotor(slot, enabled, speedRadians, maxTorque))
+            {
+                slot = DestroyedBodyKey;
+            }
         }
 
         public void DestroyNow(BodyHandle handle)
@@ -1326,8 +1356,10 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             ValidateFinite(desc.MaxMotorTorque, nameof(desc.MaxMotorTorque));
             ValidateFinite(desc.MotorSpeedRadians, nameof(desc.MotorSpeedRadians));
             ValidateFinite(desc.BreakForce, nameof(desc.BreakForce));
+            ValidateFinite(desc.BreakDistancePixels, nameof(desc.BreakDistancePixels));
             ArgumentOutOfRangeException.ThrowIfNegative(desc.MaxMotorTorque);
             ArgumentOutOfRangeException.ThrowIfNegative(desc.BreakForce);
+            ArgumentOutOfRangeException.ThrowIfNegative(desc.BreakDistancePixels);
         }
 
         private static void ValidateFinite(float value, string name)

@@ -860,7 +860,7 @@ public sealed class PhysicsSystem : IDisposable
         PixelRigidBody bodyB = PhysicsWorld.GetBody(bodyKeyB);
         ValidateJointInputs(anchorPixelsX, anchorPixelsY, in settings);
         B2JointId jointId = CreateNativeRevolute(bodyA.BodyId, bodyB.BodyId, anchorPixelsX, anchorPixelsY, in settings);
-        return AddJoint(new ManagedJoint(jointId, bodyKeyA, bodyKeyB, default, settings.BreakForce));
+        return AddJoint(new ManagedJoint(jointId, bodyKeyA, bodyKeyB, default, settings.BreakForce, settings.BreakDistancePixels));
     }
 
     /// <summary>
@@ -888,7 +888,7 @@ public sealed class PhysicsSystem : IDisposable
         try
         {
             B2JointId jointId = CreateNativeRevolute(anchorBodyId, body.BodyId, anchorPixelsX, anchorPixelsY, in settings);
-            return AddJoint(new ManagedJoint(jointId, bodyKey, -1, anchorBodyId, settings.BreakForce));
+            return AddJoint(new ManagedJoint(jointId, bodyKey, -1, anchorBodyId, settings.BreakForce, settings.BreakDistancePixels));
         }
         catch
         {
@@ -903,6 +903,26 @@ public sealed class PhysicsSystem : IDisposable
     {
         ObjectDisposedException.ThrowIf(_shutdown, this);
         return DestroyJointCore(jointKey);
+    }
+
+    /// <summary>运行时更新 revolute joint motor；joint 不存在时返回 false。</summary>
+    public bool SetRevoluteJointMotor(int jointKey, bool enabled, float speedRadians, float maxTorque)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        if (!float.IsFinite(speedRadians) || !float.IsFinite(maxTorque) || maxTorque < 0f)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxTorque), "motor speed / torque 必须是有限值，且 torque 不能为负。");
+        }
+
+        if ((uint)jointKey >= (uint)_joints.Count || _joints[jointKey] is not ManagedJoint joint)
+        {
+            return false;
+        }
+
+        Box2D.b2RevoluteJoint_EnableMotor(joint.JointId, enabled ? (byte)1 : (byte)0);
+        Box2D.b2RevoluteJoint_SetMotorSpeed(joint.JointId, speedRadians);
+        Box2D.b2RevoluteJoint_SetMaxMotorTorque(joint.JointId, maxTorque);
+        return true;
     }
 
     private B2JointId CreateNativeRevolute(
@@ -978,14 +998,22 @@ public sealed class PhysicsSystem : IDisposable
     {
         for (int i = 0; i < _joints.Count; i++)
         {
-            if (_joints[i] is not ManagedJoint joint || joint.BreakForce <= 0f)
+            if (_joints[i] is not ManagedJoint joint)
             {
                 continue;
             }
 
-            B2Vec2 force = Box2D.b2Joint_GetConstraintForce(joint.JointId);
-            float forceMagnitude = MathF.Sqrt((force.X * force.X) + (force.Y * force.Y));
-            if (forceMagnitude > joint.BreakForce)
+            bool forceExceeded = false;
+            if (joint.BreakForce > 0f)
+            {
+                B2Vec2 force = Box2D.b2Joint_GetConstraintForce(joint.JointId);
+                float forceMagnitude = MathF.Sqrt((force.X * force.X) + (force.Y * force.Y));
+                forceExceeded = forceMagnitude > joint.BreakForce;
+            }
+
+            bool distanceExceeded = joint.BreakDistancePixels > 0f &&
+                PhysicsScale.PhysicsToPixel(MathF.Abs(Box2D.b2Joint_GetLinearSeparation(joint.JointId))) > joint.BreakDistancePixels;
+            if (forceExceeded || distanceExceeded)
             {
                 _ = DestroyJointCore(i);
             }
@@ -1008,7 +1036,8 @@ public sealed class PhysicsSystem : IDisposable
         if (!float.IsFinite(anchorX) || !float.IsFinite(anchorY) ||
             !float.IsFinite(settings.MaxMotorTorque) || settings.MaxMotorTorque < 0f ||
             !float.IsFinite(settings.MotorSpeedRadians) ||
-            !float.IsFinite(settings.BreakForce) || settings.BreakForce < 0f)
+            !float.IsFinite(settings.BreakForce) || settings.BreakForce < 0f ||
+            !float.IsFinite(settings.BreakDistancePixels) || settings.BreakDistancePixels < 0f)
         {
             throw new ArgumentOutOfRangeException(nameof(settings), "joint 参数必须是有限值，且 torque / break force 不能为负。");
         }
@@ -1706,5 +1735,6 @@ public sealed class PhysicsSystem : IDisposable
         int BodyKeyA,
         int BodyKeyB,
         B2BodyId AnchorBodyId,
-        float BreakForce);
+        float BreakForce,
+        float BreakDistancePixels);
 }

@@ -8,9 +8,11 @@ namespace PixelEngine.Physics;
 /// <param name="MotorSpeedRadians">目标角速度，单位 rad/s。</param>
 /// <param name="CollideConnected">相连刚体是否互相碰撞。</param>
 /// <param name="BreakForce">约束力超过该 Box2D force 阈值时自动断裂；0 表示不自动断裂。</param>
+/// <param name="BreakDistancePixels">线性分离误差超过该像素距离时自动断裂；0 表示不按距离断裂。</param>
 public readonly record struct RevoluteJointSettings(
     bool EnableMotor = false,
     float MaxMotorTorque = 0f,
     float MotorSpeedRadians = 0f,
     bool CollideConnected = false,
-    float BreakForce = 0f);
+    float BreakForce = 0f,
+    float BreakDistancePixels = 0f);
