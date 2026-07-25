@@ -112,6 +112,74 @@ public sealed class NoitaVegetationTests
             static layer => layer.Asset.LogicalPath.StartsWith("maps/noita/vegetation/", StringComparison.Ordinal));
     }
 
+    /// <summary>入口草 marker 必须保留来源 PixelSprite 的尺寸与 anchor。</summary>
+    [Fact]
+    public void EntranceGrassMarkerUsesExactSourceSpriteRectangle()
+    {
+        NoitaWangMarkerAnchor anchor = new(
+            "mountain_left_entrance",
+            "mountain_left_entrance",
+            "ffc4187c",
+            "spawn_grass",
+            "lua",
+            NoitaWangTerrainCatalog.MarkerSemanticBase,
+            227,
+            180);
+
+        Assert.True(NoitaMarkerVegetationCatalog.TryCreateLayer(
+            in anchor,
+            0x1234UL,
+            out WorldVisualLayerDescriptor layer));
+        Assert.Equal("maps/noita/marker-vegetation/mountain_left_entrance_grass.png", layer.Asset.LogicalPath);
+        Assert.Equal(29f, layer.WorldX);
+        Assert.Equal(140f, layer.WorldY);
+        Assert.Equal(397f, layer.WidthCells);
+        Assert.Equal(94f, layer.HeightCells);
+        Assert.Equal(WorldVisualLayerKind.Decoration, layer.Layer);
+    }
+
+    /// <summary>大灌木 marker 必须从来源七个等权实体中确定性选取，且应用 y+12。</summary>
+    [Fact]
+    public void BigBushMarkerSelectsOneOfSevenSourceVariantsDeterministically()
+    {
+        NoitaWangMarkerAnchor anchor = new(
+            "mountain_left_entrance",
+            "mountain_left_entrance",
+            "ffc41820",
+            "spawn_big_bushes",
+            "lua",
+            NoitaWangTerrainCatalog.MarkerSemanticBase,
+            227,
+            180);
+
+        Assert.True(NoitaMarkerVegetationCatalog.TryCreateLayer(
+            in anchor,
+            0x1234UL,
+            out WorldVisualLayerDescriptor first));
+        Assert.True(NoitaMarkerVegetationCatalog.TryCreateLayer(
+            in anchor,
+            0x1234UL,
+            out WorldVisualLayerDescriptor second));
+        Assert.Equal(first, second);
+        Assert.Contains(
+            first.Asset.LogicalPath,
+            new[]
+            {
+                "maps/noita/vegetation/082_lush_bush_01.png",
+                "maps/noita/vegetation/083_lush_bush_02.png",
+                "maps/noita/vegetation/084_lush_bush_03.png",
+                "maps/noita/vegetation/085_lush_bush_04.png",
+                "maps/noita/vegetation/086_lush_bush_05.png",
+                "maps/noita/vegetation/097_lush_bush_small_01.png",
+                "maps/noita/vegetation/098_lush_bush_small_02.png",
+            });
+        NoitaVegetationAssetDefinition source = NoitaVegetationCatalog.Assets
+            .ToArray()
+            .Single(asset => asset.Asset == first.Asset);
+        Assert.Equal(anchor.WorldX - source.OffsetX, first.WorldX);
+        Assert.Equal(anchor.WorldY + 12 - source.OffsetY, first.WorldY);
+    }
+
     private static ushort[] GenerateChunk(
         IMaterialQuery materials,
         CampaignConfig config,

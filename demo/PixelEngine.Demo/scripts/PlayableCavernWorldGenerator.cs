@@ -242,6 +242,22 @@ public sealed class PlayableCavernWorldGenerator :
             }
         }
 
+        for (int i = 0; i < markerCount && count < destination.Length; i++)
+        {
+            ref readonly NoitaWangMarkerAnchor anchor = ref _visualMarkerBuffer[i];
+            if (NoitaMarkerVegetationCatalog.TryCreateLayer(
+                in anchor,
+                state.WorldSeed,
+                out WorldVisualLayerDescriptor layer) &&
+                layer.WorldX + layer.WidthCells >= minimumX &&
+                layer.WorldY + layer.HeightCells >= minimumY &&
+                layer.WorldX <= maximumX &&
+                layer.WorldY <= maximumY)
+            {
+                destination[count++] = layer;
+            }
+        }
+
         count += CollectVegetationVisualLayers(
             state,
             minimumX,
@@ -1129,6 +1145,11 @@ public sealed class PlayableCavernWorldGenerator :
     internal static double PixelSceneRandomUnit(long worldX, long worldY, ulong worldSeed)
     {
         return HashUnit(worldX, worldY, worldSeed ^ 0x534E_4F57_4341_5354UL);
+    }
+
+    internal static double MarkerRandomUnit(long worldX, long worldY, ulong worldSeed, ulong salt)
+    {
+        return HashUnit(worldX, worldY, worldSeed ^ salt);
     }
 
     /// <summary>

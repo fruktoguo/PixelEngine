@@ -574,6 +574,12 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
             return false;
         }
 
+        if (NoitaMarkerVegetationCatalog.Supports(anchor.Function))
+        {
+            profile = default;
+            return false;
+        }
+
         string function = anchor.Function;
         if (NoitaMarkerLoot.Supports(function))
         {

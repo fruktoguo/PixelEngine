@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "referenceBuildId": "17130612",
+  "sourceScript": "data/scripts/biomes/mountain/mountain_left_entrance.lua",
+  "sourceScriptSha256": "eebbf161d805ca90646208bce970121c11fcb689551af5636afe2e1909e3a5e9",
+  "assets": [
+    {
+      "entityPath": "data/entities/props/mountain_left_entrance_grass.xml",
+      "entitySha256": "ad62f80af73aaae13e00d9133e44ae9124eda4eb4ef04b749941437b81cf0327",
+      "sourcePath": "data/biome_impl/mountain/left_entrance_grass.png",
+      "sourceSha256": "c2d7f79fcabe51ce0e6f3d1bc9b3f230ec8c0566234b3572ae3398eb20cc5f7a",
+      "contentPath": "maps/noita/marker-vegetation/mountain_left_entrance_grass.png",
+      "contentSha256": "c2d7f79fcabe51ce0e6f3d1bc9b3f230ec8c0566234b3572ae3398eb20cc5f7a",
+      "width": 397,
+      "height": 94,
+      "anchorX": 198,
+      "anchorY": 40
+    }
+  ]
+}

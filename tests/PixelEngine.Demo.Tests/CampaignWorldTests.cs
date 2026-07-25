@@ -1374,7 +1374,7 @@ public sealed class CampaignWorldTests
         }
     }
 
-    /// <summary>动态植被 marker 在对应 Verlet/刚体/敌人 C# 实现前不得退化成通用绿色占位。</summary>
+    /// <summary>未实现的动态植被 marker 在对应 Verlet/刚体/敌人 C# 实现前不得退化成通用绿色占位。</summary>
     [Fact]
     public void DynamicVegetationMarkersDoNotMaterializeAsGenericPlaceholders()
     {
