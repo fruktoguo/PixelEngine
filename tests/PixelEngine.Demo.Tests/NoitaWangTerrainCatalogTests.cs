@@ -134,7 +134,11 @@ public sealed class NoitaWangTerrainCatalogTests
         ];
         Assert.Equal(79, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.True(runtime.Materials.TryGetId(name, out _), name));
-        Assert.Equal(128, runtime.Materials.Count);
+        JsonObject textureCatalog = ParseObject(
+            File.ReadAllText(Path.Combine(contentRoot, "noita-material-textures.json")));
+        Assert.Equal(textureCatalog["totalRuntimeMaterials"]!.GetValue<int>(), runtime.Materials.Count);
+        Assert.True(runtime.Materials.TryGetId("magic_liquid_teleportation", out _));
+        Assert.True(runtime.Materials.TryGetId("magic_liquid_unstable_teleportation", out _));
 
         Assert.DoesNotContain(
             catalog.Sets.SelectMany(static set => set.MaterialMappings),
@@ -158,7 +162,8 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal("9dbd52ced019a643169a2db02f46c77f8766c6e5", catalog["referenceVersionHash"]!.GetValue<string>());
 
         JsonArray files = Assert.IsType<JsonArray>(catalog["files"]);
-        Assert.Equal(71, files.Count);
+        int generatedTextureCount = catalog["generatedTextureCount"]!.GetValue<int>();
+        Assert.Equal(generatedTextureCount, files.Count);
         HashSet<int> textureIds = [];
         foreach (JsonNode? fileNode in files)
         {
@@ -182,7 +187,7 @@ public sealed class NoitaWangTerrainCatalogTests
             }
         }
 
-        Assert.Equal(Enumerable.Range(19, 71), textureIds.Order());
+        Assert.Equal(Enumerable.Range(19, generatedTextureCount), textureIds.Order());
     }
 
     /// <summary>

@@ -132,7 +132,11 @@ $sceneRequiredNames = @(
     @('blood', 'bone_static', 'cheese_static', 'mud', 'sand_petrify', 'snow_sticky') |
         Sort-Object -Unique)
 $vegetationRequiredNames = @($vegetationCatalog.materialNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
-$requiredNames = @(($wangRequiredNames + $sceneRequiredNames + $vegetationRequiredNames) | Sort-Object -Unique)
+$interactionRequiredNames = @(
+    'magic_liquid_teleportation',
+    'magic_liquid_unstable_teleportation'
+)
+$requiredNames = @(($wangRequiredNames + $sceneRequiredNames + $vegetationRequiredNames + $interactionRequiredNames) | Sort-Object -Unique)
 $reusedNames = @('lava', 'oil', 'sand', 'water')
 $materialsDocument.materials = @(
     $materialsDocument.materials |
@@ -322,6 +326,9 @@ $textureCatalog = [ordered]@{
     schemaVersion = 1
     referenceBuildId = [string]$catalog.reference.buildId
     referenceVersionHash = [string]$catalog.reference.versionHash
+    totalRuntimeMaterials = $materialsDocument.materials.Count
+    generatedTextureCount = $textureDefinitions.Count
+    interactionRequiredMaterials = $interactionRequiredNames
     files = @($textureDefinitions)
 }
 $textureJson = ($textureCatalog | ConvertTo-Json -Depth 10).Replace("`r`n", "`n") + "`n"

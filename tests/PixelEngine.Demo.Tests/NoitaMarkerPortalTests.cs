@@ -13,6 +13,7 @@ public sealed class NoitaMarkerPortalTests
     [InlineData("spawn_teleporter", "data/scripts/biomes/excavationsite_cube_chamber.lua", 190f, 1525f)]
     [InlineData("spawn_teleporter", "data/scripts/biomes/snowcastle_hourglass_chamber.lua", 190f, 5231f)]
     [InlineData("spawn_teleporter", "data/scripts/biomes/snowcave_secret_chamber.lua", 190f, 3080f)]
+    [InlineData("spawn_endportal", "data/scripts/biomes/temple_wall_ending.lua", 1891f, 280f)]
     public void StaticPortalDestinationsMatchReferenceXml(
         string function,
         string origin,
@@ -48,6 +49,31 @@ public sealed class NoitaMarkerPortalTests
         Assert.False(NoitaMarkerPortal.IntersectsTrigger(miss, 0f, 0f, 15f));
     }
 
+    /// <summary>验证 ending Portal 接受稳定或不稳定 teleportatium，忽略空区与未驻留 cell。</summary>
+    [Fact]
+    public void EndingPortalActivationReadsReferenceLiquidArea()
+    {
+        MaterialId stable = new(7);
+        MaterialId unstable = new(8);
+        FakeCells cells = new();
+
+        Assert.False(NoitaMarkerPortal.HasTeleportatium(cells, -2, 136, 2, 140, stable, unstable));
+
+        cells.Set(0, 138, unstable);
+        Assert.True(NoitaMarkerPortal.HasTeleportatium(cells, -2, 136, 2, 140, stable, unstable));
+    }
+
+    /// <summary>验证 ending Portal 应用来源 EntityLoad 的 y-4 偏移。</summary>
+    [Fact]
+    public void EndingPortalAppliesSourceEntityOffset()
+    {
+        NoitaMarkerPortal portal = new();
+
+        portal.Bind(Anchor("spawn_endportal", "data/scripts/biomes/temple_wall_ending.lua"));
+
+        Assert.Equal(60, portal.WorldY);
+    }
+
     private static NoitaWangMarkerAnchor Anchor(string function, string origin)
     {
         return new NoitaWangMarkerAnchor("lake", "lake", "#ffffffff", function, origin, 1, 32, 64);
@@ -59,5 +85,50 @@ public sealed class NoitaMarkerPortalTests
             x, y, width, height,
             false, false, false, false,
             0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
+    }
+
+    private sealed class FakeCells : IWorldCellAccess
+    {
+        private readonly Dictionary<(int X, int Y), MaterialId> _cells = [];
+
+        public bool IsResident(int x, int y)
+        {
+            return _cells.ContainsKey((x, y));
+        }
+
+        public MaterialId GetMaterial(int x, int y)
+        {
+            return _cells.GetValueOrDefault((x, y));
+        }
+
+        public CellView Sample(int x, int y)
+        {
+            return default;
+        }
+
+        public bool IsSolid(int x, int y)
+        {
+            return false;
+        }
+
+        public bool IsRigidOwned(int x, int y)
+        {
+            return false;
+        }
+
+        public void SetCell(int x, int y, MaterialId material)
+        {
+            Set(x, y, material);
+        }
+
+        public void Paint(int x, int y, int radius, MaterialId material)
+        {
+            Set(x, y, material);
+        }
+
+        public void Set(int x, int y, MaterialId material)
+        {
+            _cells[(x, y)] = material;
+        }
     }
 }

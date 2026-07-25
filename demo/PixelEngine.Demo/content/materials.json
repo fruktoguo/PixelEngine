@@ -1276,7 +1276,7 @@
       "highlightColor": 0,
       "displayName": "fungi green",
       "legendVisible": false,
-      "textureId": 90,
+      "textureId": 91,
       "baseColor": 4282777413,
       "colorNoise": 0,
       "tags": [
@@ -1557,7 +1557,7 @@
       "highlightColor": 0,
       "displayName": "grass dark",
       "legendVisible": false,
-      "textureId": 90,
+      "textureId": 91,
       "baseColor": 4285354111,
       "colorNoise": 0,
       "tags": [
@@ -1904,6 +1904,37 @@
       ]
     },
     {
+      "name": "magic_liquid_unstable_teleportation",
+      "type": "Liquid",
+      "density": 44,
+      "dispersion": 4,
+      "liquidStatic": false,
+      "liquidSand": false,
+      "flammability": 100,
+      "autoIgnitionTemp": 10,
+      "fireHp": 0,
+      "temperatureOfFire": 95,
+      "generatesSmoke": 250,
+      "heatConduct": 32,
+      "heatCapacity": 1.0,
+      "durability": 0,
+      "integrity": 0,
+      "renderStyle": "Liquid",
+      "legendCategory": "Liquid",
+      "edgeColor": 0,
+      "opacity": 128,
+      "highlightColor": 0,
+      "displayName": "magic liquid unstable teleportation",
+      "legendVisible": false,
+      "textureId": 87,
+      "baseColor": 2162474496,
+      "colorNoise": 0,
+      "tags": [
+        "conductive",
+        "emissive"
+      ]
+    },
+    {
       "name": "material_darkness",
       "type": "Liquid",
       "density": 12,
@@ -1956,7 +1987,7 @@
       "highlightColor": 0,
       "displayName": "meat",
       "legendVisible": false,
-      "textureId": 88,
+      "textureId": 89,
       "baseColor": 4283190476,
       "colorNoise": 0,
       "tags": [
@@ -1987,7 +2018,7 @@
       "highlightColor": 0,
       "displayName": "meat done",
       "legendVisible": false,
-      "textureId": 87,
+      "textureId": 88,
       "baseColor": 4282798685,
       "colorNoise": 0,
       "tags": [
@@ -2050,7 +2081,7 @@
       "highlightColor": 0,
       "displayName": "meteorite static",
       "legendVisible": false,
-      "textureId": 89,
+      "textureId": 90,
       "baseColor": 4279242781,
       "colorNoise": 0,
       "tags": [
@@ -2081,7 +2112,7 @@
       "highlightColor": 0,
       "displayName": "moss",
       "legendVisible": false,
-      "textureId": 90,
+      "textureId": 91,
       "baseColor": 4280858675,
       "colorNoise": 0,
       "tags": [
@@ -2142,7 +2173,7 @@
       "highlightColor": 0,
       "displayName": "neon tube cyan",
       "legendVisible": false,
-      "textureId": 91,
+      "textureId": 92,
       "baseColor": 4291360719,
       "colorNoise": 0,
       "tags": [
@@ -2174,7 +2205,7 @@
       "highlightColor": 0,
       "displayName": "neon tube purple",
       "legendVisible": false,
-      "textureId": 92,
+      "textureId": 93,
       "baseColor": 4291360719,
       "colorNoise": 0,
       "tags": [
@@ -3254,7 +3285,7 @@
       "highlightColor": 0,
       "displayName": "slime green",
       "legendVisible": false,
-      "textureId": 93,
+      "textureId": 94,
       "baseColor": 2284759887,
       "colorNoise": 0,
       "tags": [
@@ -3597,7 +3628,7 @@
       "highlightColor": 0,
       "displayName": "steel",
       "legendVisible": false,
-      "textureId": 94,
+      "textureId": 95,
       "baseColor": 4286542707,
       "colorNoise": 0,
       "tags": [
@@ -4075,7 +4106,7 @@
       "highlightColor": 0,
       "displayName": "templerock static",
       "legendVisible": false,
-      "textureId": 95,
+      "textureId": 96,
       "baseColor": 4281947247,
       "colorNoise": 5,
       "tags": [
