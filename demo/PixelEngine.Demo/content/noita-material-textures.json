@@ -231,6 +231,7 @@
       "contentPath": "textures/41_noita_ice.png",
       "contentSha256": "1e43dbf1380b3081a76802220e9bdbb50bfd2f137d230ec0c44778eebd14c051",
       "materials": [
+        "glass_liquidcave",
         "ice_static"
       ]
     },
@@ -341,7 +342,11 @@
       "contentPath": "textures/52_noita_rock.png",
       "contentSha256": "df3ccb53f58ead2f26ba97161424a8e53de45e6cc0c12c9b1b823a20ec9c8c9e",
       "materials": [
+        "rock_box2d",
+        "rock_box2d_hard",
         "rock_static",
+        "rock_static_intro",
+        "rock_static_intro_breakable",
         "rock_static_wet"
       ]
     },
@@ -487,7 +492,8 @@
       "contentSha256": "4f16bb7bfb386162e9154e854bc59e9a2d8a22330f406dee8267d2208040dcbb",
       "materials": [
         "steel_static",
-        "steel_static_strong"
+        "steel_static_strong",
+        "steelpipe_static"
       ]
     },
     {
@@ -517,6 +523,8 @@
       "contentPath": "textures/69_noita_templebrick_alt.png",
       "contentSha256": "b1c7da4ceda5895b43c42d2ae566e44afe818fd93a184ae30e863c688faaa1a3",
       "materials": [
+        "glowstone",
+        "glowstone_potion",
         "templebrickdark_static"
       ]
     },
@@ -547,6 +555,7 @@
       "contentPath": "textures/72_noita_templebrick.png",
       "contentSha256": "47aad951e8440e91cf42db595794ea1a69d133250b2225f72d1d52a0771dd94a",
       "materials": [
+        "templebrick_noedge_static",
         "templebrick_static",
         "templebrick_static_soft",
         "templebrick_thick_static"
@@ -626,7 +635,9 @@
         "wood_loose",
         "wood_player_b2",
         "wood_prop",
-        "wood_static"
+        "wood_static",
+        "wood_static_wet",
+        "wood_wall"
       ]
     },
     {
@@ -636,6 +647,7 @@
       "contentPath": "textures/80_noita_bone.png",
       "contentSha256": "49497c55d0f913d680286817ec1c35262b3e277f9468b3802cedd8908b3c6be7",
       "materials": [
+        "bone_box2d",
         "bone_static"
       ]
     },
@@ -646,6 +658,7 @@
       "contentPath": "textures/81_noita_fungi.png",
       "contentSha256": "85e149b831d5e82704d11f1cbc533434e6e84004663af033da2b9c24f8df3d26",
       "materials": [
+        "fungi",
         "fungus_loose"
       ]
     },
@@ -661,9 +674,19 @@
     },
     {
       "textureId": 83,
+      "sourcePath": "data/materials_gfx/glowrock.png",
+      "sourceSha256": "5082e7868074461388624c57b985ba891d531b5ac9edfc7ac3165afe7d414765",
+      "contentPath": "textures/83_noita_glowrock.png",
+      "contentSha256": "5082e7868074461388624c57b985ba891d531b5ac9edfc7ac3165afe7d414765",
+      "materials": [
+        "rock_static_glow"
+      ]
+    },
+    {
+      "textureId": 84,
       "sourcePath": "data/materials_gfx/grass.png",
       "sourceSha256": "7d9a007a690b7c344ff1f6ed5a1cfcce4c35300a4352a0b5e71cd15b2154e267",
-      "contentPath": "textures/83_noita_grass.png",
+      "contentPath": "textures/84_noita_grass.png",
       "contentSha256": "7d9a007a690b7c344ff1f6ed5a1cfcce4c35300a4352a0b5e71cd15b2154e267",
       "materials": [
         "ceiling_plant_material",
@@ -672,74 +695,115 @@
       ]
     },
     {
-      "textureId": 84,
+      "textureId": 85,
+      "sourcePath": "data/materials_gfx/gunpowder.png",
+      "sourceSha256": "9964a5f4c75e8dd390fa91ed157608addd978f068ac75f49ba8edf01270702ed",
+      "contentPath": "textures/85_noita_gunpowder.png",
+      "contentSha256": "9964a5f4c75e8dd390fa91ed157608addd978f068ac75f49ba8edf01270702ed",
+      "materials": [
+        "gunpowder"
+      ]
+    },
+    {
+      "textureId": 86,
       "sourcePath": "data/materials_gfx/lavarock.png",
       "sourceSha256": "e5327314ecd99bcc6171765a565a0f8e63dd88bbbf755ecae8e558a97cf78135",
-      "contentPath": "textures/84_noita_lavarock.png",
+      "contentPath": "textures/86_noita_lavarock.png",
       "contentSha256": "e5327314ecd99bcc6171765a565a0f8e63dd88bbbf755ecae8e558a97cf78135",
       "materials": [
         "plant_material_red"
       ]
     },
     {
-      "textureId": 85,
+      "textureId": 87,
       "sourcePath": "data/materials_gfx/meat_done.png",
       "sourceSha256": "0b378039f3a8ccb8b4727893ceef6166ebe8f1f5170771bcf12adbb8aaf27fb2",
-      "contentPath": "textures/85_noita_meat_done.png",
+      "contentPath": "textures/87_noita_meat_done.png",
       "contentSha256": "0b378039f3a8ccb8b4727893ceef6166ebe8f1f5170771bcf12adbb8aaf27fb2",
       "materials": [
         "meat_done"
       ]
     },
     {
-      "textureId": 86,
+      "textureId": 88,
       "sourcePath": "data/materials_gfx/meat.png",
       "sourceSha256": "d0badd818982ef94fb6fffdc3a11b1169c2eb0d44fb584574a6e8a2c29ac7020",
-      "contentPath": "textures/86_noita_meat.png",
+      "contentPath": "textures/88_noita_meat.png",
       "contentSha256": "d0badd818982ef94fb6fffdc3a11b1169c2eb0d44fb584574a6e8a2c29ac7020",
       "materials": [
         "meat"
       ]
     },
     {
-      "textureId": 87,
+      "textureId": 89,
+      "sourcePath": "data/materials_gfx/meteor.png",
+      "sourceSha256": "e07099b9f606fc2724e4d3abb1dd42ca06f7c36aba2ca6d8185e7660bff09766",
+      "contentPath": "textures/89_noita_meteor.png",
+      "contentSha256": "e07099b9f606fc2724e4d3abb1dd42ca06f7c36aba2ca6d8185e7660bff09766",
+      "materials": [
+        "meteorite_static"
+      ]
+    },
+    {
+      "textureId": 90,
       "sourcePath": "data/materials_gfx/moss.png",
       "sourceSha256": "df78f0fe110fcf0c382f5b8c979d218789bab34b620c3f4ec540231bbf885df4",
-      "contentPath": "textures/87_noita_moss.png",
+      "contentPath": "textures/90_noita_moss.png",
       "contentSha256": "df78f0fe110fcf0c382f5b8c979d218789bab34b620c3f4ec540231bbf885df4",
       "materials": [
+        "fungi_green",
         "grass_dark",
         "moss"
       ]
     },
     {
-      "textureId": 88,
+      "textureId": 91,
       "sourcePath": "data/materials_gfx/neon_tube_cyan.png",
       "sourceSha256": "9ea536b55cf5ebefe6a127afdb55ec53eb6bf20b29aac9d48af92f30a2d4337a",
-      "contentPath": "textures/88_noita_neon_tube_cyan.png",
+      "contentPath": "textures/91_noita_neon_tube_cyan.png",
       "contentSha256": "9ea536b55cf5ebefe6a127afdb55ec53eb6bf20b29aac9d48af92f30a2d4337a",
       "materials": [
         "neon_tube_cyan"
       ]
     },
     {
-      "textureId": 89,
+      "textureId": 92,
       "sourcePath": "data/materials_gfx/neon_tube_purple.png",
       "sourceSha256": "85e149b831d5e82704d11f1cbc533434e6e84004663af033da2b9c24f8df3d26",
-      "contentPath": "textures/89_noita_neon_tube_purple.png",
+      "contentPath": "textures/92_noita_neon_tube_purple.png",
       "contentSha256": "85e149b831d5e82704d11f1cbc533434e6e84004663af033da2b9c24f8df3d26",
       "materials": [
         "neon_tube_purple"
       ]
     },
     {
-      "textureId": 90,
+      "textureId": 93,
+      "sourcePath": "data/materials_gfx/slime_green.png",
+      "sourceSha256": "dc07e460bb97c08559b6219a4ada3574a8f4645ad2f98945337c7e5e4b706152",
+      "contentPath": "textures/93_noita_slime_green.png",
+      "contentSha256": "dc07e460bb97c08559b6219a4ada3574a8f4645ad2f98945337c7e5e4b706152",
+      "materials": [
+        "slime_green"
+      ]
+    },
+    {
+      "textureId": 94,
       "sourcePath": "data/materials_gfx/steel.png",
       "sourceSha256": "060a725ba7d4293067bfc81a69cf2dde18bed57df178b2ac7e3de10b97b0f420",
-      "contentPath": "textures/90_noita_steel.png",
+      "contentPath": "textures/94_noita_steel.png",
       "contentSha256": "060a725ba7d4293067bfc81a69cf2dde18bed57df178b2ac7e3de10b97b0f420",
       "materials": [
         "steel"
+      ]
+    },
+    {
+      "textureId": 95,
+      "sourcePath": "data/materials_gfx/templerock.png",
+      "sourceSha256": "adca14bad58e97e710b10fec58c4b7a9a160d5d6c20d02ab30d89122be62bcda",
+      "contentPath": "textures/95_noita_templerock.png",
+      "contentSha256": "adca14bad58e97e710b10fec58c4b7a9a160d5d6c20d02ab30d89122be62bcda",
+      "materials": [
+        "templerock_static"
       ]
     }
   ]

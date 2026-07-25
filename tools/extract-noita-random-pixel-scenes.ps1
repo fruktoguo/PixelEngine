@@ -83,6 +83,8 @@ foreach ($biome in $world.biomes) {
 }
 
 $catalogs = [Collections.Generic.List[object]]::new()
+$colorMaterialTables = [Collections.Generic.List[object]]::new()
+$seenColorMaterialTables = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
 $scriptRoot = Join-Path $resolvedDataRoot 'scripts\biomes'
 foreach ($file in Get-ChildItem -LiteralPath $scriptRoot -Filter '*.lua' -Recurse -File | Sort-Object FullName) {
     $sourcePath = 'data/' + [IO.Path]::GetRelativePath($resolvedDataRoot, $file.FullName).Replace('\', '/')
@@ -130,6 +132,29 @@ foreach ($file in Get-ChildItem -LiteralPath $scriptRoot -Filter '*.lua' -Recurs
             $cursor = $entryClose + 1
         }
         if ($entries.Count -eq 0) { continue }
+        foreach ($colorMaterialName in @($entries | ForEach-Object colorMaterialTable | Where-Object { $_ } | Sort-Object -Unique)) {
+            $tableKey = "$sourcePath|$colorMaterialName"
+            if ($seenColorMaterialTables.Add($tableKey)) {
+                $overrideHeader = [regex]::Match($text, "(?m)^\s*(?:local\s+)?$colorMaterialName\s*=\s*\{")
+                if (-not $overrideHeader.Success) { throw "Missing color_material table $tableKey." }
+                $overrideOpen = $text.IndexOf('{', $overrideHeader.Index)
+                $overrideClose = Find-MatchingBrace $text $overrideOpen
+                $overrideBody = $text.Substring($overrideOpen + 1, $overrideClose - $overrideOpen - 1)
+                $colors = [Collections.Generic.List[object]]::new()
+                foreach ($colorEntry in [regex]::Matches($overrideBody, '\[\s*"([0-9A-Fa-f]{6,8})"\s*\]\s*=\s*\{([^}]*)\}')) {
+                    $choices = @([regex]::Matches($colorEntry.Groups[2].Value, '"([A-Za-z0-9_]+)"') |
+                        ForEach-Object { $_.Groups[1].Value })
+                    if ($choices.Count -eq 0) { throw "Empty color_material choice in $tableKey." }
+                    $colors.Add([ordered]@{ color = $colorEntry.Groups[1].Value.ToLowerInvariant(); materials = $choices })
+                }
+                if ($colors.Count -eq 0) { throw "No color mappings found in $tableKey." }
+                $colorMaterialTables.Add([ordered]@{
+                    sourcePath = $sourcePath
+                    name = $colorMaterialName
+                    colors = $colors
+                })
+            }
+        }
         $catalogs.Add([ordered]@{
             biomeId = $(if ($biomeByScript.ContainsKey($sourcePath)) { $biomeByScript[$sourcePath] } else { '' })
             sourcePath = $sourcePath
@@ -155,7 +180,9 @@ $result = [ordered]@{
         materialAssets = @($catalogs | ForEach-Object entries | ForEach-Object material | ForEach-Object path | Sort-Object -Unique).Count
         visualAssets = @($catalogs | ForEach-Object entries | ForEach-Object visual | Where-Object { $null -ne $_ } | ForEach-Object path | Sort-Object -Unique).Count
         backgroundAssets = @($catalogs | ForEach-Object entries | ForEach-Object background | Where-Object { $null -ne $_ } | ForEach-Object path | Sort-Object -Unique).Count
+        colorMaterialTables = $colorMaterialTables.Count
     }
+    colorMaterialTables = $colorMaterialTables
     catalogs = $catalogs
 }
 [IO.File]::WriteAllText(

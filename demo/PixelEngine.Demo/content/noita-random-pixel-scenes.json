@@ -11,8 +11,39 @@
     "boundBiomes": 18,
     "materialAssets": 195,
     "visualAssets": 117,
-    "backgroundAssets": 66
+    "backgroundAssets": 66,
+    "colorMaterialTables": 1
   },
+  "colorMaterialTables": [
+    {
+      "sourcePath": "data/scripts/biomes/vault.lua",
+      "name": "lab_liquids",
+      "colors": [
+        {
+          "color": "fff0bbee",
+          "materials": [
+            "radioactive_liquid",
+            "radioactive_liquid",
+            "acid",
+            "acid",
+            "acid",
+            "alcohol"
+          ]
+        },
+        {
+          "color": "ffa4dbd5",
+          "materials": [
+            "radioactive_liquid",
+            "radioactive_liquid",
+            "acid",
+            "acid",
+            "acid",
+            "alcohol"
+          ]
+        }
+      ]
+    }
+  ],
   "catalogs": [
     {
       "biomeId": "coalmine_alt",

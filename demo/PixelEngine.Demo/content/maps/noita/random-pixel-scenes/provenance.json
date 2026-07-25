@@ -1,0 +1,1289 @@
+{
+  "schemaVersion": 1,
+  "referenceBuildId": "17130612",
+  "generatedBy": "tools/generate-noita-random-pixel-scenes.ps1",
+  "assetCount": 183,
+  "assets": [
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/coalpit01_visual.png",
+      "sourceSha256": "526e1f8451ac8517ab5685feb55d3dbe9f81d743f868d54e6d54e08400297ee5",
+      "contentPath": "maps/noita/random-pixel-scenes/526e1f8451ac8517-visual.png",
+      "contentSha256": "526e1f8451ac8517ab5685feb55d3dbe9f81d743f868d54e6d54e08400297ee5"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/coalpit02_visual.png",
+      "sourceSha256": "378edc39760e39df8d995edf93ca20b4bef9e9bb3b3df47b8e6ad5554b186d26",
+      "contentPath": "maps/noita/random-pixel-scenes/378edc39760e39df-visual.png",
+      "contentSha256": "378edc39760e39df8d995edf93ca20b4bef9e9bb3b3df47b8e6ad5554b186d26"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/carthill_visual.png",
+      "sourceSha256": "b852c6aeae09989de686b5e3f42363175178dccc3dac1bc8220916c8057a6828",
+      "contentPath": "maps/noita/random-pixel-scenes/b852c6aeae09989d-visual.png",
+      "contentSha256": "b852c6aeae09989de686b5e3f42363175178dccc3dac1bc8220916c8057a6828"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/coalpit03_visual.png",
+      "sourceSha256": "39402dbeb5be8d0f502ebbd4f98b9aa53ad69875dffce9d594a7bce753dada52",
+      "contentPath": "maps/noita/random-pixel-scenes/39402dbeb5be8d0f-visual.png",
+      "contentSha256": "39402dbeb5be8d0f502ebbd4f98b9aa53ad69875dffce9d594a7bce753dada52"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/coalpit04_visual.png",
+      "sourceSha256": "5c2082e10700cf1ac1b194b53dadd17a3194b83737a10df8605eaade18f288b5",
+      "contentPath": "maps/noita/random-pixel-scenes/5c2082e10700cf1a-visual.png",
+      "contentSha256": "5c2082e10700cf1ac1b194b53dadd17a3194b83737a10df8605eaade18f288b5"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/coalpit05_visual.png",
+      "sourceSha256": "7a79fef2a435f43be300fed766e257a5416f93717c662187f3bb525dfa753dac",
+      "contentPath": "maps/noita/random-pixel-scenes/7a79fef2a435f43b-visual.png",
+      "contentSha256": "7a79fef2a435f43be300fed766e257a5416f93717c662187f3bb525dfa753dac"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/shrine01_visual.png",
+      "sourceSha256": "2912ba4965bd2ad9b5ccca85ec38f6f35e4b5e950df0fb3c24695a44a46a6708",
+      "contentPath": "maps/noita/random-pixel-scenes/2912ba4965bd2ad9-visual.png",
+      "contentSha256": "2912ba4965bd2ad9b5ccca85ec38f6f35e4b5e950df0fb3c24695a44a46a6708"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/shrine02_visual.png",
+      "sourceSha256": "1b47c09e29244586b747b5aacd58fc19b5c537a62ce4238baa771c14b3a6ea97",
+      "contentPath": "maps/noita/random-pixel-scenes/1b47c09e29244586-visual.png",
+      "contentSha256": "1b47c09e29244586b747b5aacd58fc19b5c537a62ce4238baa771c14b3a6ea97"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/swarm_visual.png",
+      "sourceSha256": "3bfb98358eb8e1122f6b1298cb365a72305f4daf01b9a2058e377c3607879ffa",
+      "contentPath": "maps/noita/random-pixel-scenes/3bfb98358eb8e112-visual.png",
+      "contentSha256": "3bfb98358eb8e1122f6b1298cb365a72305f4daf01b9a2058e377c3607879ffa"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/physics_01_visual.png",
+      "sourceSha256": "6115fa81008b82f2bf4388e1b8305b05baa33c5aeda4467dc841a4c63d705caa",
+      "contentPath": "maps/noita/random-pixel-scenes/6115fa81008b82f2-visual.png",
+      "contentSha256": "6115fa81008b82f2bf4388e1b8305b05baa33c5aeda4467dc841a4c63d705caa"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/physics_02_visual.png",
+      "sourceSha256": "35402bfe16bafd3910a11ef414f96a9d1ba5ce2f1f679812df4fcdb48c681573",
+      "contentPath": "maps/noita/random-pixel-scenes/35402bfe16bafd39-visual.png",
+      "contentSha256": "35402bfe16bafd3910a11ef414f96a9d1ba5ce2f1f679812df4fcdb48c681573"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/shop_visual.png",
+      "sourceSha256": "705dac0d34bcb948ed711cddeb23e3c94d0399599ed29e8c97b1004260a668f9",
+      "contentPath": "maps/noita/random-pixel-scenes/705dac0d34bcb948-visual.png",
+      "contentSha256": "705dac0d34bcb948ed711cddeb23e3c94d0399599ed29e8c97b1004260a668f9"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_1_visual.png",
+      "sourceSha256": "904b8ab19c12d2c58ed3b814e21b9d1b1a42a23baf8cdfd9e40aa50ee2ce4111",
+      "contentPath": "maps/noita/random-pixel-scenes/904b8ab19c12d2c5-visual.png",
+      "contentSha256": "904b8ab19c12d2c58ed3b814e21b9d1b1a42a23baf8cdfd9e40aa50ee2ce4111"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_2_visual.png",
+      "sourceSha256": "b8b199f2f955257f0ebdbac46f741ddbe5379a062482e3eb942ad0230547c5bd",
+      "contentPath": "maps/noita/random-pixel-scenes/b8b199f2f955257f-visual.png",
+      "contentSha256": "b8b199f2f955257f0ebdbac46f741ddbe5379a062482e3eb942ad0230547c5bd"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_3_visual.png",
+      "sourceSha256": "68de19c78e3218b2e13b74e6f6f01423461d6d8a414aa6d4fac200886b22ae7a",
+      "contentPath": "maps/noita/random-pixel-scenes/68de19c78e3218b2-visual.png",
+      "contentSha256": "68de19c78e3218b2e13b74e6f6f01423461d6d8a414aa6d4fac200886b22ae7a"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_4_visual.png",
+      "sourceSha256": "95ecb1232dda32300642ab5ab00908d06d090082b11c375f220801cea5345f96",
+      "contentPath": "maps/noita/random-pixel-scenes/95ecb1232dda3230-visual.png",
+      "contentSha256": "95ecb1232dda32300642ab5ab00908d06d090082b11c375f220801cea5345f96"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_puzzle_visual.png",
+      "sourceSha256": "8a0e6ec2337a9fb0004c5180c5bdedb5ff7404475c14a66fb2d848fb3b0918db",
+      "contentPath": "maps/noita/random-pixel-scenes/8a0e6ec2337a9fb0-visual.png",
+      "contentSha256": "8a0e6ec2337a9fb0004c5180c5bdedb5ff7404475c14a66fb2d848fb3b0918db"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_puzzle_background.png",
+      "sourceSha256": "2bd2121b4b3be040206a3333f4149bde17ea1fae4e3f8b40474f7012fb8762c2",
+      "contentPath": "maps/noita/random-pixel-scenes/2bd2121b4b3be040-background.png",
+      "contentSha256": "2bd2121b4b3be040206a3333f4149bde17ea1fae4e3f8b40474f7012fb8762c2"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/oiltank_alt_visual.png",
+      "sourceSha256": "a0468049eaf55f20c5009736675c9247c23fe2204041c7ff76df6a1f04e43cc0",
+      "contentPath": "maps/noita/random-pixel-scenes/a0468049eaf55f20-visual.png",
+      "contentSha256": "a0468049eaf55f20c5009736675c9247c23fe2204041c7ff76df6a1f04e43cc0"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/slimepit_visual.png",
+      "sourceSha256": "429d0ceac0a33431cd1bf5ce0262f7b84c7a398914bab21b2d6b429dfaaf4abb",
+      "contentPath": "maps/noita/random-pixel-scenes/429d0ceac0a33431-visual.png",
+      "contentSha256": "429d0ceac0a33431cd1bf5ce0262f7b84c7a398914bab21b2d6b429dfaaf4abb"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/laboratory_visual.png",
+      "sourceSha256": "84ebfd90f2502438c0a9f2170f38c5e7a7900bf9d80d1686c10a6326550cbedf",
+      "contentPath": "maps/noita/random-pixel-scenes/84ebfd90f2502438-visual.png",
+      "contentSha256": "84ebfd90f2502438c0a9f2170f38c5e7a7900bf9d80d1686c10a6326550cbedf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/wandtrap_h_02_visual.png",
+      "sourceSha256": "de626f0fe67c1ae77b7e2b299b22f08841c168bb36e2a7b4f68039fe1f1e950b",
+      "contentPath": "maps/noita/random-pixel-scenes/de626f0fe67c1ae7-visual.png",
+      "contentSha256": "de626f0fe67c1ae77b7e2b299b22f08841c168bb36e2a7b4f68039fe1f1e950b"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/wandtrap_h_04_visual.png",
+      "sourceSha256": "fb1750ce92bfe7776b58d25a74263f2133d5c7c77da658aab478074096292b64",
+      "contentPath": "maps/noita/random-pixel-scenes/fb1750ce92bfe777-visual.png",
+      "contentSha256": "fb1750ce92bfe7776b58d25a74263f2133d5c7c77da658aab478074096292b64"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/wandtrap_h_06_visual.png",
+      "sourceSha256": "fb1750ce92bfe7776b58d25a74263f2133d5c7c77da658aab478074096292b64",
+      "contentPath": "maps/noita/random-pixel-scenes/fb1750ce92bfe777-visual.png",
+      "contentSha256": "fb1750ce92bfe7776b58d25a74263f2133d5c7c77da658aab478074096292b64"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/physics_swing_puzzle_visual.png",
+      "sourceSha256": "52daf773063197f4afaa852eaeb2f31b8aecd8fe31fbb34589ee7b3e940adef1",
+      "contentPath": "maps/noita/random-pixel-scenes/52daf773063197f4-visual.png",
+      "contentSha256": "52daf773063197f4afaa852eaeb2f31b8aecd8fe31fbb34589ee7b3e940adef1"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/receptacle_oil_visual.png",
+      "sourceSha256": "a9c4f5df2700237d9a8d5c1afaaabcf31510ef9a366a08bc6aec4bf8cf9d3b24",
+      "contentPath": "maps/noita/random-pixel-scenes/a9c4f5df2700237d-visual.png",
+      "contentSha256": "a9c4f5df2700237d9a8d5c1afaaabcf31510ef9a366a08bc6aec4bf8cf9d3b24"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/coalmine/receptacle_oil_background.png",
+      "sourceSha256": "e3fb4397ba553ce6cb675db2bc797b7c13b186b0ed05c4f78e388edf29fc8119",
+      "contentPath": "maps/noita/random-pixel-scenes/e3fb4397ba553ce6-background.png",
+      "contentSha256": "e3fb4397ba553ce6cb675db2bc797b7c13b186b0ed05c4f78e388edf29fc8119"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/wandtrap_h_01_visual.png",
+      "sourceSha256": "bc38d3dac0842c74b2bede86307efddb7c06c64fa42ef03218c98408ff207c49",
+      "contentPath": "maps/noita/random-pixel-scenes/bc38d3dac0842c74-visual.png",
+      "contentSha256": "bc38d3dac0842c74b2bede86307efddb7c06c64fa42ef03218c98408ff207c49"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/coalmine/wandtrap_h_03_visual.png",
+      "sourceSha256": "ebaa5f49c7c4c395375c1544d115f607049a5b6832afa2b47bd9cfd3ef645264",
+      "contentPath": "maps/noita/random-pixel-scenes/ebaa5f49c7c4c395-visual.png",
+      "contentSha256": "ebaa5f49c7c4c395375c1544d115f607049a5b6832afa2b47bd9cfd3ef645264"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_01_visual.png",
+      "sourceSha256": "5f6b41cf991326dd66172167fb677eb31b93a1b73c2401a106c13e8ea1d3c2bf",
+      "contentPath": "maps/noita/random-pixel-scenes/5f6b41cf991326dd-visual.png",
+      "contentSha256": "5f6b41cf991326dd66172167fb677eb31b93a1b73c2401a106c13e8ea1d3c2bf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_02_visual.png",
+      "sourceSha256": "d0894864527a6e92c3e47815b851319c97954c28fd46d70244c533c91e5e96c6",
+      "contentPath": "maps/noita/random-pixel-scenes/d0894864527a6e92-visual.png",
+      "contentSha256": "d0894864527a6e92c3e47815b851319c97954c28fd46d70244c533c91e5e96c6"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_03_visual.png",
+      "sourceSha256": "09dbb29ee3b84950d025c58a71899149ecd369355f29fb3372dea2d174f59ba2",
+      "contentPath": "maps/noita/random-pixel-scenes/09dbb29ee3b84950-visual.png",
+      "contentSha256": "09dbb29ee3b84950d025c58a71899149ecd369355f29fb3372dea2d174f59ba2"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_04_visual.png",
+      "sourceSha256": "dbdc3d655ff7b39149250e73f9a6d93309044c0c89a6ee358d73ea6ab2d38231",
+      "contentPath": "maps/noita/random-pixel-scenes/dbdc3d655ff7b391-visual.png",
+      "contentSha256": "dbdc3d655ff7b39149250e73f9a6d93309044c0c89a6ee358d73ea6ab2d38231"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_05_visual.png",
+      "sourceSha256": "5961821de8a4ffdcd7591ed529cf100b70530f7e9bd9bd1d07e006e27d846c21",
+      "contentPath": "maps/noita/random-pixel-scenes/5961821de8a4ffdc-visual.png",
+      "contentSha256": "5961821de8a4ffdcd7591ed529cf100b70530f7e9bd9bd1d07e006e27d846c21"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_06_visual.png",
+      "sourceSha256": "db7ae6a2b858b30b1d8dc4ae8b99cefb404c1a2442ff8c6d80f137c7027fe0bf",
+      "contentPath": "maps/noita/random-pixel-scenes/db7ae6a2b858b30b-visual.png",
+      "contentSha256": "db7ae6a2b858b30b1d8dc4ae8b99cefb404c1a2442ff8c6d80f137c7027fe0bf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_07_visual.png",
+      "sourceSha256": "35f1920123b9ffcadb0329c0b23fd44499cdc2d584867ca9ed097f24a9d90d18",
+      "contentPath": "maps/noita/random-pixel-scenes/35f1920123b9ffca-visual.png",
+      "contentSha256": "35f1920123b9ffcadb0329c0b23fd44499cdc2d584867ca9ed097f24a9d90d18"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/beam_08_visual.png",
+      "sourceSha256": "f2fc8bfc32018c7c7c2e7b5470bdbe6f74b0e0ee5680802e42dffb8fae2fecca",
+      "contentPath": "maps/noita/random-pixel-scenes/f2fc8bfc32018c7c-visual.png",
+      "contentSha256": "f2fc8bfc32018c7c7c2e7b5470bdbe6f74b0e0ee5680802e42dffb8fae2fecca"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/cavein_01_visual.png",
+      "sourceSha256": "5030979c544e76145d0f2eb7b2a896e63ff5f41eae7b8ed6295c0dbff10454d5",
+      "contentPath": "maps/noita/random-pixel-scenes/5030979c544e7614-visual.png",
+      "contentSha256": "5030979c544e76145d0f2eb7b2a896e63ff5f41eae7b8ed6295c0dbff10454d5"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/cavein_03_visual.png",
+      "sourceSha256": "8b7719082f395ff3b4e9a365ec868495093759c173e4d968515e3586fb51ebdf",
+      "contentPath": "maps/noita/random-pixel-scenes/8b7719082f395ff3-visual.png",
+      "contentSha256": "8b7719082f395ff3b4e9a365ec868495093759c173e4d968515e3586fb51ebdf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/cavein_04_visual.png",
+      "sourceSha256": "95566a1d5b140d129a28c6ef738979a079a254cefb8dee5ee785b38bea10e622",
+      "contentPath": "maps/noita/random-pixel-scenes/95566a1d5b140d12-visual.png",
+      "contentSha256": "95566a1d5b140d129a28c6ef738979a079a254cefb8dee5ee785b38bea10e622"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/lavaroom_visual.png",
+      "sourceSha256": "e17697e1109bff36868b7ebc1add48c2ec4e68f9148d276e9dedc705167f383c",
+      "contentPath": "maps/noita/random-pixel-scenes/e17697e1109bff36-visual.png",
+      "contentSha256": "e17697e1109bff36868b7ebc1add48c2ec4e68f9148d276e9dedc705167f383c"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/pit_visual.png",
+      "sourceSha256": "47b734a00c16518d5eee5cb0148cd5e5ef77e82d0a56b6d3c260b63c838db8a1",
+      "contentPath": "maps/noita/random-pixel-scenes/47b734a00c16518d-visual.png",
+      "contentSha256": "47b734a00c16518d5eee5cb0148cd5e5ef77e82d0a56b6d3c260b63c838db8a1"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/water_lava_visual.png",
+      "sourceSha256": "8ca4a6d7dc3fee1f14213bc75e5c0880f9fbe1c59c2866d088b264211dbbf7cd",
+      "contentPath": "maps/noita/random-pixel-scenes/8ca4a6d7dc3fee1f-visual.png",
+      "contentSha256": "8ca4a6d7dc3fee1f14213bc75e5c0880f9fbe1c59c2866d088b264211dbbf7cd"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/room_liquid_funnel_visual.png",
+      "sourceSha256": "342cc5875aa36c828fdd360c4c35f2f77d112b18c9f2706167a895a680af89df",
+      "contentPath": "maps/noita/random-pixel-scenes/342cc5875aa36c82-visual.png",
+      "contentSha256": "342cc5875aa36c828fdd360c4c35f2f77d112b18c9f2706167a895a680af89df"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/room_gate_drop_visual.png",
+      "sourceSha256": "35678a391903633230adc73aeec1264b43fa73be173ff9149ea03fe5996ebb00",
+      "contentPath": "maps/noita/random-pixel-scenes/35678a3919036332-visual.png",
+      "contentSha256": "35678a391903633230adc73aeec1264b43fa73be173ff9149ea03fe5996ebb00"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/crypt/shop_visual.png",
+      "sourceSha256": "d9efc290d60731a10e8be81bc7ecaee9c3c58e6e856be50e2783b1acd45c5e9a",
+      "contentPath": "maps/noita/random-pixel-scenes/d9efc290d60731a1-visual.png",
+      "contentSha256": "d9efc290d60731a10e8be81bc7ecaee9c3c58e6e856be50e2783b1acd45c5e9a"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/hut01_background.png",
+      "sourceSha256": "50066e9318032c90bb98d82186c8129b3fd5700e22681ed03fcbb084a9fd0d3a",
+      "contentPath": "maps/noita/random-pixel-scenes/50066e9318032c90-background.png",
+      "contentSha256": "50066e9318032c90bb98d82186c8129b3fd5700e22681ed03fcbb084a9fd0d3a"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife_background.png",
+      "sourceSha256": "377fdbe0368fae45cfb8f808c74212e0da5df0395821756955e332e84cc06a6a",
+      "contentPath": "maps/noita/random-pixel-scenes/377fdbe0368fae45-background.png",
+      "contentSha256": "377fdbe0368fae45cfb8f808c74212e0da5df0395821756955e332e84cc06a6a"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife2_background.png",
+      "sourceSha256": "becf211fbf65893c6d93368c01b77847947072530c990683237c3c8b46ed751c",
+      "contentPath": "maps/noita/random-pixel-scenes/becf211fbf65893c-background.png",
+      "contentSha256": "becf211fbf65893c6d93368c01b77847947072530c990683237c3c8b46ed751c"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife3_background.png",
+      "sourceSha256": "c85cb61b893882f0be0e188e722a979c563ef38f05afbf3a9fc218606b8a4567",
+      "contentPath": "maps/noita/random-pixel-scenes/c85cb61b893882f0-background.png",
+      "contentSha256": "c85cb61b893882f0be0e188e722a979c563ef38f05afbf3a9fc218606b8a4567"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife4_background.png",
+      "sourceSha256": "62c2b87b3b145dfd3717cc6b25eefe5438daf7e61e12a983baa626aa91462205",
+      "contentPath": "maps/noita/random-pixel-scenes/62c2b87b3b145dfd-background.png",
+      "contentSha256": "62c2b87b3b145dfd3717cc6b25eefe5438daf7e61e12a983baa626aa91462205"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife5_background.png",
+      "sourceSha256": "2868bb08e637eda30fe602df9dfad2513cacc47c14f9cf9fe8c0fa37644df30b",
+      "contentPath": "maps/noita/random-pixel-scenes/2868bb08e637eda3-background.png",
+      "contentSha256": "2868bb08e637eda30fe602df9dfad2513cacc47c14f9cf9fe8c0fa37644df30b"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife6_background.png",
+      "sourceSha256": "213c5629fe9f447945439465b95140566b98cf191df6d1c11e0bd05bb8d3321d",
+      "contentPath": "maps/noita/random-pixel-scenes/213c5629fe9f4479-background.png",
+      "contentSha256": "213c5629fe9f447945439465b95140566b98cf191df6d1c11e0bd05bb8d3321d"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife7_background.png",
+      "sourceSha256": "c52d451c7e42f90af548aa89ea8faeedb8e2d26a6fe79a2c1ec851e2eb28acb0",
+      "contentPath": "maps/noita/random-pixel-scenes/c52d451c7e42f90a-background.png",
+      "contentSha256": "c52d451c7e42f90af548aa89ea8faeedb8e2d26a6fe79a2c1ec851e2eb28acb0"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife8_background.png",
+      "sourceSha256": "dd7d6998b35c9578a1db6012e533cb60f4218c809fabadab9a08b6f0215776a2",
+      "contentPath": "maps/noita/random-pixel-scenes/dd7d6998b35c9578-background.png",
+      "contentSha256": "dd7d6998b35c9578a1db6012e533cb60f4218c809fabadab9a08b6f0215776a2"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife9_background.png",
+      "sourceSha256": "5a1a6c4234e20f24e9b7e0821e9fc43496e813ad1310638bf41c4ade0f833e03",
+      "contentPath": "maps/noita/random-pixel-scenes/5a1a6c4234e20f24-background.png",
+      "contentSha256": "5a1a6c4234e20f24e9b7e0821e9fc43496e813ad1310638bf41c4ade0f833e03"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife10_background.png",
+      "sourceSha256": "005455b7961beed2b124c771cc89377133dcadb398eec09de2ed68ed077e6e08",
+      "contentPath": "maps/noita/random-pixel-scenes/005455b7961beed2-background.png",
+      "contentSha256": "005455b7961beed2b124c771cc89377133dcadb398eec09de2ed68ed077e6e08"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife11_background.png",
+      "sourceSha256": "98e0463974fd057200637178b2c9263562a4e840ca72a39738aefe510a4c94ae",
+      "contentPath": "maps/noita/random-pixel-scenes/98e0463974fd0572-background.png",
+      "contentSha256": "98e0463974fd057200637178b2c9263562a4e840ca72a39738aefe510a4c94ae"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/rainforest/plantlife12_background.png",
+      "sourceSha256": "999ccd72acec1683fef53620c7fb3261cc78ae2f9fdf0b6d4d3169ac53e7e24e",
+      "contentPath": "maps/noita/random-pixel-scenes/999ccd72acec1683-background.png",
+      "contentSha256": "999ccd72acec1683fef53620c7fb3261cc78ae2f9fdf0b6d4d3169ac53e7e24e"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/gunpowderpool_01_visual.png",
+      "sourceSha256": "b00e0664c1527726c42b82f5ca2533b61e4c682f0348fa9d45da8688a080b960",
+      "contentPath": "maps/noita/random-pixel-scenes/b00e0664c1527726-visual.png",
+      "contentSha256": "b00e0664c1527726c42b82f5ca2533b61e4c682f0348fa9d45da8688a080b960"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/gunpowderpool_02_visual.png",
+      "sourceSha256": "734ef763d7782daa8dc2acd7b23094412c0ece4c6c0116feb3a6a3d1f7f371e6",
+      "contentPath": "maps/noita/random-pixel-scenes/734ef763d7782daa-visual.png",
+      "contentSha256": "734ef763d7782daa8dc2acd7b23094412c0ece4c6c0116feb3a6a3d1f7f371e6"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/gunpowderpool_03_visual.png",
+      "sourceSha256": "9e24555533675cffbfd831091db026753912a56919b4816ddfb8b1ee51291613",
+      "contentPath": "maps/noita/random-pixel-scenes/9e24555533675cff-visual.png",
+      "contentSha256": "9e24555533675cffbfd831091db026753912a56919b4816ddfb8b1ee51291613"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/gunpowderpool_04_visual.png",
+      "sourceSha256": "fd93a230c14aac9cbf28072203c98b58623cd9dd985f178c04161f2ccdeabe83",
+      "contentPath": "maps/noita/random-pixel-scenes/fd93a230c14aac9c-visual.png",
+      "contentSha256": "fd93a230c14aac9cbf28072203c98b58623cd9dd985f178c04161f2ccdeabe83"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/machine_1_visual.png",
+      "sourceSha256": "8ffa822e2f980f2e3fb7504691777f0354a1ab6193423b5f6e21837d1e11f432",
+      "contentPath": "maps/noita/random-pixel-scenes/8ffa822e2f980f2e-visual.png",
+      "contentSha256": "8ffa822e2f980f2e3fb7504691777f0354a1ab6193423b5f6e21837d1e11f432"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/excavationsite/machine_1_background.png",
+      "sourceSha256": "c47a17dd3e6d695566e5e053afa9fde2f4f237d35ae09ab5e70bcda04111cba3",
+      "contentPath": "maps/noita/random-pixel-scenes/c47a17dd3e6d6955-background.png",
+      "contentSha256": "c47a17dd3e6d695566e5e053afa9fde2f4f237d35ae09ab5e70bcda04111cba3"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/machine_2_visual.png",
+      "sourceSha256": "46cc76981f08e896adb837620cf036b61e66032f05a05fd5b3bdd3959800f656",
+      "contentPath": "maps/noita/random-pixel-scenes/46cc76981f08e896-visual.png",
+      "contentSha256": "46cc76981f08e896adb837620cf036b61e66032f05a05fd5b3bdd3959800f656"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/excavationsite/machine_2_background.png",
+      "sourceSha256": "1fb7b099e216b31b572e561d68d24c46e81c83687a217e77bb3dde51e9eb60aa",
+      "contentPath": "maps/noita/random-pixel-scenes/1fb7b099e216b31b-background.png",
+      "contentSha256": "1fb7b099e216b31b572e561d68d24c46e81c83687a217e77bb3dde51e9eb60aa"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/machine_3b_visual.png",
+      "sourceSha256": "69a709b4f0fab029d97571c8214b926f9378afd60cf5241c230087b878670a85",
+      "contentPath": "maps/noita/random-pixel-scenes/69a709b4f0fab029-visual.png",
+      "contentSha256": "69a709b4f0fab029d97571c8214b926f9378afd60cf5241c230087b878670a85"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/excavationsite/machine_3b_background.png",
+      "sourceSha256": "1f85423743a2c03cf6943d5f3973f5135b422f12cc19f5a4f0a90247ffc9d688",
+      "contentPath": "maps/noita/random-pixel-scenes/1f85423743a2c03c-background.png",
+      "contentSha256": "1f85423743a2c03cf6943d5f3973f5135b422f12cc19f5a4f0a90247ffc9d688"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/machine_4_visual.png",
+      "sourceSha256": "6aafe8319bdcabb22aa4dbd10a4e8b8e17f02736aef6f0020ce56cc0433b827e",
+      "contentPath": "maps/noita/random-pixel-scenes/6aafe8319bdcabb2-visual.png",
+      "contentSha256": "6aafe8319bdcabb22aa4dbd10a4e8b8e17f02736aef6f0020ce56cc0433b827e"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/excavationsite/machine_4_background.png",
+      "sourceSha256": "da760a80f0f3268cd5a511edb2a086d613cc5c52e73e82efe92f9c873d3c067c",
+      "contentPath": "maps/noita/random-pixel-scenes/da760a80f0f3268c-background.png",
+      "contentSha256": "da760a80f0f3268cd5a511edb2a086d613cc5c52e73e82efe92f9c873d3c067c"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/machine_5_visual.png",
+      "sourceSha256": "5fc7a42e112242b9efacb682d51868334f78be84145b513f8a92a083ddf31e66",
+      "contentPath": "maps/noita/random-pixel-scenes/5fc7a42e112242b9-visual.png",
+      "contentSha256": "5fc7a42e112242b9efacb682d51868334f78be84145b513f8a92a083ddf31e66"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/excavationsite/machine_5_background.png",
+      "sourceSha256": "45b787483edbccb09fbf52e97919578cf3605ad5ed3b8a7b17d311158a7756e5",
+      "contentPath": "maps/noita/random-pixel-scenes/45b787483edbccb0-background.png",
+      "contentSha256": "45b787483edbccb09fbf52e97919578cf3605ad5ed3b8a7b17d311158a7756e5"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/machine_6_visual.png",
+      "sourceSha256": "8c0e4557e6636e33ee6ec59feab96790ac2415f4637aa0b9e305e1e00ccebbb8",
+      "contentPath": "maps/noita/random-pixel-scenes/8c0e4557e6636e33-visual.png",
+      "contentSha256": "8c0e4557e6636e33ee6ec59feab96790ac2415f4637aa0b9e305e1e00ccebbb8"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/shop_visual.png",
+      "sourceSha256": "8a633e26dca9560f4ed3961d10357fed25a53c91bc498c88a50c0dac4929ed95",
+      "contentPath": "maps/noita/random-pixel-scenes/8a633e26dca9560f-visual.png",
+      "contentSha256": "8a633e26dca9560f4ed3961d10357fed25a53c91bc498c88a50c0dac4929ed95"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/oiltank_1_visual.png",
+      "sourceSha256": "59ed4779863862b68594e175e14a8da308442b4cca4654037eff1b9005a0acd5",
+      "contentPath": "maps/noita/random-pixel-scenes/59ed4779863862b6-visual.png",
+      "contentSha256": "59ed4779863862b68594e175e14a8da308442b4cca4654037eff1b9005a0acd5"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/excavationsite/receptacle_steam_background.png",
+      "sourceSha256": "c174484d4d67cabc2bcdf913d622fcec3a89e1e8c632c2d39f1ae0b58d55752a",
+      "contentPath": "maps/noita/random-pixel-scenes/c174484d4d67cabc-background.png",
+      "contentSha256": "c174484d4d67cabc2bcdf913d622fcec3a89e1e8c632c2d39f1ae0b58d55752a"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/puzzleroom_02_visual.png",
+      "sourceSha256": "f211daee12ea3765d0ae7037f681b9ae798814e4c5510d2d592a258d44cb6aae",
+      "contentPath": "maps/noita/random-pixel-scenes/f211daee12ea3765-visual.png",
+      "contentSha256": "f211daee12ea3765d0ae7037f681b9ae798814e4c5510d2d592a258d44cb6aae"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/excavationsite/puzzleroom_03_visual.png",
+      "sourceSha256": "c9901b197fcd54bd90f7079765b2078aa73c8c5d1f0fd5338b6d0b886a61bc2c",
+      "contentPath": "maps/noita/random-pixel-scenes/c9901b197fcd54bd-visual.png",
+      "contentSha256": "c9901b197fcd54bd90f7079765b2078aa73c8c5d1f0fd5338b6d0b886a61bc2c"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_01.png",
+      "sourceSha256": "422032bdc01b28d816be4012b49ecf538db69780a31c8350bf1728a73e7df9b0",
+      "contentPath": "maps/noita/random-pixel-scenes/422032bdc01b28d8-background.png",
+      "contentSha256": "422032bdc01b28d816be4012b49ecf538db69780a31c8350bf1728a73e7df9b0"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_02.png",
+      "sourceSha256": "39c3ebc490c8dda3675257e7712f6322c003d5d1b6bbea416d0c2255d5819329",
+      "contentPath": "maps/noita/random-pixel-scenes/39c3ebc490c8dda3-background.png",
+      "contentSha256": "39c3ebc490c8dda3675257e7712f6322c003d5d1b6bbea416d0c2255d5819329"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_03.png",
+      "sourceSha256": "ad4824574c60474dcd106e1a85b307d16fb5dd29dd50aa354f2872d602e4e2cd",
+      "contentPath": "maps/noita/random-pixel-scenes/ad4824574c60474d-background.png",
+      "contentSha256": "ad4824574c60474dcd106e1a85b307d16fb5dd29dd50aa354f2872d602e4e2cd"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_04.png",
+      "sourceSha256": "fa01017ddbe34d85c5f25ef707f5093602eb2edd47888e03f88893aec0789ff9",
+      "contentPath": "maps/noita/random-pixel-scenes/fa01017ddbe34d85-background.png",
+      "contentSha256": "fa01017ddbe34d85c5f25ef707f5093602eb2edd47888e03f88893aec0789ff9"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_05.png",
+      "sourceSha256": "cd44f68098e9f44141c3db8c9efaf5a7ad36140408d77c9e1f61fcf4ed8ce651",
+      "contentPath": "maps/noita/random-pixel-scenes/cd44f68098e9f441-background.png",
+      "contentSha256": "cd44f68098e9f44141c3db8c9efaf5a7ad36140408d77c9e1f61fcf4ed8ce651"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_06.png",
+      "sourceSha256": "cf94841e92e17ba97630759a114d57e81edcb743f9197ee4666755be26cdb2d6",
+      "contentPath": "maps/noita/random-pixel-scenes/cf94841e92e17ba9-background.png",
+      "contentSha256": "cf94841e92e17ba97630759a114d57e81edcb743f9197ee4666755be26cdb2d6"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_07.png",
+      "sourceSha256": "a6dc516249e692d8c059803c3492631c57ee4af0e7e0a651ff6580984f196721",
+      "contentPath": "maps/noita/random-pixel-scenes/a6dc516249e692d8-background.png",
+      "contentSha256": "a6dc516249e692d8c059803c3492631c57ee4af0e7e0a651ff6580984f196721"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/liquidcave/background_panel_big_08.png",
+      "sourceSha256": "87bb9d74872594d76ea04a5a2ea30291f41726055a7e1817b3f02a18e50dd2cf",
+      "contentPath": "maps/noita/random-pixel-scenes/87bb9d74872594d7-background.png",
+      "contentSha256": "87bb9d74872594d76ea04a5a2ea30291f41726055a7e1817b3f02a18e50dd2cf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/liquidcave/container_01_visual.png",
+      "sourceSha256": "64872a69eb88f8ae82d594ad31add9183d17527bc18c0832ccc2f3ff1e517b38",
+      "contentPath": "maps/noita/random-pixel-scenes/64872a69eb88f8ae-visual.png",
+      "contentSha256": "64872a69eb88f8ae82d594ad31add9183d17527bc18c0832ccc2f3ff1e517b38"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/rainforest/oiltank_01_visual.png",
+      "sourceSha256": "500ffae9be0509e5f54304c3fc9bbf6699d543fb0ff00528b0e2d30ed77cf787",
+      "contentPath": "maps/noita/random-pixel-scenes/500ffae9be0509e5-visual.png",
+      "contentSha256": "500ffae9be0509e5f54304c3fc9bbf6699d543fb0ff00528b0e2d30ed77cf787"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcastle/shaft_visual.png",
+      "sourceSha256": "fb6a9b9074276f39176b4c376b89541a6cb9a0540018e53e360a4698ddab9bfa",
+      "contentPath": "maps/noita/random-pixel-scenes/fb6a9b9074276f39-visual.png",
+      "contentSha256": "fb6a9b9074276f39176b4c376b89541a6cb9a0540018e53e360a4698ddab9bfa"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/bar_background.png",
+      "sourceSha256": "f8c81badbafc5abd756c6a494cf4fd65a935226480923c90cad9332cd4dcf128",
+      "contentPath": "maps/noita/random-pixel-scenes/f8c81badbafc5abd-background.png",
+      "contentSha256": "f8c81badbafc5abd756c6a494cf4fd65a935226480923c90cad9332cd4dcf128"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/bedroom_background.png",
+      "sourceSha256": "1b29eaa8b17b0b0e052dbd4493535896acf6303607e7fc22d0e3eb42efdf25a7",
+      "contentPath": "maps/noita/random-pixel-scenes/1b29eaa8b17b0b0e-background.png",
+      "contentSha256": "1b29eaa8b17b0b0e052dbd4493535896acf6303607e7fc22d0e3eb42efdf25a7"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcastle/drill_visual.png",
+      "sourceSha256": "77bed29a8627bd164a6dc3c595e3d9a65e1f234858b1af577d73274a477921bb",
+      "contentPath": "maps/noita/random-pixel-scenes/77bed29a8627bd16-visual.png",
+      "contentSha256": "77bed29a8627bd164a6dc3c595e3d9a65e1f234858b1af577d73274a477921bb"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/drill_background.png",
+      "sourceSha256": "90158130e972cfcdbd49eb44aea56349dbf197bd855af88bed0dd9a2a16bd6c1",
+      "contentPath": "maps/noita/random-pixel-scenes/90158130e972cfcd-background.png",
+      "contentSha256": "90158130e972cfcdbd49eb44aea56349dbf197bd855af88bed0dd9a2a16bd6c1"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcastle/greenhouse_visual.png",
+      "sourceSha256": "193e90d1fbebf94657c75deac4f0cd0c161e1bf7b580830a23cb46776b82b207",
+      "contentPath": "maps/noita/random-pixel-scenes/193e90d1fbebf946-visual.png",
+      "contentSha256": "193e90d1fbebf94657c75deac4f0cd0c161e1bf7b580830a23cb46776b82b207"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/greenhouse_background.png",
+      "sourceSha256": "492f194ca45a23a2bdabb8d3274fd9680c8a8439af05e55dcf27edf7eebfa3a8",
+      "contentPath": "maps/noita/random-pixel-scenes/492f194ca45a23a2-background.png",
+      "contentSha256": "492f194ca45a23a2bdabb8d3274fd9680c8a8439af05e55dcf27edf7eebfa3a8"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcastle/bar_visual.png",
+      "sourceSha256": "e827196f6ba7bf7386892a442f013c21ff1b9cd8e13db63b9a2d428c61470180",
+      "contentPath": "maps/noita/random-pixel-scenes/e827196f6ba7bf73-visual.png",
+      "contentSha256": "e827196f6ba7bf7386892a442f013c21ff1b9cd8e13db63b9a2d428c61470180"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcastle/sauna_visual.png",
+      "sourceSha256": "4c3c6d51593f962b1aa9b002c96dc9dfea980648f6d695ce734c1c5ebc41b5b3",
+      "contentPath": "maps/noita/random-pixel-scenes/4c3c6d51593f962b-visual.png",
+      "contentSha256": "4c3c6d51593f962b1aa9b002c96dc9dfea980648f6d695ce734c1c5ebc41b5b3"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/sauna_background.png",
+      "sourceSha256": "65612030a925c53391c2567389d7673533c66fb4b92fc12d9ffa6c0a81cb16cc",
+      "contentPath": "maps/noita/random-pixel-scenes/65612030a925c533-background.png",
+      "contentSha256": "65612030a925c53391c2567389d7673533c66fb4b92fc12d9ffa6c0a81cb16cc"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_large_01_background.png",
+      "sourceSha256": "20bbc82eba4fc9444563ead9e5d23f6432696f6ee8222d40398f2704e62481b9",
+      "contentPath": "maps/noita/random-pixel-scenes/20bbc82eba4fc944-background.png",
+      "contentSha256": "20bbc82eba4fc9444563ead9e5d23f6432696f6ee8222d40398f2704e62481b9"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_large_01_background_b.png",
+      "sourceSha256": "7047cecc6e08bfc209cd3aabe20a72d775b131f3e0986fa7425d3704d252c176",
+      "contentPath": "maps/noita/random-pixel-scenes/7047cecc6e08bfc2-background.png",
+      "contentSha256": "7047cecc6e08bfc209cd3aabe20a72d775b131f3e0986fa7425d3704d252c176"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_large_01_background_c.png",
+      "sourceSha256": "55365bca3c08bb23695dc7881219e9433ae8c3ec43e8aea13676e33721b902fc",
+      "contentPath": "maps/noita/random-pixel-scenes/55365bca3c08bb23-background.png",
+      "contentSha256": "55365bca3c08bb23695dc7881219e9433ae8c3ec43e8aea13676e33721b902fc"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_small_l_01_background.png",
+      "sourceSha256": "fc7c9d85e9a918009d1fc99aa400291639e4121c2aa72b46030723f1644c072f",
+      "contentPath": "maps/noita/random-pixel-scenes/fc7c9d85e9a91800-background.png",
+      "contentSha256": "fc7c9d85e9a918009d1fc99aa400291639e4121c2aa72b46030723f1644c072f"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_small_l_01_background_b.png",
+      "sourceSha256": "28ee410ed470244cfd7a51bb40b9922d8be0e127941a8934697d4c0727d8d50a",
+      "contentPath": "maps/noita/random-pixel-scenes/28ee410ed470244c-background.png",
+      "contentSha256": "28ee410ed470244cfd7a51bb40b9922d8be0e127941a8934697d4c0727d8d50a"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_small_r_01_background.png",
+      "sourceSha256": "c2ac64c525a89fc06083126bbdb60590c0538cb023728962616ced6c48d879a3",
+      "contentPath": "maps/noita/random-pixel-scenes/c2ac64c525a89fc0-background.png",
+      "contentSha256": "c2ac64c525a89fc06083126bbdb60590c0538cb023728962616ced6c48d879a3"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcastle/pod_small_r_01_background_b.png",
+      "sourceSha256": "dc3be00cc8a21daa600c0a8edd6bd0b787ac9e538dc1c0325dc3f97e065ee149",
+      "contentPath": "maps/noita/random-pixel-scenes/dc3be00cc8a21daa-background.png",
+      "contentSha256": "dc3be00cc8a21daa600c0a8edd6bd0b787ac9e538dc1c0325dc3f97e065ee149"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/acidtank_visual.png",
+      "sourceSha256": "8ea1c652db25662fa4a8ea1c367a064555fa2c182a644ea41918722aac38b183",
+      "contentPath": "maps/noita/random-pixel-scenes/8ea1c652db25662f-visual.png",
+      "contentSha256": "8ea1c652db25662fa4a8ea1c367a064555fa2c182a644ea41918722aac38b183"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/acidtank_background.png",
+      "sourceSha256": "c6349b6f5ae5ebcaffd12023d4e2bc0e5650d05d1d7aa4f92d6776c29a06c20c",
+      "contentPath": "maps/noita/random-pixel-scenes/c6349b6f5ae5ebca-background.png",
+      "contentSha256": "c6349b6f5ae5ebcaffd12023d4e2bc0e5650d05d1d7aa4f92d6776c29a06c20c"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/acidtank_2_visual.png",
+      "sourceSha256": "56c32e14d573681ce9fbe2cfbfb85fa7a1ff2a6031c5052d51c43404fdb74df0",
+      "contentPath": "maps/noita/random-pixel-scenes/56c32e14d573681c-visual.png",
+      "contentSha256": "56c32e14d573681ce9fbe2cfbfb85fa7a1ff2a6031c5052d51c43404fdb74df0"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/acidtank_2_background.png",
+      "sourceSha256": "faa0cb987418bd9de595b4bcade4e95b2ff894f34de4dafe201d4202600374f2",
+      "contentPath": "maps/noita/random-pixel-scenes/faa0cb987418bd9d-background.png",
+      "contentSha256": "faa0cb987418bd9de595b4bcade4e95b2ff894f34de4dafe201d4202600374f2"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/verticalobservatory_visual.png",
+      "sourceSha256": "a23d1928d167eda67ece158c2da6d3f1452ed173d22200a949208d787fc940bd",
+      "contentPath": "maps/noita/random-pixel-scenes/a23d1928d167eda6-visual.png",
+      "contentSha256": "a23d1928d167eda67ece158c2da6d3f1452ed173d22200a949208d787fc940bd"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/verticalobservatory_background.png",
+      "sourceSha256": "59527af1a59167e39ba0c6dbef2f6b7dad12b1257e35ec50b8df21e7ec7b1df5",
+      "contentPath": "maps/noita/random-pixel-scenes/59527af1a59167e3-background.png",
+      "contentSha256": "59527af1a59167e39ba0c6dbef2f6b7dad12b1257e35ec50b8df21e7ec7b1df5"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/verticalobservatory2_visual.png",
+      "sourceSha256": "c7482c5387811c29987d0cd3b994315c731a635ee8f673d815b4e121b349b62e",
+      "contentPath": "maps/noita/random-pixel-scenes/c7482c5387811c29-visual.png",
+      "contentSha256": "c7482c5387811c29987d0cd3b994315c731a635ee8f673d815b4e121b349b62e"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/verticalobservatory2_background.png",
+      "sourceSha256": "cd92b6a77ee2da5109396e76f996cd356d2eaa0343694158d4d017c59c39133f",
+      "contentPath": "maps/noita/random-pixel-scenes/cd92b6a77ee2da51-background.png",
+      "contentSha256": "cd92b6a77ee2da5109396e76f996cd356d2eaa0343694158d4d017c59c39133f"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/pipe_visual.png",
+      "sourceSha256": "b1f92b72c04e8bdea51e7e6293aff9515061ee4f288b725bd90a2f64f0542bbf",
+      "contentPath": "maps/noita/random-pixel-scenes/b1f92b72c04e8bde-visual.png",
+      "contentSha256": "b1f92b72c04e8bdea51e7e6293aff9515061ee4f288b725bd90a2f64f0542bbf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/crater_visual.png",
+      "sourceSha256": "5d967efb1796c409bd0918e72e28d51488927a2fa54f6a78da4766b955fd849b",
+      "contentPath": "maps/noita/random-pixel-scenes/5d967efb1796c409-visual.png",
+      "contentSha256": "5d967efb1796c409bd0918e72e28d51488927a2fa54f6a78da4766b955fd849b"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/horizontalobservatory_visual.png",
+      "sourceSha256": "8373cf2524a58c7c28fcbda9b9c327941cf989dd25e0bebb6a60010defbb554c",
+      "contentPath": "maps/noita/random-pixel-scenes/8373cf2524a58c7c-visual.png",
+      "contentSha256": "8373cf2524a58c7c28fcbda9b9c327941cf989dd25e0bebb6a60010defbb554c"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/horizontalobservatory_background.png",
+      "sourceSha256": "953adfd94641c6db401cc0935c903264fc822f358c9b9eed3f959e71e24d54af",
+      "contentPath": "maps/noita/random-pixel-scenes/953adfd94641c6db-background.png",
+      "contentSha256": "953adfd94641c6db401cc0935c903264fc822f358c9b9eed3f959e71e24d54af"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/horizontalobservatory2_visual.png",
+      "sourceSha256": "0bf975f8a71e58662c9d420941af7d12a6b9862673a061ecb7775ac5b4ee309b",
+      "contentPath": "maps/noita/random-pixel-scenes/0bf975f8a71e5866-visual.png",
+      "contentSha256": "0bf975f8a71e58662c9d420941af7d12a6b9862673a061ecb7775ac5b4ee309b"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/horizontalobservatory2_background.png",
+      "sourceSha256": "5619456db7aa494239dd29d2670d95220212e9122af2b5a01e52fa1cef531ad9",
+      "contentPath": "maps/noita/random-pixel-scenes/5619456db7aa4942-background.png",
+      "contentSha256": "5619456db7aa494239dd29d2670d95220212e9122af2b5a01e52fa1cef531ad9"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/horizontalobservatory3_visual.png",
+      "sourceSha256": "2b6e6e01579593cdd5ff93b77eb1af433e110e9fc650690d654f9f9f6cd72075",
+      "contentPath": "maps/noita/random-pixel-scenes/2b6e6e01579593cd-visual.png",
+      "contentSha256": "2b6e6e01579593cdd5ff93b77eb1af433e110e9fc650690d654f9f9f6cd72075"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/horizontalobservatory3_background.png",
+      "sourceSha256": "00576af72a43ddb49729313527e353d4aff3a7300ac0ddca8365d5f460f8be59",
+      "contentPath": "maps/noita/random-pixel-scenes/00576af72a43ddb4-background.png",
+      "contentSha256": "00576af72a43ddb49729313527e353d4aff3a7300ac0ddca8365d5f460f8be59"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/snowcastle_visual.png",
+      "sourceSha256": "365948327f85335960ab2d780a2744c54b78c4e76de6ec429a777cd888e2f293",
+      "contentPath": "maps/noita/random-pixel-scenes/365948327f853359-visual.png",
+      "contentSha256": "365948327f85335960ab2d780a2744c54b78c4e76de6ec429a777cd888e2f293"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/snowcastle_background.png",
+      "sourceSha256": "ff4fd005ee22fa61b519bc98b41e991b22846d2e47a9aa3c60d1a09ee4651a88",
+      "contentPath": "maps/noita/random-pixel-scenes/ff4fd005ee22fa61-background.png",
+      "contentSha256": "ff4fd005ee22fa61b519bc98b41e991b22846d2e47a9aa3c60d1a09ee4651a88"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/tinyobservatory_visual.png",
+      "sourceSha256": "dc8b541d92aee2752cfb50fec59a79845a9dd141b47decbfe16e2f75a1d3ceae",
+      "contentPath": "maps/noita/random-pixel-scenes/dc8b541d92aee275-visual.png",
+      "contentSha256": "dc8b541d92aee2752cfb50fec59a79845a9dd141b47decbfe16e2f75a1d3ceae"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/tinyobservatory_background.png",
+      "sourceSha256": "960cdf6ac456188ca9d5ae5d1ef8bf876df412ae7da9cc3ad9aa3dac1ba6bb22",
+      "contentPath": "maps/noita/random-pixel-scenes/960cdf6ac456188c-background.png",
+      "contentSha256": "960cdf6ac456188ca9d5ae5d1ef8bf876df412ae7da9cc3ad9aa3dac1ba6bb22"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/tinyobservatory2_visual.png",
+      "sourceSha256": "8467efcdb40cea61531a11096bb91c3aacaade02b68a1c766b9405a16bf18812",
+      "contentPath": "maps/noita/random-pixel-scenes/8467efcdb40cea61-visual.png",
+      "contentSha256": "8467efcdb40cea61531a11096bb91c3aacaade02b68a1c766b9405a16bf18812"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/tinyobservatory2_background.png",
+      "sourceSha256": "ac23a5bb23b6ebbe4c249dce8c37efaa059de69d09b08bb2bbfbc6a6c8489462",
+      "contentPath": "maps/noita/random-pixel-scenes/ac23a5bb23b6ebbe-background.png",
+      "contentSha256": "ac23a5bb23b6ebbe4c249dce8c37efaa059de69d09b08bb2bbfbc6a6c8489462"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/receptacle_water_background.png",
+      "sourceSha256": "316f67a229b0539b1fe04032049a15ccdda85c6bbae6f93b19ac14f1951d52b3",
+      "contentPath": "maps/noita/random-pixel-scenes/316f67a229b0539b-background.png",
+      "contentSha256": "316f67a229b0539b1fe04032049a15ccdda85c6bbae6f93b19ac14f1951d52b3"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/shop_visual.png",
+      "sourceSha256": "9bc75fb0aa59d121ed5f49b169bd690aa9fac693aa68f799f48cf0d955f489ba",
+      "contentPath": "maps/noita/random-pixel-scenes/9bc75fb0aa59d121-visual.png",
+      "contentSha256": "9bc75fb0aa59d121ed5f49b169bd690aa9fac693aa68f799f48cf0d955f489ba"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/puzzle_capsule_visual.png",
+      "sourceSha256": "9286b6dee9e02a76f6e7d6848d01436e3b5c031f46f729dbced8b752400467d0",
+      "contentPath": "maps/noita/random-pixel-scenes/9286b6dee9e02a76-visual.png",
+      "contentSha256": "9286b6dee9e02a76f6e7d6848d01436e3b5c031f46f729dbced8b752400467d0"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/puzzle_capsule_background.png",
+      "sourceSha256": "080ca034013d932c74b90e53c3d4ef67a50cb8a97f93e45a63a29059cda82a9c",
+      "contentPath": "maps/noita/random-pixel-scenes/080ca034013d932c-background.png",
+      "contentSha256": "080ca034013d932c74b90e53c3d4ef67a50cb8a97f93e45a63a29059cda82a9c"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/snowcave/puzzle_capsule_b_visual.png",
+      "sourceSha256": "c9d8c4fb887aeb084185240406bd7f7924c2327c9c81ccdc99932839e29d637f",
+      "contentPath": "maps/noita/random-pixel-scenes/c9d8c4fb887aeb08-visual.png",
+      "contentSha256": "c9d8c4fb887aeb084185240406bd7f7924c2327c9c81ccdc99932839e29d637f"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/snowcave/puzzle_capsule_b_background.png",
+      "sourceSha256": "14e8ef0d1260c1a204df2f810e429eedfb647725b0d28d35610e0a00321db114",
+      "contentPath": "maps/noita/random-pixel-scenes/14e8ef0d1260c1a2-background.png",
+      "contentSha256": "14e8ef0d1260c1a204df2f810e429eedfb647725b0d28d35610e0a00321db114"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_cross_visual.png",
+      "sourceSha256": "fea0bfaa6768709528d28463e185ed2e978171f2699d706c3e8e634dd283b34e",
+      "contentPath": "maps/noita/random-pixel-scenes/fea0bfaa67687095-visual.png",
+      "contentSha256": "fea0bfaa6768709528d28463e185ed2e978171f2699d706c3e8e634dd283b34e"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_hor_1_visual.png",
+      "sourceSha256": "d09ab2c389f175bcee2611974e6ce156c220602731135cf5847a6a3c46ee9ee2",
+      "contentPath": "maps/noita/random-pixel-scenes/d09ab2c389f175bc-visual.png",
+      "contentSha256": "d09ab2c389f175bcee2611974e6ce156c220602731135cf5847a6a3c46ee9ee2"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_hor_2_visual.png",
+      "sourceSha256": "17d32f737426d7bfee36379fc4475bb454c916335e8044f5f0f0c97e1cff70dd",
+      "contentPath": "maps/noita/random-pixel-scenes/17d32f737426d7bf-visual.png",
+      "contentSha256": "17d32f737426d7bfee36379fc4475bb454c916335e8044f5f0f0c97e1cff70dd"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_turn_left_visual.png",
+      "sourceSha256": "85802491232edaaed28080ced42272242964070ed0d3aacf4ebad4a9b1b739f0",
+      "contentPath": "maps/noita/random-pixel-scenes/85802491232edaae-visual.png",
+      "contentSha256": "85802491232edaaed28080ced42272242964070ed0d3aacf4ebad4a9b1b739f0"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_turn_right_visual.png",
+      "sourceSha256": "bb842ee7eaae3d5a7af4231cbf4f4c8d34cc1ce10053c44e7dfbd42fa0092ec2",
+      "contentPath": "maps/noita/random-pixel-scenes/bb842ee7eaae3d5a-visual.png",
+      "contentSha256": "bb842ee7eaae3d5a7af4231cbf4f4c8d34cc1ce10053c44e7dfbd42fa0092ec2"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_ver_1_visual.png",
+      "sourceSha256": "8f0f758a0f202333a76c278c4ebbfea070d45c70c810d59948b0f77eb88bde26",
+      "contentPath": "maps/noita/random-pixel-scenes/8f0f758a0f202333-visual.png",
+      "contentSha256": "8f0f758a0f202333a76c278c4ebbfea070d45c70c810d59948b0f77eb88bde26"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_ver_2_visual.png",
+      "sourceSha256": "2fab4f210fd8bfd05fd9c603764f64fb8a37493b7dd68a05d72e4be3debb3018",
+      "contentPath": "maps/noita/random-pixel-scenes/2fab4f210fd8bfd0-visual.png",
+      "contentSha256": "2fab4f210fd8bfd05fd9c603764f64fb8a37493b7dd68a05d72e4be3debb3018"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/catwalk_01_background.png",
+      "sourceSha256": "3fddf88c7e7d75f29411efa1e2996a80a7074f0f8101edca3ae4ca00e9350f2d",
+      "contentPath": "maps/noita/random-pixel-scenes/3fddf88c7e7d75f2-background.png",
+      "contentSha256": "3fddf88c7e7d75f29411efa1e2996a80a7074f0f8101edca3ae4ca00e9350f2d"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/catwalk_02_background.png",
+      "sourceSha256": "88d26fb12bd0243e32107e3344f97f9d24c201d23eb1ab66ad16e839e448c047",
+      "contentPath": "maps/noita/random-pixel-scenes/88d26fb12bd0243e-background.png",
+      "contentSha256": "88d26fb12bd0243e32107e3344f97f9d24c201d23eb1ab66ad16e839e448c047"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/catwalk_02b_background.png",
+      "sourceSha256": "ffc5222fe6236b5ae4d561f3c69cd735c5908e05b75bcbdf8ff17c28fa64e7bc",
+      "contentPath": "maps/noita/random-pixel-scenes/ffc5222fe6236b5a-background.png",
+      "contentSha256": "ffc5222fe6236b5ae4d561f3c69cd735c5908e05b75bcbdf8ff17c28fa64e7bc"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/catwalk_03_background.png",
+      "sourceSha256": "3c0285057c09f99873594d6a2881acaf21bcbb49600a725683dbce931b360e48",
+      "contentPath": "maps/noita/random-pixel-scenes/3c0285057c09f998-background.png",
+      "contentSha256": "3c0285057c09f99873594d6a2881acaf21bcbb49600a725683dbce931b360e48"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/catwalk_04_background.png",
+      "sourceSha256": "ebffb98c97ea20ba9bbe35ce24c03087067130e6183aa887fd2ed83f1c5d5bd7",
+      "contentPath": "maps/noita/random-pixel-scenes/ebffb98c97ea20ba-background.png",
+      "contentSha256": "ebffb98c97ea20ba9bbe35ce24c03087067130e6183aa887fd2ed83f1c5d5bd7"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_big_hor_1_visual.png",
+      "sourceSha256": "827a8aaf616ca59017d828a2c9a3dd43b9d2de7e751349557e4eb94f7ce48cf3",
+      "contentPath": "maps/noita/random-pixel-scenes/827a8aaf616ca590-visual.png",
+      "contentSha256": "827a8aaf616ca59017d828a2c9a3dd43b9d2de7e751349557e4eb94f7ce48cf3"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_big_hor_2_visual.png",
+      "sourceSha256": "e35215ccf03b1b70e40a1326420b271dc82a2092876acae9b8ca6f2060094c3a",
+      "contentPath": "maps/noita/random-pixel-scenes/e35215ccf03b1b70-visual.png",
+      "contentSha256": "e35215ccf03b1b70e40a1326420b271dc82a2092876acae9b8ca6f2060094c3a"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_big_turn_left_visual.png",
+      "sourceSha256": "b52149622accf140586372819736aacb114b1e965c78ec3ac13248e8436a75ab",
+      "contentPath": "maps/noita/random-pixel-scenes/b52149622accf140-visual.png",
+      "contentSha256": "b52149622accf140586372819736aacb114b1e965c78ec3ac13248e8436a75ab"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_big_turn_right_visual.png",
+      "sourceSha256": "a939b1156b450557d06715e7ddd47014bdabc5f98611936e014f376a89727d34",
+      "contentPath": "maps/noita/random-pixel-scenes/a939b1156b450557-visual.png",
+      "contentSha256": "a939b1156b450557d06715e7ddd47014bdabc5f98611936e014f376a89727d34"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_big_ver_1_visual.png",
+      "sourceSha256": "d54291a7f8eded15b2d01a2dcc6477ccb989304c746d96b3d8dfd7b79089b8ea",
+      "contentPath": "maps/noita/random-pixel-scenes/d54291a7f8eded15-visual.png",
+      "contentSha256": "d54291a7f8eded15b2d01a2dcc6477ccb989304c746d96b3d8dfd7b79089b8ea"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_big_ver_2_visual.png",
+      "sourceSha256": "13e85815a9dcd73ae50dd7df8678f060e9dfa76b79d544ae35953d6a41de745c",
+      "contentPath": "maps/noita/random-pixel-scenes/13e85815a9dcd73a-visual.png",
+      "contentSha256": "13e85815a9dcd73ae50dd7df8678f060e9dfa76b79d544ae35953d6a41de745c"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_hor_3_visual.png",
+      "sourceSha256": "a7adb5bff33a321246a7747eca87e937d9c456d157c7cfd33409ad8a983284a1",
+      "contentPath": "maps/noita/random-pixel-scenes/a7adb5bff33a3212-visual.png",
+      "contentSha256": "a7adb5bff33a321246a7747eca87e937d9c456d157c7cfd33409ad8a983284a1"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_ver_3_visual.png",
+      "sourceSha256": "8b9d509f9ad783dcb550aadb84544ae5c9e736768fb0486f079939516e25f15f",
+      "contentPath": "maps/noita/random-pixel-scenes/8b9d509f9ad783dc-visual.png",
+      "contentSha256": "8b9d509f9ad783dcb550aadb84544ae5c9e736768fb0486f079939516e25f15f"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/pipe_ver_4_visual.png",
+      "sourceSha256": "158f5701417cee8aba7ec0f0169d2003c31b2656db67eb8fc34857adce7b12e7",
+      "contentPath": "maps/noita/random-pixel-scenes/158f5701417cee8a-visual.png",
+      "contentSha256": "158f5701417cee8aba7ec0f0169d2003c31b2656db67eb8fc34857adce7b12e7"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/acidtank_visual.png",
+      "sourceSha256": "0876a1599d6181fab2223e28ec1f63a54fc1b418f0a6d01a04647e1bd64f4912",
+      "contentPath": "maps/noita/random-pixel-scenes/0876a1599d6181fa-visual.png",
+      "contentSha256": "0876a1599d6181fab2223e28ec1f63a54fc1b418f0a6d01a04647e1bd64f4912"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/acidtank_background.png",
+      "sourceSha256": "8bd8678d856eac5346b04e0173947b55b2dd85accce9c652409975dad7e3214a",
+      "contentPath": "maps/noita/random-pixel-scenes/8bd8678d856eac53-background.png",
+      "contentSha256": "8bd8678d856eac5346b04e0173947b55b2dd85accce9c652409975dad7e3214a"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/lab_visual.png",
+      "sourceSha256": "7319992edfc0513d20fe2e314f5abbda3c3cd3ccc3fc8456837b5e73e2b945a8",
+      "contentPath": "maps/noita/random-pixel-scenes/7319992edfc0513d-visual.png",
+      "contentSha256": "7319992edfc0513d20fe2e314f5abbda3c3cd3ccc3fc8456837b5e73e2b945a8"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/lab_background.png",
+      "sourceSha256": "fc438b55e4073525390b8daa9c998dbb8cc857551e4f12583cf659609ced47bf",
+      "contentPath": "maps/noita/random-pixel-scenes/fc438b55e4073525-background.png",
+      "contentSha256": "fc438b55e4073525390b8daa9c998dbb8cc857551e4f12583cf659609ced47bf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/lab2_visual.png",
+      "sourceSha256": "3451a531f47b3272d9b3ac2e508573d5afc50be37979f0ef9554b7937936c322",
+      "contentPath": "maps/noita/random-pixel-scenes/3451a531f47b3272-visual.png",
+      "contentSha256": "3451a531f47b3272d9b3ac2e508573d5afc50be37979f0ef9554b7937936c322"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/lab2_background.png",
+      "sourceSha256": "b1e60528384a11ae2ebc7314cf5e6326a287260eb722fafd849b4f6556493faa",
+      "contentPath": "maps/noita/random-pixel-scenes/b1e60528384a11ae-background.png",
+      "contentSha256": "b1e60528384a11ae2ebc7314cf5e6326a287260eb722fafd849b4f6556493faa"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/lab3_visual.png",
+      "sourceSha256": "7310b2d45baf584629959a97ebd8d6864259d4d47bd52248699bb5505b547bc6",
+      "contentPath": "maps/noita/random-pixel-scenes/7310b2d45baf5846-visual.png",
+      "contentSha256": "7310b2d45baf584629959a97ebd8d6864259d4d47bd52248699bb5505b547bc6"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/lab3_background.png",
+      "sourceSha256": "bf0996fae3cd1c5be6291af44c8c55a97be0dd7a531381618bad17c00ac76521",
+      "contentPath": "maps/noita/random-pixel-scenes/bf0996fae3cd1c5b-background.png",
+      "contentSha256": "bf0996fae3cd1c5be6291af44c8c55a97be0dd7a531381618bad17c00ac76521"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/lab_puzzle_visual.png",
+      "sourceSha256": "638a2dcbc2732b386c1bcf126671a9db79505596373bc6516311f95a5269bb7e",
+      "contentPath": "maps/noita/random-pixel-scenes/638a2dcbc2732b38-visual.png",
+      "contentSha256": "638a2dcbc2732b386c1bcf126671a9db79505596373bc6516311f95a5269bb7e"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/lab_puzzle_background.png",
+      "sourceSha256": "e1dbd97cf10ce50fb1dd53c3eaaf2c9b319d7654816a59a783fde8722c611b02",
+      "contentPath": "maps/noita/random-pixel-scenes/e1dbd97cf10ce50f-background.png",
+      "contentSha256": "e1dbd97cf10ce50fb1dd53c3eaaf2c9b319d7654816a59a783fde8722c611b02"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/electric_tunnel_room_background.png",
+      "sourceSha256": "35d8bdddba4ca28d22410382767b6d43e178f7a42a91a6f1719732732774fd8e",
+      "contentPath": "maps/noita/random-pixel-scenes/35d8bdddba4ca28d-background.png",
+      "contentSha256": "35d8bdddba4ca28d22410382767b6d43e178f7a42a91a6f1719732732774fd8e"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/brain_room_visual.png",
+      "sourceSha256": "868dde56cd250b691263b9583f1648efa4a31ecfb016165ba89dad3a67483fc7",
+      "contentPath": "maps/noita/random-pixel-scenes/868dde56cd250b69-visual.png",
+      "contentSha256": "868dde56cd250b691263b9583f1648efa4a31ecfb016165ba89dad3a67483fc7"
+    },
+    {
+      "kind": "background",
+      "sourcePath": "data/biome_impl/vault/brain_room_background.png",
+      "sourceSha256": "aed8d1a84e5c9ae6dfa835b1ed3f42156e22ef3a8c3d20b9ad1a7629b1bb2342",
+      "contentPath": "maps/noita/random-pixel-scenes/aed8d1a84e5c9ae6-background.png",
+      "contentSha256": "aed8d1a84e5c9ae6dfa835b1ed3f42156e22ef3a8c3d20b9ad1a7629b1bb2342"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/shop_visual.png",
+      "sourceSha256": "2e4956ad83d8182fe2c670758e6d93ad8c374bf5cbd32e880b5a27e6ae868067",
+      "contentPath": "maps/noita/random-pixel-scenes/2e4956ad83d8182f-visual.png",
+      "contentSha256": "2e4956ad83d8182fe2c670758e6d93ad8c374bf5cbd32e880b5a27e6ae868067"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/stain_01_visual.png",
+      "sourceSha256": "857b5a18d3fc615fb074ce24a5af5bad130a2d101d20a8377a7bf1b083da88ce",
+      "contentPath": "maps/noita/random-pixel-scenes/857b5a18d3fc615f-visual.png",
+      "contentSha256": "857b5a18d3fc615fb074ce24a5af5bad130a2d101d20a8377a7bf1b083da88ce"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/stain_02_visual.png",
+      "sourceSha256": "ef35dfe8f4c5f9cc01a307dae5b3c20ceb2887ad72ee1243e5c1f3b3a92bbc76",
+      "contentPath": "maps/noita/random-pixel-scenes/ef35dfe8f4c5f9cc-visual.png",
+      "contentSha256": "ef35dfe8f4c5f9cc01a307dae5b3c20ceb2887ad72ee1243e5c1f3b3a92bbc76"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/stain_03_visual.png",
+      "sourceSha256": "e251fc414ba43fc77c2c1d46352aacad79c606579db4fb6b461209dcea7de4d8",
+      "contentPath": "maps/noita/random-pixel-scenes/e251fc414ba43fc7-visual.png",
+      "contentSha256": "e251fc414ba43fc77c2c1d46352aacad79c606579db4fb6b461209dcea7de4d8"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/stain_ceiling_01_visual.png",
+      "sourceSha256": "e504aa9d87bc5f9ef6f762fcbb3fcc63dacc1f83df582b82a3e0e57127199f01",
+      "contentPath": "maps/noita/random-pixel-scenes/e504aa9d87bc5f9e-visual.png",
+      "contentSha256": "e504aa9d87bc5f9ef6f762fcbb3fcc63dacc1f83df582b82a3e0e57127199f01"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/vault/stain_ceiling_02_visual.png",
+      "sourceSha256": "3fc52747fa32f2eafe6d5e7023c1fc13f948f821dc402d110d01cf13d34ca2f2",
+      "contentPath": "maps/noita/random-pixel-scenes/3fc52747fa32f2ea-visual.png",
+      "contentSha256": "3fc52747fa32f2eafe6d5e7023c1fc13f948f821dc402d110d01cf13d34ca2f2"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_dynamic_01_visual.png",
+      "sourceSha256": "627fe8b97cb71f6591a12533bd9c17eaba6edc3cb1d7f7db3203d7d5c7c20eca",
+      "contentPath": "maps/noita/random-pixel-scenes/627fe8b97cb71f65-visual.png",
+      "contentSha256": "627fe8b97cb71f6591a12533bd9c17eaba6edc3cb1d7f7db3203d7d5c7c20eca"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_dynamic_02_visual.png",
+      "sourceSha256": "0521aaf876fe67485c2d5c4d441c9e1a14359800dcef63c0b53fef27d22a3f24",
+      "contentPath": "maps/noita/random-pixel-scenes/0521aaf876fe6748-visual.png",
+      "contentSha256": "0521aaf876fe67485c2d5c4d441c9e1a14359800dcef63c0b53fef27d22a3f24"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_small_01_visual.png",
+      "sourceSha256": "dc00671e61e5fd5e4af1eacc1ea668dcf1bd4dd637ca24f78edd55dcfb5a7e30",
+      "contentPath": "maps/noita/random-pixel-scenes/dc00671e61e5fd5e-visual.png",
+      "contentSha256": "dc00671e61e5fd5e4af1eacc1ea668dcf1bd4dd637ca24f78edd55dcfb5a7e30"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_small_02_visual.png",
+      "sourceSha256": "1b52ac363bd899ada6cd008ed62d229078e75b8a183f622e82b641798d90d59b",
+      "contentPath": "maps/noita/random-pixel-scenes/1b52ac363bd899ad-visual.png",
+      "contentSha256": "1b52ac363bd899ada6cd008ed62d229078e75b8a183f622e82b641798d90d59b"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_small_03_visual.png",
+      "sourceSha256": "d4f9733f4c1e0c637d806dfb7bceed766157f9e63f14ea8fa5349525fd232baf",
+      "contentPath": "maps/noita/random-pixel-scenes/d4f9733f4c1e0c63-visual.png",
+      "contentSha256": "d4f9733f4c1e0c637d806dfb7bceed766157f9e63f14ea8fa5349525fd232baf"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_l_01_visual.png",
+      "sourceSha256": "f4d173bcdd569d1a726310fc16c6cdd05b6dbbd2f263c17ac59dd5cb7a5423fd",
+      "contentPath": "maps/noita/random-pixel-scenes/f4d173bcdd569d1a-visual.png",
+      "contentSha256": "f4d173bcdd569d1a726310fc16c6cdd05b6dbbd2f263c17ac59dd5cb7a5423fd"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_l_02_visual.png",
+      "sourceSha256": "a4945cf5083b5182235a79f73287a59eef9bcd56a3079a5249aae9ce3960cea8",
+      "contentPath": "maps/noita/random-pixel-scenes/a4945cf5083b5182-visual.png",
+      "contentSha256": "a4945cf5083b5182235a79f73287a59eef9bcd56a3079a5249aae9ce3960cea8"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_r_01_visual.png",
+      "sourceSha256": "86e92cc588a2eb9a0fb61c630065eec77cf940cd7d067d3d8074b245020c5dec",
+      "contentPath": "maps/noita/random-pixel-scenes/86e92cc588a2eb9a-visual.png",
+      "contentSha256": "86e92cc588a2eb9a0fb61c630065eec77cf940cd7d067d3d8074b245020c5dec"
+    },
+    {
+      "kind": "visual",
+      "sourcePath": "data/biome_impl/wandcave/floor_rubble_r_02_visual.png",
+      "sourceSha256": "383f547801d82c2274e38d0ef5ae370330a539ad380492a033950e0ac3520f72",
+      "contentPath": "maps/noita/random-pixel-scenes/383f547801d82c22-visual.png",
+      "contentSha256": "383f547801d82c2274e38d0ef5ae370330a539ad380492a033950e0ac3520f72"
+    }
+  ]
+}

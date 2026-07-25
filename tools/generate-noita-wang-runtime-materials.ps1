@@ -7,6 +7,7 @@ param(
     [string] $WangCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-wang-terrain.json'),
     [string] $WorldCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-world-content.json'),
     [string] $SnowcastlePixelSceneCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-snowcastle-pixel-scenes.json'),
+    [string] $RandomPixelSceneCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-random-pixel-scenes-runtime.json'),
     [string] $VegetationCatalogPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\noita-vegetation.json'),
     [string] $MaterialsPath = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\materials.json'),
     [string] $TextureDirectory = (Join-Path $PSScriptRoot '..\demo\PixelEngine.Demo\content\textures'),
@@ -79,6 +80,7 @@ $catalog = Get-Content -LiteralPath $CatalogPath -Raw | ConvertFrom-Json
 $wangCatalog = Get-Content -LiteralPath $WangCatalogPath -Raw | ConvertFrom-Json
 $worldCatalog = Get-Content -LiteralPath $WorldCatalogPath -Raw | ConvertFrom-Json
 $snowcastlePixelSceneCatalog = Get-Content -LiteralPath $SnowcastlePixelSceneCatalogPath -Raw | ConvertFrom-Json
+$randomPixelSceneCatalog = Get-Content -LiteralPath $RandomPixelSceneCatalogPath -Raw | ConvertFrom-Json
 $vegetationCatalog = Get-Content -LiteralPath $VegetationCatalogPath -Raw | ConvertFrom-Json
 $materialsDocument = Get-Content -LiteralPath $MaterialsPath -Raw | ConvertFrom-Json
 $resolvedSourceDataRoot = (Resolve-Path -LiteralPath $SourceDataRoot).Path
@@ -126,6 +128,7 @@ $wangRequiredNames = @(
         Sort-Object -Unique)
 $sceneRequiredNames = @(
     @($snowcastlePixelSceneCatalog.materialNames) +
+    @($randomPixelSceneCatalog.materialNames) +
     @('blood', 'bone_static', 'cheese_static', 'mud', 'sand_petrify', 'snow_sticky') |
         Sort-Object -Unique)
 $vegetationRequiredNames = @($vegetationCatalog.materialNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
@@ -293,7 +296,7 @@ foreach ($name in $requiredNames) {
         heatCapacity = 1.0
         durability = [Math]::Clamp([int][Math]::Ceiling($hp / 500.0), 0, 255)
         integrity = [Math]::Clamp([int][Math]::Ceiling($hp / 10.0), 0, 65535)
-        renderStyle = $type
+        renderStyle = if ($type -eq 'Fire') { 'Emissive' } else { $type }
         legendCategory = $legendCategory
         edgeColor = 0
         opacity = $opacity

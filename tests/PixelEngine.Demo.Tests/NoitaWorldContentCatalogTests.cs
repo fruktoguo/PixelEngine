@@ -120,7 +120,7 @@ public sealed class NoitaWorldContentCatalogTests
 
         Assert.Equal(46, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.Contains(name, runtimeNames));
-        Assert.Equal(130, runtimeNames.Count);
+        Assert.Equal(150, runtimeNames.Count);
     }
 
     /// <summary>
@@ -310,6 +310,18 @@ public sealed class NoitaWorldContentCatalogTests
         Assert.Equal(195, statistics.GetProperty("materialAssets").GetInt32());
         Assert.Equal(117, statistics.GetProperty("visualAssets").GetInt32());
         Assert.Equal(66, statistics.GetProperty("backgroundAssets").GetInt32());
+        Assert.Equal(1, statistics.GetProperty("colorMaterialTables").GetInt32());
+
+        JsonElement colorTable = Assert.Single(root.GetProperty("colorMaterialTables").EnumerateArray());
+        Assert.Equal("lab_liquids", colorTable.GetProperty("name").GetString());
+        Assert.All(colorTable.GetProperty("colors").EnumerateArray(), static color =>
+        {
+            string[] choices = [.. color.GetProperty("materials").EnumerateArray().Select(static item => item.GetString()!)];
+            Assert.Equal(6, choices.Length);
+            Assert.Equal(2, choices.Count(static name => name == "radioactive_liquid"));
+            Assert.Equal(3, choices.Count(static name => name == "acid"));
+            Assert.Equal(1, choices.Count(static name => name == "alcohol"));
+        });
 
         JsonElement[] catalogs = [.. root.GetProperty("catalogs").EnumerateArray()];
         JsonElement coalmine = catalogs.Single(static catalog =>

@@ -411,7 +411,7 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
 {
     public static bool TryCreate(in NoitaWangMarkerAnchor anchor, out NoitaWangMarkerVisualProfile profile)
     {
-        if (NoitaSnowcastlePixelSceneCatalog.Supports(anchor))
+        if (NoitaSnowcastlePixelSceneCatalog.Supports(anchor) || NoitaRandomPixelSceneCatalog.Supports(anchor))
         {
             profile = default;
             return false;
