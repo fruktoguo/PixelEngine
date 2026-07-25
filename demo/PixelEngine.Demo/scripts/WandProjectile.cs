@@ -10,6 +10,7 @@ public sealed class WandProjectile : Behaviour
 {
     private const int MaximumEnemyTargets = 128;
     private readonly NoitaMarkerEnemy[] _enemyTargets = new NoitaMarkerEnemy[MaximumEnemyTargets];
+    private readonly NoitaMarkerGhostCrystal[] _ghostCrystalTargets = new NoitaMarkerGhostCrystal[32];
     private SpellProjectilePlan _plan;
     private WandProjectile? _firstPayload;
     private WandProjectile? _nextPayload;
@@ -364,6 +365,15 @@ public sealed class WandProjectile : Behaviour
         for (int i = 0; i < count; i++)
         {
             if (_enemyTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
+            {
+                return true;
+            }
+        }
+
+        int crystalCount = Context.Scene.CollectComponents(_ghostCrystalTargets);
+        for (int i = 0; i < crystalCount; i++)
+        {
+            if (_ghostCrystalTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
             {
                 return true;
             }

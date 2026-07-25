@@ -129,7 +129,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 NoitaWangMarkerGameplayKind.Loot or
                 NoitaWangMarkerGameplayKind.Hazard or
                 NoitaWangMarkerGameplayKind.Portal or
-                NoitaWangMarkerGameplayKind.DrippingLiquid)
+                NoitaWangMarkerGameplayKind.DrippingLiquid or
+                NoitaWangMarkerGameplayKind.GhostCrystal)
             {
                 entity.Destroy();
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
@@ -142,16 +143,19 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
             }
             LastScanMaterializedCount++;
-            TransientParticleBurst.Emit(
-                context,
-                anchor.WorldX,
-                anchor.WorldY,
-                profile.BurstCount,
-                profile.BurstSpeed,
-                lifetime: 72,
-                profile.CoreColorBgra,
-                profile.TrailColorBgra,
-                profile.LightIntensity);
+            if (_gameplayComponents[slot] is not NoitaMarkerGhostCrystal { IsPopulated: false })
+            {
+                TransientParticleBurst.Emit(
+                    context,
+                    anchor.WorldX,
+                    anchor.WorldY,
+                    profile.BurstCount,
+                    profile.BurstSpeed,
+                    lifetime: 72,
+                    profile.CoreColorBgra,
+                    profile.TrailColorBgra,
+                    profile.LightIntensity);
+            }
         }
     }
 
@@ -249,6 +253,16 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             return;
         }
 
+        if (profile.GameplayKind == NoitaWangMarkerGameplayKind.GhostCrystal)
+        {
+            Entity entity = context.Scene.CreateEntity();
+            NoitaMarkerGhostCrystal crystal = entity.AddComponent<NoitaMarkerGhostCrystal>();
+            crystal.Bind(anchor, worldSeed);
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = crystal;
+            return;
+        }
+
         if (profile.GameplayKind == NoitaWangMarkerGameplayKind.MaterialEmitter)
         {
             Entity entity = context.Scene.CreateEntity();
@@ -300,6 +314,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 {
                     NoitaMarkerEnemy enemy => !enemy.IsDead,
                     NoitaMarkerLoot loot => !loot.IsConsumed,
+                    NoitaMarkerGhostCrystal crystal => !crystal.IsDead,
                     _ => true,
                 };
             }
@@ -311,7 +326,9 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         for (int i = 0; i < MaterializedCount; i++)
         {
             bool resolved = _gameplayComponents[i] is NoitaMarkerEnemy { IsDead: true } or
-                NoitaMarkerLoot { IsConsumed: true };
+                NoitaMarkerLoot { IsConsumed: true } or
+                NoitaMarkerGhostCrystal { IsPopulated: false } or
+                NoitaMarkerGhostCrystal { IsDead: true };
             if (resolved && !ContainsResolved(_materialized[i]))
             {
                 if (_resolvedCount < _resolved.Length)
@@ -502,6 +519,7 @@ internal enum NoitaWangMarkerGameplayKind : byte
     Hazard,
     Portal,
     DrippingLiquid,
+    GhostCrystal,
 }
 
 internal readonly record struct NoitaWangMarkerVisualProfile(
@@ -586,6 +604,22 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 10f,
                 NoitaWangMarkerGameplayKind.DrippingLiquid,
                 "water");
+            return true;
+        }
+
+        if (NoitaMarkerGhostCrystal.Supports(function))
+        {
+            profile = new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Machine,
+                0xFF_E6_78_E6,
+                0xCC_90_48_C8,
+                12f,
+                96f,
+                0.82f,
+                14,
+                42f,
+                NoitaWangMarkerGameplayKind.GhostCrystal,
+                string.Empty);
             return true;
         }
 
