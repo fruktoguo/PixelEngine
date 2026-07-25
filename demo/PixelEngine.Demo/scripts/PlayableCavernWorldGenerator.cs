@@ -1137,93 +1137,103 @@ public sealed class PlayableCavernWorldGenerator :
     {
         TerrainGenerationState state = row.State;
         TerrainMaterialPalette palette = row.Palette;
-        return topologyCell.Kind switch
-        {
-            CompiledTopologyCellKind.MainBiome => SelectWangBiomeMaterial(
-                worldX,
-                worldY,
-                protectedSpawn,
-                state.MainBiomes[topologyCell.BiomeIndex],
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                in row),
-            CompiledTopologyCellKind.SideBiome => SelectWangBiomeMaterial(
+        ref readonly CompiledReferenceBiome referenceBiome =
+            ref state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex);
+        return topologyCell.Kind is not (CompiledTopologyCellKind.MainBiome or CompiledTopologyCellKind.SideBiome) &&
+            referenceBiome.WangTerrain is not null
+            ? SelectReferenceWangBiomeMaterial(
                 worldX,
                 worldY,
                 protectedSpawn: false,
-                state.SideBiomes[topologyCell.BiomeIndex],
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                in row),
-            CompiledTopologyCellKind.Solid => palette.BoundaryStone,
-            CompiledTopologyCellKind.Lava => palette.Lava,
-            CompiledTopologyCellKind.HolyMountain => SelectHolyMountainReferenceMaterial(
-                worldX,
-                topologyDepthCells,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                in palette),
-            CompiledTopologyCellKind.Empty => palette.Empty,
-            CompiledTopologyCellKind.Water => palette.Water,
-            CompiledTopologyCellKind.Clouds => SelectCloudMaterial(
-                worldX,
-                worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                in palette),
-            CompiledTopologyCellKind.SurfaceHills => SelectReferenceCaveMaterial(
-                worldX,
-                worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                palette.PackedDirt,
-                palette.Stone,
-                palette.PackedGravel,
-                in palette),
-            CompiledTopologyCellKind.SurfaceDesert => SelectReferenceCaveMaterial(
-                worldX,
-                worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                palette.PackedSand,
-                palette.Stone,
-                palette.PackedGravel,
-                in palette),
-            CompiledTopologyCellKind.SurfaceWinter => SelectReferenceCaveMaterial(
-                worldX,
-                worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                palette.Ice,
-                palette.Stone,
-                palette.PackedGravel,
-                in palette),
-            CompiledTopologyCellKind.Mountain => SelectMountainMaterial(
-                worldX,
-                topologyDepthCells,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                in palette),
-            CompiledTopologyCellKind.GenericCave => SelectReferenceCaveMaterial(
-                worldX,
-                worldY,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                palette.Stone,
-                palette.PackedGravel,
-                palette.Crystal,
-                in palette),
-            CompiledTopologyCellKind.GenericStructure => SelectReferenceStructureMaterial(
-                worldX,
-                worldY,
-                topologyDepthCells,
-                state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                in palette),
-            CompiledTopologyCellKind.FixedLaboratory => SelectFixedLaboratoryMaterial(
-                worldX,
-                topologyDepthCells,
-                state.WorldTopology,
-                state.MainBiomes[CampaignConfig.RequiredRegionCount - 1],
-                in palette),
-            CompiledTopologyCellKind.Legacy => SelectBiomeMaterial(
-                worldX,
-                worldY,
-                protectedSpawn,
-                row.Biome,
-                in row),
-            _ => throw new InvalidOperationException($"未知 world topology kind：{topologyCell.Kind}。"),
-        };
+                referenceBiome,
+                in row)
+            : topologyCell.Kind switch
+            {
+                CompiledTopologyCellKind.MainBiome => SelectWangBiomeMaterial(
+                    worldX,
+                    worldY,
+                    protectedSpawn,
+                    state.MainBiomes[topologyCell.BiomeIndex],
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    in row),
+                CompiledTopologyCellKind.SideBiome => SelectWangBiomeMaterial(
+                    worldX,
+                    worldY,
+                    protectedSpawn: false,
+                    state.SideBiomes[topologyCell.BiomeIndex],
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    in row),
+                CompiledTopologyCellKind.Solid => palette.BoundaryStone,
+                CompiledTopologyCellKind.Lava => palette.Lava,
+                CompiledTopologyCellKind.HolyMountain => SelectHolyMountainReferenceMaterial(
+                    worldX,
+                    topologyDepthCells,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    in palette),
+                CompiledTopologyCellKind.Empty => palette.Empty,
+                CompiledTopologyCellKind.Water => palette.Water,
+                CompiledTopologyCellKind.Clouds => SelectCloudMaterial(
+                    worldX,
+                    worldY,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    in palette),
+                CompiledTopologyCellKind.SurfaceHills => SelectReferenceCaveMaterial(
+                    worldX,
+                    worldY,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    palette.PackedDirt,
+                    palette.Stone,
+                    palette.PackedGravel,
+                    in palette),
+                CompiledTopologyCellKind.SurfaceDesert => SelectReferenceCaveMaterial(
+                    worldX,
+                    worldY,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    palette.PackedSand,
+                    palette.Stone,
+                    palette.PackedGravel,
+                    in palette),
+                CompiledTopologyCellKind.SurfaceWinter => SelectReferenceCaveMaterial(
+                    worldX,
+                    worldY,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    palette.Ice,
+                    palette.Stone,
+                    palette.PackedGravel,
+                    in palette),
+                CompiledTopologyCellKind.Mountain => SelectMountainMaterial(
+                    worldX,
+                    topologyDepthCells,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    in palette),
+                CompiledTopologyCellKind.GenericCave => SelectReferenceCaveMaterial(
+                    worldX,
+                    worldY,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    palette.Stone,
+                    palette.PackedGravel,
+                    palette.Crystal,
+                    in palette),
+                CompiledTopologyCellKind.GenericStructure => SelectReferenceStructureMaterial(
+                    worldX,
+                    worldY,
+                    topologyDepthCells,
+                    state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
+                    in palette),
+                CompiledTopologyCellKind.FixedLaboratory => SelectFixedLaboratoryMaterial(
+                    worldX,
+                    topologyDepthCells,
+                    state.WorldTopology,
+                    state.MainBiomes[CampaignConfig.RequiredRegionCount - 1],
+                    in palette),
+                CompiledTopologyCellKind.Legacy => SelectBiomeMaterial(
+                    worldX,
+                    worldY,
+                    protectedSpawn,
+                    row.Biome,
+                    in row),
+                _ => throw new InvalidOperationException($"未知 world topology kind：{topologyCell.Kind}。"),
+            };
     }
 
     private static ushort SelectCloudMaterial(
@@ -1599,18 +1609,48 @@ public sealed class PlayableCavernWorldGenerator :
         in CompiledReferenceBiome referenceBiome,
         in TerrainRowContext row)
     {
-        if (TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial))
-        {
-            return globalSceneMaterial;
-        }
+        return TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial)
+            ? globalSceneMaterial
+            : TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial)
+                ? sceneMaterial
+                : SelectCompiledWangMaterial(
+                    worldX,
+                    worldY,
+                    protectedSpawn,
+                    biome,
+                    referenceBiome,
+                    in row);
+    }
 
-        if (TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial))
-        {
-            return sceneMaterial;
-        }
+    private static ushort SelectReferenceWangBiomeMaterial(
+        long worldX,
+        long worldY,
+        bool protectedSpawn,
+        in CompiledReferenceBiome referenceBiome,
+        in TerrainRowContext row)
+    {
+        return TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial)
+            ? globalSceneMaterial
+            : SelectCompiledWangMaterial(
+                worldX,
+                worldY,
+                protectedSpawn,
+                row.Biome,
+                referenceBiome,
+                in row);
+    }
+
+    private static ushort SelectCompiledWangMaterial(
+        long worldX,
+        long worldY,
+        bool protectedSpawn,
+        CompiledBiome biome,
+        in CompiledReferenceBiome referenceBiome,
+        in TerrainRowContext row)
+    {
 
         DecodedNoitaWangTerrainSet wangTerrain = referenceBiome.WangTerrain ??
-            throw new InvalidOperationException("主区或侧区缺少已编译的 Noita Wang 模板。");
+            throw new InvalidOperationException($"参考 biome {referenceBiome.Id} 缺少已编译的 Noita Wang 模板。");
         byte wangSemantic = wangTerrain.Sample(
             worldX,
             worldY,
@@ -2560,9 +2600,7 @@ public sealed class PlayableCavernWorldGenerator :
         for (int i = 0; i < sources.Length; i++)
         {
             ReferenceBiomeDefinition source = sources[i];
-            NoitaWangTerrainSetDefinition? terrainSet = source.Terrain is "main-biome" or "side-biome"
-                ? wangTerrain.FindDefinitionForReferenceBiome(source.Id)
-                : null;
+            _ = wangTerrain.TryFindDefinitionForReferenceBiome(source.Id, out NoitaWangTerrainSetDefinition terrainSet);
             ushort[] wangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: false);
             ushort[] protectedWangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: true);
             ushort[] randomWangMaterials = CompileRandomWangMaterials(materials, terrainSet);
@@ -3329,7 +3367,7 @@ public sealed class PlayableCavernWorldGenerator :
         {
             for (long worldX = minimumX; worldX <= maximumX; worldX++)
             {
-                if (!TryResolveWangReferenceBiome(catalog, config, worldX, worldY, out ReferenceBiomeDefinition referenceBiome))
+                if (!TryResolveReferenceBiome(catalog, config, worldX, worldY, out ReferenceBiomeDefinition referenceBiome))
                 {
                     continue;
                 }
@@ -3343,7 +3381,11 @@ public sealed class PlayableCavernWorldGenerator :
                 }
                 else
                 {
-                    set = wangTerrain.FindDefinitionForReferenceBiome(referenceBiome.Id);
+                    if (!wangTerrain.TryFindDefinitionForReferenceBiome(referenceBiome.Id, out set))
+                    {
+                        continue;
+                    }
+
                     lastSet = set;
                     lastReferenceBiomeId = referenceBiome.Id;
                     lastSalt = StableIdSalt(referenceBiome.Id);
@@ -3431,7 +3473,7 @@ public sealed class PlayableCavernWorldGenerator :
         return count;
     }
 
-    private static bool TryResolveWangReferenceBiome(
+    private static bool TryResolveReferenceBiome(
         BiomeCatalog catalog,
         CampaignConfig config,
         long worldX,
@@ -3451,7 +3493,7 @@ public sealed class PlayableCavernWorldGenerator :
 
         int referenceBiomeIndex = BiomeCatalog.DecodeReferenceBiomeIndex(topology.MacroRows[(int)mapY], (int)mapX);
         referenceBiome = topology.ReferenceBiomes[referenceBiomeIndex];
-        return referenceBiome.Terrain is "main-biome" or "side-biome";
+        return true;
     }
 
     private static long MainPathCenterX(

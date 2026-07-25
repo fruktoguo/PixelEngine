@@ -118,6 +118,16 @@ internal sealed class NoitaWangTerrainCatalog
     internal NoitaWangTerrainSetDefinition FindDefinitionForReferenceBiome(string referenceBiomeId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(referenceBiomeId);
+        return TryFindDefinitionForReferenceBiome(referenceBiomeId, out NoitaWangTerrainSetDefinition definition)
+            ? definition
+            : throw new InvalidOperationException($"参考 biome {referenceBiomeId} 缺少 Noita Wang 模板绑定。");
+    }
+
+    internal bool TryFindDefinitionForReferenceBiome(
+        string referenceBiomeId,
+        out NoitaWangTerrainSetDefinition definition)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(referenceBiomeId);
         NoitaWangTerrainSetDefinition[] sets = Sets;
         for (int setIndex = 0; setIndex < sets.Length; setIndex++)
         {
@@ -126,12 +136,14 @@ internal sealed class NoitaWangTerrainCatalog
             {
                 if (string.Equals(referenceBiomeIds[biomeIndex], referenceBiomeId, StringComparison.Ordinal))
                 {
-                    return sets[setIndex];
+                    definition = sets[setIndex];
+                    return true;
                 }
             }
         }
 
-        throw new InvalidOperationException($"参考 biome {referenceBiomeId} 缺少 Noita Wang 模板绑定。");
+        definition = null!;
+        return false;
     }
 
     private static NoitaWangTerrainCatalog LoadBuiltin()

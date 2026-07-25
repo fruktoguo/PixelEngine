@@ -88,6 +88,13 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal(
             "11b43f3a3d5653ce8529166e9b3d50e62e8a70b78bb48890a15e0d4eb632e268",
             catalog.FindDefinitionForReferenceBiome("wizardcave").SourceWangSha256);
+        Assert.All(
+            [
+                "the-sky", "clouds", "pyramid", "liquidcave", "winter-caves",
+                "sandcave", "lake-deep", "meat", "robobase", "the-end",
+            ],
+            id => Assert.True(catalog.TryFindDefinitionForReferenceBiome(id, out _), id));
+        Assert.False(catalog.TryFindDefinitionForReferenceBiome("alchemist-secret", out _));
 
         NoitaWangTerrainSetDefinition liquidcave = catalog.FindDefinitionForReferenceBiome("liquidcave");
         NoitaWangRandomMaterialMappingDefinition randomLiquids = Assert.Single(liquidcave.RandomMaterialMappings);
