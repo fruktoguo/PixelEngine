@@ -675,6 +675,21 @@ foreach ($specification in $specifications) {
         throw "Unclassified color '$colorText' in '$($specification.id)'."
     }
 
+    function Resolve-Density([uint32] $Color, [int] $Semantic) {
+        if ($Semantic -ne $SemanticPrimary) {
+            return 255
+        }
+
+        $r = ($Color -shr 16) -band 0xff
+        $g = ($Color -shr 8) -band 0xff
+        $b = $Color -band 0xff
+        if ($r -eq $g -and $g -eq $b) {
+            return $r
+        }
+
+        return 255
+    }
+
     $bitmapCavesDefinition = $null
     if ($null -ne $bitmapCavesNode) {
         $bitmapStructureDefinitions = [System.Collections.Generic.List[object]]::new()
@@ -744,7 +759,7 @@ foreach ($specification in $specifications) {
     try {
         $writer = [IO.BinaryWriter]::new($decodedStream, [Text.Encoding]::ASCII, $true)
         try {
-            $writer.Write([Text.Encoding]::ASCII.GetBytes('PWH2'))
+            $writer.Write([Text.Encoding]::ASCII.GetBytes('PWH3'))
             $writer.Write([byte]$header.shortSide)
             foreach ($count in $header.colors) {
                 $writer.Write([byte]$count)
@@ -758,8 +773,10 @@ foreach ($specification in $specifications) {
                 $writer.Write([uint32]$tile.key)
                 for ($y = 0; $y -lt $header.shortSide; $y++) {
                     for ($x = 0; $x -lt 2 * $header.shortSide; $x++) {
-                        $semantic = Resolve-Semantic (Get-PixelArgb $image ($tile.x + $x) ($tile.y + $y))
+                        $color = Get-PixelArgb $image ($tile.x + $x) ($tile.y + $y)
+                        $semantic = Resolve-Semantic $color
                         $writer.Write([byte]$semantic)
+                        $writer.Write([byte](Resolve-Density $color $semantic))
                     }
                 }
             }
@@ -768,8 +785,10 @@ foreach ($specification in $specifications) {
                 $writer.Write([uint32]$tile.key)
                 for ($y = 0; $y -lt 2 * $header.shortSide; $y++) {
                     for ($x = 0; $x -lt $header.shortSide; $x++) {
-                        $semantic = Resolve-Semantic (Get-PixelArgb $image ($tile.x + $x) ($tile.y + $y))
+                        $color = Get-PixelArgb $image ($tile.x + $x) ($tile.y + $y)
+                        $semantic = Resolve-Semantic $color
                         $writer.Write([byte]$semantic)
+                        $writer.Write([byte](Resolve-Density $color $semantic))
                     }
                 }
             }
@@ -819,7 +838,7 @@ foreach ($specification in $specifications) {
         materialMappings = $mappingDefinitions
         markers = @($markerDefinitions)
         bitmapCaves = $bitmapCavesDefinition
-        encoding = 'brotli-pewh-v2'
+        encoding = 'brotli-pewh-v3'
         decodedLength = $decoded.Length
         decodedSha256 = Get-ByteSha256 $decoded
         data = [Convert]::ToBase64String($compressed)
@@ -839,7 +858,7 @@ foreach ($specification in $specifications) {
 }
 
 $document = [ordered]@{
-    schemaVersion = 2
+    schemaVersion = 3
     referenceBuildId = $ReferenceBuildId
     referenceVersionHash = $ReferenceVersionHash
     algorithm = 'stb-herringbone-wang-corner-v1'

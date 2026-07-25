@@ -273,6 +273,58 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.InRange(allocated, 0, 1_024);
     }
 
+    /// <summary>
+    /// 验证 v3 数据保留 primary 灰度密度，并且带密度采样与既有 semantic 采样完全一致且零分配。
+    /// </summary>
+    [Fact]
+    public void DensitySamplingPreservesGrayscaleAndSemanticContractWithoutAllocations()
+    {
+        NoitaWangTerrainCatalog catalog = LoadCatalog();
+        int grayscaleDensityCount = 0;
+        foreach (NoitaWangTerrainSetDefinition definition in catalog.Sets)
+        {
+            DecodedNoitaWangTerrainSet set = definition.Decoded;
+            ulong salt = StableIdSalt(definition.ReferenceBiomeIds[0]);
+            for (int y = -128; y < 128; y++)
+            {
+                for (int x = -128; x < 128; x++)
+                {
+                    byte semantic = set.Sample(x, y, WorldSeed, salt, out byte density);
+                    Assert.Equal(set.Sample(x, y, WorldSeed, salt), semantic);
+                    if (semantic == (byte)NoitaWangTerrainSemantic.Primary)
+                    {
+                        grayscaleDensityCount += density is > 0 and < byte.MaxValue ? 1 : 0;
+                    }
+                    else
+                    {
+                        Assert.Equal(byte.MaxValue, density);
+                    }
+                }
+            }
+        }
+
+        Assert.True(grayscaleDensityCount > 0, "Wang 目录必须保留至少一个 primary 中间灰度 density。");
+
+        DecodedNoitaWangTerrainSet hotSet = catalog.Sets[0].Decoded;
+        ulong hotSalt = StableIdSalt("coalmine");
+        for (int i = 0; i < 4_096; i++)
+        {
+            _ = hotSet.Sample(i - 2_048, (i * 17L) - 8_192, WorldSeed, hotSalt, out _);
+        }
+
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        int checksum = 0;
+        for (int i = 0; i < 65_536; i++)
+        {
+            checksum += hotSet.Sample(i - 32_768, (i * 31L) - 65_536, WorldSeed, hotSalt, out byte density);
+            checksum += density;
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        GC.KeepAlive(checksum);
+        Assert.InRange(allocated, 0, 1_024);
+    }
+
     private static ulong SampleSignature(
         DecodedNoitaWangTerrainSet set,
         ulong worldSeed,

@@ -15,7 +15,7 @@ namespace PixelEngine.Demo;
 /// </summary>
 internal sealed class NoitaWangTerrainCatalog
 {
-    internal const int CurrentSchemaVersion = 2;
+    internal const int CurrentSchemaVersion = 3;
     internal const byte MaterialSemanticBase = 10;
     internal const byte MarkerSemanticBase = 32;
     private const string EmbeddedResourceName = "PixelEngine.Demo.noita-wang-terrain.json";
@@ -246,7 +246,7 @@ internal sealed class NoitaWangTerrainCatalog
                 set.MaterialMappings.Length,
                 set.Markers.Length,
                 $"{label}.bitmapCaves");
-        Require(string.Equals(set.Encoding, "brotli-pewh-v2", StringComparison.Ordinal), $"{label}.encoding 必须为 brotli-pewh-v2。");
+        Require(string.Equals(set.Encoding, "brotli-pewh-v3", StringComparison.Ordinal), $"{label}.encoding 必须为 brotli-pewh-v3。");
         Require(set.DecodedLength > BinaryHeaderLength, $"{label}.decodedLength 非法。");
         Require(IsSha256(set.DecodedSha256), $"{label}.decodedSha256 必须为 64 位 SHA256 hex。");
         byte[] decoded = DecodeBrotli(set.Data, set.DecodedLength, set.DecodedSha256, label);
@@ -258,7 +258,7 @@ internal sealed class NoitaWangTerrainCatalog
         byte[] decoded,
         string label)
     {
-        Require(decoded.AsSpan(0, 4).SequenceEqual("PWH2"u8), $"{label}.data 缺少 PWH2 头。");
+        Require(decoded.AsSpan(0, 4).SequenceEqual("PWH3"u8), $"{label}.data 缺少 PWH3 头。");
         Require(decoded[4] == definition.ShortSide, $"{label}.data shortSide 与 JSON 不一致。");
         for (int i = 0; i < 4; i++)
         {
@@ -271,7 +271,7 @@ internal sealed class NoitaWangTerrainCatalog
         Require(horizontalCount == definition.HorizontalTileCount, $"{label}.data horizontalTileCount 与 JSON 不一致。");
         Require(verticalCount == definition.VerticalTileCount, $"{label}.data verticalTileCount 与 JSON 不一致。");
         int tileArea = checked(2 * definition.ShortSide * definition.ShortSide);
-        int recordSize = checked(sizeof(uint) + tileArea);
+        int recordSize = checked(sizeof(uint) + (tileArea * 2));
         int expectedLength = checked(BinaryHeaderLength + ((horizontalCount + verticalCount) * recordSize));
         Require(decoded.Length == expectedLength, $"{label}.data 长度与 tile 数量不一致。");
 
@@ -361,8 +361,8 @@ internal sealed class NoitaWangTerrainCatalog
 
             keys[i] = key;
             pixelOffsets[i] = offset;
-            ValidateSemanticPixels(decoded.AsSpan(offset, tileArea), materialCount, markerCount, $"{label}[{i}]");
-            offset += tileArea;
+            ValidateSemanticPixels(decoded.AsSpan(offset, tileArea * 2), materialCount, markerCount, $"{label}[{i}]");
+            offset += tileArea * 2;
             previous = key;
         }
 
@@ -382,15 +382,19 @@ internal sealed class NoitaWangTerrainCatalog
 
     private static void ValidateSemanticPixels(ReadOnlySpan<byte> pixels, int materialCount, int markerCount, string label)
     {
-        for (int i = 0; i < pixels.Length; i++)
+        Require((pixels.Length & 1) == 0, $"{label} semantic/density 长度必须为偶数。");
+        for (int i = 0; i < pixels.Length; i += 2)
         {
             byte semantic = pixels[i];
+            byte density = pixels[i + 1];
             bool terrainSemantic = semantic is <= (byte)NoitaWangTerrainSemantic.Pool or
                 (byte)NoitaWangTerrainSemantic.RandomBinary;
             bool materialSemantic = semantic >= MaterialSemanticBase &&
                 semantic - MaterialSemanticBase < materialCount;
             bool markerSemantic = semantic >= MarkerSemanticBase && semantic - MarkerSemanticBase < markerCount;
             Require(terrainSemantic || materialSemantic || markerSemantic, $"{label} 含未知 semantic {semantic}。");
+            Require(semantic == (byte)NoitaWangTerrainSemantic.Primary || density == byte.MaxValue,
+                $"{label} 非 Primary semantic {semantic} 的 density 必须为 255。");
         }
     }
 
@@ -684,6 +688,16 @@ internal sealed class DecodedNoitaWangTerrainSet(
 
     internal byte Sample(long worldX, long worldY, ulong worldSeed, ulong biomeSalt)
     {
+        return SampleCore(worldX, worldY, worldSeed, biomeSalt, out _);
+    }
+
+    internal byte Sample(long worldX, long worldY, ulong worldSeed, ulong biomeSalt, out byte density)
+    {
+        return SampleCore(worldX, worldY, worldSeed, biomeSalt, out density);
+    }
+
+    private byte SampleCore(long worldX, long worldY, ulong worldSeed, ulong biomeSalt, out byte density)
+    {
         long semanticX = FloorDivide(worldX, SemanticPixelScale, out _);
         long semanticY = FloorDivide(worldY, SemanticPixelScale, out _);
         long unitX = FloorDivide(semanticX, ShortSide, out int localX);
@@ -757,7 +771,9 @@ internal sealed class DecodedNoitaWangTerrainSet(
         int pixelIndex = horizontal
             ? (pixelY * ShortSide * 2) + pixelX
             : (pixelY * ShortSide) + pixelX;
-        return Decoded[offsets[tileIndex] + pixelIndex];
+        int sourceIndex = offsets[tileIndex] + (pixelIndex * 2);
+        density = Decoded[sourceIndex + 1];
+        return Decoded[sourceIndex];
     }
 
     internal static bool IsMarker(byte semantic)
