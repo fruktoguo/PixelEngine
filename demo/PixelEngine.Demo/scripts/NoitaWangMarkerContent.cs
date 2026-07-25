@@ -127,7 +127,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             Entity entity = context.Scene.CreateEntity();
             if (profile.GameplayKind is NoitaWangMarkerGameplayKind.Enemy or
                 NoitaWangMarkerGameplayKind.Loot or
-                NoitaWangMarkerGameplayKind.Hazard)
+                NoitaWangMarkerGameplayKind.Hazard or
+                NoitaWangMarkerGameplayKind.Portal)
             {
                 entity.Destroy();
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
@@ -224,6 +225,16 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             hazard.Bind(anchor);
             _gameplayEntities[slot] = entity;
             _gameplayComponents[slot] = hazard;
+            return;
+        }
+
+        if (profile.GameplayKind == NoitaWangMarkerGameplayKind.Portal)
+        {
+            Entity entity = context.Scene.CreateEntity();
+            NoitaMarkerPortal portal = entity.AddComponent<NoitaMarkerPortal>();
+            portal.Bind(anchor);
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = portal;
             return;
         }
 
@@ -467,6 +478,7 @@ internal enum NoitaWangMarkerVisualKind : byte
     Machine,
     Treasure,
     Hazard,
+    Portal,
 }
 
 internal enum NoitaWangMarkerGameplayKind : byte
@@ -477,6 +489,7 @@ internal enum NoitaWangMarkerGameplayKind : byte
     Enemy,
     Loot,
     Hazard,
+    Portal,
 }
 
 internal readonly record struct NoitaWangMarkerVisualProfile(
@@ -530,6 +543,30 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerGameplayKind.Hazard,
                 string.Empty);
             return true;
+        }
+
+        if (NoitaMarkerPortal.Supports(anchor))
+        {
+            profile = new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Spawn,
+                0xFF_FF_70_D0,
+                0xCC_80_40_FF,
+                12f,
+                64f,
+                0.9f,
+                18,
+                54f,
+                NoitaWangMarkerGameplayKind.Portal,
+                string.Empty);
+            return true;
+        }
+
+        // robot egg 的 spawn_teleport 目标由来源脚本按入口位置动态覆盖；
+        // 在 Portal 网络状态接入前必须 fail-closed，不能用固定点或火花占位冒充。
+        if (function == "spawn_teleport")
+        {
+            profile = default;
+            return false;
         }
 
         if (function.StartsWith("builtin-or-unresolved", StringComparison.Ordinal) ||
