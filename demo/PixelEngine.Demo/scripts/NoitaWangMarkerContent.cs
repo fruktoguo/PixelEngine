@@ -145,7 +145,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
             }
             LastScanMaterializedCount++;
-            if (_gameplayComponents[slot] is not NoitaMarkerGhostCrystal { IsPopulated: false } and
+            if (_gameplayComponents[slot] is not NoitaMarkerEnemy { IsPopulated: false } and
+                not NoitaMarkerGhostCrystal { IsPopulated: false } and
                 not NoitaMarkerForcefieldGenerator { IsPopulated: false } and
                 not NoitaMarkerMeatCyst { IsPopulated: false })
             {
@@ -211,7 +212,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         {
             Entity entity = context.Scene.CreateEntity();
             NoitaMarkerEnemy enemy = entity.AddComponent<NoitaMarkerEnemy>();
-            enemy.Bind(anchor);
+            enemy.Bind(anchor, worldSeed);
             _gameplayEntities[slot] = entity;
             _gameplayComponents[slot] = enemy;
             return;
@@ -336,7 +337,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             {
                 component.Enabled = enabled && component switch
                 {
-                    NoitaMarkerEnemy enemy => !enemy.IsDead,
+                    NoitaMarkerEnemy enemy => enemy.IsPopulated && !enemy.IsDead,
                     NoitaMarkerLoot loot => !loot.IsConsumed,
                     NoitaMarkerGhostCrystal crystal => !crystal.IsDead,
                     NoitaMarkerForcefieldGenerator generator => !generator.IsDead,
@@ -351,7 +352,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
     {
         for (int i = 0; i < MaterializedCount; i++)
         {
-            bool resolved = _gameplayComponents[i] is NoitaMarkerEnemy { IsDead: true } or
+            bool resolved = _gameplayComponents[i] is NoitaMarkerEnemy { IsPopulated: false } or
+                NoitaMarkerEnemy { IsDead: true } or
                 NoitaMarkerLoot { IsConsumed: true } or
                 NoitaMarkerGhostCrystal { IsPopulated: false } or
                 NoitaMarkerGhostCrystal { IsDead: true } or
@@ -689,6 +691,22 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 18,
                 48f,
                 NoitaWangMarkerGameplayKind.MeatCyst,
+                string.Empty);
+            return true;
+        }
+
+        if (NoitaMarkerEnemy.Supports(function))
+        {
+            profile = new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Spawn,
+                0xFF_B0_70_D8u,
+                0xCC_80_38_A0u,
+                16f,
+                42f,
+                0.42f,
+                12,
+                32f,
+                NoitaWangMarkerGameplayKind.Enemy,
                 string.Empty);
             return true;
         }

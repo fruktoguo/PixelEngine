@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Xunit;
 
 namespace PixelEngine.Demo.Tests;
@@ -54,10 +56,89 @@ public sealed class NoitaMarkerEnemyTests
         Assert.False(enemy.TryHitSegment(0f, 0f, 20f, 0f, 10f, out _, out _));
     }
 
-    private static NoitaWangMarkerAnchor Anchor(string function)
+    /// <summary>菌类 marker 必须进入专属敌人运行时，而不是被 Vegetation 总开关抑制。</summary>
+    [Fact]
+    public void FungusMarkerCreatesDedicatedEnemyProfile()
+    {
+        NoitaWangMarkerAnchor anchor = Anchor("spawn_fungi");
+
+        Assert.True(NoitaWangMarkerVisualProfile.TryCreate(anchor, out NoitaWangMarkerVisualProfile profile));
+        Assert.Equal(NoitaWangMarkerGameplayKind.Enemy, profile.GameplayKind);
+    }
+
+    /// <summary>普通煤矿保留空/小/大三项权重，alt 表不产生大菌。</summary>
+    [Fact]
+    public void FungusMarkerPreservesSourceWeightedOutcomes()
+    {
+        int empty = 0;
+        int small = 0;
+        int large = 0;
+        int alternateLarge = 0;
+        for (ulong seed = 0; seed < 4096; seed++)
+        {
+            NoitaMarkerEnemy enemy = new();
+            enemy.Bind(Anchor("spawn_fungi"), seed);
+            if (!enemy.IsPopulated)
+            {
+                empty++;
+            }
+            else if (enemy.IsLargeFungus)
+            {
+                large++;
+                Assert.Equal(190f, enemy.MaxHealth);
+            }
+            else
+            {
+                small++;
+                Assert.Equal(65f, enemy.MaxHealth);
+            }
+
+            NoitaMarkerEnemy alternate = new();
+            alternate.Bind(Anchor("spawn_fungi", "coalmine_alt"), seed);
+            alternateLarge += alternate.IsLargeFungus ? 1 : 0;
+        }
+
+        Assert.InRange(empty, 1800, 2100);
+        Assert.InRange(small, 1800, 2100);
+        Assert.InRange(large, 120, 260);
+        Assert.Equal(0, alternateLarge);
+    }
+
+    /// <summary>生成的 20 张 stand 帧必须与 provenance 逐文件一致。</summary>
+    [Fact]
+    public void FungusSpriteFramesMatchProvenance()
+    {
+        string contentRoot = Path.Combine(AppContext.BaseDirectory, "content");
+        string provenancePath = Path.Combine(
+            contentRoot,
+            "sprites",
+            "noita",
+            "marker-enemies",
+            "provenance.json");
+        using JsonDocument document = JsonDocument.Parse(File.ReadAllText(provenancePath));
+        JsonElement[] assets = [.. document.RootElement.GetProperty("assets").EnumerateArray()];
+        Assert.Equal(2, assets.Length);
+        int frameCount = 0;
+        foreach (JsonElement asset in assets)
+        {
+            foreach (JsonElement frame in asset.GetProperty("frames").EnumerateArray())
+            {
+                string relativePath = frame.GetProperty("contentPath").GetString()!;
+                string path = Path.Combine(contentRoot, relativePath.Replace('/', Path.DirectorySeparatorChar));
+                Assert.Equal(
+                    frame.GetProperty("contentSha256").GetString(),
+                    Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))).ToLowerInvariant());
+                frameCount++;
+            }
+        }
+
+        Assert.Equal(20, frameCount);
+    }
+
+    private static NoitaWangMarkerAnchor Anchor(string function, string referenceBiomeId = "coalmine")
     {
         return new NoitaWangMarkerAnchor(
-            "coalmine",
+            referenceBiomeId,
             "coalmine",
             "ff70a8ff",
             function,

@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "referenceBuildId": "17130612",
+  "assets": [
+    {
+      "name": "fungus",
+      "entityPath": "data/entities/animals/fungus.xml",
+      "entitySha256": "55b37752b27066134667e921f097065d9e39764f83ef519aea68a5f3d9a40903",
+      "spritePath": "data/enemies_gfx/fungus.xml",
+      "spriteSha256": "a8886a4d31c2c2475b82e8035d160a1deff7121a53fe4b8f24e387a49ee00aac",
+      "sourcePath": "data/enemies_gfx/fungus.png",
+      "sourceSha256": "6fc49e21d35e99b7466fa99c70d42582a01b0d8444e08111347f4270bb79be22",
+      "frameWidth": 16,
+      "frameHeight": 16,
+      "frameWait": 0.12,
+      "frames": [
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_00.png",
+          "contentSha256": "7920ee42d27ad82cd95aecc941a40005174bd6e458c235f4c901d7ef9c8f2b89"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_01.png",
+          "contentSha256": "ac56133e0d4b7f9a60a94ba58f8ac741a5b85e7b8480c0bee3ff6ebf37160af8"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_02.png",
+          "contentSha256": "72715a3b37f64c8eb0f40817912dfd1a087581de2d991edcb1120e80af295fda"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_03.png",
+          "contentSha256": "cc67a3ba4f639949a2d6966195fdec26c49d4b4971c9bfc08fd1274daa4a214e"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_04.png",
+          "contentSha256": "c6a5e637f84c46984c933fd201d85dfceb637dfb4741540f4346157f24847e33"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_05.png",
+          "contentSha256": "c2419639f207631f608b614588b6c6b7535b7eb29e608c795a247d05963d42c0"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_06.png",
+          "contentSha256": "9f5797ba93a368ce389c5c1fd97da216c2cbf87500bc8dcd069f0f37cf290058"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_07.png",
+          "contentSha256": "ac56133e0d4b7f9a60a94ba58f8ac741a5b85e7b8480c0bee3ff6ebf37160af8"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_08.png",
+          "contentSha256": "a0cf1c1a05df2946702ec75f67f5a5a89ba2e1f678b4dde8178d3c5aa19c31db"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_09.png",
+          "contentSha256": "cc67a3ba4f639949a2d6966195fdec26c49d4b4971c9bfc08fd1274daa4a214e"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_10.png",
+          "contentSha256": "b4b92f61e445fc1ebc4893303a7f6716e1537c6995fbccdaa5e4aea003ec2899"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_stand_11.png",
+          "contentSha256": "7c7da216283f306421947444644c0b1395ef8db1561067f169ae43db03e43489"
+        }
+      ]
+    },
+    {
+      "name": "fungus_big",
+      "entityPath": "data/entities/animals/fungus_big.xml",
+      "entitySha256": "dfbb89f1b48e134260d96cb034819eac34e32bee074cc06fe3fb6eb682d93d6f",
+      "spritePath": "data/enemies_gfx/fungus_big.xml",
+      "spriteSha256": "4fc400f905dfbaae1b659aad94bb462096f3fb9a381e0106a6fd25d202b60b67",
+      "sourcePath": "data/enemies_gfx/fungus_big.png",
+      "sourceSha256": "7ae5ecdaf2b94298f3189d3aa2e1ec15addbf3012a97e61736c8c315f0c4fe57",
+      "frameWidth": 34,
+      "frameHeight": 34,
+      "frameWait": 0.18,
+      "frames": [
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_00.png",
+          "contentSha256": "75b0be568ff6ddd1965da3e89c7ac9698e7e51a02ed126d3ad87d027b1fc0d48"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_01.png",
+          "contentSha256": "6e314432a565451e3b8ae1bf33d599f15dbdd4d00cbe571f658d40300968ff63"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_02.png",
+          "contentSha256": "29e5bff38573a597cbbd77d60bd794405adf84eb3ae59ca85b531464398652e1"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_03.png",
+          "contentSha256": "d1fa0452b88c6af079924fa01985ad8e35ff3946cfb318590aba424d3e8779f9"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_04.png",
+          "contentSha256": "2152f8c0aa10b66518887be47d47e6915128d6074d1c667ee8a8289d12f82586"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_05.png",
+          "contentSha256": "dc11f328bc2d74905d1f71294aac48aa9ac2ce3bdbd3df612c2b3c81f80b102b"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_06.png",
+          "contentSha256": "5cc2f0ec8784d1f219e27c2dc79f72cde405cb58bf30d95e1f2d35e2b3abc2a2"
+        },
+        {
+          "contentPath": "sprites/noita/marker-enemies/fungus_big_stand_07.png",
+          "contentSha256": "630c5e13359986a7484a26d8b3c1f53244d68fc575683ac414f18c8768e71f23"
+        }
+      ]
+    }
+  ]
+}
