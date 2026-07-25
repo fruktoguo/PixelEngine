@@ -15,6 +15,34 @@ namespace PixelEngine.Physics.Tests;
 public sealed class PhysicsSystemFacadeTests
 {
     /// <summary>
+    /// 验证精确 mask 创建只拥有 occupied pixels，不吞并同一包围盒内的其他 world cells。
+    /// </summary>
+    [Fact]
+    public void CreateBodyFromMaskPreservesUnselectedCellsInsideBounds()
+    {
+        Chunk chunk = new(new ChunkCoord(0, 0));
+        CellGrid grid = new(new TestChunkSource(chunk), MaterialPropsTable.Empty);
+        using JobSystem jobs = new(workerCount: 1);
+        B2WorldDef worldDef = Box2D.b2DefaultWorldDef();
+        worldDef.Gravity = default;
+        using PhysicsSystem system = PhysicsSystem.Initialize(grid, jobs, worldDef: worldDef);
+        byte[] mask = new byte[10 * 10];
+        for (int row = 0; row < 10; row++)
+        {
+            mask.AsSpan(row * 10, 6).Fill(1);
+        }
+        grid.MaterialAt(16, 8) = 3;
+
+        int body = system.CreateBodyFromMask(8, 8, 10, 10, mask, material: 2);
+
+        Assert.True(system.TryGetBodyTransform(body, out _));
+        Assert.Equal((ushort)3, grid.MaterialAt(16, 8));
+        Assert.False(CellFlags.Has(grid.FlagsAt(16, 8), CellFlags.RigidOwned));
+        Assert.Equal((ushort)2, grid.MaterialAt(8, 8));
+        Assert.True(CellFlags.Has(grid.FlagsAt(8, 8), CellFlags.RigidOwned));
+    }
+
+    /// <summary>
     /// 验证双刚体 revolute joint 使用世界像素锚点创建，并可显式销毁和复用句柄槽。
     /// </summary>
     [Fact]

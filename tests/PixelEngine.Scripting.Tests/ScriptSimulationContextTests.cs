@@ -735,6 +735,29 @@ public sealed class ScriptSimulationContextTests
     }
 
     /// <summary>
+    /// 验证脚本精确 mask 在 Physics flush 后创建真实刚体且不依赖预先写入 world cells。
+    /// </summary>
+    [Fact]
+    public void BodyFacadeCreatesExactMaskThroughPhysics()
+    {
+        using Fixture fixture = Fixture.Create(withPhysics: true);
+        byte[] mask = new byte[10 * 10];
+        for (int row = 0; row < 10; row++)
+        {
+            mask.AsSpan(row * 10, 6).Fill(1);
+        }
+        MaterialId material = fixture.Context.Materials.Resolve("stone");
+
+        BodyHandle handle = fixture.Context.Bodies.CreateFromMask(8, 8, 10, 10, mask, material);
+
+        Assert.False(fixture.Context.Bodies.TryGetTransform(handle, out _));
+        Assert.Equal(1, fixture.Context.FlushPhysicsCommands());
+        Assert.True(fixture.Context.Bodies.TryGetTransform(handle, out _));
+        Assert.True(CellFlags.Has(fixture.Grid.FlagsAt(8, 8), CellFlags.RigidOwned));
+        Assert.False(CellFlags.Has(fixture.Grid.FlagsAt(16, 8), CellFlags.RigidOwned));
+    }
+
+    /// <summary>
     /// 验证脚本时间 facade 从真实 FrameClock 读取固定步长、帧号与本帧 sim 决策。
     /// </summary>
     [Fact]

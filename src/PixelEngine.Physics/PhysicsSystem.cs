@@ -623,6 +623,76 @@ public sealed class PhysicsSystem : IDisposable
     }
 
     /// <summary>
+    /// 从调用方提供的精确 occupancy mask 创建动态像素刚体，不读取或清除同一包围盒内的其他 world cells。
+    /// </summary>
+    /// <param name="x">mask 左上角世界 X。</param>
+    /// <param name="y">mask 左上角世界 Y。</param>
+    /// <param name="width">mask 宽度。</param>
+    /// <param name="height">mask 高度。</param>
+    /// <param name="solidMask">逐像素 occupancy；非 0 表示属于刚体。</param>
+    /// <param name="material">全部 occupied pixels 使用的稳定运行时材质 id。</param>
+    /// <returns>新建刚体的 bodyKey。</returns>
+    public int CreateBodyFromMask(
+        int x,
+        int y,
+        int width,
+        int height,
+        ReadOnlySpan<byte> solidMask,
+        ushort material)
+    {
+        ObjectDisposedException.ThrowIf(_shutdown, this);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        if (material == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(material), "刚体 mask 材质不能是 Empty。");
+        }
+
+        int area = checked(width * height);
+        if (solidMask.Length != area)
+        {
+            throw new ArgumentException("occupancy mask 长度必须等于 width * height。", nameof(solidMask));
+        }
+
+        ushort[] materials = ArrayPool<ushort>.Shared.Rent(area);
+        try
+        {
+            Span<ushort> materialSpan = materials.AsSpan(0, area);
+            int solidCount = 0;
+            for (int i = 0; i < area; i++)
+            {
+                bool occupied = solidMask[i] != 0;
+                materialSpan[i] = occupied ? material : (ushort)0;
+                solidCount += occupied ? 1 : 0;
+            }
+
+            if (solidCount == 0)
+            {
+                throw new InvalidOperationException("occupancy mask 不包含任何实体像素。");
+            }
+
+            Vector2 localOrigin = new(width * 0.5f, height * 0.5f);
+            BodyLocalMask mask = new(width, height, localOrigin, solidMask, materialSpan);
+            if (!RigidBodyMaskShapeBuilder.TryBuildConvexPieces(mask, out ConvexPolygon[] pieces, out int pieceCount))
+            {
+                throw new InvalidOperationException("occupancy mask 无法生成有效刚体凸片。");
+            }
+
+            Vector2 position = new(x + localOrigin.X, y + localOrigin.Y);
+            B2BodyId bodyId = ShapeBuilder.BuildBody(WorldId, pieces.AsSpan(0, pieceCount), position);
+            PixelRigidBody body = PhysicsWorld.AddBody(bodyId, mask);
+            Transform2D transform = new(position, 1f, 0f);
+            _ = RigidBodyRasterizer.StampInverseSampling(body, in transform, Grid, Registry);
+            body.PreviousTransform = transform;
+            return body.BodyKey;
+        }
+        finally
+        {
+            ArrayPool<ushort>.Shared.Return(materials, clearArray: true);
+        }
+    }
+
+    /// <summary>
     /// 尝试读取刚体当前 Box2D 变换。
     /// </summary>
     /// <param name="bodyKey">刚体 bodyKey。</param>

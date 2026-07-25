@@ -302,6 +302,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.BurstParticles:
                 case ScriptCommandKind.EmitParticles:
                 case ScriptCommandKind.CreateBodyFromRegion:
+                case ScriptCommandKind.CreateBodyFromMask:
                 case ScriptCommandKind.CreateRevoluteJoint:
                 case ScriptCommandKind.CreateRevoluteJointToWorld:
                 case ScriptCommandKind.ApplyImpulse:
@@ -351,6 +352,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 case ScriptCommandKind.DamageBeam:
                 case ScriptCommandKind.AddHeat:
                 case ScriptCommandKind.CreateBodyFromRegion:
+                case ScriptCommandKind.CreateBodyFromMask:
                 case ScriptCommandKind.CreateRevoluteJoint:
                 case ScriptCommandKind.CreateRevoluteJointToWorld:
                 case ScriptCommandKind.ApplyImpulse:
@@ -388,6 +390,9 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             {
                 case ScriptCommandKind.CreateBodyFromRegion:
                     (_bodies ?? throw Unsupported(nameof(Bodies))).CreateNow(command.Body, command.X, command.Y, command.Width, command.Height);
+                    break;
+                case ScriptCommandKind.CreateBodyFromMask:
+                    (_bodies ?? throw Unsupported(nameof(Bodies))).CreateMaskNow(command.Body, command.X, command.Y, command.Width, command.Height);
                     break;
                 case ScriptCommandKind.CreateRevoluteJoint:
                     JointScriptCommand joint = command.Joint;
@@ -1034,6 +1039,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         private const int PendingBodyKey = -1;
         private const int DestroyedBodyKey = -2;
         private readonly List<int> _bodyKeys = [];
+        private readonly List<BodyMaskCreation> _bodyMasks = [];
         private readonly List<int> _jointKeys = [];
 
         public BodyHandle CreateFromRegion(int x, int y, int width, int height)
@@ -1043,7 +1049,35 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             // 脚本句柄先占位 Pending，Flush 成功后再映射到 PhysicsSystem 的 body key。
             BodyHandle handle = new(_bodyKeys.Count);
             _bodyKeys.Add(PendingBodyKey);
+            _bodyMasks.Add(default);
             commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.CreateBodyFromRegion(handle, x, y, width, height));
+            return handle;
+        }
+
+        public BodyHandle CreateFromMask(
+            int x,
+            int y,
+            int width,
+            int height,
+            ReadOnlyMemory<byte> solidMask,
+            MaterialId material)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+            if (solidMask.Length != checked(width * height))
+            {
+                throw new ArgumentException("occupancy mask 长度必须等于 width * height。", nameof(solidMask));
+            }
+
+            if (!material.IsValid)
+            {
+                throw new ArgumentException("刚体 mask 必须使用有效非 Empty 材质。", nameof(material));
+            }
+
+            BodyHandle handle = new(_bodyKeys.Count);
+            _bodyKeys.Add(PendingBodyKey);
+            _bodyMasks.Add(new BodyMaskCreation(solidMask, material));
+            commands.Enqueue(ScriptCommandTarget.Physics, ScriptCommand.CreateBodyFromMask(handle, x, y, width, height));
             return handle;
         }
 
@@ -1141,6 +1175,31 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
             }
         }
 
+        public void CreateMaskNow(BodyHandle handle, int x, int y, int width, int height)
+        {
+            ref int slot = ref GetMappedSlot(handle);
+            if (slot != PendingBodyKey)
+            {
+                throw new InvalidOperationException("刚体 mask 创建命令对应的脚本句柄已被解析或销毁。");
+            }
+
+            BodyMaskCreation creation = _bodyMasks[handle.Value];
+            try
+            {
+                slot = physics.CreateBodyFromMask(
+                    x,
+                    y,
+                    width,
+                    height,
+                    creation.Mask.Span,
+                    creation.Material.Value);
+            }
+            catch (InvalidOperationException)
+            {
+                slot = DestroyedBodyKey;
+            }
+        }
+
         public void ApplyRadialImpulseNow(int x, int y, int radius, float force)
         {
             _ = physics.ApplyRadialImpulse(x, y, radius, force);
@@ -1217,6 +1276,7 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
         public void Reset()
         {
             _bodyKeys.Clear();
+            _bodyMasks.Clear();
             _jointKeys.Clear();
         }
 
@@ -1277,6 +1337,8 @@ public sealed class ScriptSimulationContext : IScriptContext, IDisposable
                 throw new ArgumentOutOfRangeException(name, value, "参数必须是有限数值。");
             }
         }
+
+        private readonly record struct BodyMaskCreation(ReadOnlyMemory<byte> Mask, MaterialId Material);
     }
 
     private sealed class CharacterFacade(ScriptCommandQueue commands, CellGrid grid, PhysicsSystem? physics, IGameTime? time) : ICharacterController

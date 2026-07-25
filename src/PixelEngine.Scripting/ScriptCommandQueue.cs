@@ -31,6 +31,7 @@ internal enum ScriptCommandKind
     BurstParticles,
     EmitParticles,
     CreateBodyFromRegion,
+    CreateBodyFromMask,
     CreateRevoluteJoint,
     CreateRevoluteJointToWorld,
     ApplyImpulse,
@@ -121,6 +122,11 @@ internal readonly record struct ScriptCommand(
     public static ScriptCommand CreateBodyFromRegion(BodyHandle body, int x, int y, int width, int height)
     {
         return new ScriptCommand(ScriptCommandKind.CreateBodyFromRegion, x, y, width, height, default, default, default, body, default, 0, 0, default, default);
+    }
+
+    public static ScriptCommand CreateBodyFromMask(BodyHandle body, int x, int y, int width, int height)
+    {
+        return new ScriptCommand(ScriptCommandKind.CreateBodyFromMask, x, y, width, height, default, default, default, body, default, 0, 0, default, default);
     }
 
     public static ScriptCommand CreateRevoluteJoint(

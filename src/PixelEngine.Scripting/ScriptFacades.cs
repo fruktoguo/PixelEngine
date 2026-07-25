@@ -400,6 +400,17 @@ public interface IRigidBodyApi
     /// <returns>新刚体的运行时句柄；若后端采用延迟分配，可返回待解析句柄。</returns>
     BodyHandle CreateFromRegion(int x, int y, int width, int height);
 
+    /// <summary>
+    /// 延迟从精确 occupancy mask 创建刚体；mask 必须在 Physics flush 完成前保持不变。
+    /// </summary>
+    BodyHandle CreateFromMask(
+        int x,
+        int y,
+        int width,
+        int height,
+        ReadOnlyMemory<byte> solidMask,
+        MaterialId material);
+
     /// <summary>延迟在两个刚体之间创建 revolute joint；锚点为世界像素坐标。</summary>
     JointHandle CreateRevoluteJoint(
         BodyHandle bodyA,
