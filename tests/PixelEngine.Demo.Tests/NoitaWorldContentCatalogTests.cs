@@ -289,6 +289,48 @@ public sealed class NoitaWorldContentCatalogTests
                 asset.GetProperty("sourceEncoding").GetString() == "plz");
     }
 
+    /// <summary>
+    /// biome Lua 中实际传给 load_random_pixel_scene 的权重表必须在构建前完整转成独立 JSON，
+    /// 运行时不得读取 Lua 或本机 Noita 目录。
+    /// </summary>
+    [Fact]
+    public void RandomPixelSceneSourceTablesAreCompiledWithAssetProvenance()
+    {
+        using JsonDocument document = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(ContentRoot(), "noita-random-pixel-scenes.json")));
+        JsonElement root = document.RootElement;
+        Assert.Equal("pixelengine.noita-random-pixel-scenes/v1", root.GetProperty("schema").GetString());
+        Assert.Equal("17130612", root.GetProperty("reference").GetProperty("steamBuildId").GetString());
+
+        JsonElement statistics = root.GetProperty("statistics");
+        Assert.Equal(87, statistics.GetProperty("catalogs").GetInt32());
+        Assert.Equal(319, statistics.GetProperty("entries").GetInt32());
+        Assert.Equal(19, statistics.GetProperty("sourceScripts").GetInt32());
+        Assert.Equal(18, statistics.GetProperty("boundBiomes").GetInt32());
+        Assert.Equal(195, statistics.GetProperty("materialAssets").GetInt32());
+        Assert.Equal(117, statistics.GetProperty("visualAssets").GetInt32());
+        Assert.Equal(66, statistics.GetProperty("backgroundAssets").GetInt32());
+
+        JsonElement[] catalogs = [.. root.GetProperty("catalogs").EnumerateArray()];
+        JsonElement coalmine = catalogs.Single(static catalog =>
+            catalog.GetProperty("biomeId").GetString() == "coalmine" &&
+            catalog.GetProperty("table").GetString() == "g_pixel_scene_01");
+        Assert.Contains(
+            coalmine.GetProperty("functions").EnumerateArray(),
+            static function => function.GetString() == "load_pixel_scene");
+        Assert.Equal(6, coalmine.GetProperty("entries").GetArrayLength());
+
+        JsonElement vault = catalogs.Single(static catalog =>
+            catalog.GetProperty("biomeId").GetString() == "vault" &&
+            catalog.GetProperty("table").GetString() == "g_pixel_scene_02");
+        JsonElement lab = vault.GetProperty("entries").EnumerateArray().First();
+        Assert.Equal("lab_liquids", lab.GetProperty("colorMaterialTable").GetString());
+        Assert.Equal(
+            "data/biome_impl/vault/lab.png",
+            lab.GetProperty("material").GetProperty("path").GetString());
+        Assert.Equal(64, lab.GetProperty("material").GetProperty("sha256").GetString()!.Length);
+    }
+
     private static string ContentRoot()
     {
         return Path.GetFullPath(
