@@ -123,6 +123,31 @@ public sealed class NoitaWorldContentCatalogTests
     }
 
     /// <summary>
+    /// 运行时强类型目录必须逐 biome 保留全部 MaterialComponent 层，不读取参考 XML/Lua。
+    /// </summary>
+    [Fact]
+    public void EveryBiomeMaterialLayerIsCompiledIntoRuntimeCatalog()
+    {
+        using JsonDocument world = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(ContentRoot(), "noita-world-content.json")));
+        NoitaBiomeMaterialProfile[] profiles = NoitaBiomeMaterialCatalog.Profiles.ToArray();
+        Assert.Equal(146, profiles.Length);
+        Assert.Equal(640, profiles.Sum(static profile => profile.Layers.Length));
+        Assert.Equal(146, profiles.Select(static profile => profile.SourcePath).Distinct(StringComparer.Ordinal).Count());
+
+        foreach (JsonElement biome in world.RootElement.GetProperty("biomes").EnumerateArray())
+        {
+            string sourcePath = biome.GetProperty("sourcePath").GetString()!;
+            Assert.True(NoitaBiomeMaterialCatalog.TryFindBySourcePath(sourcePath, out NoitaBiomeMaterialProfile profile));
+            Assert.Equal(biome.GetProperty("id").GetString(), profile.Id);
+            Assert.Equal(
+                biome.GetProperty("materialLayers").EnumerateArray()
+                    .Select(static layer => layer.GetProperty("material_name").GetString()),
+                profile.Layers.Select(static layer => layer.MaterialName));
+        }
+    }
+
+    /// <summary>
     /// 所有参考 Lua 注册必须在构建前转换为纯 C# rule；运行时不得依赖 Lua fallback。
     /// </summary>
     [Fact]

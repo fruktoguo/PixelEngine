@@ -1184,7 +1184,8 @@ public sealed class PlayableCavernWorldGenerator :
                     palette.PackedDirt,
                     palette.Stone,
                     palette.PackedGravel,
-                    in palette),
+                    in palette,
+                    in row),
                 CompiledTopologyCellKind.SurfaceDesert => SelectReferenceCaveMaterial(
                     worldX,
                     worldY,
@@ -1192,7 +1193,8 @@ public sealed class PlayableCavernWorldGenerator :
                     palette.PackedSand,
                     palette.Stone,
                     palette.PackedGravel,
-                    in palette),
+                    in palette,
+                    in row),
                 CompiledTopologyCellKind.SurfaceWinter => SelectReferenceCaveMaterial(
                     worldX,
                     worldY,
@@ -1200,12 +1202,14 @@ public sealed class PlayableCavernWorldGenerator :
                     palette.Ice,
                     palette.Stone,
                     palette.PackedGravel,
-                    in palette),
+                    in palette,
+                    in row),
                 CompiledTopologyCellKind.Mountain => SelectMountainMaterial(
                     worldX,
                     topologyDepthCells,
                     state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                    in palette),
+                    in palette,
+                    in row),
                 CompiledTopologyCellKind.GenericCave => SelectReferenceCaveMaterial(
                     worldX,
                     worldY,
@@ -1213,7 +1217,8 @@ public sealed class PlayableCavernWorldGenerator :
                     palette.Stone,
                     palette.PackedGravel,
                     palette.Crystal,
-                    in palette),
+                    in palette,
+                    in row),
                 CompiledTopologyCellKind.GenericStructure => SelectReferenceStructureMaterial(
                     worldX,
                     worldY,
@@ -1257,7 +1262,8 @@ public sealed class PlayableCavernWorldGenerator :
         ushort primary,
         ushort secondary,
         ushort accent,
-        in TerrainMaterialPalette palette)
+        in TerrainMaterialPalette palette,
+        in TerrainRowContext row)
     {
         double chambers = Fractal2D(
             worldX * 0.0075,
@@ -1279,11 +1285,18 @@ public sealed class PlayableCavernWorldGenerator :
             worldY * 0.021,
             biome.Salt ^ 0x57A7_AUL,
             2);
-        return strata > 0.52
+        ushort fallbackMaterial = strata > 0.52
             ? accent
             : strata < -0.44
                 ? secondary
                 : primary;
+        if (biome.WangMaterialLayers.Length == 0)
+        {
+            return fallbackMaterial;
+        }
+
+        byte density = (byte)Math.Clamp((int)Math.Round(((strata * 0.5) + 0.5) * byte.MaxValue), 0, byte.MaxValue);
+        return SelectWangMaterialLayer(worldX, worldY, density, biome, in row, fallbackMaterial);
     }
 
     private static ushort SelectReferenceStructureMaterial(
@@ -1314,7 +1327,8 @@ public sealed class PlayableCavernWorldGenerator :
         long worldX,
         long depthCells,
         in CompiledReferenceBiome biome,
-        in TerrainMaterialPalette palette)
+        in TerrainMaterialPalette palette,
+        in TerrainRowContext row)
     {
         int localX = FloorRemainder(worldX, 512);
         int localY = FloorRemainder(depthCells, 512);
@@ -1394,7 +1408,8 @@ public sealed class PlayableCavernWorldGenerator :
                     palette.PackedDirt,
                     palette.Stone,
                     palette.PackedGravel,
-                    in palette);
+                    in palette,
+                    in row);
             default:
                 throw new InvalidOperationException($"未知的参考山体类型：{biome.Mountain}。");
         }
@@ -1695,10 +1710,9 @@ public sealed class PlayableCavernWorldGenerator :
                 worldX,
                 worldY,
                 density,
-                protectedSpawn,
-                biome,
                 referenceBiome,
-                in row),
+                in row,
+                SelectBiomeSolidMaterial(worldX, worldY, protectedSpawn, biome, in row)),
             (byte)NoitaWangTerrainSemantic.RandomMaterial => SelectRandomWangMaterial(
                 worldX,
                 worldY,
@@ -1735,10 +1749,9 @@ public sealed class PlayableCavernWorldGenerator :
         long worldX,
         long worldY,
         byte density,
-        bool protectedSpawn,
-        CompiledBiome biome,
         in CompiledReferenceBiome referenceBiome,
-        in TerrainRowContext row)
+        in TerrainRowContext row,
+        ushort fallbackMaterial)
     {
         CompiledWangMaterialLayer[] layers = referenceBiome.WangMaterialLayers;
         float primaryField = density * (1.0f / byte.MaxValue);
@@ -1779,7 +1792,7 @@ public sealed class PlayableCavernWorldGenerator :
             }
         }
 
-        return SelectBiomeSolidMaterial(worldX, worldY, protectedSpawn, biome, in row);
+        return fallbackMaterial;
     }
 
     private static float IndexedWangMaterialField(
@@ -2601,10 +2614,14 @@ public sealed class PlayableCavernWorldGenerator :
         {
             ReferenceBiomeDefinition source = sources[i];
             _ = wangTerrain.TryFindDefinitionForReferenceBiome(source.Id, out NoitaWangTerrainSetDefinition terrainSet);
+            _ = NoitaBiomeMaterialCatalog.TryFindBySourcePath(
+                source.ReferencePath,
+                out NoitaBiomeMaterialProfile materialProfile);
             ushort[] wangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: false);
             ushort[] protectedWangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: true);
             ushort[] randomWangMaterials = CompileRandomWangMaterials(materials, terrainSet);
-            CompiledWangMaterialLayer[] wangMaterialLayers = CompileWangMaterialLayers(materials, terrainSet);
+            NoitaWangMaterialLayerDefinition[] materialLayers = terrainSet?.MaterialLayers ?? materialProfile.Layers ?? [];
+            CompiledWangMaterialLayer[] wangMaterialLayers = CompileWangMaterialLayers(materials, materialLayers);
             referenceBiomes[i] = new CompiledReferenceBiome(
                 source.Id,
                 StableIdSalt(source.Id),
@@ -2732,14 +2749,13 @@ public sealed class PlayableCavernWorldGenerator :
 
     private static CompiledWangMaterialLayer[] CompileWangMaterialLayers(
         IMaterialQuery materials,
-        NoitaWangTerrainSetDefinition? terrainSet)
+        NoitaWangMaterialLayerDefinition[] layers)
     {
-        if (terrainSet is null)
+        if (layers.Length == 0)
         {
             return [];
         }
 
-        NoitaWangMaterialLayerDefinition[] layers = terrainSet.MaterialLayers;
         CompiledWangMaterialLayer[] result = new CompiledWangMaterialLayer[layers.Length];
         for (int i = 0; i < layers.Length; i++)
         {
