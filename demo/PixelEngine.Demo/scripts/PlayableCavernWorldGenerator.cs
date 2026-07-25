@@ -1163,7 +1163,12 @@ public sealed class PlayableCavernWorldGenerator :
                     state.SideBiomes[topologyCell.BiomeIndex],
                     state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                     in row),
-                CompiledTopologyCellKind.Solid => palette.BoundaryStone,
+                CompiledTopologyCellKind.Solid => SelectReferenceSolidMaterial(
+                    worldX,
+                    worldY,
+                    referenceBiome,
+                    palette.BoundaryStone,
+                    in row),
                 CompiledTopologyCellKind.Lava => palette.Lava,
                 CompiledTopologyCellKind.HolyMountain => SelectHolyMountainReferenceMaterial(
                     worldX,
@@ -1171,7 +1176,12 @@ public sealed class PlayableCavernWorldGenerator :
                     state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
                     in palette),
                 CompiledTopologyCellKind.Empty => palette.Empty,
-                CompiledTopologyCellKind.Water => palette.Water,
+                CompiledTopologyCellKind.Water => SelectReferenceSolidMaterial(
+                    worldX,
+                    worldY,
+                    referenceBiome,
+                    palette.Water,
+                    in row),
                 CompiledTopologyCellKind.Clouds => SelectCloudMaterial(
                     worldX,
                     worldY,
@@ -1224,7 +1234,8 @@ public sealed class PlayableCavernWorldGenerator :
                     worldY,
                     topologyDepthCells,
                     state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex),
-                    in palette),
+                    in palette,
+                    in row),
                 CompiledTopologyCellKind.FixedLaboratory => SelectFixedLaboratoryMaterial(
                     worldX,
                     topologyDepthCells,
@@ -1304,7 +1315,8 @@ public sealed class PlayableCavernWorldGenerator :
         long worldY,
         long depthCells,
         in CompiledReferenceBiome biome,
-        in TerrainMaterialPalette palette)
+        in TerrainMaterialPalette palette,
+        in TerrainRowContext row)
     {
         int localX = FloorRemainder(worldX, 64);
         int localY = FloorRemainder(depthCells, 64);
@@ -1320,7 +1332,29 @@ public sealed class PlayableCavernWorldGenerator :
             return debris > 0.94 ? palette.Crystal : palette.Empty;
         }
 
-        return (localX < 4 || localY < 4) ? palette.BoundaryStone : palette.Stone;
+        ushort fallbackMaterial = localX < 4 || localY < 4 ? palette.BoundaryStone : palette.Stone;
+        return SelectReferenceSolidMaterial(worldX, worldY, biome, fallbackMaterial, in row);
+    }
+
+    private static ushort SelectReferenceSolidMaterial(
+        long worldX,
+        long worldY,
+        in CompiledReferenceBiome biome,
+        ushort fallbackMaterial,
+        in TerrainRowContext row)
+    {
+        if (biome.WangMaterialLayers.Length == 0)
+        {
+            return fallbackMaterial;
+        }
+
+        float field = NormalizedFractal2D(
+            worldX * 0.008,
+            worldY * 0.008,
+            row.WorldSeed ^ biome.Salt ^ 0x4D41_5445_5249_414CUL,
+            4);
+        byte density = (byte)Math.Clamp((int)Math.Round(field * byte.MaxValue), 0, byte.MaxValue);
+        return SelectWangMaterialLayer(worldX, worldY, density, biome, in row, fallbackMaterial);
     }
 
     private static ushort SelectMountainMaterial(

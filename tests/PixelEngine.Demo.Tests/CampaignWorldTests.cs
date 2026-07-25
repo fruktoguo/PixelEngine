@@ -1175,6 +1175,28 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
+    /// 无 Wang 的 solid 与 water reference biome 也必须消费各自 MaterialComponent，
+    /// 不能退回整宏格单一边界石或水。
+    /// </summary>
+    [Fact]
+    public void NonWangReferenceBiomesProduceTheirMaterialComponentLayers()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, biomes, campaign.InitialRunSeed);
+
+        Dictionary<ushort, int> solid = SampleReferenceMacro(probe, campaign, biomes, "solid-wall");
+        Assert.True(solid.GetValueOrDefault(ResolveRequired(materials, "rock_hard")) > 0);
+
+        Dictionary<ushort, int> lake = SampleReferenceMacro(probe, campaign, biomes, "lake");
+        Assert.True(lake.GetValueOrDefault(ResolveRequired(materials, "water")) > 0);
+        Assert.True(
+            lake.GetValueOrDefault(ResolveRequired(materials, "mud")) > 0 ||
+            lake.GetValueOrDefault(ResolveRequired(materials, "sand_static")) > 0);
+    }
+
+    /// <summary>
     /// 验证 Wang tile 中从 Noita Lua / 内建颜色导出的 marker 不再只被当作空地丢弃，
     /// 而是能稳定暴露为后续实体、道具、背景 pixel-scene 加载使用的世界锚点。
     /// </summary>
@@ -1714,6 +1736,46 @@ public sealed class CampaignWorldTests
             config,
             biomes);
         return new ChunkSample(materialCells, temperatureCells);
+    }
+
+    private static Dictionary<ushort, int> SampleReferenceMacro(
+        TerrainProbe probe,
+        CampaignConfig campaign,
+        BiomeCatalog biomes,
+        string referenceBiomeId)
+    {
+        WorldTopologyDefinition topology = biomes.WorldTopology;
+        int referenceIndex = Array.FindIndex(
+            topology.ReferenceBiomes,
+            biome => string.Equals(biome.Id, referenceBiomeId, StringComparison.Ordinal));
+        Assert.True(referenceIndex >= 0, referenceBiomeId);
+
+        for (int mapY = 0; mapY < topology.Height; mapY++)
+        {
+            for (int mapX = 0; mapX < topology.Width; mapX++)
+            {
+                if (BiomeCatalog.DecodeReferenceBiomeIndex(topology.MacroRows[mapY], mapX) != referenceIndex)
+                {
+                    continue;
+                }
+
+                long originX = (long)(mapX - topology.OriginMacroX) * topology.MacroCellSize;
+                long originY = campaign.SurfaceY + ((long)(mapY - topology.OriginMacroY) * topology.MacroCellSize);
+                Dictionary<ushort, int> counts = [];
+                for (long y = originY + 128; y < originY + 384; y += 2)
+                {
+                    for (long x = originX + 128; x < originX + 384; x += 2)
+                    {
+                        ushort material = probe.MaterialAt(x, y);
+                        counts[material] = counts.GetValueOrDefault(material) + 1;
+                    }
+                }
+
+                return counts;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException($"world topology 未使用 reference biome {referenceBiomeId}。");
     }
 
     private static void AssertFixedLaboratoryTopology(
