@@ -63,14 +63,6 @@ internal sealed class NoitaBitmapCavesDefinition
 /// </summary>
 internal sealed class NoitaBitmapCaveStructureDefinition
 {
-    public string SourceImagePath { get; init; } = string.Empty;
-
-    public string SourceImageSha256 { get; init; } = string.Empty;
-
-    public int SourceWidth { get; init; }
-
-    public int SourceHeight { get; init; }
-
     public int AabbMinX { get; init; }
 
     public int AabbMaxX { get; init; }
@@ -86,6 +78,19 @@ internal sealed class NoitaBitmapCaveStructureDefinition
     public double StrengthMin { get; init; }
 
     public double StrengthMax { get; init; }
+
+    public NoitaBitmapCaveStructureVariantDefinition[] Variants { get; init; } = [];
+}
+
+internal sealed class NoitaBitmapCaveStructureVariantDefinition
+{
+    public string SourceImagePath { get; init; } = string.Empty;
+
+    public string SourceImageSha256 { get; init; } = string.Empty;
+
+    public int SourceWidth { get; init; }
+
+    public int SourceHeight { get; init; }
 
     public string Encoding { get; init; } = string.Empty;
 
@@ -111,7 +116,7 @@ internal sealed class DecodedNoitaBitmapCaves
     private const ulong BoundarySalt = 0x1D8E_4E27_C47D_124FUL;
     private const ulong StructureSalt = 0xEB44_ACCAB4_55D165UL;
     private const int CachedBlocksPerThread = 16;
-    private const int MaximumFeaturesPerBlock = 256;
+    private const int MaximumFeaturesPerBlock = 640;
     private const int MaximumBlockWidth = 516;
     private const int MaximumBlockHeight = 256;
     private const int MaximumBlockCells = MaximumBlockWidth * MaximumBlockHeight;
@@ -177,7 +182,7 @@ internal sealed class DecodedNoitaBitmapCaves
 
         NoitaBitmapCaveStructureDefinition[] structures = definition.Structures ??
             throw Invalid($"{label}.structures 不能为空。");
-        Require(structures.Length <= 16, $"{label}.structures 最多包含 16 项。");
+        Require(structures.Length <= 16, $"{label}.structures 最多包含 16 个放置组。");
         DecodedNoitaBitmapCaveStructure[] decodedStructures = new DecodedNoitaBitmapCaveStructure[structures.Length];
         for (int i = 0; i < structures.Length; i++)
         {
@@ -284,14 +289,15 @@ internal sealed class DecodedNoitaBitmapCaves
                 case BitmapFeatureKind.Structure:
                     {
                         DecodedNoitaBitmapCaveStructure structure = _structures[feature.StructureIndex];
+                        DecodedNoitaBitmapCaveStructureVariant variant = structure.Variants[feature.VariantIndex];
                         int relativeX = localX - (int)feature.X0;
                         int relativeY = localY - (int)feature.Y0;
-                        int scaledWidth = structure.Width * (int)feature.Scale;
-                        int scaledHeight = structure.Height * (int)feature.Scale;
+                        int scaledWidth = variant.Width * (int)feature.Scale;
+                        int scaledHeight = variant.Height * (int)feature.Scale;
                         if ((uint)relativeX < (uint)scaledWidth && (uint)relativeY < (uint)scaledHeight)
                         {
                             int scale = (int)feature.Scale;
-                            semantic = structure.Pixels[(relativeY / scale * structure.Width) + (relativeX / scale)];
+                            semantic = variant.Pixels[(relativeY / scale * variant.Width) + (relativeX / scale)];
                             return true;
                         }
 
@@ -401,6 +407,9 @@ internal sealed class DecodedNoitaBitmapCaves
             for (int instance = 0; instance < count; instance++)
             {
                 ulong instanceSeed = structureSeed ^ ((ulong)(instance + 1) * CountSalt);
+                int variantIndex = (int)(HashCoordinates(blockX, blockY, instanceSeed, StructureSalt) %
+                    (uint)structure.Variants.Length);
+                DecodedNoitaBitmapCaveStructureVariant variant = structure.Variants[variantIndex];
                 double strength = ResolveRange(
                     structure.StrengthMin,
                     structure.StrengthMax,
@@ -408,8 +417,8 @@ internal sealed class DecodedNoitaBitmapCaves
                     blockY,
                     instanceSeed ^ StrengthSalt);
                 int scale = Math.Clamp((int)Math.Round(2.0 + (strength * 2.0)), 1, 12);
-                int width = checked(structure.Width * scale);
-                int height = checked(structure.Height * scale);
+                int width = checked(variant.Width * scale);
+                int height = checked(variant.Height * scale);
                 int maximumOriginX = Math.Max(structure.AabbMinX, structure.AabbMaxX - width);
                 int maximumOriginY = Math.Max(structure.AabbMinY, structure.AabbMaxY - height);
                 int originX = ResolveCoordinate(
@@ -424,7 +433,12 @@ internal sealed class DecodedNoitaBitmapCaves
                     blockX,
                     blockY,
                     instanceSeed ^ ChildSalt);
-                AddFeature(entry, CompiledBitmapFeature.Structure(structureIndex, originX, originY, scale));
+                AddFeature(entry, CompiledBitmapFeature.Structure(
+                    structureIndex,
+                    variantIndex,
+                    originX,
+                    originY,
+                    scale));
             }
         }
 
@@ -621,7 +635,7 @@ internal sealed class DecodedNoitaBitmapCaves
                         throw new InvalidOperationException("BitmapCaves 空间索引超过固定容量。");
                     }
 
-                    entry.SpatialFeatureIndices[spatialReferenceCount++] = (byte)featureIndex;
+                    entry.SpatialFeatureIndices[spatialReferenceCount++] = (ushort)featureIndex;
                     count++;
                 }
 
@@ -653,9 +667,10 @@ internal sealed class DecodedNoitaBitmapCaves
         {
             case BitmapFeatureKind.Structure:
                 {
-                    DecodedNoitaBitmapCaveStructure structure = _structures[feature.StructureIndex];
-                    double structureMaximumX = feature.X0 + (structure.Width * feature.Scale);
-                    double structureMaximumY = feature.Y0 + (structure.Height * feature.Scale);
+                    DecodedNoitaBitmapCaveStructureVariant variant =
+                        _structures[feature.StructureIndex].Variants[feature.VariantIndex];
+                    double structureMaximumX = feature.X0 + (variant.Width * feature.Scale);
+                    double structureMaximumY = feature.Y0 + (variant.Height * feature.Scale);
                     return feature.X0 < maximumX && structureMaximumX > minimumX &&
                         feature.Y0 < maximumY && structureMaximumY > minimumY;
                 }
@@ -698,38 +713,55 @@ internal sealed class DecodedNoitaBitmapCaves
         int markerCount,
         string label)
     {
-        Require(
-            definition.SourceImagePath.StartsWith("data/biome_impl/", StringComparison.Ordinal) &&
-            definition.SourceImagePath.EndsWith(".png", StringComparison.Ordinal),
-            $"{label}.sourceImagePath 必须位于 data/biome_impl/ 且为 PNG。");
-        Require(IsSha256(definition.SourceImageSha256), $"{label}.sourceImageSha256 必须为 64 位 SHA256 hex。");
-        Require(definition.SourceWidth is >= 1 and <= 1024, $"{label}.sourceWidth 必须位于 [1,1024]。");
-        Require(definition.SourceHeight is >= 1 and <= 1024, $"{label}.sourceHeight 必须位于 [1,1024]。");
         Require(definition.AabbMinX >= 0 && definition.AabbMaxX > definition.AabbMinX, $"{label}.aabb X 范围无效。");
-        Require(definition.AabbMinY >= 0 && definition.AabbMaxY > definition.AabbMinY, $"{label}.aabb Y 范围无效。");
+        Require(
+            definition.AabbMinY >= -MaximumBlockHeight && definition.AabbMaxY > definition.AabbMinY,
+            $"{label}.aabb Y 范围无效。");
         ValidateCountRange(definition.CountMin, definition.CountMax, $"{label}.count");
         ValidateRange(definition.StrengthMin, definition.StrengthMax, $"{label}.strength");
-        Require(string.Equals(definition.Encoding, "brotli-pebitmap-v1", StringComparison.Ordinal),
-            $"{label}.encoding 必须为 brotli-pebitmap-v1。");
-        int expectedLength = checked(definition.SourceWidth * definition.SourceHeight);
-        Require(definition.DecodedLength == expectedLength, $"{label}.decodedLength 与图像尺寸不一致。");
-        Require(IsSha256(definition.DecodedSha256), $"{label}.decodedSha256 必须为 64 位 SHA256 hex。");
-        byte[] pixels = DecodeBrotli(definition.Data, definition.DecodedLength, definition.DecodedSha256, label);
-        for (int i = 0; i < pixels.Length; i++)
+        NoitaBitmapCaveStructureVariantDefinition[] variants = definition.Variants ??
+            throw Invalid($"{label}.variants 不能为空。");
+        Require(variants.Length is >= 1 and <= 1_000, $"{label}.variants 必须位于 [1,1000]。");
+        DecodedNoitaBitmapCaveStructureVariant[] decodedVariants =
+            new DecodedNoitaBitmapCaveStructureVariant[variants.Length];
+        for (int variantIndex = 0; variantIndex < variants.Length; variantIndex++)
         {
-            byte value = pixels[i];
-            bool terrain = value is <= (byte)NoitaWangTerrainSemantic.Pool or
-                (byte)NoitaWangTerrainSemantic.RandomBinary;
-            bool material = value >= NoitaWangTerrainCatalog.MaterialSemanticBase &&
-                value - NoitaWangTerrainCatalog.MaterialSemanticBase < materialCount;
-            bool marker = value >= NoitaWangTerrainCatalog.MarkerSemanticBase &&
-                value - NoitaWangTerrainCatalog.MarkerSemanticBase < markerCount;
-            Require(terrain || material || marker, $"{label}.data[{i}] 含未知 semantic {value}。");
+            NoitaBitmapCaveStructureVariantDefinition variant = variants[variantIndex] ??
+                throw Invalid($"{label}.variants[{variantIndex}] 不能为空。");
+            string variantLabel = $"{label}.variants[{variantIndex}]";
+            Require(
+                variant.SourceImagePath.StartsWith("data/biome_impl/", StringComparison.Ordinal) &&
+                variant.SourceImagePath.EndsWith(".png", StringComparison.Ordinal),
+                $"{variantLabel}.sourceImagePath 必须位于 data/biome_impl/ 且为 PNG。");
+            Require(IsSha256(variant.SourceImageSha256), $"{variantLabel}.sourceImageSha256 必须为 64 位 SHA256 hex。");
+            Require(variant.SourceWidth is >= 1 and <= 1024, $"{variantLabel}.sourceWidth 必须位于 [1,1024]。");
+            Require(variant.SourceHeight is >= 1 and <= 1024, $"{variantLabel}.sourceHeight 必须位于 [1,1024]。");
+            Require(string.Equals(variant.Encoding, "brotli-pebitmap-v1", StringComparison.Ordinal),
+                $"{variantLabel}.encoding 必须为 brotli-pebitmap-v1。");
+            int expectedLength = checked(variant.SourceWidth * variant.SourceHeight);
+            Require(variant.DecodedLength == expectedLength, $"{variantLabel}.decodedLength 与图像尺寸不一致。");
+            Require(IsSha256(variant.DecodedSha256), $"{variantLabel}.decodedSha256 必须为 64 位 SHA256 hex。");
+            byte[] pixels = DecodeBrotli(variant.Data, variant.DecodedLength, variant.DecodedSha256, variantLabel);
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                byte value = pixels[i];
+                bool terrain = value is <= (byte)NoitaWangTerrainSemantic.Pool or
+                    (byte)NoitaWangTerrainSemantic.RandomMaterial or
+                    (byte)NoitaWangTerrainSemantic.RandomBinary;
+                bool material = value >= NoitaWangTerrainCatalog.MaterialSemanticBase &&
+                    value - NoitaWangTerrainCatalog.MaterialSemanticBase < materialCount;
+                bool marker = value >= NoitaWangTerrainCatalog.MarkerSemanticBase &&
+                    value - NoitaWangTerrainCatalog.MarkerSemanticBase < markerCount;
+                Require(terrain || material || marker, $"{variantLabel}.data[{i}] 含未知 semantic {value}。");
+            }
+
+            decodedVariants[variantIndex] = new DecodedNoitaBitmapCaveStructureVariant(
+                variant.SourceWidth,
+                variant.SourceHeight,
+                pixels);
         }
 
         return new DecodedNoitaBitmapCaveStructure(
-            definition.SourceWidth,
-            definition.SourceHeight,
             definition.AabbMinX,
             definition.AabbMaxX,
             definition.AabbMinY,
@@ -738,7 +770,7 @@ internal sealed class DecodedNoitaBitmapCaves
             definition.CountMax,
             definition.StrengthMin,
             definition.StrengthMax,
-            pixels);
+            decodedVariants);
     }
 
     private void ResolvePath(
@@ -920,8 +952,8 @@ internal sealed class DecodedNoitaBitmapCaves
 
     private static void ValidateCountRange(int minimum, int maximum, string label)
     {
-        Require(minimum is >= 0 and <= 32, $"{label}Min 必须位于 [0,32]。");
-        Require(maximum >= minimum && maximum <= 32, $"{label}Max 必须位于 [{minimum},32]。");
+        Require(minimum is >= 0 and <= 128, $"{label}Min 必须位于 [0,128]。");
+        Require(maximum >= minimum && maximum <= 128, $"{label}Max 必须位于 [{minimum},128]。");
     }
 
     private static void ValidateRange(double minimum, double maximum, string label)
@@ -998,7 +1030,7 @@ internal sealed class DecodedNoitaBitmapCaves
 
         internal ushort[] SpatialCounts { get; } = new ushort[MaximumSpatialBins];
 
-        internal byte[] SpatialFeatureIndices { get; } = new byte[MaximumSpatialReferences];
+        internal ushort[] SpatialFeatureIndices { get; } = new ushort[MaximumSpatialReferences];
 
         internal int SpatialBinsX { get; set; }
 
@@ -1081,6 +1113,7 @@ internal sealed class DecodedNoitaBitmapCaves
     private readonly struct CompiledBitmapFeature(
         BitmapFeatureKind kind,
         int structureIndex,
+        int variantIndex,
         double x0,
         double y0,
         double x1,
@@ -1092,6 +1125,8 @@ internal sealed class DecodedNoitaBitmapCaves
         internal BitmapFeatureKind Kind { get; } = kind;
 
         internal int StructureIndex { get; } = structureIndex;
+
+        internal int VariantIndex { get; } = variantIndex;
 
         internal double X0 { get; } = x0;
 
@@ -1107,11 +1142,17 @@ internal sealed class DecodedNoitaBitmapCaves
 
         internal double Scale { get; } = scale;
 
-        internal static CompiledBitmapFeature Structure(int structureIndex, int originX, int originY, int scale)
+        internal static CompiledBitmapFeature Structure(
+            int structureIndex,
+            int variantIndex,
+            int originX,
+            int originY,
+            int scale)
         {
             return new CompiledBitmapFeature(
                 BitmapFeatureKind.Structure,
                 structureIndex,
+                variantIndex,
                 originX,
                 originY,
                 0.0,
@@ -1131,6 +1172,7 @@ internal sealed class DecodedNoitaBitmapCaves
             return new CompiledBitmapFeature(
                 BitmapFeatureKind.Capsule,
                 -1,
+                -1,
                 x0,
                 y0,
                 x1,
@@ -1149,6 +1191,7 @@ internal sealed class DecodedNoitaBitmapCaves
             return new CompiledBitmapFeature(
                 BitmapFeatureKind.Ellipse,
                 -1,
+                -1,
                 centerX,
                 centerY,
                 0.0,
@@ -1162,6 +1205,7 @@ internal sealed class DecodedNoitaBitmapCaves
         {
             return new CompiledBitmapFeature(
                 BitmapFeatureKind.Mountain,
+                -1,
                 -1,
                 centerX,
                 0.0,
@@ -1186,8 +1230,6 @@ internal sealed class DecodedNoitaBitmapCaves
 /// CaveStructure 的只读语义图与放置范围。
 /// </summary>
 internal sealed class DecodedNoitaBitmapCaveStructure(
-    int width,
-    int height,
     int aabbMinX,
     int aabbMaxX,
     int aabbMinY,
@@ -1196,11 +1238,11 @@ internal sealed class DecodedNoitaBitmapCaveStructure(
     int countMax,
     double strengthMin,
     double strengthMax,
-    byte[] pixels)
+    DecodedNoitaBitmapCaveStructureVariant[] variants)
 {
-    internal int Width { get; } = width;
+    internal int Width => Variants[0].Width;
 
-    internal int Height { get; } = height;
+    internal int Height => Variants[0].Height;
 
     internal int AabbMinX { get; } = aabbMinX;
 
@@ -1217,6 +1259,17 @@ internal sealed class DecodedNoitaBitmapCaveStructure(
     internal double StrengthMin { get; } = strengthMin;
 
     internal double StrengthMax { get; } = strengthMax;
+
+    internal byte[] Pixels => Variants[0].Pixels;
+
+    internal DecodedNoitaBitmapCaveStructureVariant[] Variants { get; } = variants;
+}
+
+internal sealed class DecodedNoitaBitmapCaveStructureVariant(int width, int height, byte[] pixels)
+{
+    internal int Width { get; } = width;
+
+    internal int Height { get; } = height;
 
     internal byte[] Pixels { get; } = pixels;
 }

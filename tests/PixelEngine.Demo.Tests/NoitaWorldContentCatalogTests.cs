@@ -119,7 +119,7 @@ public sealed class NoitaWorldContentCatalogTests
 
         Assert.Equal(46, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.Contains(name, runtimeNames));
-        Assert.Equal(118, runtimeNames.Count);
+        Assert.Equal(128, runtimeNames.Count);
     }
 
     /// <summary>

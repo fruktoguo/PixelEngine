@@ -24,7 +24,7 @@ public sealed class NoitaBitmapCavesTests
         NoitaWangTerrainCatalog catalog = LoadCatalog();
 
         Assert.Equal(
-            ["fungicave", "fungiforest", "snowcave", "snowcastle"],
+            ["fungicave", "fungiforest", "snowcave", "snowcastle", "clouds", "lake-deep", "meat", "mountain-center", "sandcave"],
             catalog.Sets
                 .Where(static set => set.BitmapCaves is null)
                 .Select(static set => set.Id));
@@ -34,7 +34,10 @@ public sealed class NoitaBitmapCavesTests
                 .Where(static set => set.BitmapCaves is not null && !set.DecodedBitmapCaves!.IsEnabled)
                 .Select(static set => set.Id));
         Assert.Equal(
-            ["coalmine", "coalmine-alt", "excavationsite", "vault", "vault-frozen", "crypt", "wandcave", "wizardcave"],
+            [
+                "coalmine", "coalmine-alt", "excavationsite", "vault", "vault-frozen", "crypt", "wandcave", "wizardcave",
+                "liquidcave", "magic-gate", "pyramid", "robobase", "the-end", "the-sky", "town-under", "winter-caves",
+            ],
             catalog.Sets
                 .Where(static set => set.DecodedBitmapCaves?.IsEnabled == true)
                 .Select(static set => set.Id));
@@ -50,15 +53,16 @@ public sealed class NoitaBitmapCavesTests
         Assert.Equal(0.2, caves.CaveStrengthMin, 8);
         Assert.Equal(1.0, caves.CaveStrengthMax, 8);
         NoitaBitmapCaveStructureDefinition structure = Assert.Single(caves.Structures);
-        Assert.Equal("data/biome_impl/coalmine/dangerroom.png", structure.SourceImagePath);
-        Assert.Equal("dd94d797e8cb3d7c2a121a0f53681a8a3ef8c0d222bdf01d53f5da5487a9401e", structure.SourceImageSha256);
-        Assert.Equal(8, structure.SourceWidth);
-        Assert.Equal(8, structure.SourceHeight);
         Assert.Equal((5, 507, 0, 230), (structure.AabbMinX, structure.AabbMaxX, structure.AabbMinY, structure.AabbMaxY));
         Assert.Equal((2, 4), (structure.CountMin, structure.CountMax));
         Assert.Equal((1.45, 1.55), (structure.StrengthMin, structure.StrengthMax));
-        Assert.Equal(64, structure.DecodedLength);
-        Assert.Equal("fb15d2dfad0c51e8798170a448f0d710f1f72dee8cbb91544804658fa9842ca4", structure.DecodedSha256);
+        NoitaBitmapCaveStructureVariantDefinition variant = Assert.Single(structure.Variants);
+        Assert.Equal("data/biome_impl/coalmine/dangerroom.png", variant.SourceImagePath);
+        Assert.Equal("dd94d797e8cb3d7c2a121a0f53681a8a3ef8c0d222bdf01d53f5da5487a9401e", variant.SourceImageSha256);
+        Assert.Equal(8, variant.SourceWidth);
+        Assert.Equal(8, variant.SourceHeight);
+        Assert.Equal(64, variant.DecodedLength);
+        Assert.Equal("fb15d2dfad0c51e8798170a448f0d710f1f72dee8cbb91544804658fa9842ca4", variant.DecodedSha256);
 
         DecodedNoitaBitmapCaveStructure decoded = Assert.Single(coalmine.DecodedBitmapCaves!.Structures.ToArray());
         Assert.Equal(64, decoded.Pixels.Length);
@@ -80,6 +84,13 @@ public sealed class NoitaBitmapCavesTests
             catalog.FindDefinitionForReferenceBiome("crypt").BitmapCaves);
         Assert.Equal(516, crypt.SizeX);
         Assert.Equal((0, 1), (crypt.BlobCavesCountMin, crypt.BlobCavesCountMax));
+
+        NoitaBitmapCavesDefinition winterCaves = Assert.IsType<NoitaBitmapCavesDefinition>(
+            catalog.FindDefinitionForReferenceBiome("winter-caves").BitmapCaves);
+        Assert.Equal(9, winterCaves.Structures.Length);
+        Assert.Equal(1_000, winterCaves.Structures[0].Variants.Length);
+        Assert.Equal(1_008, winterCaves.Structures.Sum(static structure => structure.Variants.Length));
+        Assert.Equal((5, 12), (winterCaves.Structures[0].CountMin, winterCaves.Structures[0].CountMax));
         Assert.Equal((1, 2), (crypt.CaveCountMin, crypt.CaveCountMax));
         Assert.Equal((0.2, 1.8), (crypt.CaveStrengthMin, crypt.CaveStrengthMax));
     }
@@ -99,13 +110,13 @@ public sealed class NoitaBitmapCavesTests
         Assert.Contains("caveCountMax", rangeError.Message, StringComparison.Ordinal);
 
         JsonObject badPath = ParseObject(source);
-        FirstStructure(badPath)["sourceImagePath"] = "data/weather_gfx/fake.png";
+        FirstStructureVariant(badPath)["sourceImagePath"] = "data/weather_gfx/fake.png";
         InvalidDataException pathError = Assert.Throws<InvalidDataException>(
             () => NoitaWangTerrainCatalog.Parse(badPath.ToJsonString()));
         Assert.Contains("sourceImagePath", pathError.Message, StringComparison.Ordinal);
 
         JsonObject badPayload = ParseObject(source);
-        FirstStructure(badPayload)["decodedSha256"] = new string('0', 64);
+        FirstStructureVariant(badPayload)["decodedSha256"] = new string('0', 64);
         InvalidDataException payloadError = Assert.Throws<InvalidDataException>(
             () => NoitaWangTerrainCatalog.Parse(badPayload.ToJsonString()));
         Assert.Contains("decodedSha256 与解码内容不一致", payloadError.Message, StringComparison.Ordinal);
@@ -398,6 +409,12 @@ public sealed class NoitaBitmapCavesTests
     {
         JsonArray structures = Assert.IsType<JsonArray>(FirstBitmapCaves(document)["structures"]);
         return Assert.IsType<JsonObject>(structures[0]);
+    }
+
+    private static JsonObject FirstStructureVariant(JsonObject document)
+    {
+        JsonArray variants = Assert.IsType<JsonArray>(FirstStructure(document)["variants"]);
+        return Assert.IsType<JsonObject>(variants[0]);
     }
 
     private static JsonObject ParseObject(string json)

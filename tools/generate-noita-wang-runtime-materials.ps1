@@ -120,6 +120,7 @@ function Resolve-Declaration([string] $Name) {
 $wangRequiredNames = @(
     ($wangCatalog.sets.materialMappings.material +
         $wangCatalog.sets.materialLayers.materialName +
+        $wangCatalog.sets.randomMaterialMappings.materials +
         $worldCatalog.biomes.materialLayers.material_name) |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
         Sort-Object -Unique)

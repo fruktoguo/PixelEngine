@@ -23,6 +23,7 @@ $SemanticLoose = 3
 $SemanticStructure = 4
 $SemanticHazard = 5
 $SemanticPool = 6
+$SemanticRandomMaterial = 8
 $SemanticRandomBinary = 9
 $SemanticMaterialBase = 10
 $SemanticMarkerBase = 32
@@ -42,7 +43,20 @@ $specifications = @(
     [ordered]@{ id = 'vault-frozen'; biome = 'biome/vault_frozen.xml'; wang = 'wang_tiles/vault_frozen.png'; bindings = @('vault-frozen') },
     [ordered]@{ id = 'crypt'; biome = 'biome/crypt.xml'; wang = 'wang_tiles/crypt.png'; bindings = @('crypt') },
     [ordered]@{ id = 'wandcave'; biome = 'biome/wandcave.xml'; wang = 'wang_tiles/wand.png'; bindings = @('wandcave') },
-    [ordered]@{ id = 'wizardcave'; biome = 'biome/wizardcave.xml'; wang = 'wang_tiles/wizardcave.png'; bindings = @('wizardcave', 'wizardcave-entrance') }
+    [ordered]@{ id = 'wizardcave'; biome = 'biome/wizardcave.xml'; wang = 'wang_tiles/wizardcave.png'; bindings = @('wizardcave', 'wizardcave-entrance') },
+    [ordered]@{ id = 'clouds'; biome = 'biome/clouds.xml'; wang = 'wang_tiles/clouds.png'; bindings = @('clouds') }
+    [ordered]@{ id = 'lake-deep'; biome = 'biome/lake_deep.xml'; wang = 'wang_tiles/water.png'; bindings = @('lake-deep') }
+    [ordered]@{ id = 'liquidcave'; biome = 'biome/liquidcave.xml'; wang = 'wang_tiles/liquidcave.png'; bindings = @('liquidcave') }
+    [ordered]@{ id = 'magic-gate'; biome = 'biome/magic_gate.xml'; wang = 'wang_tiles/the_end.png'; bindings = @('magic-gate') }
+    [ordered]@{ id = 'meat'; biome = 'biome/meat.xml'; wang = 'wang_tiles/meat.png'; bindings = @('meat') }
+    [ordered]@{ id = 'mountain-center'; biome = 'biome/mountain_center.xml'; wang = 'wang_tiles/coalmine.png'; bindings = @('mountain-center') }
+    [ordered]@{ id = 'pyramid'; biome = 'biome/pyramid.xml'; wang = 'wang_tiles/pyramid.png'; bindings = @('pyramid') }
+    [ordered]@{ id = 'robobase'; biome = 'biome/robobase.xml'; wang = 'wang_tiles/robobase.png'; bindings = @('robobase') }
+    [ordered]@{ id = 'sandcave'; biome = 'biome/sandcave.xml'; wang = 'wang_tiles/sandcave.png'; bindings = @('sandcave') }
+    [ordered]@{ id = 'the-end'; biome = 'biome/the_end.xml'; wang = 'wang_tiles/the_end.png'; bindings = @('the-end') }
+    [ordered]@{ id = 'the-sky'; biome = 'biome/the_sky.xml'; wang = 'wang_tiles/the_sky.png'; bindings = @('the-sky') }
+    [ordered]@{ id = 'town-under'; biome = 'biome/town_under.xml'; wang = 'wang_tiles/town_under.png'; bindings = @('town-under') }
+    [ordered]@{ id = 'winter-caves'; biome = 'biome/winter_caves.xml'; wang = 'wang_tiles/snowchasm.png'; bindings = @('winter-caves') }
 )
 
 function Get-Sha256([string] $Path) {
@@ -373,15 +387,19 @@ function Get-RandomColorInputs([xml] $BiomeXml) {
             throw 'RandomColor output_colors cannot be empty.'
         }
 
+        $binary = $true
         foreach ($output in $outputs) {
             $rgb = Format-Rgb (Convert-HexColor $output)
             if ($rgb -ne '000000' -and $rgb -ne 'ffffff') {
-                throw "Unsupported non-binary RandomColor output '$output'."
+                $binary = $false
             }
         }
 
         $input = Convert-HexColor ([string]$node.input_color)
-        $inputs[(Format-Rgb $input)] = $true
+        $inputs[(Format-Rgb $input)] = [pscustomobject]@{
+            binary = $binary
+            outputs = @($outputs)
+        }
     }
 
     return $inputs
@@ -389,6 +407,12 @@ function Get-RandomColorInputs([xml] $BiomeXml) {
 
 function Read-NoitaBiomeXml([string] $Path) {
     $source = [IO.File]::ReadAllText($Path)
+    # Noita 自带若干由连续 '-' 绘制的分隔注释；其 loader 接受，但标准 XML 禁止 comment 内出现 "--"。
+    $source = [regex]::Replace(
+        $source,
+        '(?s)<!--.*?--+>',
+        '',
+        [Text.RegularExpressions.RegexOptions]::CultureInvariant)
     try {
         return [xml]$source
     }
@@ -582,21 +606,43 @@ foreach ($specification in $specifications) {
                 throw "Biome '$($specification.id)' CaveStructure has invalid image_file '$sourceImagePath'."
             }
 
-            $sourceImageFile = Join-Path $resolvedDataRoot $sourceImagePath.Substring(5)
-            if (-not (Test-Path -LiteralPath $sourceImageFile -PathType Leaf)) {
-                throw "Biome '$($specification.id)' CaveStructure image not found: '$sourceImageFile'."
+            $expandedImagePaths = [System.Collections.Generic.List[string]]::new()
+            $rangeMatch = [regex]::Match($sourceImagePath, '\$\[(?<min>\d+)-(?<max>\d+)\]')
+            if ($rangeMatch.Success) {
+                $minimum = [int]$rangeMatch.Groups['min'].Value
+                $maximum = [int]$rangeMatch.Groups['max'].Value
+                if ($minimum -lt 0 -or $maximum -lt $minimum -or ($maximum - $minimum) -gt 4095) {
+                    throw "Biome '$($specification.id)' CaveStructure image range is invalid: '$sourceImagePath'."
+                }
+                for ($imageIndex = $minimum; $imageIndex -le $maximum; $imageIndex++) {
+                    $expandedImagePaths.Add($sourceImagePath.Replace($rangeMatch.Value, [string]$imageIndex))
+                }
+            } else {
+                $expandedImagePaths.Add($sourceImagePath)
             }
 
-            $structureImage = Read-Bitmap $sourceImageFile
-            foreach ($colorText in (Get-ImageColors $structureImage)) {
-                [void]$semanticSourceColors.Add($colorText)
+            $variants = [System.Collections.Generic.List[object]]::new()
+            foreach ($expandedImagePath in $expandedImagePaths) {
+                $sourceImageFile = Join-Path $resolvedDataRoot $expandedImagePath.Substring(5)
+                if (-not (Test-Path -LiteralPath $sourceImageFile -PathType Leaf)) {
+                    throw "Biome '$($specification.id)' CaveStructure image not found: '$sourceImageFile'."
+                }
+
+                $structureImage = Read-Bitmap $sourceImageFile
+                foreach ($colorText in (Get-ImageColors $structureImage)) {
+                    [void]$semanticSourceColors.Add($colorText)
+                }
+
+                $variants.Add([pscustomobject]@{
+                    sourceImagePath = $expandedImagePath
+                    sourceImageFile = $sourceImageFile
+                    image = $structureImage
+                })
             }
 
             $bitmapStructureSources.Add([pscustomobject]@{
                 node = $structureNode
-                sourceImagePath = $sourceImagePath
-                sourceImageFile = $sourceImageFile
-                image = $structureImage
+                variants = $variants
             })
         }
     }
@@ -665,7 +711,7 @@ foreach ($specification in $specifications) {
             return $SemanticEmpty
         }
         if ($randomInputs.ContainsKey($rgb)) {
-            return $SemanticRandomBinary
+            return $(if ($randomInputs[$rgb].binary) { $SemanticRandomBinary } else { $SemanticRandomMaterial })
         }
         if ($markerSemantics.ContainsKey($colorText)) {
             return [int]$markerSemantics[$colorText]
@@ -688,7 +734,7 @@ foreach ($specification in $specifications) {
         $r = ($Color -shr 16) -band 0xff
         $g = ($Color -shr 8) -band 0xff
         $b = $Color -band 0xff
-        if (-not $AllowGrayscaleGraphicsAlias -and $r -eq $g -and $g -eq $b) {
+        if ($r -eq $g -and $g -eq $b -and (-not $AllowGrayscaleGraphicsAlias -or $rgb -eq 'ffffff')) {
             return $SemanticPrimary
         }
 
@@ -733,22 +779,32 @@ foreach ($specification in $specifications) {
     if ($null -ne $bitmapCavesNode) {
         $bitmapStructureDefinitions = [System.Collections.Generic.List[object]]::new()
         foreach ($source in $bitmapStructureSources) {
-            $structureImage = $source.image
-            $semanticPixels = [byte[]]::new($structureImage.width * $structureImage.height)
-            for ($y = 0; $y -lt $structureImage.height; $y++) {
-                for ($x = 0; $x -lt $structureImage.width; $x++) {
-                    $semanticPixels[($y * $structureImage.width) + $x] =
-                        [byte](Resolve-Semantic (Get-PixelArgb $structureImage $x $y) $true)
+            $variantDefinitions = [System.Collections.Generic.List[object]]::new()
+            foreach ($variant in $source.variants) {
+                $structureImage = $variant.image
+                $semanticPixels = [byte[]]::new($structureImage.width * $structureImage.height)
+                for ($y = 0; $y -lt $structureImage.height; $y++) {
+                    for ($x = 0; $x -lt $structureImage.width; $x++) {
+                        $semanticPixels[($y * $structureImage.width) + $x] =
+                            [byte](Resolve-Semantic (Get-PixelArgb $structureImage $x $y) $true)
+                    }
                 }
+
+                $compressedStructure = Compress-Brotli $semanticPixels
+                $variantDefinitions.Add([ordered]@{
+                    sourceImagePath = $variant.sourceImagePath
+                    sourceImageSha256 = Get-Sha256 $variant.sourceImageFile
+                    sourceWidth = $structureImage.width
+                    sourceHeight = $structureImage.height
+                    encoding = 'brotli-pebitmap-v1'
+                    decodedLength = $semanticPixels.Length
+                    decodedSha256 = Get-ByteSha256 $semanticPixels
+                    data = [Convert]::ToBase64String($compressedStructure)
+                })
             }
 
-            $compressedStructure = Compress-Brotli $semanticPixels
             $structureNode = $source.node
             $bitmapStructureDefinitions.Add([ordered]@{
-                sourceImagePath = $source.sourceImagePath
-                sourceImageSha256 = Get-Sha256 $source.sourceImageFile
-                sourceWidth = $structureImage.width
-                sourceHeight = $structureImage.height
                 aabbMinX = Get-XmlIntAttribute $structureNode 'aabb_min_x'
                 aabbMaxX = Get-XmlIntAttribute $structureNode 'aabb_max_x'
                 aabbMinY = Get-XmlIntAttribute $structureNode 'aabb_min_y'
@@ -757,10 +813,7 @@ foreach ($specification in $specifications) {
                 countMax = Get-XmlIntAttribute $structureNode 'count_max'
                 strengthMin = Get-XmlDoubleAttribute $structureNode 'strength_min'
                 strengthMax = Get-XmlDoubleAttribute $structureNode 'strength_max'
-                encoding = 'brotli-pebitmap-v1'
-                decodedLength = $semanticPixels.Length
-                decodedSha256 = Get-ByteSha256 $semanticPixels
-                data = [Convert]::ToBase64String($compressedStructure)
+                variants = @($variantDefinitions)
             })
         }
 
@@ -856,6 +909,29 @@ foreach ($specification in $specifications) {
                     origin = $mapping.origin
                 }
             })
+    $randomMaterialMappings = @(
+        $randomInputs.GetEnumerator() |
+            Where-Object { -not $_.Value.binary } |
+            Sort-Object Key |
+            ForEach-Object {
+                $materials = @(
+                    $_.Value.outputs |
+                        ForEach-Object {
+                            $outputRgb = Format-Rgb (Convert-HexColor $_)
+                            $mapping = if ($wangMaterialAliases.ContainsKey($outputRgb)) {
+                                $wangMaterialAliases[$outputRgb]
+                            } elseif ($graphicsMaterialAliases.ContainsKey($outputRgb)) {
+                                $graphicsMaterialAliases[$outputRgb]
+                            } else {
+                                throw "RandomColor output '$_' has no material alias."
+                            }
+                            $mapping.material
+                        })
+                [ordered]@{
+                    inputColor = 'ff' + $_.Key
+                    materials = $materials
+                }
+            })
     $sets.Add([ordered]@{
         id = $specification.id
         referenceBiomeIds = @($specification.bindings)
@@ -875,7 +951,12 @@ foreach ($specification in $specifications) {
         verticalTileCount = $vertical.Count
         wangMapWidth = $wangMapWidth
         wangMapHeight = $wangMapHeight
-        randomBinaryColors = @($randomInputs.Keys | Sort-Object | ForEach-Object { 'ff' + $_ })
+        randomBinaryColors = @(
+            $randomInputs.GetEnumerator() |
+                Where-Object { $_.Value.binary } |
+                Sort-Object Key |
+                ForEach-Object { 'ff' + $_.Key })
+        randomMaterialMappings = $randomMaterialMappings
         materialMappings = $mappingDefinitions
         materialLayers = $materialLayers
         markers = @($markerDefinitions)

@@ -162,7 +162,7 @@ internal sealed class NoitaWangTerrainCatalog
 
         NoitaWangTerrainSetDefinition[] sets = Sets ??
             throw new InvalidDataException("noita-wang-terrain.json 配置无效：sets 不能为空。");
-        Require(sets.Length == 15, "sets 必须恰好包含 Noita 当前主区/侧区使用的 15 套 Wang 模板。");
+        Require(sets.Length == 28, "sets 必须恰好包含 Noita 全部带 Wang PNG 的 28 套 biome 模板。");
         HashSet<string> setIds = new(StringComparer.Ordinal);
         HashSet<string> referenceBiomeIds = new(StringComparer.Ordinal);
         for (int i = 0; i < sets.Length; i++)
@@ -172,7 +172,7 @@ internal sealed class NoitaWangTerrainCatalog
             ValidateSet(set, i, setIds, referenceBiomeIds);
         }
 
-        Require(referenceBiomeIds.Count == RequiredReferenceBiomeIds.Length, "Wang referenceBiomeIds 数量与权威绑定不一致。");
+        Require(referenceBiomeIds.Count >= RequiredReferenceBiomeIds.Length, "Wang referenceBiomeIds 数量少于主路径权威绑定。");
         for (int i = 0; i < RequiredReferenceBiomeIds.Length; i++)
         {
             Require(
@@ -239,6 +239,7 @@ internal sealed class NoitaWangTerrainCatalog
         Require(set.WangMapHeight is >= 1 and <= 4_096, $"{label}.wangMapHeight 必须位于 [1,4096]。");
 
         ValidateColors(set.RandomBinaryColors, $"{label}.randomBinaryColors");
+        ValidateRandomMaterialMappings(set.RandomMaterialMappings, $"{label}.randomMaterialMappings");
         ValidateMaterialMappings(set.MaterialMappings, $"{label}.materialMappings");
         ValidateMaterialLayers(set.MaterialLayers, $"{label}.materialLayers");
         ValidateMarkers(set.Markers, $"{label}.markers");
@@ -391,6 +392,7 @@ internal sealed class NoitaWangTerrainCatalog
             byte semantic = pixels[i];
             byte density = pixels[i + 1];
             bool terrainSemantic = semantic is <= (byte)NoitaWangTerrainSemantic.Pool or
+                (byte)NoitaWangTerrainSemantic.RandomMaterial or
                 (byte)NoitaWangTerrainSemantic.RandomBinary;
             bool materialSemantic = semantic >= MaterialSemanticBase &&
                 semantic - MaterialSemanticBase < materialCount;
@@ -474,6 +476,32 @@ internal sealed class NoitaWangTerrainCatalog
                 $"{label}[{i}].encodedSemantic 必须连续从 {MaterialSemanticBase} 开始。");
             Require(encodedSemantics.Add(mapping.EncodedSemantic), $"{label} encodedSemantic 重复：{mapping.EncodedSemantic}。");
             Require(mapping.Origin is "wang-color" or "graphics-color", $"{label}[{i}].origin 不受支持：{mapping.Origin}。");
+        }
+    }
+
+    private static void ValidateRandomMaterialMappings(
+        NoitaWangRandomMaterialMappingDefinition[] mappings,
+        string label)
+    {
+        if (mappings is null)
+        {
+            throw new InvalidDataException($"noita-wang-terrain.json 配置无效：{label} 不能为空。");
+        }
+
+        Require(mappings.Length <= 1, $"{label} 当前单字节 RandomMaterial semantic 每套最多支持一项。");
+        for (int i = 0; i < mappings.Length; i++)
+        {
+            NoitaWangRandomMaterialMappingDefinition mapping = mappings[i] ??
+                throw new InvalidDataException($"noita-wang-terrain.json 配置无效：{label}[{i}] 不能为空。");
+            Require(IsArgb(mapping.InputColor), $"{label}[{i}].inputColor 必须为 8 位 ARGB hex。");
+            Require(mapping.Materials is { Length: > 1 }, $"{label}[{i}].materials 必须至少包含两项。");
+            HashSet<string> names = new(StringComparer.Ordinal);
+            for (int materialIndex = 0; materialIndex < mapping.Materials.Length; materialIndex++)
+            {
+                string material = mapping.Materials[materialIndex];
+                RequireStableId(material, $"{label}[{i}].materials[{materialIndex}]");
+                Require(names.Add(material), $"{label}[{i}].materials 含重复材质 {material}。");
+            }
         }
     }
 
@@ -635,6 +663,8 @@ internal sealed class NoitaWangTerrainSetDefinition
 
     public string[] RandomBinaryColors { get; init; } = [];
 
+    public NoitaWangRandomMaterialMappingDefinition[] RandomMaterialMappings { get; init; } = [];
+
     public NoitaWangMaterialMappingDefinition[] MaterialMappings { get; init; } = [];
 
     public NoitaWangMaterialLayerDefinition[] MaterialLayers { get; init; } = [];
@@ -656,6 +686,13 @@ internal sealed class NoitaWangTerrainSetDefinition
 
     [JsonIgnore]
     internal DecodedNoitaBitmapCaves? DecodedBitmapCaves { get; set; }
+}
+
+internal sealed class NoitaWangRandomMaterialMappingDefinition
+{
+    public string InputColor { get; init; } = string.Empty;
+
+    public string[] Materials { get; init; } = [];
 }
 
 internal sealed class NoitaWangMaterialLayerDefinition
@@ -738,6 +775,7 @@ internal enum NoitaWangTerrainSemantic : byte
     Structure = 4,
     Hazard = 5,
     Pool = 6,
+    RandomMaterial = 8,
     RandomBinary = 9,
 }
 

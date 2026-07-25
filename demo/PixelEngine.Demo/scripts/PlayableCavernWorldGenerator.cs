@@ -1659,6 +1659,11 @@ public sealed class PlayableCavernWorldGenerator :
                 biome,
                 referenceBiome,
                 in row),
+            (byte)NoitaWangTerrainSemantic.RandomMaterial => SelectRandomWangMaterial(
+                worldX,
+                worldY,
+                row.WorldSeed,
+                referenceBiome),
             (byte)NoitaWangTerrainSemantic.Secondary => biome.Secondary,
             (byte)NoitaWangTerrainSemantic.Loose => biome.Loose,
             (byte)NoitaWangTerrainSemantic.Structure => biome.Structure,
@@ -1666,6 +1671,24 @@ public sealed class PlayableCavernWorldGenerator :
             (byte)NoitaWangTerrainSemantic.Pool => biome.Pool,
             _ => throw new InvalidOperationException($"未知 Noita Wang terrain semantic：{semantic}。"),
         };
+    }
+
+    private static ushort SelectRandomWangMaterial(
+        long worldX,
+        long worldY,
+        ulong worldSeed,
+        in CompiledReferenceBiome referenceBiome)
+    {
+        ushort[] materials = referenceBiome.RandomWangMaterials;
+        if (materials.Length == 0)
+        {
+            throw new InvalidOperationException($"参考 biome {referenceBiome.Id} 缺少 RandomMaterial 输出。");
+        }
+
+        int index = Math.Min(
+            (int)(HashUnit(worldX, worldY, worldSeed ^ referenceBiome.Salt ^ 0x5241_4E44_4D41_544CUL) * materials.Length),
+            materials.Length - 1);
+        return materials[index];
     }
 
     private static ushort SelectWangMaterialLayer(
@@ -2542,6 +2565,7 @@ public sealed class PlayableCavernWorldGenerator :
                 : null;
             ushort[] wangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: false);
             ushort[] protectedWangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: true);
+            ushort[] randomWangMaterials = CompileRandomWangMaterials(materials, terrainSet);
             CompiledWangMaterialLayer[] wangMaterialLayers = CompileWangMaterialLayers(materials, terrainSet);
             referenceBiomes[i] = new CompiledReferenceBiome(
                 source.Id,
@@ -2572,7 +2596,8 @@ public sealed class PlayableCavernWorldGenerator :
                 protectedWangMaterials,
                 terrainSet?.WangMapWidth ?? 0,
                 terrainSet?.WangMapHeight ?? 0,
-                wangMaterialLayers);
+                wangMaterialLayers,
+                randomWangMaterials);
         }
 
         for (int mapY = 0; mapY < definition.Height; mapY++)
@@ -2706,6 +2731,25 @@ public sealed class PlayableCavernWorldGenerator :
                 layer.RareUsePerlin,
                 layer.RareUsePolka,
                 StableIdSalt(layer.MaterialName) ^ ((uint)i * 0xD6E8_FEB8_6659_FD93UL));
+        }
+
+        return result;
+    }
+
+    private static ushort[] CompileRandomWangMaterials(
+        IMaterialQuery materials,
+        NoitaWangTerrainSetDefinition? terrainSet)
+    {
+        if (terrainSet?.RandomMaterialMappings is not { Length: 1 } mappings)
+        {
+            return [];
+        }
+
+        string[] names = mappings[0].Materials;
+        ushort[] result = new ushort[names.Length];
+        for (int i = 0; i < names.Length; i++)
+        {
+            result[i] = ResolveRequired(materials, names[i]);
         }
 
         return result;
@@ -3881,7 +3925,8 @@ public sealed class PlayableCavernWorldGenerator :
         ushort[] ProtectedWangMaterials,
         int WangMapWidth,
         int WangMapHeight,
-        CompiledWangMaterialLayer[] WangMaterialLayers);
+        CompiledWangMaterialLayer[] WangMaterialLayers,
+        ushort[] RandomWangMaterials);
 
     private readonly record struct CompiledWangMaterialLayer(
         ushort Material,

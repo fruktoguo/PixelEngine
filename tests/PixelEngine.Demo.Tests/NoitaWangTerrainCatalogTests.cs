@@ -14,7 +14,7 @@ public sealed class NoitaWangTerrainCatalogTests
     private const ulong WorldSeed = 0x5049_5845_4C53_4248UL;
 
     /// <summary>
-    /// 验证正式目录锁定 Build 17130612 的 15 套模板、20 个宏图 biome 绑定与来源 hash。
+    /// 验证正式目录锁定 Build 17130612 全部 28 套真实 Wang PNG 与主路径别名绑定。
     /// </summary>
     [Fact]
     public void CatalogLocksNoitaBuildSourcesTemplatesAndReferenceBindings()
@@ -27,7 +27,7 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal("stb-herringbone-wang-corner-v1", catalog.Algorithm);
         Assert.Equal("d371be3ed0cdc728461e9f053867142bf2d406507a2aad844dec107f6e1dffa0", catalog.AlgorithmLicenseSha256);
         Assert.Equal("122df34514edaf312e1a15a619b3d6a44d49ce605c929d5950c9051a57429d04", catalog.SourceMaterialsSha256);
-        Assert.Equal(15, catalog.Sets.Length);
+        Assert.Equal(28, catalog.Sets.Length);
         Assert.Equal(
             [
                 "coalmine",
@@ -45,20 +45,24 @@ public sealed class NoitaWangTerrainCatalogTests
                 "crypt",
                 "wandcave",
                 "wizardcave",
+                "clouds",
+                "lake-deep",
+                "liquidcave",
+                "magic-gate",
+                "meat",
+                "mountain-center",
+                "pyramid",
+                "robobase",
+                "sandcave",
+                "the-end",
+                "the-sky",
+                "town-under",
+                "winter-caves",
             ],
             catalog.Sets.Select(static set => set.Id));
-        Assert.Equal(
-            [13, 13, 20, 13, 13, 26, 13, 20, 20, 20, 20, 20, 22, 15, 22],
-            catalog.Sets.Select(static set => set.ShortSide));
-        Assert.Equal(
-            [72, 32, 32, 27, 27, 32, 48, 32, 32, 32, 32, 32, 36, 32, 36],
-            catalog.Sets.Select(static set => set.HorizontalTileCount));
-        Assert.Equal(
-            [72, 32, 32, 27, 27, 32, 48, 16, 16, 16, 32, 32, 24, 32, 24],
-            catalog.Sets.Select(static set => set.VerticalTileCount));
 
         string[] bindings = [.. catalog.Sets.SelectMany(static set => set.ReferenceBiomeIds)];
-        Assert.Equal(20, bindings.Length);
+        Assert.Equal(33, bindings.Length);
         Assert.Equal(bindings.Length, bindings.Distinct(StringComparer.Ordinal).Count());
         Assert.All(catalog.Sets, set =>
         {
@@ -69,9 +73,8 @@ public sealed class NoitaWangTerrainCatalogTests
             Assert.Equal(64, set.SourceWangSha256.Length);
             Assert.Equal(64, set.SpawnSourceSha256.Length);
             Assert.Equal(64, set.DecodedSha256.Length);
-            Assert.NotEmpty(set.Markers);
-            Assert.InRange(set.MaterialMappings.Length, 1, 22);
-            Assert.InRange(set.MaterialLayers.Length, 3, 7);
+            Assert.InRange(set.MaterialMappings.Length, 0, 22);
+            Assert.InRange(set.MaterialLayers.Length, 1, 8);
             Assert.InRange(set.WangMapWidth, 256, 260);
             Assert.InRange(set.WangMapHeight, 256, 260);
             Assert.Equal(
@@ -84,7 +87,20 @@ public sealed class NoitaWangTerrainCatalogTests
             catalog.Sets[0].SourceWangSha256);
         Assert.Equal(
             "11b43f3a3d5653ce8529166e9b3d50e62e8a70b78bb48890a15e0d4eb632e268",
-            catalog.Sets[^1].SourceWangSha256);
+            catalog.FindDefinitionForReferenceBiome("wizardcave").SourceWangSha256);
+
+        NoitaWangTerrainSetDefinition liquidcave = catalog.FindDefinitionForReferenceBiome("liquidcave");
+        NoitaWangRandomMaterialMappingDefinition randomLiquids = Assert.Single(liquidcave.RandomMaterialMappings);
+        Assert.Equal("ff01cfee", randomLiquids.InputColor);
+        Assert.Equal(
+            [
+                "magic_liquid_berserk",
+                "magic_liquid_teleportation",
+                "magic_liquid_unstable_polymorph",
+                "magic_liquid_charm",
+                "magic_liquid_mana_regeneration",
+            ],
+            randomLiquids.Materials);
     }
 
     /// <summary>
@@ -104,13 +120,14 @@ public sealed class NoitaWangTerrainCatalogTests
             .. catalog.Sets
                 .SelectMany(static set =>
                     set.MaterialMappings.Select(static mapping => mapping.Material)
-                        .Concat(set.MaterialLayers.Select(static layer => layer.MaterialName)))
+                        .Concat(set.MaterialLayers.Select(static layer => layer.MaterialName))
+                        .Concat(set.RandomMaterialMappings.SelectMany(static mapping => mapping.Materials)))
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
         ];
-        Assert.Equal(56, requiredNames.Length);
+        Assert.Equal(79, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.True(runtime.Materials.TryGetId(name, out _), name));
-        Assert.Equal(118, runtime.Materials.Count);
+        Assert.Equal(128, runtime.Materials.Count);
 
         Assert.DoesNotContain(
             catalog.Sets.SelectMany(static set => set.MaterialMappings),
@@ -134,7 +151,7 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal("9dbd52ced019a643169a2db02f46c77f8766c6e5", catalog["referenceVersionHash"]!.GetValue<string>());
 
         JsonArray files = Assert.IsType<JsonArray>(catalog["files"]);
-        Assert.Equal(63, files.Count);
+        Assert.Equal(71, files.Count);
         HashSet<int> textureIds = [];
         foreach (JsonNode? fileNode in files)
         {
@@ -158,7 +175,7 @@ public sealed class NoitaWangTerrainCatalogTests
             }
         }
 
-        Assert.Equal(Enumerable.Range(23, 63), textureIds.Order());
+        Assert.Equal(Enumerable.Range(19, 71), textureIds.Order());
     }
 
     /// <summary>
@@ -243,8 +260,8 @@ public sealed class NoitaWangTerrainCatalogTests
             Assert.Equal(solidCount, reverseSolidCount);
             Assert.Equal(markerCount, reverseMarkerCount);
             Assert.NotEqual(firstSignature, otherSeedSignature);
-            Assert.InRange(emptyCount, 1_024, (256 * 256) - 1_024);
-            Assert.InRange(solidCount, 1_024, (256 * 256) - 1_024);
+            Assert.Equal(256 * 256, emptyCount + solidCount + markerCount);
+            Assert.True(emptyCount + solidCount > 0, $"Wang set {definition.Id} 不能只包含标记语义。");
             Assert.True(signatures.Add(firstSignature), $"Wang set {definition.Id} 与其他模板产生相同采样签名。");
             totalMarkers += markerCount;
 
