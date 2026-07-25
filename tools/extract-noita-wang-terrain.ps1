@@ -524,6 +524,45 @@ foreach ($specification in $specifications) {
     $spawnPath = Join-Path $resolvedDataRoot $spawnSourcePath.Substring(5)
     $spawnFunctions = Read-SpawnFunctions $spawnPath
     $randomInputs = Get-RandomColorInputs $biomeXml
+    $wangMapWidth = Get-XmlIntAttribute $topology 'wang_map_width'
+    $wangMapHeight = Get-XmlIntAttribute $topology 'wang_map_height'
+    if ($wangMapWidth -le 0 -or $wangMapHeight -le 0) {
+        throw "Biome '$($specification.id)' has invalid wang_map_width/wang_map_height."
+    }
+
+    $materialLayers = @(
+        $biomeXml.SelectNodes('/Biome/Materials/MaterialComponent') |
+            ForEach-Object {
+                [ordered]@{
+                    enabled = (Get-XmlIntAttribute $_ '_enabled') -ne 0
+                    addPerlin = Get-XmlDoubleAttribute $_ 'add_perlin'
+                    addPerlinScaleX = Get-XmlDoubleAttribute $_ 'add_perlin_scale_x'
+                    addPerlinScaleY = Get-XmlDoubleAttribute $_ 'add_perlin_scale_y'
+                    isPolygon = (Get-XmlIntAttribute $_ 'is_polygon') -ne 0
+                    isRare = (Get-XmlIntAttribute $_ 'is_rare') -ne 0
+                    limitMaxY = Get-XmlDoubleAttribute $_ 'limit_max_y'
+                    limitMinY = Get-XmlDoubleAttribute $_ 'limit_min_y'
+                    limitY = (Get-XmlIntAttribute $_ 'limit_y') -ne 0
+                    materialIndex = Get-XmlIntAttribute $_ 'material_index'
+                    materialMax = Get-XmlDoubleAttribute $_ 'material_max'
+                    materialMin = Get-XmlDoubleAttribute $_ 'material_min'
+                    materialName = [string]$_.material_name
+                    rarePolkaIsBoxed = (Get-XmlIntAttribute $_ 'rare_polka_is_boxed') -ne 0
+                    rarePolkaProbability = Get-XmlDoubleAttribute $_ 'rare_polka_probability'
+                    rarePolkaRadiusHigh = Get-XmlDoubleAttribute $_ 'rare_polka_radius_high'
+                    rarePolkaRadiusLow = Get-XmlDoubleAttribute $_ 'rare_polka_radius_low'
+                    rareRequiredMax = Get-XmlDoubleAttribute $_ 'rare_required_max'
+                    rareRequiredMin = Get-XmlDoubleAttribute $_ 'rare_required_min'
+                    rareScaleX = Get-XmlDoubleAttribute $_ 'rare_scale_x'
+                    rareScaleY = Get-XmlDoubleAttribute $_ 'rare_scale_y'
+                    rareUsePerlin = (Get-XmlIntAttribute $_ 'rare_use_perlin') -ne 0
+                    rareUsePolka = (Get-XmlIntAttribute $_ 'rare_use_polka') -ne 0
+                }
+            })
+    if ($materialLayers.Count -eq 0) {
+        throw "Biome '$($specification.id)' has no MaterialComponent layers."
+    }
+
     $image = Read-Bitmap $wangPath
     $header = Read-WangHeader $image
     $tiles = Get-CornerTemplateTiles $header $image
@@ -834,8 +873,11 @@ foreach ($specification in $specifications) {
         varyY = $header.varyY
         horizontalTileCount = $horizontal.Count
         verticalTileCount = $vertical.Count
+        wangMapWidth = $wangMapWidth
+        wangMapHeight = $wangMapHeight
         randomBinaryColors = @($randomInputs.Keys | Sort-Object | ForEach-Object { 'ff' + $_ })
         materialMappings = $mappingDefinitions
+        materialLayers = $materialLayers
         markers = @($markerDefinitions)
         bitmapCaves = $bitmapCavesDefinition
         encoding = 'brotli-pewh-v3'

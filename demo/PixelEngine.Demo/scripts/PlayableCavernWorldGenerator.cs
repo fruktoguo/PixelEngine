@@ -1611,15 +1611,22 @@ public sealed class PlayableCavernWorldGenerator :
 
         DecodedNoitaWangTerrainSet wangTerrain = referenceBiome.WangTerrain ??
             throw new InvalidOperationException("主区或侧区缺少已编译的 Noita Wang 模板。");
-        if (referenceBiome.BitmapCaves is null ||
-            !referenceBiome.BitmapCaves.TrySample(
+        byte wangSemantic = wangTerrain.Sample(
+            worldX,
+            worldY,
+            row.WorldSeed,
+            referenceBiome.Salt,
+            out byte density);
+        byte semantic = wangSemantic;
+        if (referenceBiome.BitmapCaves is not null &&
+            referenceBiome.BitmapCaves.TrySample(
                 worldX,
                 worldY,
                 row.WorldSeed,
                 referenceBiome.Salt,
-                out byte semantic))
+                out byte bitmapSemantic))
         {
-            semantic = wangTerrain.Sample(worldX, worldY, row.WorldSeed, referenceBiome.Salt);
+            semantic = bitmapSemantic;
         }
         bool empty = semantic == (byte)NoitaWangTerrainSemantic.Empty ||
             DecodedNoitaWangTerrainSet.IsMarker(semantic) ||
@@ -1644,11 +1651,13 @@ public sealed class PlayableCavernWorldGenerator :
         return semantic switch
         {
             (byte)NoitaWangTerrainSemantic.Primary or
-            (byte)NoitaWangTerrainSemantic.RandomBinary => SelectBiomeSolidMaterial(
+            (byte)NoitaWangTerrainSemantic.RandomBinary => SelectWangMaterialLayer(
                 worldX,
                 worldY,
+                density,
                 protectedSpawn,
                 biome,
+                referenceBiome,
                 in row),
             (byte)NoitaWangTerrainSemantic.Secondary => biome.Secondary,
             (byte)NoitaWangTerrainSemantic.Loose => biome.Loose,
@@ -1657,6 +1666,128 @@ public sealed class PlayableCavernWorldGenerator :
             (byte)NoitaWangTerrainSemantic.Pool => biome.Pool,
             _ => throw new InvalidOperationException($"未知 Noita Wang terrain semantic：{semantic}。"),
         };
+    }
+
+    private static ushort SelectWangMaterialLayer(
+        long worldX,
+        long worldY,
+        byte density,
+        bool protectedSpawn,
+        CompiledBiome biome,
+        in CompiledReferenceBiome referenceBiome,
+        in TerrainRowContext row)
+    {
+        CompiledWangMaterialLayer[] layers = referenceBiome.WangMaterialLayers;
+        float primaryField = density * (1.0f / byte.MaxValue);
+        for (int i = 0; i < layers.Length; i++)
+        {
+            ref readonly CompiledWangMaterialLayer layer = ref layers[i];
+            if (!layer.Enabled ||
+                (layer.LimitY && (worldY < layer.LimitMinY || worldY > layer.LimitMaxY)))
+            {
+                continue;
+            }
+
+            float field = layer.MaterialIndex == 10
+                ? primaryField
+                : IndexedWangMaterialField(worldX, worldY, row.WorldSeed, referenceBiome.Salt, layer.MaterialIndex);
+            if (layer.AddPerlin > 0)
+            {
+                field += layer.AddPerlin * NormalizedFractal2D(
+                    worldX * layer.AddPerlinScaleX,
+                    worldY * layer.AddPerlinScaleY,
+                    row.WorldSeed ^ referenceBiome.Salt ^ ((uint)layer.MaterialIndex * 0x9E37_79B9UL),
+                    3);
+            }
+
+            if (layer.IsRare)
+            {
+                if (!IsWangRareLayerAt(worldX, worldY, row.WorldSeed, referenceBiome.Salt, in layer))
+                {
+                    continue;
+                }
+
+                field += 1.0f;
+            }
+
+            if (field >= layer.MaterialMin && field <= layer.MaterialMax)
+            {
+                return layer.Material;
+            }
+        }
+
+        return SelectBiomeSolidMaterial(worldX, worldY, protectedSpawn, biome, in row);
+    }
+
+    private static float IndexedWangMaterialField(
+        long worldX,
+        long worldY,
+        ulong worldSeed,
+        ulong biomeSalt,
+        int materialIndex)
+    {
+        ulong channelSalt = worldSeed ^ biomeSalt ^ ((uint)materialIndex * 0xD6E8_FEB8_6659_FD93UL);
+        return NormalizedFractal2D(worldX * 0.01, worldY * 0.01, channelSalt, 3);
+    }
+
+    private static bool IsWangRareLayerAt(
+        long worldX,
+        long worldY,
+        ulong worldSeed,
+        ulong biomeSalt,
+        in CompiledWangMaterialLayer layer)
+    {
+        ulong salt = worldSeed ^ biomeSalt ^ ((uint)layer.MaterialIndex * 0xA076_1D64_78BD_642FUL) ^ layer.MaterialSalt;
+        bool selected = !layer.RareUsePerlin && !layer.RareUsePolka;
+        if (layer.RareUsePerlin)
+        {
+            float rareField = NormalizedFractal2D(
+                worldX * layer.RareScaleX,
+                worldY * layer.RareScaleY,
+                salt,
+                3);
+            selected |= rareField >= layer.RareRequiredMin && rareField <= layer.RareRequiredMax;
+        }
+
+        if (layer.RareUsePolka)
+        {
+            selected |= IsPolkaSelected(worldX, worldY, salt, in layer);
+        }
+
+        return selected;
+    }
+
+    private static bool IsPolkaSelected(
+        long worldX,
+        long worldY,
+        ulong salt,
+        in CompiledWangMaterialLayer layer)
+    {
+        double scaleX = layer.RareScaleX > 0 ? layer.RareScaleX : 0.01;
+        double scaleY = layer.RareScaleY > 0 ? layer.RareScaleY : 0.01;
+        long cellX = (long)Math.Floor(worldX * scaleX);
+        long cellY = (long)Math.Floor(worldY * scaleY);
+        float probability = (float)HashUnit(cellX, cellY, salt);
+        if (probability > layer.RarePolkaProbability)
+        {
+            return false;
+        }
+
+        float centerX = (float)HashUnit(cellX, cellY, salt ^ 0x9E37_79B9_7F4A_7C15UL);
+        float centerY = (float)HashUnit(cellX, cellY, salt ^ 0xC2B2_AE3D_27D4_EB4FUL);
+        float radiusMix = (float)HashUnit(cellX, cellY, salt ^ 0x94D0_49BB_1331_11EBUL);
+        float radius = layer.RarePolkaRadiusLow +
+            ((layer.RarePolkaRadiusHigh - layer.RarePolkaRadiusLow) * radiusMix);
+        float localX = (float)((worldX * scaleX) - cellX) - centerX;
+        float localY = (float)((worldY * scaleY) - cellY) - centerY;
+        return layer.RarePolkaIsBoxed
+            ? Math.Max(Math.Abs(localX), Math.Abs(localY)) <= radius
+            : (localX * localX) + (localY * localY) <= radius * radius;
+    }
+
+    private static float NormalizedFractal2D(double x, double y, ulong salt, int octaves)
+    {
+        return (float)((Fractal2D(x, y, salt, octaves) + 1.0) * 0.5);
     }
 
     private static bool TrySelectGlobalPixelSceneMaterial(
@@ -2411,6 +2542,7 @@ public sealed class PlayableCavernWorldGenerator :
                 : null;
             ushort[] wangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: false);
             ushort[] protectedWangMaterials = CompileWangMaterials(materials, terrainSet, protectedSpawn: true);
+            CompiledWangMaterialLayer[] wangMaterialLayers = CompileWangMaterialLayers(materials, terrainSet);
             referenceBiomes[i] = new CompiledReferenceBiome(
                 source.Id,
                 StableIdSalt(source.Id),
@@ -2437,7 +2569,10 @@ public sealed class PlayableCavernWorldGenerator :
                 terrainSet?.Decoded,
                 terrainSet?.DecodedBitmapCaves,
                 wangMaterials,
-                protectedWangMaterials);
+                protectedWangMaterials,
+                terrainSet?.WangMapWidth ?? 0,
+                terrainSet?.WangMapHeight ?? 0,
+                wangMaterialLayers);
         }
 
         for (int mapY = 0; mapY < definition.Height; mapY++)
@@ -2527,6 +2662,50 @@ public sealed class PlayableCavernWorldGenerator :
             result[i] = protectedSpawn && string.Equals(mapping.Semantic, "hazard", StringComparison.Ordinal)
                 ? protectedFallback
                 : ResolveRequired(materials, mapping.Material);
+        }
+
+        return result;
+    }
+
+    private static CompiledWangMaterialLayer[] CompileWangMaterialLayers(
+        IMaterialQuery materials,
+        NoitaWangTerrainSetDefinition? terrainSet)
+    {
+        if (terrainSet is null)
+        {
+            return [];
+        }
+
+        NoitaWangMaterialLayerDefinition[] layers = terrainSet.MaterialLayers;
+        CompiledWangMaterialLayer[] result = new CompiledWangMaterialLayer[layers.Length];
+        for (int i = 0; i < layers.Length; i++)
+        {
+            NoitaWangMaterialLayerDefinition layer = layers[i];
+            result[i] = new CompiledWangMaterialLayer(
+                ResolveRequired(materials, layer.MaterialName),
+                layer.Enabled,
+                (float)layer.AddPerlin,
+                (float)layer.AddPerlinScaleX,
+                (float)layer.AddPerlinScaleY,
+                layer.IsPolygon,
+                layer.IsRare,
+                (float)layer.LimitMaxY,
+                (float)layer.LimitMinY,
+                layer.LimitY,
+                layer.MaterialIndex,
+                (float)layer.MaterialMax,
+                (float)layer.MaterialMin,
+                layer.RarePolkaIsBoxed,
+                (float)layer.RarePolkaProbability,
+                (float)layer.RarePolkaRadiusHigh,
+                (float)layer.RarePolkaRadiusLow,
+                (float)layer.RareRequiredMax,
+                (float)layer.RareRequiredMin,
+                (float)layer.RareScaleX,
+                (float)layer.RareScaleY,
+                layer.RareUsePerlin,
+                layer.RareUsePolka,
+                StableIdSalt(layer.MaterialName) ^ ((uint)i * 0xD6E8_FEB8_6659_FD93UL));
         }
 
         return result;
@@ -3699,7 +3878,36 @@ public sealed class PlayableCavernWorldGenerator :
         DecodedNoitaWangTerrainSet? WangTerrain,
         DecodedNoitaBitmapCaves? BitmapCaves,
         ushort[] WangMaterials,
-        ushort[] ProtectedWangMaterials);
+        ushort[] ProtectedWangMaterials,
+        int WangMapWidth,
+        int WangMapHeight,
+        CompiledWangMaterialLayer[] WangMaterialLayers);
+
+    private readonly record struct CompiledWangMaterialLayer(
+        ushort Material,
+        bool Enabled,
+        float AddPerlin,
+        float AddPerlinScaleX,
+        float AddPerlinScaleY,
+        bool IsPolygon,
+        bool IsRare,
+        float LimitMaxY,
+        float LimitMinY,
+        bool LimitY,
+        int MaterialIndex,
+        float MaterialMax,
+        float MaterialMin,
+        bool RarePolkaIsBoxed,
+        float RarePolkaProbability,
+        float RarePolkaRadiusHigh,
+        float RarePolkaRadiusLow,
+        float RareRequiredMax,
+        float RareRequiredMin,
+        float RareScaleX,
+        float RareScaleY,
+        bool RareUsePerlin,
+        bool RareUsePolka,
+        ulong MaterialSalt);
 
     private enum ReferenceTerrainMaskAccent : byte
     {

@@ -14,7 +14,7 @@ $log = Join-Path $outDir "lava-mine-playthrough.log"
 
 $args = @(
     "run",
-    "--project", "demo/PixelEngine.Demo",
+    "--project", "demo/PixelEngine.Demo/PixelEngine.Demo.csproj",
     "-c", $Configuration,
     "--no-build",
     "--",

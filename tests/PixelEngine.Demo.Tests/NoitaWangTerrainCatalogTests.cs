@@ -71,6 +71,9 @@ public sealed class NoitaWangTerrainCatalogTests
             Assert.Equal(64, set.DecodedSha256.Length);
             Assert.NotEmpty(set.Markers);
             Assert.InRange(set.MaterialMappings.Length, 1, 22);
+            Assert.InRange(set.MaterialLayers.Length, 3, 7);
+            Assert.InRange(set.WangMapWidth, 256, 260);
+            Assert.InRange(set.WangMapHeight, 256, 260);
             Assert.Equal(
                 Enumerable.Range(NoitaWangTerrainCatalog.MaterialSemanticBase, set.MaterialMappings.Length),
                 set.MaterialMappings.Select(static mapping => (int)mapping.EncodedSemantic));
@@ -99,14 +102,15 @@ public sealed class NoitaWangTerrainCatalogTests
         string[] requiredNames =
         [
             .. catalog.Sets
-                .SelectMany(static set => set.MaterialMappings)
-                .Select(static mapping => mapping.Material)
+                .SelectMany(static set =>
+                    set.MaterialMappings.Select(static mapping => mapping.Material)
+                        .Concat(set.MaterialLayers.Select(static layer => layer.MaterialName)))
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
         ];
-        Assert.Equal(36, requiredNames.Length);
+        Assert.Equal(56, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.True(runtime.Materials.TryGetId(name, out _), name));
-        Assert.Equal(86, runtime.Materials.Count);
+        Assert.Equal(103, runtime.Materials.Count);
 
         Assert.DoesNotContain(
             catalog.Sets.SelectMany(static set => set.MaterialMappings),
@@ -130,7 +134,7 @@ public sealed class NoitaWangTerrainCatalogTests
         Assert.Equal("9dbd52ced019a643169a2db02f46c77f8766c6e5", catalog["referenceVersionHash"]!.GetValue<string>());
 
         JsonArray files = Assert.IsType<JsonArray>(catalog["files"]);
-        Assert.Equal(37, files.Count);
+        Assert.Equal(51, files.Count);
         HashSet<int> textureIds = [];
         foreach (JsonNode? fileNode in files)
         {
@@ -154,7 +158,7 @@ public sealed class NoitaWangTerrainCatalogTests
             }
         }
 
-        Assert.Equal(Enumerable.Range(34, 37), textureIds.Order());
+        Assert.Equal(Enumerable.Range(23, 51), textureIds.Order());
     }
 
     /// <summary>

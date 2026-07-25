@@ -235,9 +235,12 @@ internal sealed class NoitaWangTerrainCatalog
         Require(set.HorizontalTileCount == expectedHorizontalCount, $"{label}.horizontalTileCount 与 STB 模板头不一致。");
         Require(set.VerticalTileCount == expectedVerticalCount, $"{label}.verticalTileCount 与 STB 模板头不一致。");
         Require(set.SourceWidth == expectedWidth && set.SourceHeight == expectedHeight, $"{label}.sourceWidth/sourceHeight 与 STB 模板布局不一致。");
+        Require(set.WangMapWidth is >= 1 and <= 4_096, $"{label}.wangMapWidth 必须位于 [1,4096]。");
+        Require(set.WangMapHeight is >= 1 and <= 4_096, $"{label}.wangMapHeight 必须位于 [1,4096]。");
 
         ValidateColors(set.RandomBinaryColors, $"{label}.randomBinaryColors");
         ValidateMaterialMappings(set.MaterialMappings, $"{label}.materialMappings");
+        ValidateMaterialLayers(set.MaterialLayers, $"{label}.materialLayers");
         ValidateMarkers(set.Markers, $"{label}.markers");
         set.DecodedBitmapCaves = set.BitmapCaves is null
             ? null
@@ -494,6 +497,52 @@ internal sealed class NoitaWangTerrainCatalog
         }
     }
 
+    private static void ValidateMaterialLayers(NoitaWangMaterialLayerDefinition[] layers, string label)
+    {
+        if (layers is null)
+        {
+            throw new InvalidDataException($"noita-wang-terrain.json 配置无效：{label} 不能为空。");
+        }
+
+        Require(layers.Length > 0, $"{label} 不能为空数组。");
+        for (int i = 0; i < layers.Length; i++)
+        {
+            NoitaWangMaterialLayerDefinition layer = layers[i] ??
+                throw new InvalidDataException($"noita-wang-terrain.json 配置无效：{label}[{i}] 不能为空。");
+            RequireStableId(layer.MaterialName, $"{label}[{i}].materialName");
+            Require(layer.MaterialIndex is >= 0 and <= 31, $"{label}[{i}].materialIndex 必须位于 [0,31]。");
+            RequireFinite(layer.MaterialMin, $"{label}[{i}].materialMin");
+            RequireFinite(layer.MaterialMax, $"{label}[{i}].materialMax");
+            Require(layer.MaterialMax >= layer.MaterialMin, $"{label}[{i}].materialMax 不得小于 materialMin。");
+            RequireFinite(layer.LimitMinY, $"{label}[{i}].limitMinY");
+            RequireFinite(layer.LimitMaxY, $"{label}[{i}].limitMaxY");
+            Require(layer.LimitMaxY >= layer.LimitMinY, $"{label}[{i}].limitMaxY 不得小于 limitMinY。");
+            RequireNonNegativeFinite(layer.AddPerlin, $"{label}[{i}].addPerlin");
+            RequireNonNegativeFinite(layer.AddPerlinScaleX, $"{label}[{i}].addPerlinScaleX");
+            RequireNonNegativeFinite(layer.AddPerlinScaleY, $"{label}[{i}].addPerlinScaleY");
+            RequireNonNegativeFinite(layer.RarePolkaProbability, $"{label}[{i}].rarePolkaProbability");
+            RequireNonNegativeFinite(layer.RarePolkaRadiusLow, $"{label}[{i}].rarePolkaRadiusLow");
+            RequireNonNegativeFinite(layer.RarePolkaRadiusHigh, $"{label}[{i}].rarePolkaRadiusHigh");
+            Require(layer.RarePolkaRadiusHigh >= layer.RarePolkaRadiusLow, $"{label}[{i}].rarePolkaRadiusHigh 不得小于 rarePolkaRadiusLow。");
+            RequireFinite(layer.RareRequiredMin, $"{label}[{i}].rareRequiredMin");
+            RequireFinite(layer.RareRequiredMax, $"{label}[{i}].rareRequiredMax");
+            Require(layer.RareRequiredMax >= layer.RareRequiredMin, $"{label}[{i}].rareRequiredMax 不得小于 rareRequiredMin。");
+            RequireNonNegativeFinite(layer.RareScaleX, $"{label}[{i}].rareScaleX");
+            RequireNonNegativeFinite(layer.RareScaleY, $"{label}[{i}].rareScaleY");
+        }
+    }
+
+    private static void RequireFinite(double value, string label)
+    {
+        Require(double.IsFinite(value), $"{label} 必须为有限数值。");
+    }
+
+    private static void RequireNonNegativeFinite(double value, string label)
+    {
+        RequireFinite(value, label);
+        Require(value >= 0, $"{label} 不得为负数。");
+    }
+
     private static void RequireSourcePath(string value, string prefix, string suffix, string label)
     {
         Require(
@@ -580,9 +629,15 @@ internal sealed class NoitaWangTerrainSetDefinition
 
     public int VerticalTileCount { get; init; }
 
+    public int WangMapWidth { get; init; }
+
+    public int WangMapHeight { get; init; }
+
     public string[] RandomBinaryColors { get; init; } = [];
 
     public NoitaWangMaterialMappingDefinition[] MaterialMappings { get; init; } = [];
+
+    public NoitaWangMaterialLayerDefinition[] MaterialLayers { get; init; } = [];
 
     public NoitaWangMarkerDefinition[] Markers { get; init; } = [];
 
@@ -601,6 +656,55 @@ internal sealed class NoitaWangTerrainSetDefinition
 
     [JsonIgnore]
     internal DecodedNoitaBitmapCaves? DecodedBitmapCaves { get; set; }
+}
+
+internal sealed class NoitaWangMaterialLayerDefinition
+{
+    public bool Enabled { get; init; }
+
+    public double AddPerlin { get; init; }
+
+    public double AddPerlinScaleX { get; init; }
+
+    public double AddPerlinScaleY { get; init; }
+
+    public bool IsPolygon { get; init; }
+
+    public bool IsRare { get; init; }
+
+    public double LimitMaxY { get; init; }
+
+    public double LimitMinY { get; init; }
+
+    public bool LimitY { get; init; }
+
+    public int MaterialIndex { get; init; }
+
+    public double MaterialMax { get; init; }
+
+    public double MaterialMin { get; init; }
+
+    public string MaterialName { get; init; } = string.Empty;
+
+    public bool RarePolkaIsBoxed { get; init; }
+
+    public double RarePolkaProbability { get; init; }
+
+    public double RarePolkaRadiusHigh { get; init; }
+
+    public double RarePolkaRadiusLow { get; init; }
+
+    public double RareRequiredMax { get; init; }
+
+    public double RareRequiredMin { get; init; }
+
+    public double RareScaleX { get; init; }
+
+    public double RareScaleY { get; init; }
+
+    public bool RareUsePerlin { get; init; }
+
+    public bool RareUsePolka { get; init; }
 }
 
 internal sealed class NoitaWangMaterialMappingDefinition

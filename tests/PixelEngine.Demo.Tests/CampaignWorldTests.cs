@@ -1143,6 +1143,38 @@ public sealed class CampaignWorldTests
     }
 
     /// <summary>
+    /// 验证 Primary Wang 灰度场由 Noita MaterialComponent 层求值，不能退回通用 biome palette。
+    /// </summary>
+    [Fact]
+    public void CoalmineWangPrimaryFieldProducesReferenceMaterialLayers()
+    {
+        CampaignConfig campaign = LoadConfig();
+        BiomeCatalog biomes = LoadBiomes(campaign);
+        IMaterialQuery materials = LoadMaterials();
+        TerrainProbe probe = new(materials, campaign, biomes, campaign.InitialRunSeed);
+        ushort soil = ResolveRequired(materials, "soil");
+        ushort sandStatic = ResolveRequired(materials, "sand_static");
+        ushort rockStaticWet = ResolveRequired(materials, "rock_static_wet");
+        int soilCells = 0;
+        int sandStaticCells = 0;
+        int rockStaticWetCells = 0;
+        for (long worldY = 832; worldY < 1_088; worldY++)
+        {
+            for (long worldX = 256; worldX < 512; worldX++)
+            {
+                ushort material = probe.MaterialAt(worldX, worldY);
+                soilCells += material == soil ? 1 : 0;
+                sandStaticCells += material == sandStatic ? 1 : 0;
+                rockStaticWetCells += material == rockStaticWet ? 1 : 0;
+            }
+        }
+
+        string distribution = $"soil={soilCells}, sand_static={sandStaticCells}, rock_static_wet={rockStaticWetCells}";
+        Assert.True(sandStaticCells > 0, $"coalmine 必须生成 MaterialComponent sand_static 层；{distribution}。");
+        Assert.True(rockStaticWetCells > 0, $"coalmine 必须生成 MaterialComponent rock_static_wet 层；{distribution}。");
+    }
+
+    /// <summary>
     /// 验证 Wang tile 中从 Noita Lua / 内建颜色导出的 marker 不再只被当作空地丢弃，
     /// 而是能稳定暴露为后续实体、道具、背景 pixel-scene 加载使用的世界锚点。
     /// </summary>

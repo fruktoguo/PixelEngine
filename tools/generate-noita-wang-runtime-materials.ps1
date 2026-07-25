@@ -115,7 +115,10 @@ function Resolve-Declaration([string] $Name) {
     return $entry
 }
 
-$wangRequiredNames = @($wangCatalog.sets.materialMappings.material | Sort-Object -Unique)
+$wangRequiredNames = @(
+    ($wangCatalog.sets.materialMappings.material + $wangCatalog.sets.materialLayers.materialName) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique)
 $sceneRequiredNames = @($snowcastlePixelSceneCatalog.materialNames | Sort-Object -Unique)
 $vegetationRequiredNames = @($vegetationCatalog.materialNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 $requiredNames = @(($wangRequiredNames + $sceneRequiredNames + $vegetationRequiredNames) | Sort-Object -Unique)
