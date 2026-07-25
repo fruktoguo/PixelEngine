@@ -128,7 +128,8 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             if (profile.GameplayKind is NoitaWangMarkerGameplayKind.Enemy or
                 NoitaWangMarkerGameplayKind.Loot or
                 NoitaWangMarkerGameplayKind.Hazard or
-                NoitaWangMarkerGameplayKind.Portal)
+                NoitaWangMarkerGameplayKind.Portal or
+                NoitaWangMarkerGameplayKind.DrippingLiquid)
             {
                 entity.Destroy();
                 CreateGameplayMarkerEntity(context, anchor, profile, slot, worldSeed);
@@ -235,6 +236,16 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             portal.Bind(anchor);
             _gameplayEntities[slot] = entity;
             _gameplayComponents[slot] = portal;
+            return;
+        }
+
+        if (profile.GameplayKind == NoitaWangMarkerGameplayKind.DrippingLiquid)
+        {
+            Entity entity = context.Scene.CreateEntity();
+            NoitaMarkerDrippingLiquid dripping = entity.AddComponent<NoitaMarkerDrippingLiquid>();
+            dripping.Bind(anchor);
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = dripping;
             return;
         }
 
@@ -490,6 +501,7 @@ internal enum NoitaWangMarkerGameplayKind : byte
     Loot,
     Hazard,
     Portal,
+    DrippingLiquid,
 }
 
 internal readonly record struct NoitaWangMarkerVisualProfile(
@@ -561,6 +573,22 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
             return true;
         }
 
+        if (NoitaMarkerDrippingLiquid.Supports(function))
+        {
+            profile = new NoitaWangMarkerVisualProfile(
+                NoitaWangMarkerVisualKind.Machine,
+                0xFF_E8_90_48,
+                0xCC_FF_C0_80,
+                4f,
+                18f,
+                0.2f,
+                2,
+                10f,
+                NoitaWangMarkerGameplayKind.DrippingLiquid,
+                "water");
+            return true;
+        }
+
         // robot egg 的 spawn_teleport 目标由来源脚本按入口位置动态覆盖；
         // 在 Portal 网络状态接入前必须 fail-closed，不能用固定点或火花占位冒充。
         if (function == "spawn_teleport")
@@ -578,7 +606,7 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
 
         // 来源中的 Vegetation marker 实际混合 Verlet chain、刚体、敌人、产怪建筑与静态植物。
         // 在对应 C# 运行时逐类实现前不得继续用同一个绿色 overlay/SparkEmitter 冒充。
-        if (rule.Kind is NoitaMarkerRuleKind.Vegetation or NoitaMarkerRuleKind.Loot)
+        if (rule.Kind is NoitaMarkerRuleKind.Vegetation or NoitaMarkerRuleKind.Loot or NoitaMarkerRuleKind.Effect)
         {
             profile = default;
             return false;
@@ -624,17 +652,8 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 25f,
                 NoitaWangMarkerGameplayKind.SparkEmitter,
                 "crystal"),
-            NoitaMarkerRuleKind.Effect => new NoitaWangMarkerVisualProfile(
-                NoitaWangMarkerVisualKind.Spawn,
-                0xFF_F0_E8_B0,
-                0xCC_A0_90_50,
-                7f,
-                34f,
-                0.48f,
-                7,
-                22f,
-                NoitaWangMarkerGameplayKind.SparkEmitter,
-                "fire"),
+            NoitaMarkerRuleKind.Effect => throw new InvalidOperationException(
+                "未实现的 Effect marker 必须在 profile switch 前抑制。"),
             _ => throw new InvalidOperationException($"未知 Noita marker rule kind：{rule.Kind}。"),
         };
         return true;
