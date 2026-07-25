@@ -37,6 +37,7 @@ public sealed class NoitaWorldContentCatalogTests
         Assert.Equal(317, statistics.GetProperty("vegetationLayers").GetInt32());
         Assert.Equal(785, statistics.GetProperty("spawnFunctions").GetInt32());
         Assert.Equal(12, statistics.GetProperty("splicedPixelSceneFiles").GetInt32());
+        Assert.Equal(80, statistics.GetProperty("splicedPixelScenes").GetInt32());
         Assert.Equal(17, statistics.GetProperty("globalBackgroundImages").GetInt32());
         Assert.Equal(91, statistics.GetProperty("bufferedPixelScenes").GetInt32());
         Assert.Equal(2_232, statistics.GetProperty("biomeImplFiles").GetInt32());
@@ -119,7 +120,7 @@ public sealed class NoitaWorldContentCatalogTests
 
         Assert.Equal(46, requiredNames.Length);
         Assert.All(requiredNames, name => Assert.Contains(name, runtimeNames));
-        Assert.Equal(128, runtimeNames.Count);
+        Assert.Equal(130, runtimeNames.Count);
     }
 
     /// <summary>
@@ -188,13 +189,13 @@ public sealed class NoitaWorldContentCatalogTests
     }
 
     /// <summary>
-    /// 全局 buffered pixel scene 必须全部预编译成 C# 坐标和资产边界，运行时不读取 XML。
+    /// 全局 buffered 与 spliced pixel scene 必须全部预编译成 C# 坐标和资产边界，运行时不读取 XML。
     /// </summary>
     [Fact]
     public void GlobalPixelScenesArePrecompiledIntoPureCSharpCatalog()
     {
-        Assert.Equal(91, NoitaPixelSceneCatalog.SceneCount);
-        Assert.Equal(91, NoitaPixelSceneCatalog.Scenes.Length);
+        Assert.Equal(171, NoitaPixelSceneCatalog.SceneCount);
+        Assert.Equal(171, NoitaPixelSceneCatalog.Scenes.Length);
         Assert.True(NoitaPixelSceneCatalog.TryFindAt(1464, 5976, out NoitaPixelSceneDefinition forge));
         Assert.Equal("global-buffered-2", forge.StableId);
         Assert.Equal(128, forge.Width);
@@ -203,6 +204,11 @@ public sealed class NoitaWorldContentCatalogTests
         Assert.Equal("data/biome_impl/snowcastle/forge_visual.png", forge.ColorsPath);
         Assert.Equal("data/biome_impl/snowcastle/forge_background.png", forge.BackgroundPath);
         Assert.Equal("0dc4f73e2353119606ff33db0cc2fb4f0453491278c4fe125275030eb885f1a6", forge.MaterialSha256);
+        Assert.True(NoitaPixelSceneCatalog.TryFindAt(2048, 512, out NoitaPixelSceneDefinition lavaLake));
+        Assert.Equal("global-spliced-1", lavaLake.StableId);
+        Assert.Equal("data/biome_impl/spliced/lavalake2/1.plz", lavaLake.MaterialPath);
+        Assert.Equal(512, lavaLake.Width);
+        Assert.Equal(512, lavaLake.Height);
         Assert.False(NoitaPixelSceneCatalog.TryFindAt(0, 0, out _));
     }
 
@@ -212,15 +218,15 @@ public sealed class NoitaWorldContentCatalogTests
     [Fact]
     public void GlobalPixelSceneMaterialMasksDecodeAndSampleAtWorldScale()
     {
-        Assert.Equal(30, NoitaPixelSceneCatalog.Masks.Length);
-        Assert.Equal(30, NoitaPixelSceneCatalog.DecodedScenes.Length);
+        Assert.Equal(110, NoitaPixelSceneCatalog.Masks.Length);
+        Assert.Equal(110, NoitaPixelSceneCatalog.DecodedScenes.Length);
         Assert.True(NoitaPixelSceneCatalog.Masks.ToArray().Sum(static mask => mask.MarkerPixelCount) > 0);
 
         DecodedNoitaPixelScene forge = NoitaPixelSceneCatalog.DecodedScenes.ToArray().Single(static scene => scene.Ordinal == 2);
         Assert.Equal(128, forge.Width);
         Assert.Equal(128, forge.Height);
         Assert.Equal(128 * 128, forge.Materials.Length);
-        Assert.All(forge.Materials, static value => Assert.InRange(value, (byte)0, (byte)NoitaPixelSceneMaterial.Glass));
+        Assert.All(forge.Materials, static value => Assert.InRange(value, (byte)0, (byte)NoitaPixelSceneMaterial.SnowSticky));
 
         int materialIndex = Array.FindIndex(forge.Materials, static value => value != (byte)NoitaPixelSceneMaterial.Empty);
         Assert.True(materialIndex >= 0);
@@ -232,6 +238,18 @@ public sealed class NoitaWorldContentCatalogTests
             out NoitaPixelSceneMaterial sampled));
         Assert.Equal((NoitaPixelSceneMaterial)forge.Materials[materialIndex], sampled);
         Assert.False(NoitaPixelSceneCatalog.TrySample(forge.WorldX - 1, forge.WorldY - 1, out _));
+
+        DecodedNoitaPixelScene lavaLake = NoitaPixelSceneCatalog.DecodedScenes.ToArray()
+            .Single(static scene => scene.Ordinal == 92);
+        int lavaIndex = Array.FindIndex(
+            lavaLake.Materials,
+            static value => value == (byte)NoitaPixelSceneMaterial.Lava);
+        Assert.True(lavaIndex >= 0);
+        Assert.True(NoitaPixelSceneCatalog.TrySample(
+            lavaLake.WorldX + (lavaIndex % lavaLake.Width),
+            lavaLake.WorldY + (lavaIndex / lavaLake.Width),
+            out NoitaPixelSceneMaterial lava));
+        Assert.Equal(NoitaPixelSceneMaterial.Lava, lava);
     }
 
     /// <summary>

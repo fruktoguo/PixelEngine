@@ -720,6 +720,37 @@
       ]
     },
     {
+      "name": "bone_static",
+      "type": "Solid",
+      "density": 100,
+      "dispersion": 0,
+      "liquidStatic": true,
+      "liquidSand": true,
+      "flammability": 0,
+      "autoIgnitionTemp": 0,
+      "fireHp": 0,
+      "temperatureOfFire": 10,
+      "generatesSmoke": 0,
+      "heatConduct": 32,
+      "heatCapacity": 1.0,
+      "durability": 40,
+      "integrity": 2000,
+      "renderStyle": "Solid",
+      "legendCategory": "Terrain",
+      "edgeColor": 0,
+      "opacity": 255,
+      "highlightColor": 0,
+      "displayName": "bone static",
+      "legendVisible": false,
+      "textureId": 80,
+      "baseColor": 4278210386,
+      "colorNoise": 0,
+      "tags": [
+        "static",
+        "corrodible"
+      ]
+    },
+    {
       "name": "brass",
       "type": "Powder",
       "density": 80,
@@ -804,7 +835,7 @@
       "highlightColor": 0,
       "displayName": "ceiling plant material",
       "legendVisible": false,
-      "textureId": 82,
+      "textureId": 83,
       "baseColor": 4280858675,
       "colorNoise": 0,
       "tags": [
@@ -838,6 +869,38 @@
       "baseColor": 4286611584,
       "colorNoise": 0,
       "tags": [
+        "corrodible",
+        "meltable"
+      ]
+    },
+    {
+      "name": "cheese_static",
+      "type": "Solid",
+      "density": 50,
+      "dispersion": 0,
+      "liquidStatic": true,
+      "liquidSand": true,
+      "flammability": 0,
+      "autoIgnitionTemp": 0,
+      "fireHp": 0,
+      "temperatureOfFire": 0,
+      "generatesSmoke": 0,
+      "heatConduct": 32,
+      "heatCapacity": 1.0,
+      "durability": 2,
+      "integrity": 100,
+      "renderStyle": "Solid",
+      "legendCategory": "Terrain",
+      "edgeColor": 0,
+      "opacity": 255,
+      "highlightColor": 0,
+      "displayName": "cheese static",
+      "legendVisible": false,
+      "textureId": -1,
+      "baseColor": 4284993011,
+      "colorNoise": 0,
+      "tags": [
+        "static",
         "corrodible",
         "meltable"
       ]
@@ -1139,7 +1202,7 @@
       "highlightColor": 0,
       "displayName": "fungus loose",
       "legendVisible": false,
-      "textureId": 80,
+      "textureId": 81,
       "baseColor": 4282428260,
       "colorNoise": 0,
       "tags": [
@@ -1169,7 +1232,7 @@
       "highlightColor": 0,
       "displayName": "glass static",
       "legendVisible": false,
-      "textureId": 81,
+      "textureId": 82,
       "baseColor": 4284833953,
       "colorNoise": 0,
       "tags": [
@@ -1233,7 +1296,7 @@
       "highlightColor": 0,
       "displayName": "grass",
       "legendVisible": false,
-      "textureId": 82,
+      "textureId": 83,
       "baseColor": 4280858675,
       "colorNoise": 0,
       "tags": [
@@ -1263,7 +1326,7 @@
       "highlightColor": 0,
       "displayName": "grass dark",
       "legendVisible": false,
-      "textureId": 86,
+      "textureId": 87,
       "baseColor": 4285354111,
       "colorNoise": 0,
       "tags": [
@@ -1632,7 +1695,7 @@
       "highlightColor": 0,
       "displayName": "meat",
       "legendVisible": false,
-      "textureId": 85,
+      "textureId": 86,
       "baseColor": 4283190476,
       "colorNoise": 0,
       "tags": [
@@ -1663,7 +1726,7 @@
       "highlightColor": 0,
       "displayName": "meat done",
       "legendVisible": false,
-      "textureId": 84,
+      "textureId": 85,
       "baseColor": 4282798685,
       "colorNoise": 0,
       "tags": [
@@ -1726,7 +1789,7 @@
       "highlightColor": 0,
       "displayName": "moss",
       "legendVisible": false,
-      "textureId": 86,
+      "textureId": 87,
       "baseColor": 4280858675,
       "colorNoise": 0,
       "tags": [
@@ -1787,7 +1850,7 @@
       "highlightColor": 0,
       "displayName": "neon tube cyan",
       "legendVisible": false,
-      "textureId": 87,
+      "textureId": 88,
       "baseColor": 4291360719,
       "colorNoise": 0,
       "tags": [
@@ -1819,7 +1882,7 @@
       "highlightColor": 0,
       "displayName": "neon tube purple",
       "legendVisible": false,
-      "textureId": 88,
+      "textureId": 89,
       "baseColor": 4291360719,
       "colorNoise": 0,
       "tags": [
@@ -1851,7 +1914,7 @@
       "highlightColor": 0,
       "displayName": "plant material",
       "legendVisible": false,
-      "textureId": 82,
+      "textureId": 83,
       "baseColor": 4280858675,
       "colorNoise": 0,
       "tags": [
@@ -1881,7 +1944,7 @@
       "highlightColor": 0,
       "displayName": "plant material red",
       "legendVisible": false,
-      "textureId": 83,
+      "textureId": 84,
       "baseColor": 4279773354,
       "colorNoise": 0,
       "tags": [
@@ -3058,7 +3121,7 @@
       "highlightColor": 0,
       "displayName": "steel",
       "legendVisible": false,
-      "textureId": 89,
+      "textureId": 90,
       "baseColor": 4286542707,
       "colorNoise": 0,
       "tags": [

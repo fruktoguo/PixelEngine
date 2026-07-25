@@ -13,6 +13,7 @@
     "vegetationLayers": 317,
     "spawnFunctions": 785,
     "splicedPixelSceneFiles": 12,
+    "splicedPixelScenes": 80,
     "globalBackgroundImages": 17,
     "bufferedPixelScenes": 91,
     "biomeImplFiles": 2232,
@@ -33,6 +34,2635 @@
       "data/biome_impl/spliced/lavalake_pit_bottom.xml",
       "data/biome_impl/spliced/gourd_room.xml",
       "data/biome_impl/spliced/skull.xml"
+    ],
+    "splicedScenes": [
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/0.plz",
+        "pos_x": "2050",
+        "pos_y": "445",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/0.plz",
+            "sha256": "d2d71c85ca8a5b539b87b33fb6d9b1ed85bd96df44021498738976400b75504e",
+            "length": 1526,
+            "width": 510,
+            "height": 67,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1502,
+            "decodedLength": 136680,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/1.plz",
+        "pos_x": "2048",
+        "pos_y": "512",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/1.plz",
+            "sha256": "bccf551b492cf1d636d69537f711b73240bb1fd96913dec0db3160374279b4f9",
+            "length": 7545,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7521,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/2.plz",
+        "pos_x": "2065",
+        "pos_y": "1024",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/2.plz",
+            "sha256": "00826c3d5ea686032da2d169d2bb9977982122df3ae0f148fab3b600ab619d55",
+            "length": 7654,
+            "width": 495,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7630,
+            "decodedLength": 1013760,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/3.plz",
+        "pos_x": "2326",
+        "pos_y": "1536",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/3.plz",
+            "sha256": "e5367e2b205c267bd448344ac31fc174b3cd3bd2c82b355004dc4e00a9078529",
+            "length": 5832,
+            "width": 234,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5808,
+            "decodedLength": 479232,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/4.plz",
+        "pos_x": "2556",
+        "pos_y": "2048",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/4.plz",
+            "sha256": "50abd5b1b2b7ff6513bea975755bc2fb5f9e3d32e1bd531a2dabac689b2b6914",
+            "length": 56,
+            "width": 4,
+            "height": 2,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 32,
+            "decodedLength": 32,
+            "encoding": "raw-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/5.plz",
+        "pos_x": "2560",
+        "pos_y": "451",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/5.plz",
+            "sha256": "391e4d5b7b7cd9ffbaf89179cf85659f798891133ee2e2ec511e9b34b18c2be3",
+            "length": 1084,
+            "width": 512,
+            "height": 61,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1060,
+            "decodedLength": 124928,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/6.plz",
+        "pos_x": "2560",
+        "pos_y": "512",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/6.plz",
+            "sha256": "48965e448efe0ce06387d19dca9a386f6d15a635416a03feecf037a3de836f64",
+            "length": 5400,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5376,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/7.plz",
+        "pos_x": "2560",
+        "pos_y": "1024",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/7.plz",
+            "sha256": "f0f710686a712dc807bd58fe87b1a0a720f579b0e94593394be46b63f222f84b",
+            "length": 7149,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7125,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/8.plz",
+        "pos_x": "2560",
+        "pos_y": "1536",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/8.plz",
+            "sha256": "7aada8443d157346089839a4abfff231c659ade8610961ae4648ce7011a08ad9",
+            "length": 6976,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 6952,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/9.plz",
+        "pos_x": "2560",
+        "pos_y": "2048",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/9.plz",
+            "sha256": "597a199487e9ad1a3f672459a334be15100a0e80284ade348e9afa5e96a24cc0",
+            "length": 1725,
+            "width": 512,
+            "height": 26,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1701,
+            "decodedLength": 53248,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/10.plz",
+        "pos_x": "3072",
+        "pos_y": "451",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/10.plz",
+            "sha256": "d290b76bbea790f754fd823b724f5e945b01ef8b99ff78781651f3fe12be2c4a",
+            "length": 1262,
+            "width": 512,
+            "height": 61,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1238,
+            "decodedLength": 124928,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/11.plz",
+        "pos_x": "3072",
+        "pos_y": "512",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/11.plz",
+            "sha256": "1734a3f0b729cec838c2df857e5b972033da03e01d9769d31d04e619a9707f97",
+            "length": 9123,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9099,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/12.plz",
+        "pos_x": "3072",
+        "pos_y": "1024",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/12.plz",
+            "sha256": "b1ccfb852071f277850ec97d8625baa9134aafb3611e0800eabe6070f649cab6",
+            "length": 7883,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7859,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/13.plz",
+        "pos_x": "3072",
+        "pos_y": "1536",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/13.plz",
+            "sha256": "ef16700766ab9b506cb82cd7f8ddf702626ce9c93e05cd75ba1fde3dd6ec04a6",
+            "length": 5826,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5802,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/14.plz",
+        "pos_x": "3072",
+        "pos_y": "2048",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/14.plz",
+            "sha256": "1881b7c341c918316bb48a0d959616bd748e17aabc91f399fba978c0385b91d5",
+            "length": 1903,
+            "width": 512,
+            "height": 41,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1879,
+            "decodedLength": 83968,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/15.plz",
+        "pos_x": "3584",
+        "pos_y": "445",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/15.plz",
+            "sha256": "67938c1ddb540c0c4b38b3ea39483058bbd307d66e2fd9f0bce44932392e8771",
+            "length": 1277,
+            "width": 512,
+            "height": 67,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1253,
+            "decodedLength": 137216,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/16.plz",
+        "pos_x": "3584",
+        "pos_y": "512",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/16.plz",
+            "sha256": "baf0ae468e212a386801688aeaad7a0e5cddcf238b244ff65ee733c525281fe7",
+            "length": 8672,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 8648,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/17.plz",
+        "pos_x": "3584",
+        "pos_y": "1024",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/17.plz",
+            "sha256": "1a2fd0faf496beeef4a78fda1943f9708fbaf27294d73a9c603d1243852195f8",
+            "length": 8473,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 8449,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/18.plz",
+        "pos_x": "3584",
+        "pos_y": "1536",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/18.plz",
+            "sha256": "020ab8e9d84ece20a0f538ce0e9145c77b8d982cb0bbdfdc7ee332d09394a51b",
+            "length": 4372,
+            "width": 32,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 4348,
+            "decodedLength": 65536,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/19.plz",
+        "pos_x": "3584",
+        "pos_y": "2048",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/19.plz",
+            "sha256": "846c67be6c56ffe5ae8a0a84903580c4dc2bc455a16d51a73e64d477e5cae2e1",
+            "length": 158,
+            "width": 14,
+            "height": 23,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 134,
+            "decodedLength": 1288,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/20.plz",
+        "pos_x": "4096",
+        "pos_y": "461",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/20.plz",
+            "sha256": "36052e4ae1e8d62560281423d1553d0f56bdce820e8e3c26a0ccc415a5b6fb2f",
+            "length": 444,
+            "width": 77,
+            "height": 51,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 420,
+            "decodedLength": 15708,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/21.plz",
+        "pos_x": "4096",
+        "pos_y": "512",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/21.plz",
+            "sha256": "b601bdb6ac11c00cabe119261143f52d5a5419c98e6f28f568e9078ec8e293aa",
+            "length": 1451,
+            "width": 54,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1427,
+            "decodedLength": 110592,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/22.plz",
+        "pos_x": "4096",
+        "pos_y": "1024",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/22.plz",
+            "sha256": "4914dbcf8a5b0b6baf89761ec2037be2e480df80b5f3539c05ce499ad0d75ced",
+            "length": 2029,
+            "width": 101,
+            "height": 272,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 2005,
+            "decodedLength": 109888,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/23.plz",
+        "pos_x": "4608",
+        "pos_y": "2048",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/23.plz",
+            "sha256": "a6bf2bc287d144fdfcee382bab0c9c1716fdd97d08c6c42a3814464a4c4fc4d6",
+            "length": 4129,
+            "width": 511,
+            "height": 511,
+            "flipX": true,
+            "flipY": true,
+            "payloadLength": 4105,
+            "decodedLength": 1044484,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake2/24.plz",
+        "pos_x": "4608",
+        "pos_y": "2392",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake2.xml",
+        "sourceSplicedSha256": "41f832e13f0132a6538ceb0249523ceb3a1ec7114b0fe89a6397d1fbdb043366",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake2/24.plz",
+            "sha256": "645d8f73c9c06e8ffd76d657292a62332e4c64089dcd0045ebe1cdbbb1103fd4",
+            "length": 2783,
+            "width": 511,
+            "height": 343,
+            "flipX": true,
+            "flipY": true,
+            "payloadLength": 2759,
+            "decodedLength": 701092,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "data/biome_impl/spliced/skull_in_desert/1_visual.png",
+        "material_filename": "data/biome_impl/spliced/skull_in_desert/1.png",
+        "pos_x": "7100",
+        "pos_y": "-100",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/skull_in_desert.xml",
+        "sourceSplicedSha256": "e6c40caa097c0a536fb5b782b53586e6703e183c4ad22d8de337be48cc0befd9",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/skull_in_desert/1.png",
+            "sha256": "17b8c5c25a9df5f6914dabe3e64407c6ccaa8b70cd41455a5ff1c8f85c632032",
+            "length": 8111,
+            "width": 512,
+            "height": 350
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/skull_in_desert/1_visual.png",
+            "sha256": "c0943eb87ea3a002737986c44ec14ca1ee5e605da8d3d7d98964b536ffd17e7f",
+            "length": 105099,
+            "width": 512,
+            "height": 350
+          },
+          "background": null
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/0_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/0.plz",
+        "pos_x": "1536",
+        "pos_y": "12288",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/0.plz",
+            "sha256": "2d6be8231e1ce7c2d7aa72d7f191e3132bd101812de6974e571461dfb0ab7d96",
+            "length": 6415,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 6391,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/0_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/1_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/1_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/1.plz",
+        "pos_x": "1536",
+        "pos_y": "12800",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/1.plz",
+            "sha256": "3359ba747d52c75aa8b646b01f4d25f8b012bf58157ddeccbaecc52e42607635",
+            "length": 7778,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7754,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/1_visual.plz",
+            "sha256": "b9152564dfb02ecd5fe03e9e68a6598cfa5b95c2d850cb0b66d4d17479f1e102",
+            "length": 55550,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 55526,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/1_background.png",
+            "sha256": "1cd52d9a04c5ce5d3c3b4add73e0dca1027595d69ff8374882993ff51478664c",
+            "length": 68034,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/2_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/2.plz",
+        "pos_x": "1536",
+        "pos_y": "13312",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/2.plz",
+            "sha256": "14a4f93cf8e73cfc61729a6b71454013361586fb05f0850eae81117edfbcdbda",
+            "length": 4159,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 4135,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/2_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/3_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/3.plz",
+        "pos_x": "1536",
+        "pos_y": "13824",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/3.plz",
+            "sha256": "b652fee3cfa6393037626eb8a463010a73a802e54c7be94a058f72bb8ec69ff6",
+            "length": 549,
+            "width": 512,
+            "height": 64,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 525,
+            "decodedLength": 131072,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/3_background.png",
+            "sha256": "36faa245fa1a5b909544d31e6e43d83dd2f87dde5920b323e5e01ef3cc56e7cc",
+            "length": 1411,
+            "width": 512,
+            "height": 64
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/4_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/4.plz",
+        "pos_x": "2048",
+        "pos_y": "12288",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/4.plz",
+            "sha256": "dfe52dab588db21340b8831e83000071a68c4afe25cc61420252ec9c90a326a0",
+            "length": 4148,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 4124,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/4_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/5_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/5_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/5.plz",
+        "pos_x": "2048",
+        "pos_y": "12800",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/5.plz",
+            "sha256": "c331e3b09b3a476be3b7033d3f083341aa3ae8d54166b8d040f58c9f1487f34a",
+            "length": 8438,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 8414,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/5_visual.plz",
+            "sha256": "ac8e8ad653c39fc95f3b186b1225685a645b9b62d12d146886da2a5e14af79db",
+            "length": 85876,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 85852,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/5_background.png",
+            "sha256": "b2aa6545cba0ba885770892bbfca34470a12305ba3f7c0366ffd03ed2d7d6299",
+            "length": 129586,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/6_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/6.plz",
+        "pos_x": "2048",
+        "pos_y": "13312",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/6.plz",
+            "sha256": "14a4f93cf8e73cfc61729a6b71454013361586fb05f0850eae81117edfbcdbda",
+            "length": 4159,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 4135,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/6_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/7_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/7.plz",
+        "pos_x": "2048",
+        "pos_y": "13824",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/7.plz",
+            "sha256": "b652fee3cfa6393037626eb8a463010a73a802e54c7be94a058f72bb8ec69ff6",
+            "length": 549,
+            "width": 512,
+            "height": 64,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 525,
+            "decodedLength": 131072,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/7_background.png",
+            "sha256": "36faa245fa1a5b909544d31e6e43d83dd2f87dde5920b323e5e01ef3cc56e7cc",
+            "length": 1411,
+            "width": 512,
+            "height": 64
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/8_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/8.plz",
+        "pos_x": "2560",
+        "pos_y": "12288",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/8.plz",
+            "sha256": "474653863ce41daea1cb8e5f13521f1de35b3eb9bc8e2f473adffff901f53de8",
+            "length": 8940,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 8916,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/8_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/9_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/9_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/9.plz",
+        "pos_x": "2560",
+        "pos_y": "12800",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/9.plz",
+            "sha256": "88076c58474761bc1a6c7409211ae2382a723347297133fee58d56ae56ee997a",
+            "length": 12785,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 12761,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/9_visual.plz",
+            "sha256": "5f64aa91630586bf82e17c4bf972432bea862c904101de095c2144ed32c95e4d",
+            "length": 87742,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 87718,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/9_background.png",
+            "sha256": "6bce34e8b7872237956352c3959ced2b6995b42be94e9887210f57d6baf15526",
+            "length": 52473,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/10_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/10_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/10.plz",
+        "pos_x": "2560",
+        "pos_y": "13312",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/10.plz",
+            "sha256": "292317afae5c830a792c65ee650433686f24d8239e257a170cb5377282edbe57",
+            "length": 14705,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 14681,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/10_visual.plz",
+            "sha256": "9a47c48906b02ca68410e97554968e15be554f2916bc9e0f229366229e32886d",
+            "length": 4621,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 4597,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/10_background.png",
+            "sha256": "846b2e31bfc0a75e2513936dbd5ad54a49bc6665ca7a9c554f02281e9787543c",
+            "length": 11130,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/11_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/11.plz",
+        "pos_x": "2560",
+        "pos_y": "13824",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/11.plz",
+            "sha256": "c63acb052fdd5d2c8528ff676c9e85736eb2e2264fe7a9cbeb540938f6416a8a",
+            "length": 1444,
+            "width": 512,
+            "height": 64,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1420,
+            "decodedLength": 131072,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/11_background.png",
+            "sha256": "36faa245fa1a5b909544d31e6e43d83dd2f87dde5920b323e5e01ef3cc56e7cc",
+            "length": 1411,
+            "width": 512,
+            "height": 64
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/12_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/12.plz",
+        "pos_x": "3072",
+        "pos_y": "12288",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/12.plz",
+            "sha256": "f551c6aea89ea6e7aad1da3e61e1b8053bcc3e9e134e8c1460bf5febc256a6aa",
+            "length": 9980,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9956,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/12_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/13_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/13_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/13.plz",
+        "pos_x": "3072",
+        "pos_y": "12800",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/13.plz",
+            "sha256": "f35b383a7e66d62696917e9951db00c68fa1a1f3c6a6e2b9639e16f4560048f3",
+            "length": 13676,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 13652,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/13_visual.plz",
+            "sha256": "860d48ae28112d4c9cebe8d9dd5de6203f88fcd91bffbc61655722fe5c29823d",
+            "length": 118288,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 118264,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/13_background.png",
+            "sha256": "bb2ecb029157cd27976d1a9e955633ec241cf698c47f27d864180f987b65e17b",
+            "length": 34797,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/14_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/14.plz",
+        "pos_x": "3072",
+        "pos_y": "13312",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/14.plz",
+            "sha256": "25ff0132d723682b512b563619e4e1b35dfbe2e23f54fcc98e07d196c5fdecc1",
+            "length": 9826,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9802,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/14_background.png",
+            "sha256": "574309c7a543a0b367c568630368372d2b334c0edd89071b21c3538499ebfb31",
+            "length": 12003,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/15_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/15.plz",
+        "pos_x": "3072",
+        "pos_y": "13824",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/15.plz",
+            "sha256": "1025c4493110d10ff1a063f8cce03948b65224bf1557d4b89ff80bd91e489770",
+            "length": 1200,
+            "width": 512,
+            "height": 64,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1176,
+            "decodedLength": 131072,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/15_background.png",
+            "sha256": "36faa245fa1a5b909544d31e6e43d83dd2f87dde5920b323e5e01ef3cc56e7cc",
+            "length": 1411,
+            "width": 512,
+            "height": 64
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/16_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/16.plz",
+        "pos_x": "3584",
+        "pos_y": "12288",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/16.plz",
+            "sha256": "69957e76ac637d9c0014bf41c00e43150182507797c122e3e80d526ffed34e32",
+            "length": 9898,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9874,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/16_background.png",
+            "sha256": "c9c869f628a79b5dd3b81fce4aac1445927c99c50d0f287c9dead957a6e096d2",
+            "length": 10788,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/17_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/17_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/17.plz",
+        "pos_x": "3584",
+        "pos_y": "12800",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/17.plz",
+            "sha256": "f80d3e8a2078943aae564f6088a03e7065f01711f0ab966f3c530cffec519e58",
+            "length": 13623,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 13599,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/17_visual.plz",
+            "sha256": "8431a44b56ebcc63b858e73d5ed8e0ffe2d55baa8780fbce26ca502f1df38ec9",
+            "length": 113619,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 113595,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/17_background.png",
+            "sha256": "6f8b29f3b38137cc2c7d33309a8eaaae093a2cefb29665213d40e23a755b576a",
+            "length": 21759,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/18_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "data/biome_impl/spliced/boss_arena/18_visual.plz",
+        "material_filename": "data/biome_impl/spliced/boss_arena/18.plz",
+        "pos_x": "3584",
+        "pos_y": "13312",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/18.plz",
+            "sha256": "005eddc522bfb272bf212078601faec73640d5f697afbc0dd8dd8fcb8983af3c",
+            "length": 12735,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 12711,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/boss_arena/18_visual.plz",
+            "sha256": "37c2acc8c78e8d789cd51bfe2be4a2340ccdbf2b7a46d6b4af3ae6a59b0e1000",
+            "length": 29846,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 29822,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/18_background.png",
+            "sha256": "fb6fed36a507f0d7dcf2cc8cf24ca35c0d4f24d221d4bb0a6ad96c96a03390de",
+            "length": 15311,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/19_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/19.plz",
+        "pos_x": "3584",
+        "pos_y": "13824",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/19.plz",
+            "sha256": "5e98902e8ab613b82b73f14111716761ac8684974778eac5e2315ecd00abbc75",
+            "length": 1238,
+            "width": 512,
+            "height": 64,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1214,
+            "decodedLength": 131072,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/19_background.png",
+            "sha256": "36faa245fa1a5b909544d31e6e43d83dd2f87dde5920b323e5e01ef3cc56e7cc",
+            "length": 1411,
+            "width": 512,
+            "height": 64
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/20_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/20.plz",
+        "pos_x": "4096",
+        "pos_y": "12288",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/20.plz",
+            "sha256": "8fea49c01b33f1e206a29c7af669344fc8cbb55b54730c9b10be4befdac6bd1a",
+            "length": 357,
+            "width": 40,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 333,
+            "decodedLength": 81920,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/20_background.png",
+            "sha256": "45d110e78374b0053e4a27b3188dd57cf5b17c6cf58d5add0b03202378831098",
+            "length": 1064,
+            "width": 40,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/21_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/21.plz",
+        "pos_x": "4096",
+        "pos_y": "12800",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/21.plz",
+            "sha256": "3aa480ad6cfb9708b981a1b2420909788a9791517adbc1d6cd96735355702ffa",
+            "length": 395,
+            "width": 40,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 371,
+            "decodedLength": 81920,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/21_background.png",
+            "sha256": "05303f9490911837faf9d9b049059d345c6e355f2a800b74a482bd0d7d845efd",
+            "length": 1477,
+            "width": 40,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/22_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/22.plz",
+        "pos_x": "4096",
+        "pos_y": "13312",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/22.plz",
+            "sha256": "dd4c96d231d39d6b44e8e7d9bb250b76a613613e3c0bd42b09c4b7e4b63eab83",
+            "length": 513,
+            "width": 40,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 489,
+            "decodedLength": 81920,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/22_background.png",
+            "sha256": "f5374451e611ce96d80b257f5ccdbfe95700733cf9a481b173192838cc1d58a7",
+            "length": 1939,
+            "width": 40,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/boss_arena/23_background.png",
+        "clean_area_before": "1",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/boss_arena/23.plz",
+        "pos_x": "4096",
+        "pos_y": "13824",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/boss_arena.xml",
+        "sourceSplicedSha256": "2cae47277c748fb1c7f083906f25a7b8c8eb904772039a422db2bf2e16fcb748",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/boss_arena/23.plz",
+            "sha256": "f5fa4531a74000086374e30441e8616f2cfc53aa35b260db142208412bfc6a04",
+            "length": 153,
+            "width": 40,
+            "height": 64,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 129,
+            "decodedLength": 10240,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/boss_arena/23_background.png",
+            "sha256": "5637c68210f5f3dc46addfec2ac67486acc5272c14ea2a3a64408e31351c8de2",
+            "length": 197,
+            "width": 40,
+            "height": 64
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/0_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/0_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/0.plz",
+        "pos_x": "-2016",
+        "pos_y": "-1324",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/0.plz",
+            "sha256": "f444d4f0104d4545e87ea0ec4948585c71c21131768237a66795523df4dd1339",
+            "length": 9384,
+            "width": 480,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9360,
+            "decodedLength": 983040,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/0_visual.plz",
+            "sha256": "7cf1c0bdf0098a1cdd83c2666bbb979743161f0f4ed97d8700e1c19022905da2",
+            "length": 248770,
+            "width": 480,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 248746,
+            "decodedLength": 983040,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/0_background.png",
+            "sha256": "9c3e6b6c691938fc04096472a01fb2cd6f30eaca5cb76e4d1ca82d888e44c78f",
+            "length": 17741,
+            "width": 480,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/1_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/1_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/1.plz",
+        "pos_x": "-2035",
+        "pos_y": "-812",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/1.plz",
+            "sha256": "d3f13e48b53f9610f7dca6e7c71da0444ebeba339543de7625c5df907653d298",
+            "length": 9805,
+            "width": 499,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9781,
+            "decodedLength": 1021952,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/1_visual.plz",
+            "sha256": "b3ad5d03cac065f829e21c11674968416744d24562b21a081a19e464ff5fb02f",
+            "length": 242602,
+            "width": 499,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 242578,
+            "decodedLength": 1021952,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/1_background.png",
+            "sha256": "edb7db7d819b7435cd02963d384f1fa9b694902827ef53efebab0ed1e49b98b0",
+            "length": 16390,
+            "width": 499,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/2_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/2_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/2.plz",
+        "pos_x": "-2048",
+        "pos_y": "-300",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/2.plz",
+            "sha256": "08fe4c7b03e1e2819845e42af4b47052eadb5797c86152bcc1e273a662afc0b4",
+            "length": 6255,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 6231,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/2_visual.plz",
+            "sha256": "7d52f8c7d7e28983e4fcd80ea99480b1bbfaa6a4005e3d299fbda003201a6474",
+            "length": 234584,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 234560,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/2_background.png",
+            "sha256": "115da6389c60f8fa538822757fc590d39ce5ace9cd12b685fcddc726717e50e5",
+            "length": 17736,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/3_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/3_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/3.plz",
+        "pos_x": "-2048",
+        "pos_y": "212",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/3.plz",
+            "sha256": "e7954e83f4c8d023d3642a66789ac1928e3a3abdba0777b51231c1dcf0a20f58",
+            "length": 5101,
+            "width": 512,
+            "height": 299,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5077,
+            "decodedLength": 612352,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/3_visual.plz",
+            "sha256": "7942ca3d85c62f29383a8a1d02949c5212e4d31c9b23317fbff9c304d96e54f3",
+            "length": 10858,
+            "width": 512,
+            "height": 299,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 10834,
+            "decodedLength": 612352,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/3_background.png",
+            "sha256": "12b7f25411f81f6ebe539bb4eae72e668abd2811f8917b22614fbd6924dfd515",
+            "length": 8608,
+            "width": 512,
+            "height": 299
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/4_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/4_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/4.plz",
+        "pos_x": "-1536",
+        "pos_y": "-1323",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/4.plz",
+            "sha256": "973ee9e54cfe6900929b910277ff5cd9fa27e461783fedb1526ab31fc6f18e10",
+            "length": 11888,
+            "width": 475,
+            "height": 511,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 11864,
+            "decodedLength": 970900,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/4_visual.plz",
+            "sha256": "ab79d6ea94049b5dcbd1a6a7c83b66e72666de69f26ffdbaa989a38efafd7e4c",
+            "length": 201456,
+            "width": 475,
+            "height": 511,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 201432,
+            "decodedLength": 970900,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/4_background.png",
+            "sha256": "c483ac7d474dba1e0e128cf2017de8ccd3ad533dd4559b228a2f1a78dd559b73",
+            "length": 16803,
+            "width": 475,
+            "height": 511
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/5_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/5_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/5.plz",
+        "pos_x": "-1536",
+        "pos_y": "-812",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/5.plz",
+            "sha256": "a6bd51ecb805ad49f5574347368f23f12638ac96e14829d03891ba15cb734348",
+            "length": 10565,
+            "width": 508,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 10541,
+            "decodedLength": 1040384,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/5_visual.plz",
+            "sha256": "cc3a2a205fa79e66ca40ccf42df1ec724dd237dd02578201fd6ea4fa7afa1067",
+            "length": 179678,
+            "width": 508,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 179654,
+            "decodedLength": 1040384,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/5_background.png",
+            "sha256": "3e40bba74df4dd0254f57d2e90678de7ec94f3584b7bba0cf181f8bdf2c4076f",
+            "length": 34819,
+            "width": 508,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/6_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/6_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/6.plz",
+        "pos_x": "-1536",
+        "pos_y": "-300",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/6.plz",
+            "sha256": "7885268f95530f01bd4b35cd04dff6a5a82e918c026c2ab98c3d961bdfba38bc",
+            "length": 10770,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 10746,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/6_visual.plz",
+            "sha256": "74a4ec7aa696d2b7fcf88eb82721ea48fe97c28274a424683c595d9c3386964c",
+            "length": 138935,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 138911,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/6_background.png",
+            "sha256": "8ca6103902295cf336554993b51bb2a2175be474aa162428be5d958e17928297",
+            "length": 25163,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/tree/7_background.png",
+        "colors_filename": "data/biome_impl/spliced/tree/7_visual.plz",
+        "material_filename": "data/biome_impl/spliced/tree/7.plz",
+        "pos_x": "-1536",
+        "pos_y": "212",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/tree.xml",
+        "sourceSplicedSha256": "2ea5ef484e29a95cb7a48f1a5f5d71ba3cd10d6f454bb35490ef6fda5d467ee6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/tree/7.plz",
+            "sha256": "b794b9140491ae90847cc193591989a6353e21132e9385aa787dcb91cfb0f87c",
+            "length": 20063,
+            "width": 512,
+            "height": 510,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 20039,
+            "decodedLength": 1044480,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/tree/7_visual.plz",
+            "sha256": "7d55713cbe54aee6e691cd52f31c1670779073d09771d6145194ddf2ac524287",
+            "length": 80572,
+            "width": 512,
+            "height": 510,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 80548,
+            "decodedLength": 1044480,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/tree/7_background.png",
+            "sha256": "bc9825681627b6fab8cc2b86b15e2bbaeee0cf4fec914a47ca679031435de9eb",
+            "length": 42119,
+            "width": 512,
+            "height": 510
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/watercave/0_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/watercave/0.plz",
+        "pos_x": "-2048",
+        "pos_y": "389",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/watercave.xml",
+        "sourceSplicedSha256": "32f1286c7425178948294dbf030f63c353a56154cccc105ef95346efff6dc002",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/watercave/0.plz",
+            "sha256": "cb15ca4f45608ec15e937f0f703d265a51744d3f08ea57d7490dedf39a537bca",
+            "length": 4005,
+            "width": 511,
+            "height": 123,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 3981,
+            "decodedLength": 251412,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/watercave/0_background.png",
+            "sha256": "9610505995244a933b4fc3af7d9c65f9f0d35898ceb62d2ccca9f02dcb59dcb5",
+            "length": 3135,
+            "width": 73,
+            "height": 64
+          }
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/watercave/1.plz",
+        "pos_x": "-2048",
+        "pos_y": "512",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/watercave.xml",
+        "sourceSplicedSha256": "32f1286c7425178948294dbf030f63c353a56154cccc105ef95346efff6dc002",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/watercave/1.plz",
+            "sha256": "e06ef77d89c5ab57239b56a596df98588ce3ac795a2c08bef62de6082482ed25",
+            "length": 145,
+            "width": 512,
+            "height": 4,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 121,
+            "decodedLength": 8192,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/watercave/2.plz",
+        "pos_x": "-2047",
+        "pos_y": "1027",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/watercave.xml",
+        "sourceSplicedSha256": "32f1286c7425178948294dbf030f63c353a56154cccc105ef95346efff6dc002",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/watercave/2.plz",
+            "sha256": "e96d4c155be6fd0bed1669b1b6dbc3d957159bb2824ad93243699edee439128b",
+            "length": 2833,
+            "width": 449,
+            "height": 88,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 2809,
+            "decodedLength": 158048,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/mountain_lake/0.plz",
+        "pos_x": "2560",
+        "pos_y": "0",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/mountain_lake.xml",
+        "sourceSplicedSha256": "7acbad9b06015fe67dba6c3f28a370423e7b25034b7f7dc9388d7486b64f4464",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/mountain_lake/0.plz",
+            "sha256": "671fbf3eb14e586629ec0f44b9f9c8924dfa0ab094fa5fae24eae3c54b27d7f7",
+            "length": 76094,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 76070,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/lake_statue/0_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lake_statue/0.plz",
+        "pos_x": "-14848",
+        "pos_y": "160",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lake_statue.xml",
+        "sourceSplicedSha256": "9c7c720680c6c75c2cd2d360180287ed8ca3b2aca4c2b7e4c6dec0c2de52308a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lake_statue/0.plz",
+            "sha256": "2f4b95194d5374aa1caa455bfba3f8236953a686fcf88a0022d816b5b2dd4331",
+            "length": 5682,
+            "width": 512,
+            "height": 352,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5658,
+            "decodedLength": 720896,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/lake_statue/0_background.png",
+            "sha256": "854a994ad6ead6b51c6e63b574dbbce0c363e307dd936fd8ffa313d9937f85d0",
+            "length": 7055,
+            "width": 512,
+            "height": 352
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/lake_statue/1_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lake_statue/1.plz",
+        "pos_x": "-14336",
+        "pos_y": "23",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lake_statue.xml",
+        "sourceSplicedSha256": "9c7c720680c6c75c2cd2d360180287ed8ca3b2aca4c2b7e4c6dec0c2de52308a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lake_statue/1.plz",
+            "sha256": "d4f82a3f1158b0a39e6bf963e4da22dc85cd8c34cb8344870c8514a3d8857ba3",
+            "length": 11296,
+            "width": 512,
+            "height": 489,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 11272,
+            "decodedLength": 1001472,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/lake_statue/1_background.png",
+            "sha256": "ace7ecc7ffec4c195b587cdbf374e7ec68c42a88d0adaad029fe7893ace0a110",
+            "length": 9775,
+            "width": 512,
+            "height": 489
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/lake_statue/2_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lake_statue/2.plz",
+        "pos_x": "-13824",
+        "pos_y": "93",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lake_statue.xml",
+        "sourceSplicedSha256": "9c7c720680c6c75c2cd2d360180287ed8ca3b2aca4c2b7e4c6dec0c2de52308a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lake_statue/2.plz",
+            "sha256": "0a5bb87a746d0dd36d380b2c9b41b1b9a735bfd5b3d24b1a4dc378e3896d8da5",
+            "length": 7387,
+            "width": 512,
+            "height": 419,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7363,
+            "decodedLength": 858112,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/lake_statue/2_background.png",
+            "sha256": "22b01a0e4798c855905d05fd4e067e60204930f2e9d8ee0f099eac8b1012ceb0",
+            "length": 10345,
+            "width": 512,
+            "height": 419
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/moon/0_background.png",
+        "colors_filename": "data/biome_impl/spliced/moon/0_visual.plz",
+        "material_filename": "data/biome_impl/spliced/moon/0.plz",
+        "pos_x": "13",
+        "pos_y": "-26104",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/moon.xml",
+        "sourceSplicedSha256": "3f032e32cf9383a60f9e46e521a4b9b9b704d88fffb3aa961fd8b28f5df78402",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/moon/0.plz",
+            "sha256": "d773eb5856f456d42d70d44ac9a5d6e602beafb3b07957401764608c8f4b9e0b",
+            "length": 7977,
+            "width": 488,
+            "height": 494,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 7953,
+            "decodedLength": 964288,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/moon/0_visual.plz",
+            "sha256": "31dc8d531729ab2f2f9eca32cb71a1f82d5bfcd661072584d2d8d120c49599d2",
+            "length": 261561,
+            "width": 488,
+            "height": 494,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 261537,
+            "decodedLength": 964288,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/moon/0_background.png",
+            "sha256": "78ac2ba5d5da2b039ce041bec20421739fa754faf2bd440b7f02ee9094745abb",
+            "length": 174834,
+            "width": 488,
+            "height": 494
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/moon_dark/0_background.png",
+        "colors_filename": "data/biome_impl/spliced/moon_dark/0_visual.plz",
+        "material_filename": "data/biome_impl/spliced/moon_dark/0.plz",
+        "pos_x": "9",
+        "pos_y": "37513",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/moon_dark.xml",
+        "sourceSplicedSha256": "0c60f8d70b7e04b5d3499f427c7862183c9c459f5c694f6ea893fcf70984043a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/moon_dark/0.plz",
+            "sha256": "77c3d29af8a272cfa9d11a1a81a3474396582d9312106f42cd04c0216a2a443f",
+            "length": 12399,
+            "width": 496,
+            "height": 501,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 12375,
+            "decodedLength": 993984,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/moon_dark/0_visual.plz",
+            "sha256": "93ee905e80f77f36e1143439643a883237788bff79372c23f746b684793824ad",
+            "length": 76980,
+            "width": 496,
+            "height": 501,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 76956,
+            "decodedLength": 993984,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": {
+            "path": "data/biome_impl/spliced/moon_dark/0_background.png",
+            "sha256": "9189aec2161298ac68718e1b6a26b32bb2765c839b62d7d9ee6ccf6fb9eac4bd",
+            "length": 170649,
+            "width": 496,
+            "height": 501
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/lavalake_pit_bottom/0_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake_pit_bottom/0.plz",
+        "pos_x": "2560",
+        "pos_y": "3072",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake_pit_bottom.xml",
+        "sourceSplicedSha256": "5c4a08033fcee6c5890a8abef60ff2d8ac959fa6aaf0c787ec630bea80e1662a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake_pit_bottom/0.plz",
+            "sha256": "cf3cb1729bd5ab0dddc4f26951426556ca447e4116a578e504158eb85e672c06",
+            "length": 5353,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5329,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/lavalake_pit_bottom/0_background.png",
+            "sha256": "9ffd4bc6964b87990124d3f24d6389c096b54f0dc6c0c191eb8e4685a5dddcbf",
+            "length": 10233,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/lavalake_pit_bottom/1_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake_pit_bottom/1.plz",
+        "pos_x": "3072",
+        "pos_y": "3072",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake_pit_bottom.xml",
+        "sourceSplicedSha256": "5c4a08033fcee6c5890a8abef60ff2d8ac959fa6aaf0c787ec630bea80e1662a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake_pit_bottom/1.plz",
+            "sha256": "dbabb2a8945844c51f4ab1706672f66bdf227b4e12e9ef0f2372a04f2e9c605c",
+            "length": 5692,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5668,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/lavalake_pit_bottom/1_background.png",
+            "sha256": "645f466b611c75804f375b77628244a7c9da5c86cfcb51be6d7e4708dfafe58d",
+            "length": 10656,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "background_filename": "data/biome_impl/spliced/lavalake_pit_bottom/2_background.png",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/lavalake_pit_bottom/2.plz",
+        "pos_x": "3584",
+        "pos_y": "3072",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/lavalake_pit_bottom.xml",
+        "sourceSplicedSha256": "5c4a08033fcee6c5890a8abef60ff2d8ac959fa6aaf0c787ec630bea80e1662a",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/lavalake_pit_bottom/2.plz",
+            "sha256": "61c9e1c2521e7f9bc87ef5db25f19554df0f1c1c93c6f1d24b411b12341308a1",
+            "length": 8445,
+            "width": 512,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 8421,
+            "decodedLength": 1048576,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/lavalake_pit_bottom/2_background.png",
+            "sha256": "8353e3b57bdc311850f99604ad58614f2269c56dc527a15111a9f149f7889ffe",
+            "length": 13063,
+            "width": 512,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/gourd_room/0_background.png",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/0.plz",
+        "pos_x": "-16541",
+        "pos_y": "-6767",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/0.plz",
+            "sha256": "a8e015fe4e0fc529e7e479d093dea8c5899e485cb1a023fb7b47b8e56cfc66ed",
+            "length": 893,
+            "width": 157,
+            "height": 111,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 869,
+            "decodedLength": 69708,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/gourd_room/0_background.png",
+            "sha256": "6c7e528c377f4f2739bdd38264dda35eec4a9aedbae024122b1283c7675ffbfc",
+            "length": 2311,
+            "width": 157,
+            "height": 111
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/gourd_room/1_background.png",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/1.plz",
+        "pos_x": "-16590",
+        "pos_y": "-6656",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/1.plz",
+            "sha256": "ff40221062d7ae7c862e8fdd80f0f6550db86744ec608d27d57d5e9b700fadd0",
+            "length": 5445,
+            "width": 206,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 5421,
+            "decodedLength": 421888,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/gourd_room/1_background.png",
+            "sha256": "55e943440e3c784c6c68996857b6b901dfe76f2a42e9ed5474cc5d572002928a",
+            "length": 14255,
+            "width": 206,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/gourd_room/2_background.png",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/2.plz",
+        "pos_x": "-16533",
+        "pos_y": "-6144",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/2.plz",
+            "sha256": "8355b8ff7be1dd450664a45f4579ab91ca6e02bec37baa6836fb53553d0db890",
+            "length": 1157,
+            "width": 149,
+            "height": 109,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1133,
+            "decodedLength": 64964,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/gourd_room/2_background.png",
+            "sha256": "8f494f95f0857a44302aada9ac311cfd041ea328278cd56b88b528e74695fae4",
+            "length": 2184,
+            "width": 149,
+            "height": 109
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/gourd_room/3_background.png",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/3.plz",
+        "pos_x": "-16384",
+        "pos_y": "-6776",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/3.plz",
+            "sha256": "955888950cb2ec5b9275ad71d986e33edf7aab1c0c1e25f51d0e501db3ddfcce",
+            "length": 2156,
+            "width": 501,
+            "height": 120,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 2132,
+            "decodedLength": 240480,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/gourd_room/3_background.png",
+            "sha256": "254aa8f43cbbf5aa27aef1f2f9f997a1bb2747311effe89cc339a20fe5e700c4",
+            "length": 6864,
+            "width": 501,
+            "height": 120
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/gourd_room/4_background.png",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/4.plz",
+        "pos_x": "-16384",
+        "pos_y": "-6656",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/4.plz",
+            "sha256": "0e489719695965a3aa48f6f28a900a9ebb178993c4a0fcd69f5611ee761169ed",
+            "length": 9400,
+            "width": 507,
+            "height": 512,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 9376,
+            "decodedLength": 1038336,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/gourd_room/4_background.png",
+            "sha256": "c5adb797a63ccee63c68d77c85205fe369d0d913362732c52084aae7239a0421",
+            "length": 32564,
+            "width": 507,
+            "height": 512
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "data/biome_impl/spliced/gourd_room/5_background.png",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/5.plz",
+        "pos_x": "-16384",
+        "pos_y": "-6144",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/5.plz",
+            "sha256": "f37c33feca8e00cf4738f54ef01ec3765a1d0eab13770320454eee42233f36d8",
+            "length": 2000,
+            "width": 504,
+            "height": 137,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 1976,
+            "decodedLength": 276192,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": {
+            "path": "data/biome_impl/spliced/gourd_room/5_background.png",
+            "sha256": "0277ef48e2e6401c51a513d4109b03d0bd77a3656b09bee95faa67b4422fc599",
+            "length": 8410,
+            "width": 504,
+            "height": 137
+          }
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/6.plz",
+        "pos_x": "-15360",
+        "pos_y": "-6656",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/6.plz",
+            "sha256": "a6bf2bc287d144fdfcee382bab0c9c1716fdd97d08c6c42a3814464a4c4fc4d6",
+            "length": 4129,
+            "width": 511,
+            "height": 511,
+            "flipX": true,
+            "flipY": true,
+            "payloadLength": 4105,
+            "decodedLength": 1044484,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/7.plz",
+        "pos_x": "-15360",
+        "pos_y": "-6144",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/7.plz",
+            "sha256": "a6bf2bc287d144fdfcee382bab0c9c1716fdd97d08c6c42a3814464a4c4fc4d6",
+            "length": 4129,
+            "width": 511,
+            "height": 511,
+            "flipX": true,
+            "flipY": true,
+            "payloadLength": 4105,
+            "decodedLength": 1044484,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "DEBUG_RELOAD_ME": "1",
+        "background_filename": "",
+        "clean_area_before": "0",
+        "colors_filename": "",
+        "material_filename": "data/biome_impl/spliced/gourd_room/8.plz",
+        "pos_x": "-15360",
+        "pos_y": "-5632",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/gourd_room.xml",
+        "sourceSplicedSha256": "e252da7b412e4e9aec0d41a173c36116baabc6ec26c4185977dbf5763db2dce6",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/gourd_room/8.plz",
+            "sha256": "a6bf2bc287d144fdfcee382bab0c9c1716fdd97d08c6c42a3814464a4c4fc4d6",
+            "length": 4129,
+            "width": 511,
+            "height": 511,
+            "flipX": true,
+            "flipY": true,
+            "payloadLength": 4105,
+            "decodedLength": 1044484,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": null,
+          "background": null
+        }
+      },
+      {
+        "background_filename": "",
+        "colors_filename": "data/biome_impl/spliced/skull/0_visual.plz",
+        "material_filename": "data/biome_impl/spliced/skull/0.plz",
+        "pos_x": "14685",
+        "pos_y": "16198",
+        "skip_biome_checks": "1",
+        "sourceSplicedPath": "data/biome_impl/spliced/skull.xml",
+        "sourceSplicedSha256": "11b0e819a084517ccf3ff32afe4455f3577e02c26f5e044b4767a487baee7540",
+        "assets": {
+          "material": {
+            "path": "data/biome_impl/spliced/skull/0.plz",
+            "sha256": "0dd4470c09ce5e70340f1c5bfe45aead6bc72000bfe74a0330348a979b0f3cd0",
+            "length": 13648,
+            "width": 454,
+            "height": 505,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 13624,
+            "decodedLength": 917080,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "colors": {
+            "path": "data/biome_impl/spliced/skull/0_visual.plz",
+            "sha256": "e19adca0f39702489a6f93ca548e69a8801df054335e74989e4af830c33b0317",
+            "length": 132220,
+            "width": 454,
+            "height": 505,
+            "flipX": false,
+            "flipY": false,
+            "payloadLength": 132196,
+            "decodedLength": 917080,
+            "encoding": "fastlz-rgba-v1"
+          },
+          "background": null
+        }
+      }
     ],
     "backgroundImages": [
       {

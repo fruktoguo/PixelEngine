@@ -1072,6 +1072,13 @@ public sealed class CampaignWorldTests
             NoitaPixelSceneMaterial.Ice => "ice",
             NoitaPixelSceneMaterial.Sand => "sand",
             NoitaPixelSceneMaterial.Glass => "glass",
+            NoitaPixelSceneMaterial.Lava => "lava",
+            NoitaPixelSceneMaterial.Blood => "blood",
+            NoitaPixelSceneMaterial.BoneStatic => "bone_static",
+            NoitaPixelSceneMaterial.CheeseStatic => "cheese_static",
+            NoitaPixelSceneMaterial.Mud => "mud",
+            NoitaPixelSceneMaterial.SandPetrify => "sand_petrify",
+            NoitaPixelSceneMaterial.SnowSticky => "snow_sticky",
             _ => throw new InvalidOperationException("Pixel Scene material enum 超出生成器支持范围。"),
         };
         Assert.Equal(

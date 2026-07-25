@@ -108,6 +108,29 @@ function Get-AssetDescriptor([string] $DataPath) {
             $image.Dispose()
         }
     }
+    elseif ([IO.Path]::GetExtension($file).Equals('.plz', [StringComparison]::OrdinalIgnoreCase)) {
+        $header = [IO.File]::ReadAllBytes($file)
+        if ($header.Length -lt 24 -or [BitConverter]::ToInt32($header, 0) -ne 1 -or
+            [BitConverter]::ToInt32($header, 12) -ne 4) {
+            throw "Unsupported Noita PLZ header: $DataPath"
+        }
+
+        $encodedWidth = [BitConverter]::ToInt32($header, 4)
+        $encodedHeight = [BitConverter]::ToInt32($header, 8)
+        $descriptor.width = [Math]::Abs($encodedWidth)
+        $descriptor.height = [Math]::Abs($encodedHeight)
+        $descriptor.flipX = $encodedWidth -lt 0
+        $descriptor.flipY = $encodedHeight -lt 0
+        $descriptor.payloadLength = [BitConverter]::ToInt32($header, 16)
+        $descriptor.decodedLength = [BitConverter]::ToInt32($header, 20)
+        if ($encodedWidth -eq 0 -or $encodedHeight -eq 0 -or
+            $descriptor.payloadLength -ne $header.Length - 24 -or
+            $descriptor.decodedLength -ne $descriptor.width * $descriptor.height * 4) {
+            throw "Invalid Noita PLZ dimensions or lengths: $DataPath"
+        }
+
+        $descriptor.encoding = $(if ($descriptor.payloadLength -eq $descriptor.decodedLength) { 'raw-rgba-v1' } else { 'fastlz-rgba-v1' })
+    }
 
     return $descriptor
 }
@@ -183,6 +206,26 @@ foreach ($file in Get-ChildItem -LiteralPath $biomeRoot -File -Filter '*.xml' | 
 
 $pixelDocument = Read-NoitaXml $pixelScenesPath
 $splicedFiles = @($pixelDocument.SelectNodes('/PixelScenes/PixelSceneFiles/File') | ForEach-Object { $_.InnerText.Trim() })
+$splicedScenes = [Collections.Generic.List[object]]::new()
+foreach ($splicedPath in $splicedFiles) {
+    if (-not $splicedPath.StartsWith('data/', [StringComparison]::Ordinal)) {
+        throw "Spliced Pixel Scene path must start with data/: $splicedPath"
+    }
+
+    $splicedFile = Join-Path $resolvedDataRoot $splicedPath.Substring(5)
+    $splicedDocument = Read-NoitaXml $splicedFile
+    foreach ($node in $splicedDocument.SelectNodes('/PixelScenes/mBufferedPixelScenes/PixelScene')) {
+        $attributes = Get-Attributes $node
+        $attributes.sourceSplicedPath = $splicedPath
+        $attributes.sourceSplicedSha256 = Get-Sha256 $splicedFile
+        $attributes.assets = [ordered]@{
+            material = Get-AssetDescriptor $(if ($attributes.Contains('material_filename')) { [string]$attributes['material_filename'] } else { '' })
+            colors = Get-AssetDescriptor $(if ($attributes.Contains('colors_filename')) { [string]$attributes['colors_filename'] } else { '' })
+            background = Get-AssetDescriptor $(if ($attributes.Contains('background_filename')) { [string]$attributes['background_filename'] } else { '' })
+        }
+        $splicedScenes.Add($attributes)
+    }
+}
 $backgrounds = @($pixelDocument.SelectNodes('/PixelScenes/BackgroundImages/Image') | ForEach-Object { Get-Attributes $_ })
 $bufferedScenes = @($pixelDocument.SelectNodes('/PixelScenes/mBufferedPixelScenes/PixelScene') | ForEach-Object {
     $attributes = Get-Attributes $_
@@ -228,6 +271,7 @@ $document = [ordered]@{
         vegetationLayers = [int](@($biomes | ForEach-Object { $_.vegetationLayers.Count } | Measure-Object -Sum).Sum)
         spawnFunctions = [int](@($biomes | ForEach-Object { if ($null -ne $_.lua) { $_.lua.spawnFunctions.Count } else { 0 } } | Measure-Object -Sum).Sum)
         splicedPixelSceneFiles = $splicedFiles.Count
+        splicedPixelScenes = $splicedScenes.Count
         globalBackgroundImages = $backgrounds.Count
         bufferedPixelScenes = $bufferedScenes.Count
         biomeImplFiles = $biomeImplFiles.Count
@@ -236,6 +280,7 @@ $document = [ordered]@{
     globalPixelScenes = [ordered]@{
         sourcePath = 'data/biome/_pixel_scenes.xml'
         splicedFiles = $splicedFiles
+        splicedScenes = @($splicedScenes)
         backgroundImages = $backgrounds
         bufferedScenes = $bufferedScenes
     }

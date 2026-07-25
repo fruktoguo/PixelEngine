@@ -1139,8 +1139,10 @@ public sealed class PlayableCavernWorldGenerator :
         TerrainMaterialPalette palette = row.Palette;
         ref readonly CompiledReferenceBiome referenceBiome =
             ref state.WorldTopology.ReferenceBiome(topologyCell.ReferenceBiomeIndex);
-        return topologyCell.Kind is not (CompiledTopologyCellKind.MainBiome or CompiledTopologyCellKind.SideBiome) &&
-            referenceBiome.WangTerrain is not null
+        return TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial)
+            ? globalSceneMaterial
+            : topologyCell.Kind is not (CompiledTopologyCellKind.MainBiome or CompiledTopologyCellKind.SideBiome) &&
+                referenceBiome.WangTerrain is not null
             ? SelectReferenceWangBiomeMaterial(
                 worldX,
                 worldY,
@@ -1658,17 +1660,15 @@ public sealed class PlayableCavernWorldGenerator :
         in CompiledReferenceBiome referenceBiome,
         in TerrainRowContext row)
     {
-        return TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial)
-            ? globalSceneMaterial
-            : TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial)
-                ? sceneMaterial
-                : SelectCompiledWangMaterial(
-                    worldX,
-                    worldY,
-                    protectedSpawn,
-                    biome,
-                    referenceBiome,
-                    in row);
+        return TrySelectPixelSceneMaterial(worldX, worldY, biome, in row, out ushort sceneMaterial)
+            ? sceneMaterial
+            : SelectCompiledWangMaterial(
+                worldX,
+                worldY,
+                protectedSpawn,
+                biome,
+                referenceBiome,
+                in row);
     }
 
     private static ushort SelectReferenceWangBiomeMaterial(
@@ -1678,15 +1678,13 @@ public sealed class PlayableCavernWorldGenerator :
         in CompiledReferenceBiome referenceBiome,
         in TerrainRowContext row)
     {
-        return TrySelectGlobalPixelSceneMaterial(worldX, worldY, in row, out ushort globalSceneMaterial)
-            ? globalSceneMaterial
-            : SelectCompiledWangMaterial(
-                worldX,
-                worldY,
-                protectedSpawn,
-                row.Biome,
-                referenceBiome,
-                in row);
+        return SelectCompiledWangMaterial(
+            worldX,
+            worldY,
+            protectedSpawn,
+            row.Biome,
+            referenceBiome,
+            in row);
     }
 
     private static ushort SelectCompiledWangMaterial(
@@ -1929,6 +1927,13 @@ public sealed class PlayableCavernWorldGenerator :
             NoitaPixelSceneMaterial.Ice => palette.Ice,
             NoitaPixelSceneMaterial.Sand => palette.Sand,
             NoitaPixelSceneMaterial.Glass => palette.Glass,
+            NoitaPixelSceneMaterial.Lava => palette.Lava,
+            NoitaPixelSceneMaterial.Blood => palette.Blood,
+            NoitaPixelSceneMaterial.BoneStatic => palette.BoneStatic,
+            NoitaPixelSceneMaterial.CheeseStatic => palette.CheeseStatic,
+            NoitaPixelSceneMaterial.Mud => palette.Mud,
+            NoitaPixelSceneMaterial.SandPetrify => palette.SandPetrify,
+            NoitaPixelSceneMaterial.SnowSticky => palette.SnowSticky,
             _ => throw new InvalidOperationException($"未知 Noita Pixel Scene material：{sceneMaterial}。"),
         };
         return true;
@@ -2632,7 +2637,13 @@ public sealed class PlayableCavernWorldGenerator :
             ResolveRequired(materials, "metal"),
             ResolveRequired(materials, "wood"),
             ResolveRequired(materials, "smoke"),
-            ResolveRequired(materials, "glass"));
+            ResolveRequired(materials, "glass"),
+            ResolveRequired(materials, "blood"),
+            ResolveRequired(materials, "bone_static"),
+            ResolveRequired(materials, "cheese_static"),
+            ResolveRequired(materials, "mud"),
+            ResolveRequired(materials, "sand_petrify"),
+            ResolveRequired(materials, "snow_sticky"));
     }
 
     private static CompiledWorldTopology CompileWorldTopology(
@@ -4103,7 +4114,13 @@ public sealed class PlayableCavernWorldGenerator :
         ushort Metal,
         ushort Wood,
         ushort Smoke,
-        ushort Glass);
+        ushort Glass,
+        ushort Blood,
+        ushort BoneStatic,
+        ushort CheeseStatic,
+        ushort Mud,
+        ushort SandPetrify,
+        ushort SnowSticky);
 }
 
 internal readonly record struct BiomeEncounterAnchor(

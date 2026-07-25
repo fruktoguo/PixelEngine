@@ -152,6 +152,13 @@ internal enum NoitaPixelSceneMaterial : byte
     Ice,
     Sand,
     Glass,
+    Lava,
+    Blood,
+    BoneStatic,
+    CheeseStatic,
+    Mud,
+    SandPetrify,
+    SnowSticky,
 }
 
 internal readonly record struct NoitaPixelSceneMaskDefinition(

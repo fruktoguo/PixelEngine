@@ -124,7 +124,10 @@ $wangRequiredNames = @(
         $worldCatalog.biomes.materialLayers.material_name) |
         Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
         Sort-Object -Unique)
-$sceneRequiredNames = @($snowcastlePixelSceneCatalog.materialNames | Sort-Object -Unique)
+$sceneRequiredNames = @(
+    @($snowcastlePixelSceneCatalog.materialNames) +
+    @('blood', 'bone_static', 'cheese_static', 'mud', 'sand_petrify', 'snow_sticky') |
+        Sort-Object -Unique)
 $vegetationRequiredNames = @($vegetationCatalog.materialNames | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Sort-Object -Unique)
 $requiredNames = @(($wangRequiredNames + $sceneRequiredNames + $vegetationRequiredNames) | Sort-Object -Unique)
 $reusedNames = @('lava', 'oil', 'sand', 'water')
