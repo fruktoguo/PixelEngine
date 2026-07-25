@@ -1288,19 +1288,12 @@ public sealed class CampaignWorldTests
         Assert.True(hasLuaMaterializableMarker, "至少一个 Lua 来源 Noita marker 必须能进入实体/特效 materialization 管线。");
     }
 
-    /// <summary>验证全局 Pixel Scene 的非材质像素全部进入纯 C# marker 目录。</summary>
+    /// <summary>验证直接场景内建点与 spliced 场景唯一解析的 spawn marker 进入纯 C# 目录。</summary>
     [Fact]
     public void GlobalPixelSceneMarkersPreserveEveryUnresolvedMaterialPixel()
     {
         ReadOnlySpan<NoitaPixelSceneMarkerDefinition> markers = NoitaPixelSceneCatalog.Markers;
-        int expected = 0;
-        foreach (NoitaPixelSceneMaskDefinition mask in NoitaPixelSceneCatalog.Masks)
-        {
-            expected += mask.MarkerPixelCount;
-        }
-
-        Assert.Equal(43, markers.Length);
-        Assert.Equal(expected, markers.Length);
+        Assert.Equal(102, markers.Length);
         Assert.All(markers.ToArray(), static marker =>
         {
             Assert.StartsWith("ff", marker.Color, StringComparison.Ordinal);
@@ -1308,6 +1301,13 @@ public sealed class CampaignWorldTests
             Assert.False(string.IsNullOrWhiteSpace(marker.Function));
             Assert.False(string.IsNullOrWhiteSpace(marker.Origin));
         });
+
+        NoitaPixelSceneMarkerDefinition lavaLakeMusic = Assert.Single(
+            markers.ToArray(),
+            static marker => marker.SceneOrdinal == 92 && marker.Function == "spawn_music_trigger");
+        Assert.Equal(2311, lavaLakeMusic.WorldX);
+        Assert.Equal(780, lavaLakeMusic.WorldY);
+        Assert.Equal("ffff5a0f", lavaLakeMusic.Color);
     }
 
     /// <summary>验证 forge marker 保留参考坐标、颜色、函数与来源，并可接入现有实体 profile。</summary>
@@ -1601,7 +1601,7 @@ public sealed class CampaignWorldTests
             Config: new EngineScriptConfigApi(ContentRoot()));
         _ = generator.Describe(in request);
 
-        Assert.Equal(32, generator.WorldVisualLayerCount);
+        Assert.Equal(98, generator.WorldVisualLayerCount);
         WorldVisualLayerDescriptor background = generator.GetWorldVisualLayer(0).Validate();
         WorldVisualLayerDescriptor belowBackground = generator.GetWorldVisualLayer(1).Validate();
         WorldVisualLayerDescriptor stubBackground = generator.GetWorldVisualLayer(2).Validate();
@@ -1652,11 +1652,11 @@ public sealed class CampaignWorldTests
             "maps/noita/mountain/left_entrance_visual.png",
             "D5775C1BC8BAB858A691C6398E4639B4922759C37B489BBE535D0B824BB7D5CC");
 
-        WorldVisualLayerDescriptor[] globalLayers = [.. Enumerable.Range(4, 28)
+        WorldVisualLayerDescriptor[] globalLayers = [.. Enumerable.Range(4, 94)
             .Select(generator.GetWorldVisualLayer)
             .Select(static layer => layer.Validate())];
-        Assert.Equal(6, globalLayers.Count(static layer => layer.Layer == WorldVisualLayerKind.Background));
-        Assert.Equal(22, globalLayers.Count(static layer => layer.Layer == WorldVisualLayerKind.Decoration));
+        Assert.Equal(53, globalLayers.Count(static layer => layer.Layer == WorldVisualLayerKind.Background));
+        Assert.Equal(41, globalLayers.Count(static layer => layer.Layer == WorldVisualLayerKind.Decoration));
         WorldVisualLayerDescriptor forgeBackground = globalLayers.Single(static layer =>
             layer.Asset.LogicalPath == "maps/noita/global-scenes/02-background.png");
         WorldVisualLayerDescriptor forgeColors = globalLayers.Single(static layer =>
@@ -1676,6 +1676,15 @@ public sealed class CampaignWorldTests
             forgeColors,
             "maps/noita/global-scenes/02-colors.png",
             "EDA605EE5094D45F02F46521EE7A77D704D23C34D1FBC98785E1AC6817326121");
+
+        WorldVisualLayerDescriptor bossArenaColors = globalLayers.Single(static layer =>
+            layer.Asset.LogicalPath == "maps/noita/global-scenes/118-colors.png");
+        Assert.Equal((1536f, 12800f, 512f, 512f), (
+            bossArenaColors.WorldX,
+            bossArenaColors.WorldY,
+            bossArenaColors.WidthCells,
+            bossArenaColors.HeightCells));
+        Assert.Equal(WorldVisualLayerKind.Decoration, bossArenaColors.Layer);
     }
 
     /// <summary>

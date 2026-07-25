@@ -262,23 +262,31 @@ public sealed class NoitaWorldContentCatalogTests
         using JsonDocument document = JsonDocument.Parse(File.ReadAllText(Path.Combine(visualRoot, "provenance.json")));
         JsonElement root = document.RootElement;
         Assert.Equal("17130612", root.GetProperty("referenceBuildId").GetString());
-        Assert.Equal(28, root.GetProperty("assetCount").GetInt32());
+        Assert.Equal(94, root.GetProperty("assetCount").GetInt32());
         JsonElement[] assets = [.. root.GetProperty("assets").EnumerateArray()];
-        Assert.Equal(6, assets.Count(static asset => asset.GetProperty("kind").GetString() == "background"));
-        Assert.Equal(22, assets.Count(static asset => asset.GetProperty("kind").GetString() == "colors"));
+        Assert.Equal(53, assets.Count(static asset => asset.GetProperty("kind").GetString() == "background"));
+        Assert.Equal(41, assets.Count(static asset => asset.GetProperty("kind").GetString() == "colors"));
 
         foreach (JsonElement asset in assets)
         {
             string relativePath = asset.GetProperty("contentPath").GetString()!;
             string file = Path.Combine(ContentRoot(), relativePath.Replace('/', Path.DirectorySeparatorChar));
             Assert.True(File.Exists(file), relativePath);
-            Assert.Equal(
-                asset.GetProperty("sourceSha256").GetString(),
-                Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant());
-            Assert.Equal(asset.GetProperty("sourceSha256").GetString(), asset.GetProperty("contentSha256").GetString());
+            string contentSha256 = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(file))).ToLowerInvariant();
+            Assert.Equal(asset.GetProperty("contentSha256").GetString(), contentSha256);
+            if (asset.GetProperty("sourceEncoding").GetString() == "png")
+            {
+                Assert.Equal(asset.GetProperty("sourceSha256").GetString(), contentSha256);
+            }
             Assert.True(asset.GetProperty("width").GetInt32() > 0);
             Assert.True(asset.GetProperty("height").GetInt32() > 0);
         }
+
+        Assert.Contains(
+            assets,
+            static asset => asset.GetProperty("sourcePath").GetString() ==
+                "data/biome_impl/spliced/boss_arena/1_visual.plz" &&
+                asset.GetProperty("sourceEncoding").GetString() == "plz");
     }
 
     private static string ContentRoot()

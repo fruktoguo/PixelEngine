@@ -14,6 +14,8 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+Add-Type -Path (Join-Path $PSScriptRoot 'NoitaFastLzDecoder.cs')
 $utf8NoBom = [Text.UTF8Encoding]::new($false)
 $resolvedDataRoot = (Resolve-Path -LiteralPath $DataRoot).Path
 $catalog = Get-Content -Raw -LiteralPath $CatalogPath | ConvertFrom-Json -Depth 30
@@ -22,6 +24,56 @@ $resolvedOutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 
 function Get-Sha256([string] $Path) {
     return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Convert-PlzToPng([string] $SourceFile, [string] $OutputFile) {
+    $bytes = [IO.File]::ReadAllBytes($SourceFile)
+    if ($bytes.Length -lt 24 -or [BitConverter]::ToInt32($bytes, 0) -ne 1 -or
+        [BitConverter]::ToInt32($bytes, 12) -ne 4) {
+        throw "Unsupported Noita PLZ header: $SourceFile"
+    }
+
+    $encodedWidth = [BitConverter]::ToInt32($bytes, 4)
+    $encodedHeight = [BitConverter]::ToInt32($bytes, 8)
+    $width = [Math]::Abs($encodedWidth)
+    $height = [Math]::Abs($encodedHeight)
+    $payloadLength = [BitConverter]::ToInt32($bytes, 16)
+    $decodedLength = [BitConverter]::ToInt32($bytes, 20)
+    if ($payloadLength -ne $bytes.Length - 24 -or $decodedLength -ne $width * $height * 4) {
+        throw "Invalid Noita PLZ lengths: $SourceFile"
+    }
+
+    $payload = [byte[]]::new($payloadLength)
+    [Array]::Copy($bytes, 24, $payload, 0, $payloadLength)
+    $rgba = [PixelEngine.Tools.Noita.NoitaFastLzDecoder]::Decode($payload, $decodedLength)
+    $bgra = [byte[]]::new($decodedLength)
+    $flipX = $encodedWidth -lt 0
+    $flipY = $encodedHeight -lt 0
+    for ($sourceIndex = 0; $sourceIndex -lt $width * $height; $sourceIndex++) {
+        $sourceX = $sourceIndex % $width
+        $sourceY = [Math]::Floor($sourceIndex / $width)
+        $targetX = $(if ($flipX) { $width - 1 - $sourceX } else { $sourceX })
+        $targetY = $(if ($flipY) { $height - 1 - $sourceY } else { $sourceY })
+        $sourceOffset = $sourceIndex * 4
+        $targetOffset = (($targetY * $width) + $targetX) * 4
+        $bgra[$targetOffset] = $rgba[$sourceOffset + 2]
+        $bgra[$targetOffset + 1] = $rgba[$sourceOffset + 1]
+        $bgra[$targetOffset + 2] = $rgba[$sourceOffset]
+        $bgra[$targetOffset + 3] = $rgba[$sourceOffset + 3]
+    }
+
+    $bitmap = [Drawing.Bitmap]::new($width, $height, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+    try {
+        $rectangle = [Drawing.Rectangle]::new(0, 0, $width, $height)
+        $bits = $bitmap.LockBits($rectangle, [Drawing.Imaging.ImageLockMode]::WriteOnly, [Drawing.Imaging.PixelFormat]::Format32bppArgb)
+        try {
+            if ($bits.Stride -ne $width * 4) { throw "Unexpected bitmap stride for $SourceFile" }
+            [Runtime.InteropServices.Marshal]::Copy($bgra, 0, $bits.Scan0, $bgra.Length)
+        }
+        finally { $bitmap.UnlockBits($bits) }
+        $bitmap.Save($OutputFile, [Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally { $bitmap.Dispose() }
 }
 
 function Add-Visual($Scene, [int] $Ordinal, [string] $Kind, [Collections.Generic.List[object]] $Destination) {
@@ -36,9 +88,18 @@ function Add-Visual($Scene, [int] $Ordinal, [string] $Kind, [Collections.Generic
 
     $fileName = '{0:d2}-{1}.png' -f $Ordinal, $Kind
     $outputFile = Join-Path $resolvedOutputRoot $fileName
-    Copy-Item -LiteralPath $sourceFile -Destination $outputFile -Force
+    $extension = [IO.Path]::GetExtension($sourceFile).ToLowerInvariant()
+    if ($extension -eq '.png') {
+        Copy-Item -LiteralPath $sourceFile -Destination $outputFile -Force
+    }
+    elseif ($extension -eq '.plz') {
+        Convert-PlzToPng $sourceFile $outputFile
+    }
+    else {
+        throw "Unsupported Noita visual asset '$sourcePath'."
+    }
     $outputSha256 = Get-Sha256 $outputFile
-    if (-not [string]::Equals($sourceSha256, $outputSha256, [StringComparison]::Ordinal)) {
+    if ($extension -eq '.png' -and -not [string]::Equals($sourceSha256, $outputSha256, [StringComparison]::Ordinal)) {
         throw "Copied visual hash mismatch for '$sourcePath'."
     }
 
@@ -47,6 +108,7 @@ function Add-Visual($Scene, [int] $Ordinal, [string] $Kind, [Collections.Generic
         kind = $Kind
         sourcePath = $sourcePath
         sourceSha256 = $sourceSha256
+        sourceEncoding = $extension.Substring(1)
         contentPath = "maps/noita/global-scenes/$fileName"
         contentSha256 = $outputSha256
         worldX = [int]$Scene.pos_x
@@ -57,7 +119,7 @@ function Add-Visual($Scene, [int] $Ordinal, [string] $Kind, [Collections.Generic
 }
 
 $visuals = [Collections.Generic.List[object]]::new()
-$scenes = @($catalog.globalPixelScenes.bufferedScenes)
+$scenes = @($catalog.globalPixelScenes.bufferedScenes) + @($catalog.globalPixelScenes.splicedScenes)
 for ($i = 0; $i -lt $scenes.Count; $i++) {
     Add-Visual $scenes[$i] $i 'background' $visuals
 }
