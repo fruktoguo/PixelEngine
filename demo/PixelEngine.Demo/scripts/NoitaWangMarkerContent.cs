@@ -20,6 +20,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
     private readonly Entity?[] _propEntities = new Entity?[MaxMaterializedMarkers];
     private readonly Entity?[] _gameplayEntities = new Entity?[MaxMaterializedMarkers];
     private readonly Behaviour?[] _gameplayComponents = new Behaviour?[MaxMaterializedMarkers];
+    private readonly MarkerKey[] _resolved = new MarkerKey[MaxMaterializedMarkers];
     private CampaignConfig? _config;
     private BiomeCatalog? _biomes;
     private NoitaWangTerrainCatalog? _wangTerrain;
@@ -27,6 +28,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
     private CampaignRunDirector? _runDirector;
     private float _scanTimer;
     private float _gameplayElapsed;
+    private int _resolvedCount;
 
     /// <summary>已经创建为场景 prop 的 marker 数量。</summary>
     public int MaterializedCount { get; private set; }
@@ -103,6 +105,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             _anchors.AsSpan(count));
         LastScanAnchorCount = count;
         LastScanMaterializedCount = 0;
+        RecordResolvedEnemies();
         EvictMarkersOutsideCurrentScan(_anchors.AsSpan(0, count));
         for (int i = 0; i < count; i++)
         {
@@ -113,7 +116,7 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             }
 
             MarkerKey key = MarkerKey.From(anchor);
-            if (ContainsMaterialized(key) || MaterializedCount >= _materialized.Length)
+            if (ContainsMaterialized(key) || ContainsResolved(key) || MaterializedCount >= _materialized.Length)
             {
                 continue;
             }
@@ -121,10 +124,18 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
             int slot = MaterializedCount++;
             _materialized[slot] = key;
             Entity entity = context.Scene.CreateEntity();
-            _propEntities[slot] = entity;
-            NoitaWangMarkerProp prop = entity.AddComponent<NoitaWangMarkerProp>();
-            prop.Bind(anchor, profile);
-            CreateGameplayMarkerEntity(context, anchor, profile, slot);
+            if (profile.GameplayKind == NoitaWangMarkerGameplayKind.Enemy)
+            {
+                entity.Destroy();
+                CreateGameplayMarkerEntity(context, anchor, profile, slot);
+            }
+            else
+            {
+                _propEntities[slot] = entity;
+                NoitaWangMarkerProp prop = entity.AddComponent<NoitaWangMarkerProp>();
+                prop.Bind(anchor, profile);
+                CreateGameplayMarkerEntity(context, anchor, profile, slot);
+            }
             LastScanMaterializedCount++;
             TransientParticleBurst.Emit(
                 context,
@@ -182,6 +193,16 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         in NoitaWangMarkerVisualProfile profile,
         int slot)
     {
+        if (profile.GameplayKind == NoitaWangMarkerGameplayKind.Enemy)
+        {
+            Entity entity = context.Scene.CreateEntity();
+            NoitaMarkerEnemy enemy = entity.AddComponent<NoitaMarkerEnemy>();
+            enemy.Bind(anchor);
+            _gameplayEntities[slot] = entity;
+            _gameplayComponents[slot] = enemy;
+            return;
+        }
+
         if (profile.GameplayKind == NoitaWangMarkerGameplayKind.MaterialEmitter)
         {
             Entity entity = context.Scene.CreateEntity();
@@ -229,7 +250,21 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         {
             if (_gameplayComponents[i] is { } component)
             {
-                component.Enabled = enabled;
+                component.Enabled = enabled && (component is not NoitaMarkerEnemy enemy || !enemy.IsDead);
+            }
+        }
+    }
+
+    private void RecordResolvedEnemies()
+    {
+        for (int i = 0; i < MaterializedCount; i++)
+        {
+            if (_gameplayComponents[i] is NoitaMarkerEnemy { IsDead: true } && !ContainsResolved(_materialized[i]))
+            {
+                if (_resolvedCount < _resolved.Length)
+                {
+                    _resolved[_resolvedCount++] = _materialized[i];
+                }
             }
         }
     }
@@ -239,13 +274,13 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         int slot = 0;
         while (slot < MaterializedCount)
         {
-            if (ContainsAnchor(anchors, _materialized[slot]))
+            if (!ContainsResolved(_materialized[slot]) && ContainsAnchor(anchors, _materialized[slot]))
             {
                 slot++;
                 continue;
             }
 
-            _propEntities[slot]!.Destroy();
+            _propEntities[slot]?.Destroy();
             _gameplayEntities[slot]?.Destroy();
             int last = --MaterializedCount;
             if (slot != last)
@@ -281,6 +316,19 @@ internal sealed class NoitaWangMarkerContentSystem : ISystem
         for (int i = 0; i < MaterializedCount; i++)
         {
             if (_materialized[i].Equals(key))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool ContainsResolved(MarkerKey key)
+    {
+        for (int i = 0; i < _resolvedCount; i++)
+        {
+            if (_resolved[i].Equals(key))
             {
                 return true;
             }
@@ -395,6 +443,7 @@ internal enum NoitaWangMarkerGameplayKind : byte
     None,
     SparkEmitter,
     MaterialEmitter,
+    Enemy,
 }
 
 internal readonly record struct NoitaWangMarkerVisualProfile(
@@ -469,8 +518,8 @@ internal readonly record struct NoitaWangMarkerVisualProfile(
                 0.54f,
                 10,
                 28f,
-                NoitaWangMarkerGameplayKind.SparkEmitter,
-                "fire"),
+                NoitaWangMarkerGameplayKind.Enemy,
+                string.Empty),
             NoitaMarkerRuleKind.Trigger => new NoitaWangMarkerVisualProfile(
                 NoitaWangMarkerVisualKind.Machine,
                 0xFF_E8_D8_58,

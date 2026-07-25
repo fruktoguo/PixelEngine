@@ -68,6 +68,23 @@ public sealed class Scene
     }
 
     /// <summary>
+    /// 将当前场景中指定类型的组件复制到调用方提供的固定容量缓冲区，不创建快照或托管集合。
+    /// </summary>
+    /// <typeparam name="T">要收集的组件类型。</typeparam>
+    /// <param name="destination">接收组件实例的缓冲区。</param>
+    /// <returns>实际写入的组件数量；组件总数超过容量时截断。</returns>
+    /// <remarks>
+    /// 返回顺序是稠密分桶当前顺序，不是稳定排序契约；组件移除后可能因 swap-remove 改变顺序。
+    /// </remarks>
+    public int CollectComponents<T>(Span<T> destination)
+        where T : class, IComponent
+    {
+        return _buckets.TryGetValue(typeof(T), out IComponentBucket? bucket)
+            ? ((ComponentBucket<T>)bucket).CopyTo(destination)
+            : 0;
+    }
+
+    /// <summary>
     /// 捕获当前脚本实体与 Behaviour 组件快照，供 Editor 层级与 Inspector 使用。
     /// </summary>
     /// <returns>按实体 id 升序排列的只读快照数组。</returns>
@@ -592,6 +609,13 @@ public sealed class Scene
 
             component = null!;
             return false;
+        }
+
+        public int CopyTo(Span<T> destination)
+        {
+            int count = Math.Min(Count, destination.Length);
+            _components.AsSpan(0, count).CopyTo(destination);
+            return count;
         }
 
         public bool TryGet(int entityId, out T component)

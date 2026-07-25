@@ -84,6 +84,52 @@ public sealed class ScriptDispatchAllocationTests
         Assert.Equal(0, allocated);
     }
 
+    /// <summary>验证固定 Span 收集遵循稠密分桶突变并按目标容量截断。</summary>
+    [Fact]
+    public void SceneComponentCollectionTracksDenseBucketAndCapacity()
+    {
+        Scene scene = new();
+        Entity firstEntity = scene.CreateEntity();
+        MarkerComponent first = firstEntity.AddComponent<MarkerComponent>();
+        MarkerComponent second = scene.CreateEntity().AddComponent<MarkerComponent>();
+        MarkerComponent third = scene.CreateEntity().AddComponent<MarkerComponent>();
+        MarkerComponent[] limited = new MarkerComponent[2];
+
+        Assert.Equal(2, scene.CollectComponents(limited));
+        Assert.Same(first, limited[0]);
+        Assert.Same(second, limited[1]);
+
+        firstEntity.RemoveComponent<MarkerComponent>();
+        MarkerComponent[] remaining = new MarkerComponent[3];
+        Assert.Equal(2, scene.CollectComponents(remaining));
+        Assert.Same(third, remaining[0]);
+        Assert.Same(second, remaining[1]);
+    }
+
+    /// <summary>验证组件 Span 收集预热后保持零托管分配。</summary>
+    [Fact]
+    public void SceneComponentCollectionDoesNotAllocateManagedMemory()
+    {
+        Scene scene = new();
+        for (int i = 0; i < 32; i++)
+        {
+            _ = scene.CreateEntity().AddComponent<MarkerComponent>();
+        }
+
+        MarkerComponent[] components = new MarkerComponent[32];
+        _ = scene.CollectComponents(components);
+        int count = 0;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1_024; i++)
+        {
+            count += scene.CollectComponents(components);
+        }
+
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Assert.Equal(32 * 1_024, count);
+        Assert.Equal(0, allocated);
+    }
+
     private sealed class NoopBehaviour : Behaviour;
 
     private sealed class MarkerComponent : IComponent;

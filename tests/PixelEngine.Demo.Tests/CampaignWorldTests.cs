@@ -1339,7 +1339,7 @@ public sealed class CampaignWorldTests
     /// 验证代表性的 Noita Lua marker 已经映射到真实 Demo 脚本实体，而不只是 overlay 占位。
     /// </summary>
     [Theory]
-    [InlineData("load_oiltank", "Hazard", "MaterialEmitter", "oil")]
+    [InlineData("spawn_acid", "Hazard", "MaterialEmitter", "acid")]
     [InlineData("load_acidtank_left", "Hazard", "MaterialEmitter", "acid")]
     [InlineData("load_gunpowderpool_01", "Hazard", "MaterialEmitter", "fire")]
     [InlineData("spawn_lamp2", "Machine", "SparkEmitter", "fire")]

@@ -8,6 +8,8 @@ namespace PixelEngine.Demo;
 /// </summary>
 public sealed class WandProjectile : Behaviour
 {
+    private const int MaximumEnemyTargets = 128;
+    private readonly NoitaMarkerEnemy[] _enemyTargets = new NoitaMarkerEnemy[MaximumEnemyTargets];
     private SpellProjectilePlan _plan;
     private WandProjectile? _firstPayload;
     private WandProjectile? _nextPayload;
@@ -244,6 +246,17 @@ public sealed class WandProjectile : Behaviour
             hitSolid = raycastAvailable && hit.Hit;
         }
 
+        float collisionEndX = hitSolid ? hit.X : X + moveX;
+        float collisionEndY = hitSolid ? hit.Y : Y + moveY;
+        if (TryHitEnemy(previousX, previousY, collisionEndX, collisionEndY, out float enemyHitX, out float enemyHitY))
+        {
+            X = enemyHitX;
+            Y = enemyHitY;
+            DrawTrail(previousX, previousY);
+            ResolveEntityImpact();
+            return;
+        }
+
         if (hitSolid)
         {
             X = hit.X;
@@ -323,6 +336,42 @@ public sealed class WandProjectile : Behaviour
         }
 
         DestroyProjectile();
+    }
+
+    private void ResolveEntityImpact()
+    {
+        EmitImpactFeedback();
+        if ((_plan.Trigger == WandTriggerKind.Hit || _plan.Trigger == WandTriggerKind.Death) && !_payloadTriggered)
+        {
+            TriggerPayloads();
+        }
+
+        if (_bouncesRemaining > 0)
+        {
+            _bouncesRemaining--;
+            _velocityX *= -0.72f;
+            _velocityY *= -0.72f;
+            return;
+        }
+
+        DestroyProjectile();
+    }
+
+    private bool TryHitEnemy(float x0, float y0, float x1, float y1, out float hitX, out float hitY)
+    {
+        int count = Context.Scene.CollectComponents(_enemyTargets);
+        float damage = MathF.Max(1f, _plan.Damage);
+        for (int i = 0; i < count; i++)
+        {
+            if (_enemyTargets[i].TryHitSegment(x0, y0, x1, y1, damage, out hitX, out hitY))
+            {
+                return true;
+            }
+        }
+
+        hitX = 0f;
+        hitY = 0f;
+        return false;
     }
 
     private void ApplyWorldEffect()
